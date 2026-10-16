@@ -1,0 +1,62 @@
+[
+  {
+    "scenario": "scenario_a",
+    "controller": "rule_based",
+    "seed": 42,
+    "total_cost": 0.0,
+    "grid_import_kwh": 0.0,
+    "peak_demand_kw": 0.0,
+    "pv_self_consumption_kwh": 0.0,
+    "ev_completion_rate": 1.0,
+    "comfort_violations": 0.0,
+    "pf_convergence": 1.0,
+    "voltage_violations": 0,
+    "line_violations": 0,
+    "run_id": "scenario_a_20261016_141703"
+  },
+  {
+    "scenario": "scenario_a",
+    "controller": "rule_based",
+    "seed": 123,
+    "total_cost": 0.0,
+    "grid_import_kwh": 0.0,
+    "peak_demand_kw": 0.0,
+    "pv_self_consumption_kwh": 0.0,
+    "ev_completion_rate": 1.0,
+    "comfort_violations": 0.0,
+    "pf_convergence": 1.0,
+    "voltage_violations": 0,
+    "line_violations": 0,
+    "run_id": "scenario_a_20261016_141730"
+  },
+  {
+    "scenario": "scenario_a",
+    "controller": "multi_agent",
+    "seed": 42,
+    "total_cost": 0.0,
+    "grid_import_kwh": 0.0,
+    "peak_demand_kw": 0.0,
+    "pv_self_consumption_kwh": 0.0,
+    "ev_completion_rate": 1.0,
+    "comfort_violations": 0.0,
+    "pf_convergence": 1.0,
+    "voltage_violations": 0,
+    "line_violations": 0,
+    "run_id": "scenario_a_20261016_141755"
+  },
+  {
+    "scenario": "scenario_a",
+    "controller": "multi_agent",
+    "seed": 123,
+    "total_cost": 0.0,
+    "grid_import_kwh": 0.0,
+    "peak_demand_kw": 0.0,
+    "pv_self_consumption_kwh": 0.0,
+    "ev_completion_rate": 1.0,
+    "comfort_violations": 0.0,
+    "pf_convergence": 1.0,
+    "voltage_violations": 0,
+    "line_violations": 0,
+    "run_id": "scenario_a_20261016_141823"
+  }
+]
