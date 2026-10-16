@@ -18,7 +18,7 @@ from src.schemas.report import (
     EnergyMetrics, ServiceMetrics, GridMetrics, AgentMetrics
 )
 from src.simulation import SimulationCoupler
-from src.controllers import RuleBasedController, BaseController
+from src.controllers import RuleBasedController, BaseController, MultiAgentController, CentralizedController
 from src.evaluation import compute_all_metrics, generate_report_plots, compute_per_member_metrics
 
 
@@ -47,6 +47,10 @@ class ExperimentRunner:
         # Create controller
         if controller_type == "rule_based":
             self.controller = RuleBasedController(self.scenario_config)
+        elif controller_type == "multi_agent":
+            self.controller = MultiAgentController(self.scenario_config)
+        elif controller_type == "centralized":
+            self.controller = CentralizedController(self.scenario_config)
         else:
             raise ValueError(f"Unknown controller type: {controller_type}")
     
@@ -188,12 +192,24 @@ class ExperimentRunner:
                 direction=direction
             ))
         
+        # Determine controller type from the actual controller instance
+        if isinstance(self.controller, MultiAgentController):
+            controller_type_enum = ControllerType.LLM_AGENT
+            controller_config = {"type": "multi_agent", "workflow": "planner_coder_executor_verifier_reporter"}
+        elif isinstance(self.controller, CentralizedController):
+            controller_type_enum = ControllerType.RULE_BASED
+            controller_config = {"type": "centralized", "approach": "joint_optimization"}
+        else:
+            # Default to rule_based for backward compatibility
+            controller_type_enum = ControllerType.RULE_BASED
+            controller_config = {"type": "rule_based"}
+        
         # Create result
         result = ExperimentResult(
             run_id=self.run_id,
             scenario_id=self.scenario_config.scenario_id,
-            controller_type=ControllerType.RULE_BASED,
-            controller_config={"type": "rule_based"},
+            controller_type=controller_type_enum,
+            controller_config=controller_config,
             status=ExperimentStatus.COMPLETED,
             start_time=datetime.fromtimestamp(self.start_time) if self.start_time else datetime.now(),
             end_time=datetime.fromtimestamp(self.end_time) if self.end_time else datetime.now(),
@@ -263,7 +279,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run energy community experiment")
     parser.add_argument("--config", type=str, required=True, help="Path to scenario YAML config")
     parser.add_argument("--controller", type=str, default="rule_based", 
-                       choices=["rule_based"], help="Controller type")
+                       choices=["rule_based", "multi_agent", "centralized"], help="Controller type")
     parser.add_argument("--max-steps", type=int, default=None, help="Maximum steps to run")
     parser.add_argument("--output-dir", type=str, default="experiments/results", help="Output directory")
     

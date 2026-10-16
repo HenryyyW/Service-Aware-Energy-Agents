@@ -320,3 +320,14 @@ class RuleBasedControllerWithGrid(RuleBasedController):
         # This would be passed via observations in a real implementation
         
         return requested
+# Import multi-agent controller
+from src.controllers.multi_agent import MultiAgentController
+from src.controllers.centralized import CentralizedController
+
+__all__ = [
+    "BaseController",
+    "RuleBasedController",
+    "RuleBasedControllerWithGrid",
+    "MultiAgentController",
+    "CentralizedController",
+]
