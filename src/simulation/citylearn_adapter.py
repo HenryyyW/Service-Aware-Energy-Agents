@@ -144,8 +144,8 @@ class CityLearnAdapter:
         schema['simulation_end_time_step'] = 7 * timesteps_per_day - 1
         schema['episode_time_steps'] = 7 * timesteps_per_day
         
-        # Update root directory to our data dir
-        schema['root_directory'] = str(Path(self.data_dir) / "schemas" / self.scenario_config.scenario_id)
+        # Update root directory to our data dir - use absolute path to avoid double resolution
+        schema['root_directory'] = str(Path(self.data_dir).resolve() / "schemas" / self.scenario_config.scenario_id)
         
         # Keep only the number of buildings we need (up to 5 for scenario A)
         buildings_to_keep = {}
@@ -236,19 +236,19 @@ class CityLearnAdapter:
             freq=f"{self.scenario_config.timestep_minutes}min"
         )
         # Generate realistic dummy data matching EnergySimulation expected columns
-        # Ensure cooling and heating don't overlap (summer = cooling only)
+        # Set all thermal demands to 0 to avoid CityLearn assertions for buildings without those devices
         data = pd.DataFrame({
             "month": timestamps.month,
             "hour": timestamps.hour,
             "day_type": (timestamps.dayofweek < 5).astype(int),
             "daylight_savings_status": 0,
             "indoor_dry_bulb_temperature": 22 + 2 * np.sin(2 * np.pi * timestamps.hour / 24) + np.random.normal(0, 1, timesteps),
-            "average_unmet_cooling_setpoint_difference": np.maximum(0, np.random.normal(0.5, 0.3, timesteps)),
+            "average_unmet_cooling_setpoint_difference": np.zeros(timesteps),
             "indoor_relative_humidity": 50 + 15 * np.sin(2 * np.pi * timestamps.hour / 24) + np.random.normal(0, 3, timesteps),
             "non_shiftable_load": np.random.uniform(1, 5, timesteps),
-            "dhw_demand": np.random.uniform(0.5, 2, timesteps),
-            "cooling_demand": np.maximum(0, np.random.normal(3, 1.5, timesteps)),  # Summer cooling
-            "heating_demand": np.zeros(timesteps),  # No heating in summer
+            "dhw_demand": np.zeros(timesteps),  # No DHW demand - buildings may not have DHW devices
+            "cooling_demand": np.zeros(timesteps),  # No cooling demand - buildings may not have cooling devices
+            "heating_demand": np.zeros(timesteps),  # No heating demand
             "solar_generation": np.maximum(0, 5 * np.sin(2 * np.pi * (timestamps.hour - 6) / 12) + np.random.normal(0, 1, timesteps)),
         })
         data.to_csv(filepath, index=False)
@@ -298,6 +298,13 @@ class CityLearnAdapter:
         elif not isinstance(rewards, dict):
             rewards = {b: rewards for b in self.building_ids}
         
+        # Check if episode is done (all buildings terminated/truncated)
+        done = False
+        if isinstance(terminated, dict):
+            done = all(terminated.values()) or all(truncated.values())
+        elif isinstance(terminated, (bool, np.bool_)):
+            done = terminated or truncated
+        
         # Build step result
         step_result = SimulationStepResult(
             timestep=self.episode_step,
@@ -307,7 +314,9 @@ class CityLearnAdapter:
             observations=observations,
             rewards=rewards,
             costs=self._extract_costs(info),
-            constraint_violations=self._check_constraints(requested_actions, limited_actions, applied_actions)
+            constraint_violations=self._check_constraints(requested_actions, limited_actions, applied_actions),
+            terminated=done,
+            truncated=False
         )
         
         self.observation_history.append(observations)

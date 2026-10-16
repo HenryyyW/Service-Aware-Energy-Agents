@@ -64,13 +64,20 @@ def test_pandapower_adapter_update_loads(pandapower_config):
     
     adapter.update_building_loads(building_powers, building_pvs)
     
-    # Check loads were updated (net load = consumption - PV)
+    # Check loads were updated (load = total demand, not net)
     load_0 = adapter.net.load.at[adapter.load_indices["building_0"], 'p_mw']
     load_1 = adapter.net.load.at[adapter.load_indices["building_1"], 'p_mw']
     
-    # Net loads in MW
-    assert abs(load_0 - (10.0 - 3.0) / 1000) < 0.001
-    assert abs(load_1 - (5.0 - 2.0) / 1000) < 0.001
+    # Loads in MW (total demand)
+    assert abs(load_0 - 10.0 / 1000) < 0.001
+    assert abs(load_1 - 5.0 / 1000) < 0.001
+    
+    # Check PV was set as sgen
+    sgen_0 = adapter.net.sgen.at[adapter.sgen_indices["building_0"], 'p_mw']
+    sgen_1 = adapter.net.sgen.at[adapter.sgen_indices["building_1"], 'p_mw']
+    
+    assert abs(sgen_0 - 3.0 / 1000) < 0.001
+    assert abs(sgen_1 - 2.0 / 1000) < 0.001
 
 
 def test_pandapower_adapter_run_power_flow(pandapower_config):

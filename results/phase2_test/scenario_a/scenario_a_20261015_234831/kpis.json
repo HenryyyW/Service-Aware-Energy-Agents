@@ -1,0 +1,6 @@
+{
+  "grid_convergence_rate": 1.0,
+  "grid_voltage_violations": 0,
+  "grid_line_violations": 0,
+  "grid_trafo_violations": 0
+}

@@ -142,6 +142,8 @@ class DiagnosticReport(BaseModel):
     power_flow_converged: bool = True
     total_violations: int = 0
     critical_violations: int = 0
+    building_contributions: Optional[Dict[str, Dict[str, float]]] = None
+    losses: Optional[Dict[str, Any]] = None
     
     def add_diagnostic(self, diagnostic: Diagnostic):
         self.diagnostics.append(diagnostic)

@@ -88,6 +88,11 @@ class ExperimentRunner:
             if step % 100 == 0:
                 print(f"  Step {step}...")
             
+            # Check termination from CityLearn
+            if cosim_result.terminated or cosim_result.truncated:
+                print(f"Episode terminated at step {step}")
+                break
+            
             # Check termination
             if max_steps and step >= max_steps:
                 print(f"Reached max steps: {max_steps}")
@@ -139,9 +144,12 @@ class ExperimentRunner:
         # Scenario config as dict
         scenario_dict = self.scenario_config.model_dump()
         
+        # Extract CityLearn results for metrics computation
+        cl_history = [h.citylearn_result for h in self.history]
+        
         # Compute metrics
         all_metrics = compute_all_metrics(
-            history=self.history,
+            history=cl_history,
             scenario_config=scenario_dict,
             repair_history=[],
             token_usage=0,
@@ -149,7 +157,7 @@ class ExperimentRunner:
         )
         
         # Per-member metrics
-        per_member = compute_per_member_metrics(self.history, self.scenario_config)
+        per_member = compute_per_member_metrics(cl_history, self.scenario_config)
         per_member_dicts = [m.model_dump() for m in per_member]
         
         # Create KPI results
@@ -196,7 +204,7 @@ class ExperimentRunner:
             agent=all_metrics['agent'],
             kpis=kpi_results,
             per_member=per_member,
-            diagnostic_reports=[h.grid_diagnostics for h in self.history if h.grid_diagnostics],
+            diagnostic_reports=[h.grid_diagnostics.model_dump() for h in self.history if h.grid_diagnostics],
             trajectories_file=str(self.run_dir / "trajectories.jsonl"),
             logs_file=str(self.run_dir / "experiment.log")
         )

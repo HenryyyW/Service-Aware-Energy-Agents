@@ -1,6 +1,6 @@
 {
   "random_seed": 42,
-  "root_directory": "data\\schemas\\scenario_a",
+  "root_directory": "C:\\Users\\henry\\Projects\\Service-Aware-Energy-Agents\\data\\schemas\\scenario_a",
   "central_agent": false,
   "simulation_start_time_step": 0,
   "simulation_end_time_step": 671,

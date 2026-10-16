@@ -88,3 +88,5 @@ class SimulationStepResult(BaseModel):
     costs: Dict[str, float] = Field(default_factory=dict)
     grid_diagnostics: Optional[Dict[str, Any]] = None
     constraint_violations: List[str] = Field(default_factory=list)
+    terminated: bool = False
+    truncated: bool = False

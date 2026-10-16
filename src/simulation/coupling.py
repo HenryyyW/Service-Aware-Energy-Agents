@@ -13,6 +13,26 @@ from .citylearn_adapter import CityLearnAdapter, create_citylearn_adapter
 from .pandapower_adapter import PandapowerAdapter, create_grid_from_scenario
 
 
+def _convert_to_json_serializable(obj):
+    """Recursively convert numpy types to Python native types for JSON serialization."""
+    if isinstance(obj, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64, np.float32, np.float16)):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, np.bool_):
+        return bool(obj)
+    elif isinstance(obj, dict):
+        return {k: _convert_to_json_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_convert_to_json_serializable(v) for v in obj]
+    elif isinstance(obj, tuple):
+        return tuple(_convert_to_json_serializable(v) for v in obj)
+    else:
+        return obj
+
+
 @dataclass
 class CoSimulationStepResult:
     """Result of one co-simulation step."""
@@ -21,6 +41,8 @@ class CoSimulationStepResult:
     grid_diagnostics: DiagnosticReport
     power_flow_converged: bool
     combined_violations: List[str]
+    terminated: bool = False
+    truncated: bool = False
 
 
 class SimulationCoupler:
@@ -54,10 +76,10 @@ class SimulationCoupler:
         observations, cl_result = self.citylearn.step(requested_actions)
         
         # Extract building powers for grid
-        building_powers, building_pvs = self._extract_building_powers(cl_result)
+        building_powers, building_pvs, building_battery_powers = self._extract_building_powers(cl_result)
         
         # Update grid loads
-        self.pandapower.update_building_loads(building_powers, building_pvs)
+        self.pandapower.update_building_loads(building_powers, building_pvs, building_battery_powers)
         
         # Run power flow at specified intervals
         grid_diagnostics = DiagnosticReport(
@@ -83,6 +105,13 @@ class SimulationCoupler:
                 )
                 for d in grid_limit_diagnostics:
                     grid_diagnostics.add_diagnostic(d)
+            
+            # Add per-building contributions and losses to diagnostics
+            if power_flow_converged:
+                building_contributions = self.pandapower.get_per_building_contributions()
+                losses = self.pandapower.calculate_losses()
+                grid_diagnostics.building_contributions = building_contributions
+                grid_diagnostics.losses = losses
         
         # Combine violations
         combined_violations = cl_result.constraint_violations.copy()
@@ -95,16 +124,26 @@ class SimulationCoupler:
             citylearn_result=cl_result,
             grid_diagnostics=grid_diagnostics,
             power_flow_converged=power_flow_converged,
-            combined_violations=combined_violations
+            combined_violations=combined_violations,
+            terminated=cl_result.terminated,
+            truncated=cl_result.truncated
         )
         
         # Attach grid diagnostics to CityLearn result
-        cl_result.grid_diagnostics = {
+        grid_diag_dict = {
             "power_flow_converged": power_flow_converged,
             "diagnostics": [d.model_dump() for d in grid_diagnostics.diagnostics],
             "voltage_profile": self.pandapower.get_voltage_profile(),
             "loading_profile": self.pandapower.get_loading_profile()
         }
+        
+        # Add building contributions and losses if available
+        if hasattr(grid_diagnostics, 'building_contributions'):
+            grid_diag_dict["building_contributions"] = grid_diagnostics.building_contributions
+        if hasattr(grid_diagnostics, 'losses'):
+            grid_diag_dict["losses"] = grid_diagnostics.losses
+        
+        cl_result.grid_diagnostics = grid_diag_dict
         
         self.co_sim_history.append(cosim_result)
         self.current_timestep += 1
@@ -114,10 +153,11 @@ class SimulationCoupler:
     def _extract_building_powers(
         self, 
         cl_result: SimulationStepResult
-    ) -> Tuple[Dict[str, float], Dict[str, float]]:
-        """Extract building net power demand and PV generation from CityLearn result."""
+    ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
+        """Extract building net power demand, PV generation, and battery power from CityLearn result."""
         building_powers = {}
         building_pvs = {}
+        building_battery_powers = {}
         
         # From observations
         obs = cl_result.observations
@@ -126,8 +166,6 @@ class SimulationCoupler:
             bid = building.building_id
             
             # Net electrical demand (positive = consumption)
-            # CityLearn observations typically have 'net_electricity_consumption' 
-            # or similar per building
             net_demand_key = f"{bid}_net_electricity_consumption"
             if net_demand_key in obs:
                 building_powers[bid] = float(obs[net_demand_key])
@@ -146,17 +184,37 @@ class SimulationCoupler:
                 building_pvs[bid] = float(obs[pv_key])
             elif bid not in building_pvs:
                 building_pvs[bid] = 0.0
+            
+            # Battery power (positive = discharge, negative = charge)
+            # Check observations for battery power
+            battery_power_key = f"{bid}_battery_power"
+            if battery_power_key in obs:
+                building_battery_powers[bid] = float(obs[battery_power_key])
+            else:
+                # Try to infer from applied actions
+                for action in cl_result.applied_actions.actions:
+                    # asset_id format: {building_id}_battery or {building_id}_ev_{i}
+                    if action.asset_id.startswith(bid + "_battery"):
+                        if action.action_type == ActionType.BATTERY_CHARGE:
+                            building_battery_powers[bid] = -float(action.value_kw)  # Negative = charge
+                        elif action.action_type == ActionType.BATTERY_DISCHARGE:
+                            building_battery_powers[bid] = float(action.value_kw)  # Positive = discharge
+                        break
+                else:
+                    building_battery_powers[bid] = 0.0
         
-        return building_powers, building_pvs
+        return building_powers, building_pvs, building_battery_powers
     
     def get_kpis(self) -> Dict[str, Any]:
         """Get combined KPIs from both simulators."""
         cl_kpis = self.citylearn.get_kpis()
-        grid_state = self.pandapower.get_network_state()
+        
+        # Get enhanced grid KPIs from pandapower adapter
+        grid_kpis = self.pandapower.get_enhanced_kpis()
         
         return {
             **cl_kpis,
-            "grid_convergence_rate": np.mean(self.pandapower.convergence_history) if self.pandapower.convergence_history else 1.0,
+            **grid_kpis,
             "grid_voltage_violations": sum(1 for h in self.co_sim_history 
                                           for d in h.grid_diagnostics.diagnostics 
                                           if d.category == DiagnosticCategory.VOLTAGE),
@@ -167,6 +225,15 @@ class SimulationCoupler:
                                         for d in h.grid_diagnostics.diagnostics 
                                         if d.category == DiagnosticCategory.TRANSFORMER_LOADING),
         }
+    
+    def get_per_building_contributions(self) -> List[Dict[str, Dict[str, float]]]:
+        """Get per-building contributions for each timestep."""
+        contributions_history = []
+        for h in self.co_sim_history:
+            # The pandapower adapter stores contributions per timestep in the grid_diagnostics
+            if h.citylearn_result.grid_diagnostics and "building_contributions" in h.citylearn_result.grid_diagnostics:
+                contributions_history.append(h.citylearn_result.grid_diagnostics["building_contributions"])
+        return contributions_history
     
     def close(self):
         """Close both simulators."""
@@ -192,7 +259,7 @@ class SimulationCoupler:
                 "constraint_violations": h.citylearn_result.constraint_violations,
                 "grid_diagnostics": h.citylearn_result.grid_diagnostics
             }
-            trajectories.append(traj)
+            trajectories.append(_convert_to_json_serializable(traj))
         
         with open(os.path.join(output_dir, "trajectories.jsonl"), "w") as f:
             for t in trajectories:
