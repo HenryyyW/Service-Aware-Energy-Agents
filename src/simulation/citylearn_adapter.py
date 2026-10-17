@@ -91,8 +91,13 @@ class CityLearnAdapter:
         # Get building IDs from schema (only included buildings)
         self.building_ids = [b for b in schema['buildings'].keys() if schema['buildings'][b].get('include', True)]
         
-        # Get observation names from schema
-        self.observation_names = list(schema.get('observations', {}).keys())
+        # Get observation names from schema - ONLY ACTIVE observations
+        all_observations = schema.get('observations', {})
+        self.observation_names = [
+            name for name, info in all_observations.items()
+            if info.get('active', True)  # Default to True if 'active' not specified
+        ]
+        print(f"Active observations: {self.observation_names} ({len(self.observation_names)} out of {len(all_observations)})")
         
         print(f"Loaded CityLearn dataset: {self.dataset_name}")
         print(f"Buildings: {self.building_ids}")
@@ -141,8 +146,12 @@ class CityLearnAdapter:
         # Set simulation time steps (1 week default)
         timesteps_per_day = 24 * 60 // self.scenario_config.timestep_minutes
         schema['simulation_start_time_step'] = 0
-        schema['simulation_end_time_step'] = 7 * timesteps_per_day - 1
-        schema['episode_time_steps'] = 7 * timesteps_per_day
+        episode_time_steps = 7 * timesteps_per_day
+        if self.scenario_config.timestep_minutes == 15:
+            # CityLearn terminates at time_step >= time_steps - 1.
+            episode_time_steps += 1
+        schema['episode_time_steps'] = episode_time_steps
+        schema['simulation_end_time_step'] = episode_time_steps - 1
         
         # Update root directory to our data dir - use absolute path to avoid double resolution
         schema['root_directory'] = str(Path(self.data_dir).resolve() / "schemas" / self.scenario_config.scenario_id)
@@ -254,10 +263,40 @@ class CityLearnAdapter:
         data.to_csv(filepath, index=False)
     
     def _convert_observations_to_dict(self, observations) -> Dict[str, Any]:
-        """Convert observations from list format to dict keyed by building_id."""
+        """Convert observations to flat dict keyed by '{building_id}_{observation_name}'."""
         if isinstance(observations, list):
-            return {bid: obs for bid, obs in zip(self.building_ids, observations)}
-        return observations
+            # Assume it's a list of lists, one per building, in the order of self.building_ids
+            flat_obs = {}
+            for bid_idx, bid in enumerate(self.building_ids):
+                if bid_idx < len(observations):
+                    obs_list = observations[bid_idx]
+                    for i, obs_name in enumerate(self.observation_names):
+                        if i < len(obs_list):
+                            flat_obs[f"{bid}_{obs_name}"] = obs_list[i]
+            return flat_obs
+        elif isinstance(observations, dict):
+            # Check if it's a dict of building_id -> list
+            is_building_dict = all(
+                bid in observations and isinstance(observations[bid], list)
+                for bid in self.building_ids
+            ) if self.building_ids else False
+            if is_building_dict:
+                flat_obs = {}
+                for bid in self.building_ids:
+                    obs_list = observations[bid]
+                    for i, obs_name in enumerate(self.observation_names):
+                        if i < len(obs_list):
+                            flat_obs[f"{bid}_{obs_name}"] = obs_list[i]
+                return flat_obs
+            else:
+                # Assume it's already flat
+                return observations
+        else:
+            # Try to convert to dict if possible
+            try:
+                return dict(observations)
+            except Exception:
+                return observations
     
     def reset(self, random_seed: Optional[int] = None) -> Dict[str, Any]:
         """Reset environment and return initial observations."""
@@ -339,8 +378,8 @@ class CityLearnAdapter:
             # Only include actions for devices this building has
             for action_name in self.building_actions.get(bid, []):
                 asset_id = f"{bid}_{action_name}"
-                action = requested.get_action(asset_id, ActionType.BATTERY_CHARGE)
-                if action:
+                action = requested.get_action(asset_id, None)  # Find by asset_id only
+                if action is not None:
                     building_actions.append(action.value_kw)
                 else:
                     building_actions.append(0.0)
@@ -352,25 +391,65 @@ class CityLearnAdapter:
     def _extract_limited_actions(self, info: Dict, requested: RequestedActions) -> LimitedActions:
         """Extract limited actions from CityLearn info."""
         limited = LimitedActions(timestep=self.episode_step)
-        for req_action in requested.actions:
-            limited.actions.append(Action(
-                asset_id=req_action.asset_id,
-                action_type=req_action.action_type,
-                value_kw=req_action.value_kw,
-                timestep=req_action.timestep
-            ))
+        if 'limited_actions' in info and info['limited_actions'] is not None:
+            # info['limited_actions'] is a list of lists, one per building, in the order of self.building_ids
+            for bid_idx, bid in enumerate(self.building_ids):
+                if bid_idx < len(info['limited_actions']):
+                    limited_action_values = info['limited_actions'][bid_idx]
+                    # For each action in the building's active actions
+                    for act_idx, action_name in enumerate(self.building_actions.get(bid, [])):
+                        if act_idx < len(limited_action_values):
+                            asset_id = f"{bid}_{action_name}"
+                            # Try to get the action_type from the requested actions for this asset_id
+                            action_obj = requested.get_action(asset_id, None)
+                            action_type = action_obj.action_type if action_obj is not None else ActionType.BATTERY_CHARGE
+                            limited.actions.append(Action(
+                                asset_id=asset_id,
+                                action_type=action_type,
+                                value_kw=float(limited_action_values[act_idx]),
+                                timestep=self.episode_step
+                            ))
+        else:
+            # Fallback to requested actions
+            for req_action in requested.actions:
+                limited.actions.append(Action(
+                    asset_id=req_action.asset_id,
+                    action_type=req_action.action_type,
+                    value_kw=req_action.value_kw,
+                    timestep=req_action.timestep
+                ))
         return limited
     
     def _extract_applied_actions(self, info: Dict, requested: RequestedActions) -> AppliedActions:
         """Extract actually applied actions from CityLearn info."""
         applied = AppliedActions(timestep=self.episode_step)
-        for req_action in requested.actions:
-            applied.actions.append(Action(
-                asset_id=req_action.asset_id,
-                action_type=req_action.action_type,
-                value_kw=req_action.value_kw,
-                timestep=req_action.timestep
-            ))
+        if 'applied_actions' in info and info['applied_actions'] is not None:
+            # info['applied_actions'] is a list of lists, one per building, in the order of self.building_ids
+            for bid_idx, bid in enumerate(self.building_ids):
+                if bid_idx < len(info['applied_actions']):
+                    applied_action_values = info['applied_actions'][bid_idx]
+                    # For each action in the building's active actions
+                    for act_idx, action_name in enumerate(self.building_actions.get(bid, [])):
+                        if act_idx < len(applied_action_values):
+                            asset_id = f"{bid}_{action_name}"
+                            # Try to get the action_type from the requested actions for this asset_id
+                            action_obj = requested.get_action(asset_id, None)
+                            action_type = action_obj.action_type if action_obj is not None else ActionType.BATTERY_CHARGE
+                            applied.actions.append(Action(
+                                asset_id=asset_id,
+                                action_type=action_type,
+                                value_kw=float(applied_action_values[act_idx]),
+                                timestep=self.episode_step
+                            ))
+        else:
+            # Fallback to requested actions
+            for req_action in requested.actions:
+                applied.actions.append(Action(
+                    asset_id=req_action.asset_id,
+                    action_type=req_action.action_type,
+                    value_kw=req_action.value_kw,
+                    timestep=req_action.timestep
+                ))
         return applied
     
     def _extract_costs(self, info: Dict) -> Dict[str, float]:
@@ -381,6 +460,10 @@ class CityLearnAdapter:
                 costs = info["cost"]
             else:
                 costs = {b: info["cost"] for b in self.building_ids}
+        else:
+            # Debug: print info keys if cost not found
+            print("!!! COST NOT FOUND IN INFO !!!")
+            print("Info keys:", list(info.keys()))
         return costs
     
     def _check_constraints(

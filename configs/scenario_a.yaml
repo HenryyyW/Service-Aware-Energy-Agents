@@ -271,23 +271,23 @@ pandapower:
     - building_id: "building_0"
       bus_idx: 1
       phase: "all"
-      voltage_level: "LV"
+      voltage_level: "MV"
     - building_id: "building_1"
       bus_idx: 3
       phase: "all"
-      voltage_level: "LV"
+      voltage_level: "MV"
     - building_id: "building_2"
       bus_idx: 5
       phase: "all"
-      voltage_level: "LV"
+      voltage_level: "MV"
     - building_id: "building_3"
       bus_idx: 7
       phase: "all"
-      voltage_level: "LV"
+      voltage_level: "MV"
     - building_id: "building_4"
       bus_idx: 9
       phase: "all"
-      voltage_level: "LV"
+      voltage_level: "MV"
   slack_bus: 0
   voltage_limits:
     min: 0.95

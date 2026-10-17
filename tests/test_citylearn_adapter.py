@@ -77,7 +77,8 @@ def test_citylearn_adapter_reset(minimal_scenario, temp_data_dir):
     observations = adapter.reset(random_seed=42)
     assert observations is not None
     assert isinstance(observations, dict)
-    assert "building_0" in observations
+    # Check for at least one flattened observation key (e.g., building_0_month)
+    assert any(key.startswith("building_0_") for key in observations.keys())
     adapter.close()
 
 
