@@ -1,0 +1,11 @@
+{
+  "grid_convergence_rate": 1.0,
+  "total_active_loss_kwh": 3.090653286034979,
+  "avg_voltage_pu": 1.002193067373353,
+  "voltage_violations_count": 0,
+  "max_line_loading_pct": 0.8903880342917114,
+  "max_trafo_loading_pct": 9.204872285468149,
+  "grid_voltage_violations": 0,
+  "grid_line_violations": 0,
+  "grid_trafo_violations": 0
+}
