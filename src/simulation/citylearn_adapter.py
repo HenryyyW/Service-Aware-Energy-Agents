@@ -50,6 +50,15 @@ class CityLearnAdapter:
         dataset = DataSet()
         schema = dataset.get_schema(self.dataset_name)
         
+        # Capture dataset's native time resolution (seconds per step)
+        self.dataset_seconds_per_step = schema.get('seconds_per_time_step', 3600)
+        dataset_timestep_minutes = self.dataset_seconds_per_step // 60
+        if self.scenario_config.timestep_minutes != dataset_timestep_minutes:
+            print(f"[WARNING] Scenario timestep ({self.scenario_config.timestep_minutes} min) differs from dataset native resolution ({dataset_timestep_minutes} min). "
+                  f"Using dataset resolution ({dataset_timestep_minutes} min) for CityLearn simulation.")
+            # Override scenario timestep for this adapter to avoid resampling issues
+            self.scenario_config.timestep_minutes = dataset_timestep_minutes
+        
         # Save original root_directory BEFORE customizing schema
         original_root_dir = Path(schema['root_directory'])
         
@@ -140,16 +149,30 @@ class CityLearnAdapter:
         """Customize schema for our scenario."""
         # Update simulation parameters
         schema['random_seed'] = self.scenario_config.random_seed
-        schema['seconds_per_time_step'] = self.scenario_config.timestep_minutes * 60
+        # Keep dataset's native seconds_per_time_step (do not overwrite)
         schema['central_agent'] = False
         
-        # Set simulation time steps (1 week default)
-        timesteps_per_day = 24 * 60 // self.scenario_config.timestep_minutes
+        # Ensure critical observations are active for metrics
+        critical_observations = [
+            'indoor_dry_bulb_temperature',
+            'average_unmet_cooling_setpoint_difference',
+            'indoor_relative_humidity',
+            'cooling_storage_soc',
+            'heating_storage_soc',
+            'dhw_storage_soc',
+        ]
+        for obs_name in critical_observations:
+            if obs_name in schema.get('observations', {}):
+                schema['observations'][obs_name]['active'] = True
+        
+        # Set simulation time steps based on dataset resolution
+        dataset_timestep_minutes = self.dataset_seconds_per_step // 60
+        timesteps_per_day = 24 * 60 // dataset_timestep_minutes
         schema['simulation_start_time_step'] = 0
         episode_time_steps = 7 * timesteps_per_day
-        if self.scenario_config.timestep_minutes == 15:
-            # CityLearn terminates at time_step >= time_steps - 1.
-            episode_time_steps += 1
+        # CityLearn terminates at time_step >= time_steps - 1.
+        # Add one extra step for safety
+        episode_time_steps += 1
         schema['episode_time_steps'] = episode_time_steps
         schema['simulation_end_time_step'] = episode_time_steps - 1
         

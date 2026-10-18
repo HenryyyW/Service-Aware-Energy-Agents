@@ -4,6 +4,7 @@
 # Evaluate voltage rise, reverse power flow, and curtailment
 # Test whether local storage and demand shifting reduce grid violations
 
+# Schematic layout around Boulder, CO; coordinates are illustrative, not surveyed locations.
 scenario_id: "scenario_c"
 name: "PV Export and Grid Constraints"
 description: "Baseline scenario with increased PV capacity (150% of baseline) and stricter export limits to test grid constraints."
@@ -20,8 +21,8 @@ buildings:
   - building_id: "building_0"
     building_type: "residential"
     location:
-      lat: 40.0
-      lon: -105.0
+      lat: 40.0000
+      lon: -105.0000
       timezone: "America/Denver"
     simulation_start: "2023-07-01"
     simulation_end: "2023-07-08"
@@ -70,8 +71,8 @@ buildings:
   - building_id: "building_1"
     building_type: "residential"
     location:
-      lat: 40.0
-      lon: -105.0
+      lat: 40.0007
+      lon: -105.0007
       timezone: "America/Denver"
     simulation_start: "2023-07-01"
     simulation_end: "2023-07-08"
@@ -120,8 +121,8 @@ buildings:
   - building_id: "building_2"
     building_type: "residential"
     location:
-      lat: 40.0
-      lon: -105.0
+      lat: 40.0007
+      lon: -104.9993
       timezone: "America/Denver"
     simulation_start: "2023-07-01"
     simulation_end: "2023-07-08"
@@ -170,8 +171,8 @@ buildings:
   - building_id: "building_3"
     building_type: "residential"
     location:
-      lat: 40.0
-      lon: -105.0
+      lat: 39.9993
+      lon: -105.0007
       timezone: "America/Denver"
     simulation_start: "2023-07-01"
     simulation_end: "2023-07-08"
@@ -220,8 +221,8 @@ buildings:
   - building_id: "building_4"
     building_type: "residential"
     location:
-      lat: 40.0
-      lon: -105.0
+      lat: 39.9993
+      lon: -104.9993
       timezone: "America/Denver"
     simulation_start: "2023-07-01"
     simulation_end: "2023-07-08"

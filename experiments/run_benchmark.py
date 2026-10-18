@@ -18,17 +18,21 @@ import argparse
 
 def run_experiment(scenario_file: str, controller: str, seed: int, output_base: str) -> Dict[str, Any]:
     """Run a single experiment and return the result metrics."""
-    output_dir = f"{output_base}/seed_{seed}"
+    scenario_name = Path(scenario_file).stem
+    # Deterministic run_id so we can locate the result file directly
+    run_id = f"{scenario_name}_{controller}_{seed}"
     
     # Run the experiment
     cmd = [
         sys.executable, "-m", "experiments.run_experiment",
         "--config", scenario_file,
         "--controller", controller,
-        "--output-dir", output_dir
+        "--seed", str(seed),
+        "--run-id", run_id,
+        "--output-dir", output_base
     ]
     
-    # Set the random seed in the environment
+    # Set the random seed in the environment (optional, the script uses --seed)
     env = os.environ.copy()
     env["PYTHONHASHSEED"] = str(seed)
     
@@ -50,49 +54,11 @@ def run_experiment(scenario_file: str, controller: str, seed: int, output_base: 
         print(f"Timeout running scenario {scenario_file} with controller {controller} seed {seed}")
         return None
     
-    # Load the result JSON
-    # Find the actual output directory (it includes timestamp and seed)
-    output_path = Path(output_base)
-    scenario_name = Path(scenario_file).stem
-    
-    # Look for all result.json files under the output base
-    all_result_files = list(output_path.glob("*/**/result.json"))
-    
-    # Filter for files that belong to this scenario
-    result_files = []
-    for f in all_result_files:
-        # Check if the file path contains the scenario name in the right place
-        # Expected pattern: {output_base}/{seed}/{scenario_name}/{timestamp}/result.json
-        parts = f.parts
-        try:
-            # Find the scenario_name in the path
-            scenario_index = parts.index(scenario_name)
-            # Check that we have enough path components: output_base, seed, scenario, timestamp, result.json
-            if len(parts) >= scenario_index + 3 and parts[scenario_index + 1].endswith('.json') == False:
-                # The component after scenario_name should be the timestamp directory (not result.json yet)
-                # And the final component should be result.json
-                if f.name == "result.json":
-                    result_files.append(f)
-        except ValueError:
-            # scenario_name not in path
-            continue
-    
-    if not result_files:
-        print(f"No result file found for {scenario_file} in {output_base}")
-        # Debug: show what we found
-        all_files = list(output_path.glob("*/**/result.json"))
-        print(f"  Found {len(all_files)} total result files:")
-        for f in all_files[:5]:  # Show first 5
-            print(f"    {f}")
-        if len(all_files) > 5:
-            print(f"    ... and {len(all_files) - 5} more")
-        return None
-        
-    # Get the most recent result file
-    result_file = max(result_files, key=lambda f: f.stat().st_mtime)
+    # Directly read the result file from the known location
+    result_file = Path(output_base) / scenario_name / run_id / "result.json"
     
     if not result_file.exists():
-        print(f"Result file not found: {result_file}")
+        print(f"Result file not found at expected path: {result_file}")
         return None
     
     try:

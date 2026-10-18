@@ -3,6 +3,7 @@
 # Compare: No sharing, Uniform price sharing, Weighted importer/exporter settlement
 # Report both community savings and distribution of savings among members
 
+# Schematic layout around Boulder, CO; coordinates are illustrative, not surveyed locations.
 scenario_id: "scenario_d"
 name: "Local Energy Sharing and Settlement"
 description: "Baseline scenario with local energy sharing enabled. Tests different settlement rules: uniform price, weighted, carbon-aware, and fairness-aware."
@@ -19,8 +20,8 @@ buildings:
   - building_id: "building_0"
     building_type: "residential"
     location:
-      lat: 40.0
-      lon: -105.0
+      lat: 40.0000
+      lon: -105.0000
       timezone: "America/Denver"
     simulation_start: "2023-07-01"
     simulation_end: "2023-07-08"
@@ -69,8 +70,8 @@ buildings:
   - building_id: "building_1"
     building_type: "residential"
     location:
-      lat: 40.0
-      lon: -105.0
+      lat: 40.0007
+      lon: -105.0007
       timezone: "America/Denver"
     simulation_start: "2023-07-01"
     simulation_end: "2023-07-08"
@@ -119,8 +120,8 @@ buildings:
   - building_id: "building_2"
     building_type: "residential"
     location:
-      lat: 40.0
-      lon: -105.0
+      lat: 40.0007
+      lon: -104.9993
       timezone: "America/Denver"
     simulation_start: "2023-07-01"
     simulation_end: "2023-07-08"
@@ -169,8 +170,8 @@ buildings:
   - building_id: "building_3"
     building_type: "residential"
     location:
-      lat: 40.0
-      lon: -105.0
+      lat: 39.9993
+      lon: -105.0007
       timezone: "America/Denver"
     simulation_start: "2023-07-01"
     simulation_end: "2023-07-08"
@@ -219,8 +220,8 @@ buildings:
   - building_id: "building_4"
     building_type: "residential"
     location:
-      lat: 40.0
-      lon: -105.0
+      lat: 39.9993
+      lon: -104.9993
       timezone: "America/Denver"
     simulation_start: "2023-07-01"
     simulation_end: "2023-07-08"

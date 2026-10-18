@@ -1,2 +1,7 @@
 *.pdf
 notes.md
+
+# Local agent skill bundles; keep project-specific design guidance tracked.
+.agents/skills/
+.agents/**/__pycache__/
+.agents/**/*.py[cod]

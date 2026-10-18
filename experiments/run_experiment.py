@@ -25,11 +25,15 @@ from src.evaluation import compute_all_metrics, generate_report_plots, compute_p
 class ExperimentRunner:
     """Runs experiments with given scenario and controller."""
     
-    def __init__(self, scenario_config: ScenarioConfig, output_dir: str = "experiments/results"):
+    def __init__(self, scenario_config: ScenarioConfig, output_dir: str = "experiments/results", run_id: Optional[str] = None):
         self.scenario_config = scenario_config
         self.output_dir = Path(output_dir) / scenario_config.scenario_id
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.run_id = f"{scenario_config.scenario_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        if run_id is None:
+            seed = scenario_config.random_seed
+            self.run_id = f"{scenario_config.scenario_id}_{seed}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        else:
+            self.run_id = run_id
         self.run_dir = self.output_dir / self.run_id
         self.run_dir.mkdir(parents=True, exist_ok=True)
         
@@ -282,16 +286,39 @@ def main():
                        choices=["rule_based", "multi_agent", "centralized"], help="Controller type")
     parser.add_argument("--max-steps", type=int, default=None, help="Maximum steps to run")
     parser.add_argument("--output-dir", type=str, default="experiments/results", help="Output directory")
+    parser.add_argument("--seed", type=int, default=None, help="Random seed (overrides scenario config)")
+    parser.add_argument("--run-id", type=str, default=None, help="Custom run ID (optional)")
     
     args = parser.parse_args()
     
     # Load scenario
     scenario = load_scenario(args.config)
     
+    # Override seed if provided
+    if args.seed is not None:
+        scenario.random_seed = args.seed
+    
     # Run experiment
-    runner = ExperimentRunner(scenario, args.output_dir)
+    runner = ExperimentRunner(scenario, args.output_dir, run_id=args.run_id)
     runner.setup(args.controller)
     result = runner.run(args.max_steps)
+    
+    # Verify result matches command line
+    assert result.scenario_id == scenario.scenario_id, f"Scenario mismatch: {result.scenario_id} vs {scenario.scenario_id}"
+    assert result.random_seed == scenario.random_seed, f"Seed mismatch: {result.random_seed} vs {scenario.random_seed}"
+    # controller_type is enum, compare value
+    expected_controller = args.controller
+    if expected_controller == "rule_based":
+        expected_enum = ControllerType.RULE_BASED
+    elif expected_controller == "multi_agent":
+        expected_enum = ControllerType.LLM_AGENT
+    elif expected_controller == "centralized":
+        expected_enum = ControllerType.RULE_BASED  # centralized maps to RULE_BASED in _create_result
+    else:
+        expected_enum = ControllerType.RULE_BASED
+    assert result.controller_type == expected_enum, f"Controller mismatch: {result.controller_type} vs {expected_enum}"
+    print(f"Verification passed: scenario={result.scenario_id}, controller={result.controller_type.value}, seed={result.random_seed}")
+    print(f"Result file: {runner.run_dir / 'result.json'}")
     
     print(f"\nExperiment Summary:")
     print(f"  Run ID: {result.run_id}")
