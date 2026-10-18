@@ -1,0 +1,367 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+import streamlit as st
+import yaml
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+RESULTS_DIR = PROJECT_ROOT / "results"
+CONFIGS_DIR = PROJECT_ROOT / "configs"
+
+
+def load_experiment_results(results_dir: Path) -> list[dict[str, Any]]:
+    runs = []
+    for result_file in results_dir.rglob("result.json"):
+        try:
+            with result_file.open(encoding="utf-8") as file:
+                result = json.load(file)
+            runs.append({
+                "run_id": result.get("run_id", result_file.parent.name),
+                "scenario_id": result.get("scenario_id", ""),
+                "controller_type": str(result.get("controller_type", "")),
+                "status": result.get("status", "unknown"),
+                "start_time": result.get("start_time", ""),
+                "result": result,
+                "path": result_file.parent,
+            })
+        except (OSError, json.JSONDecodeError) as error:
+            st.warning(f"Could not load {result_file}: {error}")
+    return runs
+
+
+def load_trajectories(run_path: Path) -> list[dict[str, Any]] | None:
+    trajectory_file = run_path / "trajectories.jsonl"
+    if not trajectory_file.exists():
+        return None
+
+    rows = []
+    try:
+        with trajectory_file.open(encoding="utf-8") as file:
+            for line in file:
+                if line.strip():
+                    rows.append(json.loads(line))
+    except (OSError, json.JSONDecodeError) as error:
+        st.error(f"Could not read trajectories: {error}")
+        return None
+    return rows
+
+
+def load_scenario_config(scenario_id: str) -> dict[str, Any] | None:
+    scenario_file = CONFIGS_DIR / f"{scenario_id}.yaml"
+    if not scenario_file.exists():
+        return None
+    with scenario_file.open(encoding="utf-8") as file:
+        return yaml.safe_load(file)
+
+
+def get_building_ids(scenario_config: dict[str, Any] | None, trajectory: dict[str, Any]) -> list[str]:
+    if scenario_config and scenario_config.get("buildings"):
+        return [building["building_id"] for building in scenario_config["buildings"]]
+
+    observations = trajectory.get("observations", {})
+    if isinstance(observations, dict):
+        return sorted({
+            key.split("_", 1)[0]
+            for key in observations
+            if key.startswith("building_")
+        })
+    return []
+
+
+def expand_trajectories(steps: list[dict[str, Any]], building_ids: list[str]) -> pd.DataFrame:
+    """Expand timestep records into one row per building and timestep."""
+    rows = []
+    action_columns = ("battery_power_kw", "ev_charge_kw", "flexible_load_kw")
+
+    for step in steps:
+        observations = step.get("observations") or {}
+        costs = step.get("costs") or {}
+        actions_by_building = {
+            building_id: {column: 0.0 for column in action_columns}
+            for building_id in building_ids
+        }
+
+        for action in step.get("applied_actions", []):
+            asset_id = action.get("asset_id", "")
+            building_id = next(
+                (candidate for candidate in building_ids if asset_id.startswith(candidate + "_")),
+                None,
+            )
+            if building_id is None:
+                continue
+
+            action_type = action.get("action_type")
+            column = {
+                "battery_charge": "battery_power_kw",
+                "battery_discharge": "battery_power_kw",
+                "ev_charge": "ev_charge_kw",
+                "flexible_load": "flexible_load_kw",
+            }.get(action_type)
+            if column:
+                actions_by_building[building_id][column] += float(action.get("value_kw", 0.0))
+
+        for building_id in building_ids:
+            prefix = f"{building_id}_"
+            row = {
+                "timestep": int(step.get("timestep", 0)),
+                "building_id": building_id,
+                "cost": float(costs.get(building_id, 0.0)),
+            }
+            row.update({
+                key[len(prefix):]: value
+                for key, value in observations.items()
+                if key.startswith(prefix)
+            })
+            row.update(actions_by_building[building_id])
+            rows.append(row)
+
+    return pd.DataFrame(rows)
+
+
+def grid_timeline(steps: list[dict[str, Any]]) -> pd.DataFrame:
+    rows = []
+    for step in steps:
+        diagnostics = step.get("grid_diagnostics") or {}
+        voltages = diagnostics.get("voltage_profile") or {}
+        loading = diagnostics.get("loading_profile") or {}
+        lines = loading.get("lines") or {}
+        transformers = loading.get("trafos") or {}
+        rows.append({
+            "timestep": step.get("timestep", 0),
+            "min_voltage_pu": min(voltages.values(), default=None),
+            "max_voltage_pu": max(voltages.values(), default=None),
+            "max_line_loading_pct": max(lines.values(), default=None) * 100 if lines else None,
+            "max_transformer_loading_pct": max(transformers.values(), default=None) * 100 if transformers else None,
+            "power_flow_converged": diagnostics.get("power_flow_converged"),
+        })
+    return pd.DataFrame(rows)
+
+
+def display_metric(column, label: str, value: Any, *, format_string: str | None = None):
+    if value is None:
+        column.metric(label, "N/A")
+    elif format_string:
+        column.metric(label, format_string.format(value))
+    else:
+        column.metric(label, value)
+
+
+def main() -> None:
+    st.set_page_config(page_title="Energy Community", layout="wide")
+    st.markdown(
+        """
+        <style>
+        :root { --ink: #173a36; --green: #176b5b; --lime: #c8dc68; --rust: #c75b35; }
+        .block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
+        h1, h2, h3 { color: var(--ink); }
+        [data-testid="stMetric"] { border-left: 2px solid var(--lime); padding-left: .7rem; }
+        [data-testid="stSidebar"] { border-right: 1px solid #d8e0da; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.title("Energy Community")
+    st.caption("Experiment results · spatial, temporal, grid and service views")
+
+    if not RESULTS_DIR.exists():
+        st.error(f"Results directory not found: {RESULTS_DIR}")
+        st.stop()
+
+    runs = load_experiment_results(RESULTS_DIR)
+    if not runs:
+        st.error("No experiment runs found in results/.")
+        st.stop()
+    runs.sort(key=lambda run: run.get("start_time", ""), reverse=True)
+
+    with st.sidebar:
+        st.header("Run selection")
+        labels = [
+            f"{run['run_id']} · {run['scenario_id']} · {run['controller_type']}"
+            for run in runs
+        ]
+        selected_label = st.selectbox("Experiment", labels)
+        run = runs[labels.index(selected_label)]
+        result = run["result"]
+        raw_steps = load_trajectories(run["path"])
+        if not raw_steps:
+            st.error("This run has no readable trajectory data.")
+            st.stop()
+
+        scenario_config = load_scenario_config(run["scenario_id"])
+        building_ids = get_building_ids(scenario_config, raw_steps[0])
+        trajectory = expand_trajectories(raw_steps, building_ids)
+        if trajectory.empty:
+            st.error("No building observations could be extracted from the trajectory.")
+            st.stop()
+
+        selected_building = st.selectbox("Building", building_ids)
+        timestep = st.slider(
+            "Timestep",
+            min_value=int(trajectory["timestep"].min()),
+            max_value=int(trajectory["timestep"].max()),
+            value=int(trajectory["timestep"].min()),
+        )
+        st.divider()
+        st.caption(f"Scenario: {run['scenario_id']}")
+        st.caption(f"Controller: {run['controller_type']}")
+        st.caption(f"Seed: {result.get('random_seed', 'N/A')}")
+        st.caption(f"Recorded steps: {len(raw_steps)}")
+
+    energy = result.get("energy") or {}
+    service = result.get("service") or {}
+    grid = result.get("grid") or {}
+    kpis = st.columns(5)
+    display_metric(kpis[0], "Run status", run["status"])
+    display_metric(kpis[1], "Total cost", energy.get("total_cost"), format_string="${:,.2f}")
+    display_metric(kpis[2], "Grid import", energy.get("grid_import_kwh"), format_string="{:,.1f} kWh")
+    display_metric(kpis[3], "Peak demand", energy.get("peak_demand_kw"), format_string="{:,.2f} kW")
+    display_metric(kpis[4], "EV completion", service.get("ev_completion_rate"), format_string="{:.0%}")
+
+    tabs = st.tabs(["Overview", "Energy", "Grid", "Service & Fairness", "Repair"])
+    timestep_rows = trajectory[trajectory["timestep"] == timestep]
+    building_rows = trajectory[trajectory["building_id"] == selected_building]
+    selected_row = timestep_rows[timestep_rows["building_id"] == selected_building]
+
+    with tabs[0]:
+        left, right = st.columns([1.25, 1])
+        with left:
+            st.subheader("Community map")
+            locations = []
+            for building in (scenario_config or {}).get("buildings", []):
+                location = building.get("location") or {}
+                if location.get("lat") is not None and location.get("lon") is not None:
+                    locations.append({
+                        "building": building["building_id"],
+                        "lat": float(location["lat"]),
+                        "lon": float(location["lon"]),
+                    })
+            if locations:
+                st.map(pd.DataFrame(locations), latitude="lat", longitude="lon", size=80)
+                if scenario_config and scenario_config.get("pandapower"):
+                    mappings = scenario_config["pandapower"].get("bus_mappings", [])
+                    if mappings:
+                        st.dataframe(pd.DataFrame(mappings), hide_index=True, use_container_width=True)
+            else:
+                st.info("Building coordinates are not available in this scenario.")
+        with right:
+            st.subheader(f"{selected_building} · step {timestep}")
+            if not selected_row.empty:
+                values = selected_row.iloc[0].drop(labels=["timestep", "building_id"])
+                st.dataframe(values.rename("Value").to_frame(), use_container_width=True)
+            st.subheader("Grid summary")
+            grid_cols = st.columns(2)
+            display_metric(grid_cols[0], "Power-flow convergence", grid.get("power_flow_convergence_rate"), format_string="{:.1%}")
+            display_metric(grid_cols[1], "Voltage violations", grid.get("voltage_violations_count"))
+            display_metric(grid_cols[0], "Line violations", grid.get("line_loading_violations"))
+            display_metric(grid_cols[1], "Transformer violations", grid.get("transformer_loading_violations"))
+
+    with tabs[1]:
+        st.subheader("Energy profile")
+        metric_options = [
+            "net_electricity_consumption", "non_shiftable_load", "solar_generation",
+            "electrical_storage_soc", "connected_electric_vehicle_at_charger_soc",
+            "battery_power_kw", "ev_charge_kw", "flexible_load_kw", "cost",
+        ]
+        numeric_columns = [
+            column for column in trajectory.columns
+            if column not in {"timestep", "building_id"}
+            and pd.api.types.is_numeric_dtype(trajectory[column])
+        ]
+        available_metrics = [metric for metric in metric_options if metric in numeric_columns]
+        available_metrics += [metric for metric in numeric_columns if metric not in available_metrics]
+        metric = st.selectbox("Series", available_metrics)
+        compare_buildings = st.checkbox("Compare buildings", value=False)
+        chart = trajectory.pivot(index="timestep", columns="building_id", values=metric)
+        if compare_buildings:
+            st.line_chart(chart)
+        elif selected_building in chart.columns:
+            st.line_chart(chart[[selected_building]])
+        st.caption(f"{metric.replace('_', ' ').title()} by timestep")
+
+    with tabs[2]:
+        st.subheader("Distribution grid")
+        grid_history = grid_timeline(raw_steps)
+        voltage_columns = [
+            column for column in (
+                "min_voltage_pu", "max_voltage_pu",
+            ) if column in grid_history and grid_history[column].notna().any()
+        ]
+        loading_columns = [
+            column for column in ("max_line_loading_pct", "max_transformer_loading_pct")
+            if column in grid_history and grid_history[column].notna().any()
+        ]
+        voltage_col, loading_col = st.columns(2)
+        with voltage_col:
+            st.write("Voltage profile (pu)")
+            if voltage_columns:
+                st.line_chart(grid_history.set_index("timestep")[voltage_columns])
+            else:
+                st.info("Per-step voltage profiles were not saved for this run.")
+        with loading_col:
+            st.write("Maximum loading (%)")
+            if loading_columns:
+                st.line_chart(grid_history.set_index("timestep")[loading_columns])
+            else:
+                st.info("Per-step line and transformer loading profiles were not saved for this run.")
+        step_record = next((step for step in raw_steps if step.get("timestep") == timestep), {})
+        step_grid = step_record.get("grid_diagnostics") or {}
+        detail_cols = st.columns(2)
+        with detail_cols[0]:
+            st.write("Selected-step voltage profile")
+            voltages = step_grid.get("voltage_profile") or {}
+            st.dataframe(pd.DataFrame([{"bus": bus, "voltage_pu": value} for bus, value in voltages.items()]), hide_index=True)
+        with detail_cols[1]:
+            st.write("Selected-step loading profile")
+            loading = step_grid.get("loading_profile") or {}
+            loading_rows = [
+                {"element_type": kind, "element": element, "loading_pct": float(value) * 100}
+                for kind in ("lines", "trafos")
+                for element, value in loading.get(kind, {}).items()
+            ]
+            st.dataframe(pd.DataFrame(loading_rows), hide_index=True)
+
+    with tabs[3]:
+        st.subheader("Service outcomes")
+        service_cols = st.columns(4)
+        display_metric(service_cols[0], "EV completion", service.get("ev_completion_rate"), format_string="{:.1%}")
+        display_metric(service_cols[1], "Average departure SOC", service.get("ev_avg_soc_at_departure"), format_string="{:.1%}")
+        display_metric(service_cols[2], "Worst departure SOC", service.get("ev_worst_soc_at_departure"), format_string="{:.1%}")
+        display_metric(service_cols[3], "Comfort violations", service.get("comfort_violation_degree_hours"), format_string="{:.1f} degree-hours")
+        service_cols2 = st.columns(4)
+        display_metric(service_cols2[0], "Flexible-load completion", service.get("flexible_load_completion_rate"), format_string="{:.1%}")
+        display_metric(service_cols2[1], "Flexible-load delay", service.get("flexible_load_avg_delay_hours"), format_string="{:.1f} h")
+        display_metric(service_cols2[2], "Fairness Gini", service.get("gini_coefficient"), format_string="{:.3f}")
+        display_metric(service_cols2[3], "Worst member cost", service.get("worst_member_cost"), format_string="${:,.2f}")
+        members = result.get("per_member") or []
+        if members:
+            st.subheader("Member outcomes")
+            st.dataframe(pd.DataFrame(members), hide_index=True, use_container_width=True)
+        else:
+            st.info("Per-member metrics are not present in this result.")
+
+    with tabs[4]:
+        st.subheader("Repair record")
+        iterations = result.get("repair_iterations") or []
+        if not iterations:
+            st.info("No repair iterations are recorded for this run.")
+        else:
+            st.dataframe(pd.DataFrame(iterations), hide_index=True, use_container_width=True)
+        if result.get("code_diffs"):
+            for index, diff in enumerate(result["code_diffs"], start=1):
+                content = diff.get("diff", "")
+                if content:
+                    with st.expander(f"Code diff {index}"):
+                        st.code(content, language="diff")
+
+    st.caption(
+        f"{run['run_id']} · {len(raw_steps)} recorded steps · "
+        f"{run['scenario_id']} · seed {result.get('random_seed', 'N/A')}"
+    )
+
+
+main()
