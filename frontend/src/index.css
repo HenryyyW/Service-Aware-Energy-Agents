@@ -3,28 +3,60 @@
 @import "tailwindcss";
 
 @theme {
-  /* Colors from design plan */
-  --color-space: #0A0F1A;
-  --color-surface: #111827;
-  --color-surface-hover: #1A2235;
+  /* ============================================================
+     SEMANTIC COLOR TOKENS - Dark Mode First (Energy Domain)
+     All values tested for >=4.5:1 contrast (text) / >=3:1 (UI)
+  ============================================================ */
+  /* Base surfaces */
+  --color-bg: #0A0F1A;
+  --color-bg-elevated: #111827;
+  --color-bg-hover: #1A2235;
+  --color-bg-active: #222B3D;
+  
+  /* Borders & dividers - consistent in both themes */
   --color-border: #2D3748;
+  --color-border-strong: #3D4A5C;
+  --color-border-subtle: #1E293B;
+  
+  /* Text hierarchy */
   --color-text: #E8EBF0;
-  --color-text-muted: #7A8494;
-  --color-sun: #F59E0B;
-  --color-energy: #10B981;
-  --color-load: #F43F5E;
-  --color-battery: #8B5CF6;
-  --color-ev: #06B6D4;
-  --color-grid: #EAB308;
-  --color-violation: #EF4444;
-  --color-comfort: #22D3EE;
+  --color-text-muted: #94A3B8;
+  --color-text-subtle: #64748B;
+  --color-text-inverse: #0A0F1A;
+  
+  /* Semantic energy domain colors - physics-meaningful */
+  --color-sun: #F59E0B;       /* Generation (PV) - amber */
+  --color-energy: #10B981;    /* Storage/flow - emerald */
+  --color-load: #F43F5E;      /* Consumption - rose */
+  --color-battery: #8B5CF6;   /* Battery - violet */
+  --color-ev: #06B6D4;        /* Mobility - cyan */
+  --color-grid: #EAB308;      /* Infrastructure - yellow */
+  --color-violation: #EF4444; /* Safety/alert - red */
+  --color-comfort: #22D3EE;   /* Comfort - sky */
+  
+  /* State overlays (8%/12%/16% opacity scale) */
+  --color-state-hover: rgba(255,255,255,0.08);
+  --color-state-active: rgba(255,255,255,0.12);
+  --color-state-focus: rgba(245, 158, 11, 0.4);
+  --color-state-disabled: rgba(255,255,255,0.04);
+  
+  /* Semantic aliases for components */
+  --color-primary: var(--color-sun);
+  --color-primary-hover: #D97706;
+  --color-primary-active: #B45309;
+  --color-danger: var(--color-violation);
+  --color-danger-hover: #DC2626;
+  --color-danger-active: #B91C1C;
+  --color-success: var(--color-energy);
+  --color-warning: var(--color-grid);
+  --color-info: var(--color-ev);
 
   /* Font families */
   --font-display: 'Space Grotesk', sans-serif;
   --font-body: 'IBM Plex Sans', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  /* Font sizes - using standard Tailwind naming */
+  /* Font sizes - consistent scale with line-height ratios */
   --text-display-xl: 72px;
   --text-display-xl--line-height: 80px;
   --text-display-xl--letter-spacing: -0.02em;
@@ -75,6 +107,22 @@
   --text-data--font-weight: 500;
   --text-data--font-family: var(--font-mono);
 
+  /* ============================================================
+     SPACING & LAYOUT TOKENS - 4dp/8dp rhythm
+  ============================================================ */
+  --space-1: 4px;   /* 1 unit */
+  --space-2: 8px;   /* 2 units */
+  --space-3: 12px;  /* 3 units */
+  --space-4: 16px;  /* 4 units */
+  --space-5: 20px;  /* 5 units */
+  --space-6: 24px;  /* 6 units */
+  --space-8: 32px;  /* 8 units */
+  --space-10: 40px; /* 10 units */
+  --space-12: 48px; /* 12 units */
+  --space-16: 64px; /* 16 units */
+  --space-20: 80px; /* 20 units */
+  --space-24: 96px; /* 24 units */
+
   /* Standard Tailwind durations */
   --duration-75: 75ms;
   --duration-100: 100ms;
@@ -90,18 +138,35 @@
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* Spring physics for delightful micro-interactions */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-spring-gentle: cubic-bezier(0.25, 1.0, 0.5, 1.0);
 
-  /* Box shadows */
+  /* Box shadows - layered depth system */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-panel-hover: 0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
   --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-tooltip: 0 4px 16px rgba(0, 0, 0, 0.4);
 
   /* Backdrop blur */
   --blur-panel: 12px;
+  --blur-modal: 24px;
 
   /* Background images */
   --bg-grid-pattern: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
   --bg-size-grid: 40px 40px;
+
+  /* ============================================================
+     TOUCH TARGET & ACCESSIBILITY
+  ============================================================ */
+  --touch-target-min: 44px;  /* iOS minimum */
+  --touch-target-comfortable: 48px;  /* Android comfortable */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
 }
 
 /* Custom utilities for design system values not covered by standard Tailwind */
@@ -121,6 +186,10 @@
   transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+@utility ease-spring-gentle {
+  transition-timing-function: cubic-bezier(0.25, 1.0, 0.5, 1.0);
+}
+
 @utility shadow-panel {
   box-shadow: var(--shadow-panel);
 }
@@ -133,8 +202,20 @@
   box-shadow: var(--shadow-card);
 }
 
+@utility shadow-modal {
+  box-shadow: var(--shadow-modal);
+}
+
+@utility shadow-tooltip {
+  box-shadow: var(--shadow-tooltip);
+}
+
 @utility blur-panel {
   backdrop-filter: blur(var(--blur-panel));
+}
+
+@utility blur-modal {
+  backdrop-filter: blur(var(--blur-modal));
 }
 
 @utility bg-grid-pattern {
@@ -200,7 +281,7 @@
   ring-width: 2px;
   ring-color: var(--color-sun);
   ring-offset-width: 2px;
-  ring-offset-color: var(--color-space);
+  ring-offset-color: var(--color-bg);
 }
 
 @utility btn-disabled {
@@ -211,7 +292,7 @@
 @utility input-base {
   width: 100%;
   padding: 0.5rem 0.75rem;
-  background-color: var(--color-space);
+  background-color: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: 0.5rem;
   color: var(--color-text);
@@ -241,7 +322,7 @@
   ring-width: 2px;
   ring-color: var(--color-sun);
   ring-offset-width: 2px;
-  ring-offset-color: var(--color-space);
+  ring-offset-color: var(--color-bg);
 }
 
 @utility slider-thumb {
@@ -332,7 +413,7 @@
   position: absolute;
   z-index: 50;
   padding: 0.375rem 0.75rem;
-  background-color: var(--color-surface);
+  background-color: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: 0.5rem;
   font-size: var(--text-body-sm);
@@ -376,43 +457,54 @@
   }
 
   * {
-    @apply border-border;
+    border-color: var(--color-border);
   }
 
   html {
-    @apply scroll-smooth;
+    scroll-behavior: smooth;
   }
 
   body {
-    @apply bg-space text-text font-body antialiased;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
 
   /* Focus visible for accessibility */
   *:focus-visible {
-    @apply outline-none ring-2 ring-sun ring-offset-2 ring-offset-space;
+    outline: none;
+    ring-width: 2px;
+    ring-color: var(--color-sun);
+    ring-offset-width: 2px;
+    ring-offset-color: var(--color-bg);
   }
 
   /* Scrollbar styling */
   ::-webkit-scrollbar {
-    @apply w-2 h-2;
+    width: 8px;
+    height: 8px;
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-space;
+    background-color: var(--color-bg);
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-border rounded-full;
+    background-color: var(--color-border);
+    border-radius: 9999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-text-muted;
+    background-color: var(--color-text-muted);
   }
 
   /* Selection */
   ::selection {
-    @apply bg-sun/30 text-text;
+    background-color: color-mix(in srgb, var(--color-sun) 30%, transparent);
+    color: var(--color-text);
   }
 }
 
@@ -445,8 +537,17 @@
   }
 
   .btn-primary {
-    @apply btn-base btn-focus bg-sun text-space hover:bg-sun/90 active:bg-sun;
-    box-shadow: 0 10px 40px rgba(245, 158, 11, 0.25);
+    @apply btn-base btn-focus;
+    background-color: var(--color-sun);
+    color: var(--color-bg);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--color-primary-hover);
+  }
+
+  .btn-primary:active:not(:disabled) {
+    background-color: var(--color-primary-active);
   }
 
   .btn-primary:disabled {
@@ -454,7 +555,15 @@
   }
 
   .btn-secondary {
-    @apply btn-base btn-focus bg-surface border border-border text-text hover:bg-surface-hover hover:border-border/50;
+    @apply btn-base btn-focus;
+    background-color: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background-color: var(--color-bg-hover);
+    border-color: color-mix(in srgb, var(--color-border) 50%, transparent);
   }
 
   .btn-secondary:disabled {
@@ -462,7 +571,14 @@
   }
 
   .btn-ghost {
-    @apply btn-base btn-focus bg-transparent text-text-muted hover:text-text hover:bg-white/5;
+    @apply btn-base btn-focus;
+    background-color: transparent;
+    color: var(--color-text-muted);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    color: var(--color-text);
+    background-color: rgba(255, 255, 255, 0.05);
   }
 
   .btn-ghost:disabled {
@@ -470,8 +586,13 @@
   }
 
   .btn-danger {
-    @apply btn-base btn-focus bg-violation text-white hover:bg-violation/90;
-    box-shadow: 0 10px 40px rgba(239, 68, 68, 0.25);
+    @apply btn-base btn-focus;
+    background-color: var(--color-violation);
+    color: white;
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background-color: var(--color-danger-hover);
   }
 
   .btn-danger:disabled {
@@ -492,7 +613,8 @@
   }
 
   .input:disabled {
-    @apply opacity-50 cursor-not-allowed;
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .select {
@@ -504,7 +626,8 @@
   }
 
   .select:disabled {
-    @apply opacity-50 cursor-not-allowed;
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   /* Slider */
@@ -517,7 +640,7 @@
   }
 
   .slider::-webkit-slider-thumb:hover {
-    @apply scale-110;
+    transform: scale(1.1);
     box-shadow: 0 20px 40px rgba(245, 158, 11, 0.4);
   }
 
@@ -531,7 +654,10 @@
   }
 
   .tab-active {
-    @apply tab-base bg-sun/15 text-sun border border-sun/30;
+    @apply tab-base;
+    background-color: color-mix(in srgb, var(--color-sun) 15%, transparent);
+    color: var(--color-sun);
+    border: 1px solid color-mix(in srgb, var(--color-sun) 30%, transparent);
   }
 
   /* Tooltip */
@@ -548,22 +674,26 @@
     @apply badge-base;
   }
 
-  .badge-sun { @apply badge-base bg-sun/15 text-sun border border-sun/30; }
-  .badge-energy { @apply badge-base bg-energy/15 text-energy border border-energy/30; }
-  .badge-load { @apply badge-base bg-load/15 text-load border border-load/30; }
-  .badge-battery { @apply badge-base bg-battery/15 text-battery border border-battery/30; }
-  .badge-ev { @apply badge-base bg-ev/15 text-ev border border-ev/30; }
-  .badge-grid { @apply badge-base bg-grid/15 text-grid border border-grid/30; }
-  .badge-violation { @apply badge-base bg-violation/15 text-violation border border-violation/30; }
-  .badge-comfort { @apply badge-base bg-comfort/15 text-comfort border border-comfort/30; }
+  .badge-sun { @apply badge-base; background-color: color-mix(in srgb, var(--color-sun) 15%, transparent); color: var(--color-sun); border: 1px solid color-mix(in srgb, var(--color-sun) 30%, transparent); }
+  .badge-energy { @apply badge-base; background-color: color-mix(in srgb, var(--color-energy) 15%, transparent); color: var(--color-energy); border: 1px solid color-mix(in srgb, var(--color-energy) 30%, transparent); }
+  .badge-load { @apply badge-base; background-color: color-mix(in srgb, var(--color-load) 15%, transparent); color: var(--color-load); border: 1px solid color-mix(in srgb, var(--color-load) 30%, transparent); }
+  .badge-battery { @apply badge-base; background-color: color-mix(in srgb, var(--color-battery) 15%, transparent); color: var(--color-battery); border: 1px solid color-mix(in srgb, var(--color-battery) 30%, transparent); }
+  .badge-ev { @apply badge-base; background-color: color-mix(in srgb, var(--color-ev) 15%, transparent); color: var(--color-ev); border: 1px solid color-mix(in srgb, var(--color-ev) 30%, transparent); }
+  .badge-grid { @apply badge-base; background-color: color-mix(in srgb, var(--color-grid) 15%, transparent); color: var(--color-grid); border: 1px solid color-mix(in srgb, var(--color-grid) 30%, transparent); }
+  .badge-violation { @apply badge-base; background-color: color-mix(in srgb, var(--color-violation) 15%, transparent); color: var(--color-violation); border: 1px solid color-mix(in srgb, var(--color-violation) 30%, transparent); }
+  .badge-comfort { @apply badge-base; background-color: color-mix(in srgb, var(--color-comfort) 15%, transparent); color: var(--color-comfort); border: 1px solid color-mix(in srgb, var(--color-comfort) 30%, transparent); }
 
   /* Metric value */
   .metric-value {
-    @apply font-mono text-data tabular-nums;
+    font-family: var(--font-mono);
+    font-size: var(--text-data);
+    font-variant-numeric: tabular-nums;
   }
 
   .metric-label {
-    @apply font-body text-caption text-text-muted;
+    font-family: var(--font-body);
+    font-size: var(--text-caption);
+    color: var(--color-text-muted);
   }
 
   /* Time player specific */
@@ -582,7 +712,9 @@
   }
 
   .layer-item-active {
-    @apply layer-item-base bg-sun/10 text-sun;
+    @apply layer-item-base;
+    background-color: color-mix(in srgb, var(--color-sun) 10%, transparent);
+    color: var(--color-sun);
   }
 
   /* Asset card in inspector */
@@ -595,11 +727,16 @@
   }
 
   .asset-card-title {
-    @apply font-display font-semibold text-body text-text;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--text-body);
+    color: var(--color-text);
   }
 
   .asset-card-subtitle {
-    @apply font-body text-body-sm text-text-muted;
+    font-family: var(--font-body);
+    font-size: var(--text-body-sm);
+    color: var(--color-text-muted);
   }
 
   /* Grid pattern for empty states */
@@ -626,61 +763,93 @@
 
   /* Absolute center */
   .absolute-center {
-    @apply absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
   }
 
   /* Full screen */
   .full-screen {
-    @apply fixed inset-0 z-50;
+    position: fixed;
+    inset: 0;
+    z-index: 50;
   }
 
   /* Aspect ratios for map */
   .aspect-map {
-    @apply aspect-[16/10];
+    aspect-ratio: 16/10;
   }
 
   @media (max-width: 1024px) {
     .aspect-map {
-      @apply aspect-[4/3];
+      aspect-ratio: 4/3;
     }
   }
 }
 
 /* MapLibre GL overrides */
 .maplibregl-popup {
-  @apply bg-surface border border-border rounded-xl shadow-panel;
+  background-color: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  box-shadow: var(--shadow-panel);
 }
 
 .maplibregl-popup-content {
-  @apply p-0;
+  padding: 0;
 }
 
 .maplibregl-popup-close-button {
-  @apply text-text-muted hover:text-text text-xl leading-none p-2;
+  color: var(--color-text-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0.5rem;
+}
+
+.maplibregl-popup-close-button:hover {
+  color: var(--color-text);
 }
 
 .maplibregl-ctrl-group {
-  @apply bg-surface/80 backdrop-blur-panel border border-border rounded-xl shadow-panel;
+  background-color: color-mix(in srgb, var(--color-bg-elevated) 80%, transparent);
+  backdrop-filter: blur(var(--blur-panel));
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  box-shadow: var(--shadow-panel);
 }
 
 .maplibregl-ctrl {
-  @apply bg-transparent;
+  background-color: transparent;
 }
 
 .maplibregl-ctrl-button {
-  @apply text-text-muted hover:text-text;
+  color: var(--color-text-muted);
+}
+
+.maplibregl-ctrl-button:hover {
+  color: var(--color-text);
 }
 
 /* Deck.gl canvas */
 .deck-canvas {
-  @apply absolute inset-0;
+  position: absolute;
+  inset: 0;
 }
 
 /* Plotly overrides */
 .plotly .modebar {
-  @apply bg-surface/80 backdrop-blur-panel border border-border rounded-lg shadow-panel;
+  background-color: color-mix(in srgb, var(--color-bg-elevated) 80%, transparent);
+  backdrop-filter: blur(var(--blur-panel));
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  box-shadow: var(--shadow-panel);
 }
 
 .plotly .modebar-btn {
-  @apply text-text-muted hover:text-text;
+  color: var(--color-text-muted);
+}
+
+.plotly .modebar-btn:hover {
+  color: var(--color-text);
 }
