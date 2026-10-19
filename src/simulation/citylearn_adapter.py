@@ -51,7 +51,7 @@ class CityLearnAdapter:
         schema = dataset.get_schema(self.dataset_name)
         
         # Capture dataset's native time resolution (seconds per step)
-        self.dataset_seconds_per_step = schema.get('seconds_per_time_step', 3600)
+        self.dataset_seconds_per_step = int(schema.get('seconds_per_time_step', 3600))
         dataset_timestep_minutes = self.dataset_seconds_per_step // 60
         if self.scenario_config.timestep_minutes != dataset_timestep_minutes:
             print(f"[WARNING] Scenario timestep ({self.scenario_config.timestep_minutes} min) differs from dataset native resolution ({dataset_timestep_minutes} min). "
@@ -70,6 +70,9 @@ class CityLearnAdapter:
         ]
         print(f"All actions: {self.action_names}")
         print(f"Active actions (global): {self.active_action_names}")
+        
+        # Capture original building IDs from dataset schema BEFORE customizing
+        self.building_ids = [b for b in schema['buildings'].keys() if schema['buildings'][b].get('include', True)]
         
         # Update schema with our scenario parameters
         schema = self._customize_schema(schema)
@@ -149,7 +152,8 @@ class CityLearnAdapter:
         """Customize schema for our scenario."""
         # Update simulation parameters
         schema['random_seed'] = self.scenario_config.random_seed
-        # Keep dataset's native seconds_per_time_step (do not overwrite)
+        # Ensure seconds_per_time_step is stored as integer in schema
+        schema['seconds_per_time_step'] = int(self.dataset_seconds_per_step)
         schema['central_agent'] = False
         
         # Ensure critical observations are active for metrics
@@ -165,40 +169,38 @@ class CityLearnAdapter:
             if obs_name in schema.get('observations', {}):
                 schema['observations'][obs_name]['active'] = True
         
-        # Set simulation time steps based on dataset resolution
-        dataset_timestep_minutes = self.dataset_seconds_per_step // 60
-        timesteps_per_day = 24 * 60 // dataset_timestep_minutes
+        # Set simulation time steps based on dataset resolution - ensure all values are integers
+        dataset_timestep_minutes = int(self.dataset_seconds_per_step // 60)
+        timesteps_per_day = int(24 * 60 // dataset_timestep_minutes)
         schema['simulation_start_time_step'] = 0
-        episode_time_steps = 7 * timesteps_per_day
+        episode_time_steps = int(7 * timesteps_per_day)
         # CityLearn terminates at time_step >= time_steps - 1.
         # Add one extra step for safety
         episode_time_steps += 1
-        schema['episode_time_steps'] = episode_time_steps
-        schema['simulation_end_time_step'] = episode_time_steps - 1
+        schema['episode_time_steps'] = int(episode_time_steps)
+        schema['simulation_end_time_step'] = int(episode_time_steps - 1)
         
         # Update root directory to our data dir - use absolute path to avoid double resolution
         schema['root_directory'] = str(Path(self.data_dir).resolve() / "schemas" / self.scenario_config.scenario_id)
         
-        # Keep only the number of buildings we need (up to 5 for scenario A)
+        # Keep ONLY the buildings from our scenario - no fallback to dataset buildings
+        # This ensures dummy data is created for all scenario buildings
         buildings_to_keep = {}
         for i, building_config in enumerate(self.scenario_config.buildings[:5]):
+            # Map scenario building to dataset building by index if available
             if i < len(self.building_ids):
                 old_name = self.building_ids[i]
                 new_name = building_config.building_id
                 if old_name in schema['buildings']:
-                    buildings_to_keep[new_name] = schema['buildings'][old_name]
-                    buildings_to_keep[new_name]['energy_simulation'] = f"{new_name}.csv"
-        
-        # If we don't have enough buildings in dataset, use what we have
-        if not buildings_to_keep:
-            buildings_to_keep = {k: v for k, v in list(schema['buildings'].items())[:5]}
-            # Rename to match our building IDs
-            renamed = {}
-            for i, (old_name, building_schema) in enumerate(buildings_to_keep.items()):
-                new_name = self.scenario_config.buildings[i].building_id if i < len(self.scenario_config.buildings) else f"building_{i}"
-                building_schema['energy_simulation'] = f"{new_name}.csv"
-                renamed[new_name] = building_schema
-            buildings_to_keep = renamed
+                    # Use dataset building config as template
+                    buildings_to_keep[new_name] = schema['buildings'][old_name].copy()
+                else:
+                    # Dataset doesn't have enough buildings, create minimal config
+                    buildings_to_keep[new_name] = {}
+                # Always use our building name for energy simulation file
+                buildings_to_keep[new_name]['energy_simulation'] = f"{new_name}.csv"
+                # Ensure building is included
+                buildings_to_keep[new_name]['include'] = True
         
         schema['buildings'] = buildings_to_keep
         self.building_ids = list(buildings_to_keep.keys())
@@ -261,7 +263,11 @@ class CityLearnAdapter:
     
     def _create_dummy_energy_file(self, filepath: Path):
         """Create a dummy energy simulation file with correct columns for EnergySimulation."""
-        timesteps = 7 * 24 * 60 // self.scenario_config.timestep_minutes
+        # Use episode_time_steps from schema to match CityLearn's expectation
+        # episode_time_steps = 7 * timesteps_per_day + 1 (for safety)
+        dataset_timestep_minutes = int(self.dataset_seconds_per_step // 60)
+        timesteps_per_day = int(24 * 60 // dataset_timestep_minutes)
+        timesteps = int(7 * timesteps_per_day + 1)  # +1 for safety to match episode_time_steps
         timestamps = pd.date_range(
             start="2023-07-01",  # Summer month to avoid heating
             periods=timesteps,

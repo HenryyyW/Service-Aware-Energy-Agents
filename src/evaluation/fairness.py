@@ -16,10 +16,15 @@ class FairnessAnalyzer:
         self.scenario_config = scenario_config
         self.member_ids = [b.building_id for b in scenario_config.buildings]
         self.baseline_costs = None  # Will be set if baseline provided
+        self.settlement_savings = None  # Will be set from settlement engine
     
     def set_baseline(self, baseline_history: List[SimulationStepResult]):
         """Set baseline history for savings calculation."""
         self.baseline_costs = self._compute_member_costs(baseline_history)
+    
+    def set_settlement_savings(self, savings: Dict[str, float]):
+        """Set settlement savings from settlement engine."""
+        self.settlement_savings = savings
     
     def analyze(self, history: List[SimulationStepResult]) -> ServiceMetrics:
         """Analyze fairness metrics from simulation history."""
@@ -131,8 +136,8 @@ class FairnessAnalyzer:
             # Comfort violations
             member.comfort_violations_hours = 0.0
             
-            # Settlement savings (placeholder)
-            member.settlement_savings = 0.0
+            # Settlement savings from settlement engine
+            member.settlement_savings = self.settlement_savings.get(bid, 0.0) if self.settlement_savings else 0.0
             
             # Service score (placeholder)
             member.service_score = 0.0

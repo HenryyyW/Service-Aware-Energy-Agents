@@ -11,6 +11,8 @@ from src.schemas.action import (
 from src.schemas.diagnostics import DiagnosticReport, Diagnostic, DiagnosticCategory, Severity
 from .citylearn_adapter import CityLearnAdapter, create_citylearn_adapter
 from .pandapower_adapter import PandapowerAdapter, create_grid_from_scenario
+from .market import create_market_engine, BuildingEnergyState, MarketClearingResult
+from .settlement import create_settlement_engine, SettlementEngine, SettlementResult
 
 
 def _convert_to_json_serializable(obj):
@@ -43,6 +45,8 @@ class CoSimulationStepResult:
     combined_violations: List[str]
     terminated: bool = False
     truncated: bool = False
+    market_result: Optional[MarketClearingResult] = None
+    settlement_snapshot: Optional[Dict[str, float]] = None
 
 
 class SimulationCoupler:
@@ -56,6 +60,15 @@ class SimulationCoupler:
         self.citylearn = create_citylearn_adapter(scenario_config, data_dir)
         self.pandapower = create_grid_from_scenario(scenario_config)
         
+        # Initialize energy sharing components if enabled
+        self.energy_sharing_enabled = (
+            scenario_config.energy_sharing is not None and 
+            scenario_config.energy_sharing.enabled
+        )
+        self.settlement_engine = None
+        if self.energy_sharing_enabled:
+            self.settlement_engine = create_settlement_engine(scenario_config, scenario_config.energy_sharing)
+        
         # State tracking
         self.current_timestep = 0
         self.co_sim_history: List[CoSimulationStepResult] = []
@@ -66,6 +79,9 @@ class SimulationCoupler:
         seed = random_seed or self.scenario_config.random_seed
         observations = self.citylearn.reset(seed)
         self.pandapower.reset()
+        if self.settlement_engine:
+            # Recreate settlement engine to reset state
+            self.settlement_engine = create_settlement_engine(self.scenario_config, self.scenario_config.energy_sharing)
         self.current_timestep = 0
         self.co_sim_history = []
         return observations
@@ -78,7 +94,55 @@ class SimulationCoupler:
         # Extract building powers for grid
         building_powers, building_pvs, building_battery_powers = self._extract_building_powers(cl_result)
         
-        # Update grid loads
+        # Energy sharing: clear market via settlement engine and adjust building powers
+        market_result = None
+        settlement_snapshot = None
+        grid_imports = {}
+        grid_exports = {}
+        
+        if self.energy_sharing_enabled and self.settlement_engine:
+            # Build building states for market clearing
+            building_states = self._build_building_states(
+                cl_result, building_powers, building_pvs, building_battery_powers
+            )
+            
+            # Get current carbon intensity if available
+            carbon_intensity = None
+            carbon_key = "carbon_intensity"
+            if carbon_key in cl_result.observations:
+                carbon_intensity = float(cl_result.observations[carbon_key])
+            
+            # Compute PRE-trade grid imports/exports for baseline tracking
+            for bid, power in building_powers.items():
+                if power > 0:
+                    grid_imports[bid] = power
+                    grid_exports[bid] = 0.0
+                else:
+                    grid_imports[bid] = 0.0
+                    grid_exports[bid] = -power
+            
+            # Clear market and process settlement (single clearing)
+            market_result = self.settlement_engine.process_timestep(
+                self.current_timestep,
+                building_states,
+                grid_imports,
+                grid_exports,
+                carbon_intensity
+            )
+            
+            # Apply trades to building powers (community trades offset grid import/export)
+            for bid, trade in market_result.trades.items():
+                if bid in building_powers:
+                    # Positive trade = buying from community (reduces grid import)
+                    # Negative trade = selling to community (reduces grid export)
+                    building_powers[bid] -= trade
+            
+            # Settlement snapshot
+            settlement_snapshot = {}
+            for bid, settlement in self.settlement_engine.building_settlements.items():
+                settlement_snapshot[bid] = settlement.net_settlement
+        
+        # Update grid loads with post-market building powers
         self.pandapower.update_building_loads(building_powers, building_pvs, building_battery_powers)
         
         # Run power flow at specified intervals
@@ -126,7 +190,9 @@ class SimulationCoupler:
             power_flow_converged=power_flow_converged,
             combined_violations=combined_violations,
             terminated=cl_result.terminated,
-            truncated=cl_result.truncated
+            truncated=cl_result.truncated,
+            market_result=market_result,
+            settlement_snapshot=settlement_snapshot
         )
         
         # Attach grid diagnostics to CityLearn result
@@ -143,12 +209,73 @@ class SimulationCoupler:
         if hasattr(grid_diagnostics, 'losses'):
             grid_diag_dict["losses"] = grid_diagnostics.losses
         
+        # Add market and settlement data if available
+        if market_result:
+            grid_diag_dict["market_result"] = {
+                "clearing_price": market_result.clearing_price,
+                "trades": market_result.trades,
+                "settlements": market_result.settlements,
+                "total_volume_kwh": market_result.total_volume_kwh,
+                "market_type": market_result.market_type.value,
+            }
+        if settlement_snapshot:
+            grid_diag_dict["settlement_snapshot"] = settlement_snapshot
+        
         cl_result.grid_diagnostics = grid_diag_dict
         
         self.co_sim_history.append(cosim_result)
         self.current_timestep += 1
         
         return cosim_result
+    
+    def _build_building_states(
+        self,
+        cl_result: SimulationStepResult,
+        building_powers: Dict[str, float],
+        building_pvs: Dict[str, float],
+        building_battery_powers: Dict[str, float]
+    ) -> Dict[str, BuildingEnergyState]:
+        """Build building energy states for market clearing."""
+        states = {}
+        obs = cl_result.observations
+        
+        for building in self.scenario_config.buildings:
+            bid = building.building_id
+            
+            # Net demand (positive = consumption)
+            net_demand = building_powers.get(bid, 0.0)
+            
+            # PV generation
+            pv_gen = building_pvs.get(bid, 0.0)
+            
+            # Battery power
+            battery_power = building_battery_powers.get(bid, 0.0)
+            
+            # Battery SOC
+            soc_key = f"{bid}_electrical_storage_soc"
+            battery_soc = float(obs.get(soc_key, 0.5))
+            
+            # Max import/export
+            max_import = self.scenario_config.energy_sharing.import_limit_kw or float('inf')
+            max_export = self.scenario_config.energy_sharing.export_limit_kw or float('inf')
+            # Per-building limits
+            if hasattr(building, 'max_import_kw'):
+                max_import = min(max_import, building.max_import_kw)
+            if hasattr(building, 'max_export_kw'):
+                max_export = min(max_export, building.max_export_kw)
+            
+            states[bid] = BuildingEnergyState(
+                building_id=bid,
+                net_demand_kw=net_demand,
+                pv_generation_kw=pv_gen,
+                battery_power_kw=battery_power,
+                battery_soc=battery_soc,
+                max_import_kw=max_import,
+                max_export_kw=max_export,
+                tariff_config=building.tariff
+            )
+        
+        return states
     
     def _extract_building_powers(
         self, 
@@ -212,9 +339,17 @@ class SimulationCoupler:
         # Get enhanced grid KPIs from pandapower adapter
         grid_kpis = self.pandapower.get_enhanced_kpis()
         
+        # Add energy sharing KPIs if enabled
+        sharing_kpis = {}
+        if self.settlement_engine:
+            sharing_kpis = self.settlement_engine.get_community_metrics()
+            # Add per-building savings
+            sharing_kpis["per_building_savings"] = self.settlement_engine.get_building_savings()
+        
         return {
             **cl_kpis,
             **grid_kpis,
+            **sharing_kpis,
             "grid_voltage_violations": sum(1 for h in self.co_sim_history 
                                           for d in h.grid_diagnostics.diagnostics 
                                           if d.category == DiagnosticCategory.VOLTAGE),
@@ -234,6 +369,12 @@ class SimulationCoupler:
             if h.citylearn_result.grid_diagnostics and "building_contributions" in h.citylearn_result.grid_diagnostics:
                 contributions_history.append(h.citylearn_result.grid_diagnostics["building_contributions"])
         return contributions_history
+    
+    def get_settlement_result(self) -> Optional[SettlementResult]:
+        """Get final settlement result."""
+        if self.settlement_engine:
+            return self.settlement_engine.finalize()
+        return None
     
     def close(self):
         """Close both simulators."""
@@ -275,57 +416,62 @@ class SimulationCoupler:
             for d in grid_diags:
                 f.write(json.dumps(d) + "\n")
         
+        # Export market results if available
+        market_results = []
+        for h in self.co_sim_history:
+            if h.market_result:
+                market_results.append({
+                    "timestep": h.timestep,
+                    "clearing_price": h.market_result.clearing_price,
+                    "trades": h.market_result.trades,
+                    "settlements": h.market_result.settlements,
+                    "total_volume_kwh": h.market_result.total_volume_kwh,
+                    "market_type": h.market_result.market_type.value,
+                })
+        
+        with open(os.path.join(output_dir, "market_results.jsonl"), "w") as f:
+            for m in market_results:
+                f.write(json.dumps(_convert_to_json_serializable(m)) + "\n")
+        
+        # Export settlement results if available
+        if self.settlement_engine:
+            settlement_result = self.settlement_engine.finalize()
+            with open(os.path.join(output_dir, "settlement_result.json"), "w") as f:
+                json.dump(_convert_to_json_serializable({
+                    "building_settlements": {
+                        bid: {
+                            "net_settlement": s.net_settlement,
+                            "total_bought_kwh": s.total_bought_kwh,
+                            "total_sold_kwh": s.total_sold_kwh,
+                            "total_grid_import_kwh": s.total_grid_import_kwh,
+                            "total_grid_export_kwh": s.total_grid_export_kwh,
+                            "total_community_import_kwh": s.total_community_import_kwh,
+                            "total_community_export_kwh": s.total_community_export_kwh,
+                            "interval_settlements": s.interval_settlements,
+                            "metadata": s.metadata,
+                        }
+                        for bid, s in settlement_result.building_settlements.items()
+                    },
+                    "interval_results": [
+                        {
+                            "interval_idx": r.interval_idx,
+                            "start_timestep": r.start_timestep,
+                            "end_timestep": r.end_timestep,
+                            "building_settlements": r.building_settlements,
+                            "avg_clearing_price": r.avg_clearing_price,
+                            "total_volume_kwh": r.total_volume_kwh,
+                        }
+                        for r in settlement_result.interval_results
+                    ],
+                    "total_community_volume_kwh": settlement_result.total_community_volume_kwh,
+                    "total_community_revenue": settlement_result.total_community_revenue,
+                    "metadata": settlement_result.metadata,
+                }), f, indent=2)
+        
         # Export pandapower network
         self.pandapower.export_results(os.path.join(output_dir, "pandapower_network.json"))
         
         # Export KPIs
         kpis = self.get_kpis()
         with open(os.path.join(output_dir, "kpis.json"), "w") as f:
-            json.dump(kpis, f, indent=2)
-
-
-def run_co_simulation(
-    scenario_config: ScenarioConfig,
-    controller,
-    data_dir: str = "data",
-    max_steps: Optional[int] = None
-) -> List[CoSimulationStepResult]:
-    """Run a complete co-simulation with a given controller.
-    
-    Args:
-        scenario_config: Scenario configuration
-        controller: Controller object with `get_actions(observations, timestep)` method
-        data_dir: Data directory
-        max_steps: Maximum steps to run (None = full episode)
-    
-    Returns:
-        List of co-simulation step results
-    """
-    coupler = SimulationCoupler(scenario_config, data_dir)
-    observations = coupler.reset()
-    
-    results = []
-    step = 0
-    
-    while True:
-        # Get actions from controller
-        requested_actions = controller.get_actions(observations, step)
-        
-        # Step co-simulation
-        cosim_result = coupler.step(requested_actions)
-        results.append(cosim_result)
-        
-        # Check termination
-        observations = cosim_result.citylearn_result.observations
-        step += 1
-        
-        if max_steps and step >= max_steps:
-            break
-        
-        # Check if episode done (all buildings terminated)
-        # This depends on CityLearn's termination criteria
-        if all(v.get("terminated", False) for v in observations.values() if isinstance(v, dict)):
-            break
-    
-    coupler.close()
-    return results
+            json.dump(_convert_to_json_serializable(kpis), f, indent=2)

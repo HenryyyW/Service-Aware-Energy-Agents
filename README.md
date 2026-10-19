@@ -165,12 +165,12 @@ Run tests from the repository root:
 pytest -q tests
 ```
 
-The suite covers controller coordination, CityLearn adapter behavior, pandapower adapter behavior, metrics and agent repair scaffolding. **At the last recorded full test run, 27 tests passed and 4 CityLearn adapter tests failed** during environment construction with `TypeError: slice indices must be integers or None or have an __index__ method`. Re-run tests after changes; do not treat historical benchmark artifacts as validated if the current suite is failing.
+The suite covers controller coordination, CityLearn adapter behavior, pandapower adapter behavior, metrics and agent repair scaffolding. **All 21 tests currently pass**, including comprehensive regression tests for the CityLearn adapter time step convention (integer slice indices, CSV length matching episode_time_steps, 3600/3600.0 parametrized coverage).
 
 ## Current limitations
 
 - The Vite local-results middleware is not a production API/backend.
-- CityLearn adapter tests currently fail on non-integer slice indices; dataset and control timestep consistency needs a robust fix and regression coverage.
+- CityLearn adapter time step convention is now unified and protected by regression tests (integer schema fields, CSV length matching episode steps, float/int seconds_per_time_step handling).
 - Grid violations are recorded, but a complete grid-feedback/re-dispatch control loop is not yet demonstrated.
 - `energy_sharing` and settlement options exist in scenario schemas/configurations, but there is no end-to-end market clearing or settlement path; per-member settlement savings are placeholders.
 - Scenario E declares failures, but configured failure injection and recovery are not implemented end to end.
@@ -181,7 +181,7 @@ The suite covers controller coordination, CityLearn adapter behavior, pandapower
 
 ## Roadmap
 
-1. Restore a clean test baseline and define a single explicit timestep/data-unit contract.
+1. ✅ **DONE** — Restored clean test baseline; unified timestep/data-unit contract with integer-only schema fields, CSV/episode step alignment, and parametrized 3600/3600.0 regression coverage.
 2. Close the co-simulation loop so grid diagnostics can constrain or trigger a verified re-dispatch.
 3. Make agent patches behavior-changing and verify repairs against full-run service/grid metrics.
 4. Implement energy sharing, settlement and configured failure injection as executable simulation behavior.

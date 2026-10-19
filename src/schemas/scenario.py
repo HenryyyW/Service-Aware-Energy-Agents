@@ -1,6 +1,6 @@
 """Scenario configuration schemas for CityLearn and pandapower."""
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from enum import Enum
 
 
@@ -103,6 +103,21 @@ class EnergySharingConfig(BaseModel):
     settlement_interval: str = "15min"  # 15min, hourly, daily
     export_limit_kw: Optional[float] = None
     import_limit_kw: Optional[float] = None
+
+    @field_validator("export_limit_kw", "import_limit_kw")
+    @classmethod
+    def validate_limits(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and v <= 0:
+            raise ValueError("Limits must be positive")
+        return v
+
+    @field_validator("market_type")
+    @classmethod
+    def validate_market_type(cls, v: str) -> str:
+        valid = {"uniform_price", "weighted", "carbon_aware", "fairness_aware"}
+        if v not in valid:
+            raise ValueError(f"market_type must be one of {valid}")
+        return v
 
 
 class FailureConfig(BaseModel):
