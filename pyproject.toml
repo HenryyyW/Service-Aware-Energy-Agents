@@ -19,6 +19,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+api = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+]
 dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",

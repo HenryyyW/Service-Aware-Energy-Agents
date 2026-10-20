@@ -1,10 +1,15 @@
-import { useRef, useMemo, useCallback } from 'react';
+import { useRef, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Map from 'react-map-gl/maplibre';
+import MapGL, { Marker } from 'react-map-gl/maplibre';
+import { Building2 } from 'lucide-react';
 import Deck from '@deck.gl/react';
 import { Layer } from '@deck.gl/core';
 import { useCanvasStore } from '../../store/canvasStore';
 import { useSimulationStore, useCurrentStepData } from '../../store/simulationStore';
+import { useScenarioStore } from '../../store/scenarioStore';
+import { api } from '../../api/client';
+import { toDisplayNetworkGeometry } from '../../api/networkGeometry';
+import { WebMercatorViewport } from '@deck.gl/core';
 import {
   createBuildingLayer,
   createPVLayer,
@@ -23,7 +28,7 @@ import { LayerTree } from '../panels/LayerTree';
 import { AssetInspector } from '../panels/AssetInspector';
 import { GridExplorer } from '../panels/GridExplorer';
 import { TopBar } from '../panels/TopBar';
-import type { Building, PVAsset, BatteryAsset, EVAsset, Feeder, Transformer, GridDiagnostics } from '../../api/types';
+import type { Building, PVAsset, BatteryAsset, EVAsset, Feeder, Transformer, GridDiagnostics, NetworkBus } from '../../api/types';
 
 interface CommunityCanvasProps {}
 
@@ -39,6 +44,8 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
     selectedAsset,
     selectAsset,
     mapStyle,
+    networkGeometry: sourceNetworkGeometry,
+    fetchNetworkGeometry,
   } = useCanvasStore();
 
   const {
@@ -48,7 +55,57 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
     timePlayer,
   } = useSimulationStore();
 
+  const { currentScenario, setCurrentScenario } = useScenarioStore();
+
+  const communityAnchor = useMemo(() => {
+    const locations = currentScenario?.buildings
+      ?.map((building: any) => building.location)
+      .filter((location: any) => Number.isFinite(location?.lat) && Number.isFinite(location?.lon));
+    if (!locations?.length) return { latitude: 40, longitude: -105 };
+    return {
+      latitude: locations.reduce((sum: number, location: any) => sum + location.lat, 0) / locations.length,
+      longitude: locations.reduce((sum: number, location: any) => sum + location.lon, 0) / locations.length,
+    };
+  }, [currentScenario]);
+
+  const networkGeometry = useMemo(
+    () => toDisplayNetworkGeometry(sourceNetworkGeometry, communityAnchor),
+    [sourceNetworkGeometry, communityAnchor],
+  );
+
   const currentStepData = useCurrentStepData();
+
+  // Fetch network geometry on mount
+  useEffect(() => {
+    fetchNetworkGeometry();
+  }, [fetchNetworkGeometry]);
+
+  useEffect(() => {
+    if (!currentRun?.scenario_id) return;
+    let active = true;
+    api.getScenario(currentRun.scenario_id).then((scenario) => {
+      if (active) setCurrentScenario(scenario);
+    }).catch((error) => {
+      if (active) {
+        setCurrentScenario(null);
+        console.error('Failed to load network bus mappings:', error);
+      }
+    });
+    return () => { active = false; };
+  }, [currentRun?.scenario_id, setCurrentScenario]);
+
+  useEffect(() => {
+    const bounds = networkGeometry?.bounds;
+    if (!bounds) return;
+    const fitted = new WebMercatorViewport({ width: window.innerWidth, height: window.innerHeight }).fitBounds([
+      [bounds.min_lon, bounds.min_lat],
+      [bounds.max_lon, bounds.max_lat],
+    ], {
+      padding: { left: Math.min(300, window.innerWidth * 0.28), right: Math.min(340, window.innerWidth * 0.31), top: 110, bottom: 190 },
+      maxZoom: 18,
+    });
+    setViewport({ longitude: fitted.longitude, latitude: fitted.latitude, zoom: fitted.zoom, pitch: 0, bearing: 0 });
+  }, [networkGeometry, setViewport]);
 
   const timestepData = useMemo(() => {
     if (!currentStepData) return {};
@@ -76,23 +133,40 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
     return data;
   }, [currentStepData]);
 
-  const buildingLocations = useMemo(() => new globalThis.Map(
-    buildingIds.map((id, index) => {
-      const column = index % 3;
-      const row = Math.floor(index / 3);
-      return [id, {
-        lat: 40.0000 + (1 - row) * 0.00055,
-        lon: -105.0000 + (column - 1) * 0.00065,
-      }];
-    })
-  ), [buildingIds]);
+  // Map building IDs to their corresponding bus indices from the scenario config
+  const buildingBusMapping = useMemo(() => {
+    if (!currentScenario?.pandapower?.bus_mappings) return new Map<string, number>();
+    const mapping = new Map<string, number>();
+    currentScenario.pandapower.bus_mappings.forEach((m: any) => {
+      mapping.set(m.building_id, m.bus_idx);
+    });
+    return mapping;
+  }, [currentScenario]);
+
+  // Get building locations from real network geometry
+  const buildingLocations = useMemo(() => {
+    const locations = new Map<string, { lat: number; lon: number }>();
+    buildingIds.forEach((id) => {
+      const busIdx = buildingBusMapping.get(id);
+      if (busIdx === undefined || !networkGeometry) return;
+      
+      // Find the bus by bus_idx in the network geometry
+      const busEntry = Object.values(networkGeometry.buses).find((bus: NetworkBus) => bus.bus_idx === busIdx);
+      if (busEntry) {
+        locations.set(id, { lat: busEntry.lat, lon: busEntry.lon });
+      }
+    });
+    return locations;
+  }, [buildingIds, buildingBusMapping, networkGeometry]);
 
   const buildings = useMemo((): Building[] => {
     if (!buildingIds.length || !currentStepData) return [];
     return buildingIds.flatMap((id) => {
       const location = buildingLocations.get(id);
       if (!location) return [];
-      const halfSize = 0.00012;
+      // Scale the building size based on the coordinate system
+      // The network geometry coordinates are in a different scale (0-22 range)
+      const halfSize = 0.00003;
       return [{
         building_id: id,
         name: id.replace('_', ' '),
@@ -163,39 +237,57 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
     });
   }, [buildingLocations, trajectories]);
 
+  // Create feeders from real network line geometries
   const feeders = useMemo((): Feeder[] => {
-    return [{
-      feeder_id: 'feeder_1',
-      name: 'Feeder 1',
-      geometry: {
-        type: 'LineString',
-        coordinates: buildings.map((building) => [building.location!.lon, building.location!.lat]),
-      },
-      buses: [],
-    }];
-  }, [buildings]);
+    if (!networkGeometry) return [];
+    
+    return networkGeometry.lines.map((line) => {
+      const fromBus = networkGeometry.buses[line.from_bus];
+      const toBus = networkGeometry.buses[line.to_bus];
+      return {
+        feeder_id: `line_${line.line_id}`,
+        name: line.name,
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: line.coordinates,
+        },
+        buses: [
+          fromBus ? { bus_id: fromBus.name, name: fromBus.name, lat: fromBus.lat, lon: fromBus.lon } : { bus_id: line.from_bus, name: line.from_bus, lat: 0, lon: 0 },
+          toBus ? { bus_id: toBus.name, name: toBus.name, lat: toBus.lat, lon: toBus.lon } : { bus_id: line.to_bus, name: line.to_bus, lat: 0, lon: 0 },
+        ],
+      };
+    });
+  }, [networkGeometry]);
 
+  // Create transformers from real network transformer data
   const transformers = useMemo((): Transformer[] => {
-    return [{
-      transformer_id: 'trafo_1',
-      name: 'Main Transformer',
-      lat: 40.0000,
-      lon: -105.0000,
-      capacity_kva: 630,
+    if (!networkGeometry) return [];
+    
+    return networkGeometry.transformers.map((trafo) => ({
+      transformer_id: `trafo_${trafo.transformer_id}`,
+      name: trafo.name,
+      lat: trafo.lat,
+      lon: trafo.lon,
+      capacity_kva: trafo.capacity_mva * 1000,
       loading_pct: undefined,
-    }];
-  }, []);
+    }));
+  }, [networkGeometry]);
 
   const gridDiagnostics = useMemo((): GridDiagnostics | undefined => {
     return currentStepData?.grid_diagnostics;
   }, [currentStepData]);
 
   const violations = useMemo(() => {
-    if (!gridDiagnostics) return [];
+    if (!gridDiagnostics || !networkGeometry) return [];
     const viol: any[] = [];
     const voltageViolations = (gridDiagnostics.violations?.voltage || {}) as Record<string, { value: number; limit: number }>;
     const loadingViolations = (gridDiagnostics.violations?.loading || {}) as Record<string, { value: number; limit: number }>;
+    
     Object.entries(voltageViolations).forEach(([bus, v]) => {
+      // Find the bus location from network geometry
+      const busEntry = Object.values(networkGeometry.buses).find((b: NetworkBus) => b.name === bus);
+      const location = busEntry ? { lat: busEntry.lat, lon: busEntry.lon } : { lat: 0, lon: 0 };
+      
       viol.push({
         type: 'voltage',
         element: bus,
@@ -203,11 +295,24 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
         value: v.value,
         limit: v.limit,
         severity: v.value > v.limit * 1.02 ? 'critical' : 'warning',
-        location: { lat: 40.0000, lon: -105.0000 },
+        location,
         timestamp: currentStepData?.timestep || 0,
       });
     });
     Object.entries(loadingViolations).forEach(([el, v]) => {
+      // Try to find location for lines and transformers
+      let location = { lat: 0, lon: 0 };
+      const lineEntry = networkGeometry.lines.find((l) => l.name === el);
+      const trafoEntry = networkGeometry.transformers.find((t) => t.name === el);
+      
+      if (lineEntry && lineEntry.coordinates.length > 0) {
+        // Use midpoint of line
+        const midIdx = Math.floor(lineEntry.coordinates.length / 2);
+        location = { lat: lineEntry.coordinates[midIdx][1], lon: lineEntry.coordinates[midIdx][0] };
+      } else if (trafoEntry) {
+        location = { lat: trafoEntry.lat, lon: trafoEntry.lon };
+      }
+      
       viol.push({
         type: 'loading',
         element: el,
@@ -215,12 +320,12 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
         value: v.value,
         limit: v.limit,
         severity: v.value > v.limit * 1.02 ? 'critical' : 'warning',
-        location: { lat: 37.7749, lon: -122.4194 },
+        location,
         timestamp: currentStepData?.timestep || 0,
       });
     });
     return viol;
-  }, [gridDiagnostics, currentStepData]);
+  }, [gridDiagnostics, currentStepData, networkGeometry]);
 
   const energyFlows = useMemo(() => {
     if (!currentStepData) return [];
@@ -240,9 +345,14 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
       }
 
       if (load > 0) {
+        // Find the substation/transformer as grid connection point
+        const gridConnection = networkGeometry?.transformers[0] 
+          ? { lat: networkGeometry.transformers[0].lat, lon: networkGeometry.transformers[0].lon }
+          : { lat: 0, lon: 0 };
+        
         flows.push({
           from: { lat: b.location!.lat, lon: b.location!.lon, type: 'building', id: b.building_id },
-          to: { lat: 40.0000, lon: -105.0000, type: 'grid', id: 'grid' },
+          to: { lat: gridConnection.lat, lon: gridConnection.lon, type: 'grid', id: 'grid' },
           power_kw: load,
           type: 'consumption',
         });
@@ -252,9 +362,13 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
     batteryAssets.forEach(bat => {
       const power = currentStepData.observations[`${bat.asset_id}_battery_power_kw`] || 0;
       if (Math.abs(power) > 1) {
+        const gridConnection = networkGeometry?.transformers[0] 
+          ? { lat: networkGeometry.transformers[0].lat, lon: networkGeometry.transformers[0].lon }
+          : { lat: 0, lon: 0 };
+          
         flows.push({
           from: { lat: bat.location!.lat, lon: bat.location!.lon, type: 'battery', id: bat.asset_id },
-          to: { lat: 40.0000, lon: -105.0000, type: 'grid', id: 'grid' },
+          to: { lat: gridConnection.lat, lon: gridConnection.lon, type: 'grid', id: 'grid' },
           power_kw: Math.abs(power),
           type: power > 0 ? 'storage_charge' : 'storage_discharge',
         });
@@ -264,8 +378,12 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
     evAssets.forEach(ev => {
       const power = currentStepData.observations[`${ev.asset_id}_ev_charge_kw`] || 0;
       if (power > 1) {
+        const gridConnection = networkGeometry?.transformers[0] 
+          ? { lat: networkGeometry.transformers[0].lat, lon: networkGeometry.transformers[0].lon }
+          : { lat: 0, lon: 0 };
+          
         flows.push({
-          from: { lat: 40.0000, lon: -105.0000, type: 'grid', id: 'grid' },
+          from: { lat: gridConnection.lat, lon: gridConnection.lon, type: 'grid', id: 'grid' },
           to: { lat: ev.location!.lat, lon: ev.location!.lon, type: 'ev', id: ev.asset_id },
           power_kw: power,
           type: 'ev_charge',
@@ -274,7 +392,7 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
     });
 
     return flows;
-  }, [currentStepData, buildings, batteryAssets, evAssets]);
+  }, [currentStepData, buildings, batteryAssets, evAssets, networkGeometry]);
 
   const handleViewportChange = useCallback((newViewport: any) => {
     const nextViewport = newViewport.viewState || newViewport;
@@ -376,10 +494,11 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
       }
     }
 
-    if (layerVisibility.voltage_heatmap && gridDiagnostics) {
+    if (layerVisibility.voltage_heatmap && gridDiagnostics && networkGeometry) {
       const voltageLayer = createVoltageHeatmapLayer({
-        buses: Object.entries(gridDiagnostics.voltage_profile).map(([bus, voltage], index) => {
-          const location = buildings[index % Math.max(buildings.length, 1)]?.location || { lat: 40.0000, lon: -105.0000 };
+        buses: Object.entries(gridDiagnostics.voltage_profile).map(([bus, voltage]) => {
+          const busEntry = Object.values(networkGeometry.buses).find((b: NetworkBus) => b.name === bus);
+          const location = busEntry ? { lat: busEntry.lat, lon: busEntry.lon } : { lat: 0, lon: 0 };
           return {
             bus_id: bus,
             lat: location.lat,
@@ -393,11 +512,16 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
       if (voltageLayer) layers.push(voltageLayer);
     }
 
-    if (layerVisibility.loading_heatmap && gridDiagnostics) {
+    if (layerVisibility.loading_heatmap && gridDiagnostics && networkGeometry) {
       const loadingLayer = createLoadingHeatmapLayer({
         elements: [
-          ...Object.entries(gridDiagnostics.loading_profile.lines).map(([line, loading], index) => {
-            const location = buildings[index % Math.max(buildings.length, 1)]?.location || { lat: 40.0000, lon: -105.0000 };
+          ...Object.entries(gridDiagnostics.loading_profile.lines).map(([line, loading]) => {
+            const lineEntry = networkGeometry.lines.find((l) => l.name === line);
+            let location = { lat: 0, lon: 0 };
+            if (lineEntry && lineEntry.coordinates.length > 0) {
+              const midIdx = Math.floor(lineEntry.coordinates.length / 2);
+              location = { lat: lineEntry.coordinates[midIdx][1], lon: lineEntry.coordinates[midIdx][0] };
+            }
             return {
               element_id: line,
               lat: location.lat,
@@ -406,8 +530,9 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
               type: 'line' as const,
             };
           }),
-          ...Object.entries(gridDiagnostics.loading_profile.trafos).map(([trafo, loading], index) => {
-            const location = buildings[index % Math.max(buildings.length, 1)]?.location || { lat: 40.0000, lon: -105.0000 };
+          ...Object.entries(gridDiagnostics.loading_profile.trafos).map(([trafo, loading]) => {
+            const trafoEntry = networkGeometry.transformers.find((t) => t.name === trafo);
+            const location = trafoEntry ? { lat: trafoEntry.lat, lon: trafoEntry.lon } : { lat: 0, lon: 0 };
             return {
               element_id: trafo,
               lat: location.lat,
@@ -451,6 +576,7 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
     selectAsset,
     timePlayer.playing,
     timePlayer.speed,
+    networkGeometry,
   ]);
 
   return (
@@ -464,7 +590,12 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
       />
 
       <div className="absolute inset-0" ref={mapRef}>
-        <Map
+        {sourceNetworkGeometry?.coordinate_system === 'schematic' && (
+          <div className="pointer-events-none absolute left-1/2 top-20 z-10 -translate-x-1/2 rounded border border-white/20 bg-black/70 px-3 py-1.5 text-xs text-white">
+            Schematic network layout
+          </div>
+        )}
+        <MapGL
           viewState={{
             ...viewport,
             width: mapRef.current?.clientWidth || window.innerWidth,
@@ -474,7 +605,21 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
           onMove={(event) => handleViewportChange(event.viewState)}
           mapStyle={mapStyleUrl}
           attributionControl={false}
-        />
+        >
+          {layerVisibility.buildings && buildings.map((building) => building.location && (
+            <Marker key={building.building_id} longitude={building.location.lon} latitude={building.location.lat} style={{ zIndex: 5 }}>
+              <button
+                type="button"
+                aria-label={`Select ${building.building_id}`}
+                title={building.building_id}
+                className="flex h-7 w-7 items-center justify-center rounded border-2 border-white bg-emerald-600 text-white shadow"
+                onClick={() => selectAsset({ type: 'building', id: building.building_id, data: building })}
+              >
+                <Building2 size={16} />
+              </button>
+            </Marker>
+          ))}
+        </MapGL>
 
         <Deck
           ref={deckRef as any}

@@ -55,6 +55,26 @@ def test_pandapower_adapter_creation(pandapower_config):
     assert "building_1" in adapter.bus_mapping
 
 
+def test_builtin_network_geometry_is_explicitly_schematic(pandapower_config):
+    """Built-in test feeder coordinates are x/y layout, not geographic coordinates."""
+    adapter = PandapowerAdapter(pandapower_config)
+    geometry = adapter.get_network_geometry()
+
+    assert geometry["coordinate_system"] == "schematic"
+    assert set(geometry["bounds"]) == {"min_x", "max_x", "min_y", "max_y"}
+    assert geometry["bounds"]["max_x"] > geometry["bounds"]["min_x"]
+    assert geometry["lines"]
+    assert all("lat" not in bus and "lon" not in bus for bus in geometry["buses"].values())
+    assert all("lat" not in transformer and "lon" not in transformer for transformer in geometry["transformers"])
+
+
+def test_network_coordinate_system_config_is_validated():
+    """Custom networks can declare geographic or schematic coordinates only."""
+    assert PandapowerConfig(network_type="custom", coordinate_system="schematic").coordinate_system == "schematic"
+    with pytest.raises(ValueError):
+        PandapowerConfig(network_type="custom", coordinate_system="projected")
+
+
 def test_pandapower_adapter_update_loads(pandapower_config):
     """Test updating building loads."""
     adapter = PandapowerAdapter(pandapower_config)

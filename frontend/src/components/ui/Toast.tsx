@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 import { clsx } from 'clsx';
 import { X } from 'lucide-react';
 
@@ -22,7 +22,11 @@ const ToastContext = createContext<ToastContextType | null>(null);
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const addToast = (toast: Omit<Toast, 'id'>) => {
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  }, []);
+
+  const addToast = useCallback((toast: Omit<Toast, 'id'>) => {
     const id = Math.random().toString(36).substr(2, 9);
     const newToast = { ...toast, id };
     setToasts((prev) => [...prev, newToast]);
@@ -32,11 +36,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }
 
     return id;
-  };
-
-  const removeToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  }, [removeToast]);
 
   return (
     <ToastContext.Provider value={{ toasts, addToast, removeToast }}>

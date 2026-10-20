@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { MapViewport, LayerVisibility, SelectedAsset } from '../api/types';
+import type { MapViewport, LayerVisibility, SelectedAsset, NetworkGeometry } from '../api/types';
+import { api } from '../api/client';
+import { WebMercatorViewport } from '@deck.gl/core';
 
 interface CanvasState {
   // Map viewport
@@ -25,6 +27,12 @@ interface CanvasState {
   // Community bounds (for fitting map to community)
   communityBounds: [[number, number], [number, number]] | null;
   setCommunityBounds: (bounds: [[number, number], [number, number]] | null) => void;
+
+  // Network geometry (real pandapower network data)
+  networkGeometry: NetworkGeometry | null;
+  setNetworkGeometry: (geometry: NetworkGeometry | null) => void;
+  fetchNetworkGeometry: () => Promise<void>;
+  fitToNetworkBounds: () => void;
 }
 
 const DEFAULT_VIEWPORT: MapViewport = {
@@ -51,7 +59,7 @@ const DEFAULT_LAYERS: LayerVisibility = {
 
 export const useCanvasStore = create<CanvasState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       viewport: DEFAULT_VIEWPORT,
       setViewport: (viewport) => set((state) => ({ viewport: { ...state.viewport, ...viewport } })),
       resetViewport: () => set({ viewport: DEFAULT_VIEWPORT }),
@@ -69,6 +77,42 @@ export const useCanvasStore = create<CanvasState>()(
 
       communityBounds: null,
       setCommunityBounds: (bounds) => set({ communityBounds: bounds }),
+
+      networkGeometry: null,
+      setNetworkGeometry: (geometry) => set({ networkGeometry: geometry }),
+      fetchNetworkGeometry: async () => {
+        try {
+          const geometry = await api.getNetworkGeometry();
+          set({ networkGeometry: geometry });
+        } catch (error) {
+          console.error('Failed to fetch network geometry:', error);
+        }
+      },
+      fitToNetworkBounds: () => {
+        const { networkGeometry, setViewport } = get();
+        const bounds = networkGeometry?.bounds;
+        if (!bounds || bounds.min_lon === undefined || bounds.max_lon === undefined
+          || bounds.min_lat === undefined || bounds.max_lat === undefined) return;
+
+        const fitted = new WebMercatorViewport({
+          width: window.innerWidth,
+          height: window.innerHeight,
+        }).fitBounds([
+          [bounds.min_lon, bounds.min_lat],
+          [bounds.max_lon, bounds.max_lat],
+        ], {
+          padding: { left: Math.min(460, window.innerWidth * 0.3), right: Math.min(480, window.innerWidth * 0.3), top: 120, bottom: 220 },
+          maxZoom: 18,
+        });
+
+        setViewport({
+          longitude: fitted.longitude,
+          latitude: fitted.latitude,
+          zoom: fitted.zoom,
+          pitch: 0,
+          bearing: 0,
+        });
+      },
     }),
     {
       name: 'canvas-store',

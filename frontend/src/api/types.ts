@@ -54,13 +54,6 @@ export interface FlexibleLoadAsset {
   status: 'pending' | 'shifted' | 'completed' | 'delayed' | 'failed';
 }
 
-export interface Feeder {
-  feeder_id: string;
-  name: string;
-  geometry: GeoJSON.LineString;
-  buses: Bus[];
-}
-
 export interface Bus {
   bus_id: string;
   name: string;
@@ -68,6 +61,13 @@ export interface Bus {
   lon: number;
   voltage_pu?: number;
   violation?: boolean;
+}
+
+export interface Feeder {
+  feeder_id: string;
+  name: string;
+  geometry: GeoJSON.LineString;
+  buses: Bus[];
 }
 
 export interface Transformer {
@@ -110,6 +110,21 @@ export interface AppliedAction {
   limited_kw?: number;
 }
 
+export interface BusMapping {
+  building_id: string;
+  bus_idx: number;
+  phase: string;
+}
+
+export interface PandapowerConfig {
+  network_type: string;
+  bus_mappings: BusMapping[];
+  slack_bus: number;
+  voltage_limits: { min: number; max: number };
+  line_loading_limit: number;
+  transformer_loading_limit: number;
+}
+
 export interface ScenarioConfig {
   community: {
     name: string;
@@ -146,6 +161,29 @@ export interface ScenarioConfig {
     strategy: string;
     objective: string[];
   };
+  pandapower?: PandapowerConfig;
+  scenario_id?: string;
+  name?: string;
+  description?: string;
+  random_seed?: number;
+  timestep_minutes?: number;
+  simulation_start?: string;
+  simulation_end?: string;
+  buildings?: Array<{
+    building_id: string;
+    building_type: string;
+    location: { lat: number; lon: number; timezone: string };
+    simulation_start: string;
+    simulation_end: string;
+    pv?: any;
+    battery?: any;
+    evs?: any[];
+    flexible_loads?: any;
+    tariff?: any;
+    weather_file?: string;
+  }>;
+  community_import_limit_kw?: number;
+  community_export_limit_kw?: number;
 }
 
 export interface SimulationRun {
@@ -251,6 +289,59 @@ export interface MapViewport {
   zoom: number;
   pitch: number;
   bearing: number;
+}
+
+export interface NetworkGeometry {
+  coordinate_system: 'geographic' | 'schematic';
+  buses: Record<string, NetworkBus>;
+  lines: NetworkLine[];
+  transformers: NetworkTransformer[];
+  bounds: {
+    min_lon?: number;
+    max_lon?: number;
+    min_lat?: number;
+    max_lat?: number;
+    min_x?: number;
+    max_x?: number;
+    min_y?: number;
+    max_y?: number;
+  } | null;
+}
+
+export interface NetworkBus {
+  name: string;
+  x: number;
+  y: number;
+  lat?: number;
+  lon?: number;
+  vn_kv: number;
+  bus_idx: number;
+}
+
+export interface NetworkLine {
+  line_id: string;
+  name: string;
+  coordinates: [number, number][];
+  from_bus: string;
+  to_bus: string;
+  from_bus_idx: number;
+  to_bus_idx: number;
+  length_km: number;
+  std_type: string | null;
+}
+
+export interface NetworkTransformer {
+  transformer_id: string;
+  name: string;
+  x: number;
+  y: number;
+  lat?: number;
+  lon?: number;
+  hv_bus: string;
+  lv_bus: string;
+  hv_bus_idx: number;
+  lv_bus_idx: number;
+  capacity_mva: number;
 }
 
 export interface SelectedAsset {

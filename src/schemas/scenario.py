@@ -1,5 +1,5 @@
 """Scenario configuration schemas for CityLearn and pandapower."""
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from pydantic import BaseModel, Field, field_validator
 from enum import Enum
 
@@ -88,6 +88,7 @@ class PandapowerConfig(BaseModel):
     """pandapower network configuration."""
     network_type: str = "ieee_34"  # ieee_13, ieee_34, simbench, custom
     network_file: Optional[str] = None
+    coordinate_system: Literal["geographic", "schematic"] = "schematic"
     bus_mappings: List[GridBusMapping] = Field(default_factory=list)
     slack_bus: int = 0
     voltage_limits: Dict[str, float] = Field(default_factory=lambda: {"min": 0.95, "max": 1.05})

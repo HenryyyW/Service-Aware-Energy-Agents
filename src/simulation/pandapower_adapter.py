@@ -41,21 +41,28 @@ class PandapowerAdapter:
     def _create_network(self):
         """Create pandapower network from configuration."""
         if self.config.network_type == "ieee_13":
+            self.coordinate_system = "schematic"
             # IEEE 13-node test feeder - use pandapower's IEEE 14 bus as base and modify
             self.net = self._create_ieee13_network()
         elif self.config.network_type == "ieee_34":
+            self.coordinate_system = "schematic"
             # IEEE 34-node test feeder
             self.net = self._create_ieee34_network()
         elif self.config.network_type == "ieee_123":
+            self.coordinate_system = "schematic"
             # IEEE 123-node test feeder
             self.net = self._create_ieee123_network()
         elif self.config.network_type == "cigre_lv":
+            self.coordinate_system = "schematic"
             self.net = pn.create_cigre_network_lv()
         elif self.config.network_type == "simbench":
+            self.coordinate_system = "schematic"
             self.net = self._create_simbench_network()
         elif self.config.network_type == "custom" and self.config.network_file:
+            self.coordinate_system = self.config.coordinate_system
             self.net = pp.from_json(self.config.network_file)
         else:
+            self.coordinate_system = "schematic"
             # Default to CIGRE LV network
             self.net = pn.create_cigre_network_lv()
         
@@ -1001,6 +1008,172 @@ class PandapowerAdapter:
     def export_results(self, output_path: str):
         """Export network and results to JSON."""
         pp.to_json(self.net, output_path)
+
+
+
+    def get_bus_coordinates(self) -> Dict[str, Dict[str, Any]]:
+        """Get raw bus x/y coordinates and geographic values when applicable."""
+        coordinates = {}
+        if self.net is None or len(self.net.bus) == 0:
+            return coordinates
+        
+        for idx, row in self.net.bus.iterrows():
+            bus_name = row['name']
+            vn_kv = row['vn_kv']
+            geo = row.get('geo')
+            
+            if geo is not None:
+                # geo may be a JSON string like '{"coordinates": [x, y], "type": "Point"}'
+                # or a dict, or a tuple/list (legacy geodata)
+                if isinstance(geo, str):
+                    try:
+                        import json
+                        geo = json.loads(geo)
+                    except (json.JSONDecodeError, ValueError):
+                        geo = None
+                
+                if isinstance(geo, dict) and 'coordinates' in geo:
+                    coords = geo['coordinates']
+                    if isinstance(coords, (list, tuple)) and len(coords) >= 2:
+                        x, y = coords[0], coords[1]
+                        coordinates[bus_name] = {
+                            'x': float(x),
+                            'y': float(y),
+                            'vn_kv': float(vn_kv),
+                            'name': bus_name,
+                            'bus_idx': int(idx)
+                        }
+                        if self.coordinate_system == "geographic":
+                            coordinates[bus_name].update({'lat': float(y), 'lon': float(x)})
+                # Also check legacy 'geodata' column (tuple/list)
+                elif isinstance(geo, (tuple, list)) and len(geo) >= 2:
+                    x, y = geo[0], geo[1]
+                    coordinates[bus_name] = {
+                        'x': float(x),
+                        'y': float(y),
+                        'vn_kv': float(vn_kv),
+                        'name': bus_name,
+                        'bus_idx': int(idx)
+                    }
+                    if self.coordinate_system == "geographic":
+                        coordinates[bus_name].update({'lat': float(y), 'lon': float(x)})
+        
+        return coordinates
+    
+    def get_line_geometries(self) -> List[Dict[str, Any]]:
+        """Get line geometries as LineString coordinates."""
+        geometries = []
+        if self.net is None or len(self.net.line) == 0:
+            return geometries
+        
+        bus_coords = self.get_bus_coordinates()
+        
+        for idx, row in self.net.line.iterrows():
+            from_bus_idx = row['from_bus']
+            to_bus_idx = row['to_bus']
+            line_name = row['name']
+            length_km = row.get('length_km', 0)
+            std_type = row.get('std_type', '')
+            
+            from_bus_name = self.net.bus.at[from_bus_idx, 'name'] if from_bus_idx in self.net.bus.index else str(from_bus_idx)
+            to_bus_name = self.net.bus.at[to_bus_idx, 'name'] if to_bus_idx in self.net.bus.index else str(to_bus_idx)
+            
+            from_coord = bus_coords.get(from_bus_name)
+            to_coord = bus_coords.get(to_bus_name)
+            
+            if from_coord and to_coord:
+                coordinates = [
+                    [from_coord['x'], from_coord['y']],
+                    [to_coord['x'], to_coord['y']]
+                ]
+                
+                line_geodata = row.get('geodata')
+                if line_geodata is not None and not (isinstance(line_geodata, float) and np.isnan(line_geodata)):
+                    if isinstance(line_geodata, (list, tuple)) and len(line_geodata) > 2:
+                        coordinates = [[float(pt[0]), float(pt[1])] for pt in line_geodata]
+                
+                geometry = {
+                    'line_id': str(idx),
+                    'name': line_name,
+                    'coordinates': coordinates,
+                    'from_bus': from_bus_name,
+                    'to_bus': to_bus_name,
+                    'from_bus_idx': int(from_bus_idx),
+                    'to_bus_idx': int(to_bus_idx),
+                    'length_km': float(length_km),
+                    'std_type': std_type,
+                }
+                if self.coordinate_system == "geographic":
+                    geometry['coordinates'] = coordinates
+                geometries.append(geometry)
+        
+        return geometries
+    
+    def get_transformer_geometries(self) -> List[Dict[str, Any]]:
+        """Get transformer geometries (point locations)."""
+        geometries = []
+        if self.net is None or len(self.net.trafo) == 0:
+            return geometries
+        
+        bus_coords = self.get_bus_coordinates()
+        
+        for idx, row in self.net.trafo.iterrows():
+            hv_bus_idx = row['hv_bus']
+            lv_bus_idx = row['lv_bus']
+            trafo_name = row['name']
+            sn_mva = row.get('sn_mva', 0)
+            
+            hv_bus_name = self.net.bus.at[hv_bus_idx, 'name'] if hv_bus_idx in self.net.bus.index else str(hv_bus_idx)
+            lv_bus_name = self.net.bus.at[lv_bus_idx, 'name'] if lv_bus_idx in self.net.bus.index else str(lv_bus_idx)
+            
+            lv_coord = bus_coords.get(lv_bus_name)
+            if lv_coord:
+                geometries.append({
+                    'transformer_id': str(idx),
+                    'name': trafo_name,
+                    'x': lv_coord['x'],
+                    'y': lv_coord['y'],
+                    'hv_bus': hv_bus_name,
+                    'lv_bus': lv_bus_name,
+                    'hv_bus_idx': int(hv_bus_idx),
+                    'lv_bus_idx': int(lv_bus_idx),
+                    'capacity_mva': float(sn_mva),
+                })
+                if self.coordinate_system == "geographic":
+                    geometries[-1].update({'lat': lv_coord['lat'], 'lon': lv_coord['lon']})
+        
+        return geometries
+    
+    def get_network_geometry(self) -> Dict[str, Any]:
+        """Get complete network geometry for frontend visualization."""
+        buses = self.get_bus_coordinates()
+        lines = self.get_line_geometries()
+        transformers = self.get_transformer_geometries()
+        
+        all_coords = []
+        for bus in buses.values():
+            all_coords.append([bus['x'], bus['y']])
+        for line in lines:
+            all_coords.extend(line['coordinates'])
+        
+        bounds = None
+        if all_coords:
+            lons = [c[0] for c in all_coords]
+            lats = [c[1] for c in all_coords]
+            bounds = {'min_x': min(lons), 'max_x': max(lons), 'min_y': min(lats), 'max_y': max(lats)}
+            if self.coordinate_system == "geographic":
+                bounds = {
+                    'min_lon': min(lons), 'max_lon': max(lons),
+                    'min_lat': min(lats), 'max_lat': max(lats)
+                }
+        
+        return {
+            'coordinate_system': self.coordinate_system,
+            'buses': buses,
+            'lines': lines,
+            'transformers': transformers,
+            'bounds': bounds
+        }
 
 
 def create_grid_from_scenario(scenario: ScenarioConfig) -> PandapowerAdapter:

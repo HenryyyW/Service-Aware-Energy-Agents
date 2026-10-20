@@ -5,10 +5,11 @@ import type {
   TimeStepData,
   AgentTask,
   WebSocketMessage,
+  NetworkGeometry,
 } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000';
+const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
 
 class ApiClient {
   private client: AxiosInstance;
@@ -54,6 +55,12 @@ class ApiClient {
 
   async deleteScenario(scenarioId: string): Promise<void> {
     await this.client.delete(`/api/scenarios/${scenarioId}`);
+  }
+
+  // Network geometry endpoints
+  async getNetworkGeometry(): Promise<NetworkGeometry> {
+    const response = await this.client.get('/api/network/geometry');
+    return response.data;
   }
 
   // Simulation endpoints
