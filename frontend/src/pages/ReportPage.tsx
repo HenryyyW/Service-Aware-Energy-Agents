@@ -16,7 +16,7 @@ function ReportPageContent() {
   const { addToast } = useToast();
   const [report, setReport] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  const [format, setFormat] = useState<'markdown' | 'pdf' | 'zip'>('markdown');
+  const [format] = useState<'markdown'>('markdown');
 
   useEffect(() => {
     if (runId) {
@@ -44,7 +44,7 @@ function ReportPageContent() {
     }
   };
 
-  const handleDownload = async (fmt: 'markdown' | 'pdf' | 'zip') => {
+  const handleDownload = async (fmt: 'markdown') => {
     try {
       addToast({ type: 'info', title: `Generating ${fmt.toUpperCase()}...`, duration: 2000 });
       const blob = await api.downloadReport(runId!, fmt);
@@ -80,12 +80,9 @@ function ReportPageContent() {
           <div className="flex items-center gap-2">
             <select
               value={format}
-              onChange={(e) => setFormat(e.target.value as any)}
               className="input w-auto min-w-[140px] py-1.5 text-body-sm"
             >
               <option value="markdown">Markdown</option>
-              <option value="pdf">PDF</option>
-              <option value="zip">ZIP</option>
             </select>
             <Button onClick={() => handleDownload(format)}>
               <Download className="w-4 h-4 mr-2" />

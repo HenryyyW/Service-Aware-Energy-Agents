@@ -157,26 +157,22 @@ export function ScenarioEditor({ onSave, onRun, readOnly = false }: ScenarioEdit
               value={currentScenario.community.buildings}
               onChange={(e) => updateScenarioField('community.buildings', parseInt(e.target.value) || 0)}
               min={1}
-              max={100}
+              max={5}
             />
             <Select
               label="Simulation Period"
               value={currentScenario.community.simulation_period}
               onChange={(e) => updateScenarioField('community.simulation_period', e.target.value)}
               options={[
-                { value: '1_day', label: '1 Day (96 steps)' },
-                { value: '7_days', label: '1 Week (672 steps)' },
-                { value: '30_days', label: '1 Month (2880 steps)' },
-                { value: '365_days', label: '1 Year (35040 steps)' },
+                { value: '1_day', label: '1 Day (24 hourly steps)' },
+                { value: '7_days', label: '1 Week (168 hourly steps)' },
               ]}
             />
             <Input
               label="Timestep (minutes)"
               type="number"
-              value={currentScenario.community.timestep_minutes}
-              onChange={(e) => updateScenarioField('community.timestep_minutes', parseInt(e.target.value) || 15)}
-              min={5}
-              max={60}
+              value={60}
+              disabled
             />
           </div>
         </ScenarioSection>
@@ -406,10 +402,8 @@ export function ScenarioEditor({ onSave, onRun, readOnly = false }: ScenarioEdit
               onChange={(e) => updateScenarioField('control.strategy', e.target.value)}
               options={[
                 { value: 'rule_based', label: 'Rule-Based' },
-                { value: 'mpc', label: 'Model Predictive Control' },
-                { value: 'rl_baseline', label: 'RL Baseline' },
-                { value: 'agent_policy', label: 'Agent Policy' },
-                { value: 'centralized', label: 'Centralized Optimization' },
+                { value: 'multi_agent', label: 'Multi-Agent Heuristic' },
+                { value: 'centralized', label: 'Centralized Heuristic' },
               ]}
             />
             <div>

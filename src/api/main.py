@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from src.api.routes import network, simulation, scenarios
+from src.api.routes import network, simulation, scenarios, runs
 
 
 @asynccontextmanager
@@ -36,6 +36,9 @@ app.add_middleware(
 app.include_router(scenarios.router, prefix="/api/scenarios", tags=["scenarios"])
 app.include_router(network.router, prefix="/api/network", tags=["network"])
 app.include_router(simulation.router, prefix="/api/simulation", tags=["simulation"])
+app.include_router(runs.runs_router, prefix="/api/simulations", tags=["runs"])
+app.include_router(runs.reports_router, prefix="/api/reports", tags=["reports"])
+app.include_router(runs.comparison_router, prefix="/api/compare", tags=["comparison"])
 
 
 @app.get("/")

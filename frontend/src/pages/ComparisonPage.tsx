@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useSimulationStore } from '../store/simulationStore';
 import { useScenarioStore } from '../store/scenarioStore';
-// import { api } from '../api/client';
+import { api } from '../api/client';
 import { ScenarioComparison } from '../components/scenario/ScenarioComparison';
 import { ToastProvider, useToast } from '../components/ui/Toast';
 import { Button } from '../components/ui/Button';
@@ -28,17 +28,13 @@ function ComparisonPageContent() {
     try {
       const runA = runs.find(r => r.run_id === runIdA);
       const runB = runs.find(r => r.run_id === runIdB);
-
-      if (runA && runB) {
-        setComparisonRunA(runA);
-        setComparisonRunB(runB);
-      }
-
-      // Try to get detailed comparison from API
-      try {
-      } catch {
-        // API might not have comparison endpoint yet
-      }
+      const [resolvedA, resolvedB] = await Promise.all([
+        runA || (runIdA ? api.getRun(runIdA) : Promise.reject(new Error('Missing run A'))),
+        runB || (runIdB ? api.getRun(runIdB) : Promise.reject(new Error('Missing run B'))),
+      ]);
+      setComparisonRunA(resolvedA);
+      setComparisonRunB(resolvedB);
+      await api.compareRuns(resolvedA.run_id, resolvedB.run_id);
     } catch (error) {
       console.error('Failed to load comparison:', error);
       addToast({ type: 'error', title: 'Failed to load comparison' });
@@ -59,9 +55,39 @@ function ComparisonPageContent() {
     clearComparison();
   };
 
-  const handleDownload = () => {
-    // Would generate comparison report
-    addToast({ type: 'info', title: 'Generating comparison report...', duration: 2000 });
+  const handleDownload = async () => {
+    if (!selectedA || !selectedB) return;
+    try {
+      const comparison = await api.compareRuns(selectedA.run_id, selectedB.run_id);
+      const lines = [
+        `# Run comparison: ${selectedA.run_id} vs ${selectedB.run_id}`,
+        '',
+        `- Scenario A: ${selectedA.scenario_id} (${selectedA.controller_type})`,
+        `- Scenario B: ${selectedB.scenario_id} (${selectedB.controller_type})`,
+        '',
+        '## Metrics',
+        '',
+        '| Group | Metric | Run A | Run B |',
+        '|---|---|---:|---:|',
+        ...Object.entries(comparison.metrics_comparison).flatMap(([group, metrics]: [string, any]) =>
+          Object.entries(metrics).map(([key, values]: [string, any]) =>
+            `| ${group} | ${key} | ${values.run_a} | ${values.run_b} |`
+          )
+        ),
+        '',
+        '> Values are taken from saved experiment results; placeholder metrics should not be interpreted as validated measurements.',
+      ];
+      const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/markdown' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `comparison_${selectedA.run_id}_${selectedB.run_id}.md`;
+      link.click();
+      URL.revokeObjectURL(url);
+      addToast({ type: 'success', title: 'Comparison report downloaded' });
+    } catch (error) {
+      console.error('Failed to export comparison:', error);
+      addToast({ type: 'error', title: 'Comparison export failed' });
+    }
   };
 
   const selectedA = comparisonRunA || runs.find(r => r.run_id === runIdA);

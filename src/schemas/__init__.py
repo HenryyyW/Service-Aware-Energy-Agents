@@ -20,7 +20,8 @@ from .diagnostics import (
 from .report import (
     ExperimentResult, ExperimentStatus, ControllerType, KPIResult,
     EnergyMetrics, ServiceMetrics, GridMetrics, AgentMetrics,
-    PerMemberMetrics, ComparisonReport, FinalReport
+    PerMemberMetrics, MemberSettlementMetrics, EnergySharingMetrics,
+    ComparisonReport, FinalReport
 )
 
 __all__ = [
@@ -41,5 +42,6 @@ __all__ = [
     # report
     "ExperimentResult", "ExperimentStatus", "ControllerType", "KPIResult",
     "EnergyMetrics", "ServiceMetrics", "GridMetrics", "AgentMetrics",
-    "PerMemberMetrics", "ComparisonReport", "FinalReport",
+    "PerMemberMetrics", "MemberSettlementMetrics", "EnergySharingMetrics",
+    "ComparisonReport", "FinalReport",
 ]

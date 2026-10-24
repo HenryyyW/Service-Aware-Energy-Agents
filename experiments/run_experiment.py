@@ -15,7 +15,8 @@ from src.schemas.scenario import ScenarioConfig
 from src.schemas.action import RequestedActions, Action, ActionType
 from src.schemas.report import (
     ExperimentResult, ExperimentStatus, ControllerType, KPIResult,
-    EnergyMetrics, ServiceMetrics, GridMetrics, AgentMetrics
+    EnergyMetrics, ServiceMetrics, GridMetrics, AgentMetrics,
+    EnergySharingMetrics, MemberSettlementMetrics
 )
 from src.simulation import SimulationCoupler
 from src.controllers import RuleBasedController, BaseController, MultiAgentController, CentralizedController
@@ -163,16 +164,56 @@ class ExperimentRunner:
             token_usage=0,
             wall_clock_seconds=self.end_time - self.start_time if self.end_time and self.start_time else 0
         )
-        
-        # Per-member metrics
-        per_member = compute_per_member_metrics(cl_history, self.scenario_config)
-        per_member_dicts = [m.model_dump() for m in per_member]
-        
-        # Create KPI results
-        kpi_results = []
         energy = all_metrics['energy']
         service = all_metrics['service']
         grid = all_metrics['grid']
+        
+        # Per-member metrics
+        per_member = compute_per_member_metrics(cl_history, self.scenario_config)
+        energy_sharing = None
+        settlement_result = self.coupler.get_settlement_result() if self.coupler else None
+        if settlement_result:
+            settlement_members = {}
+            settlement_savings = {}
+            for building_id, settlement in settlement_result.building_settlements.items():
+                savings = float(settlement.metadata.get("savings_vs_baseline", 0.0))
+                settlement_savings[building_id] = savings
+                settlement_members[building_id] = MemberSettlementMetrics(
+                    baseline_grid_bill=float(settlement.metadata.get("baseline_grid_bill", 0.0)),
+                    actual_grid_bill=float(settlement.metadata.get("actual_grid_bill", 0.0)),
+                    actual_total_bill=float(settlement.metadata.get("actual_total_bill", 0.0)),
+                    settlement_savings=savings,
+                    baseline_grid_import_kwh=settlement.baseline_grid_import_kwh,
+                    baseline_grid_export_kwh=settlement.baseline_grid_export_kwh,
+                    grid_import_kwh=settlement.total_grid_import_kwh,
+                    grid_export_kwh=settlement.total_grid_export_kwh,
+                    grid_import_cost=settlement.total_grid_import_cost,
+                    grid_export_revenue=settlement.total_grid_export_revenue,
+                    demand_charge=settlement.actual_demand_charge,
+                    community_import_cost=settlement.total_community_import_cost,
+                    community_export_revenue=settlement.total_community_export_revenue,
+                    net_settlement=settlement.net_settlement,
+                )
+            per_member_by_id = {member.building_id: member for member in per_member}
+            for building_id, savings in settlement_savings.items():
+                if building_id in per_member_by_id:
+                    per_member_by_id[building_id].settlement_savings = savings
+            service.per_member_savings = settlement_savings
+            energy_sharing = EnergySharingMetrics(
+                market_type=settlement_result.metadata.get("market_type", "uniform_price"),
+                settlement_interval_timesteps=settlement_result.metadata.get("settlement_interval_timesteps", 0),
+                timestep_minutes=settlement_result.metadata.get("timestep_minutes", 0),
+                total_community_volume_kwh=settlement_result.total_community_volume_kwh,
+                total_community_revenue=settlement_result.total_community_revenue,
+                baseline_grid_bill=sum(m.baseline_grid_bill for m in settlement_members.values()),
+                actual_grid_bill=sum(m.actual_grid_bill for m in settlement_members.values()),
+                actual_total_bill=sum(m.actual_total_bill for m in settlement_members.values()),
+                total_savings_vs_baseline=sum(settlement_savings.values()),
+                per_member=settlement_members,
+            )
+        
+        # Create KPI results
+        kpi_results = []
         
         kpi_defs = [
             ('total_cost', 'Total Cost', '$', energy.total_cost, 'minimize'),
@@ -185,6 +226,12 @@ class ExperimentRunner:
             ('pf_convergence', 'PF Convergence Rate', '-', grid.power_flow_convergence_rate, 'maximize'),
             ('voltage_violations', 'Voltage Violations', 'count', grid.voltage_violations_count, 'minimize'),
         ]
+        if energy_sharing:
+            kpi_defs.extend([
+                ('community_savings', 'Community Savings', '$', energy_sharing.total_savings_vs_baseline, 'maximize'),
+                ('community_settlement_volume', 'Community Settlement Volume', 'kWh', energy_sharing.total_community_volume_kwh, 'maximize'),
+                ('community_actual_bill', 'Community Actual Bill', '$', energy_sharing.actual_total_bill, 'minimize'),
+            ])
         
         for kpi_id, name, unit, value, direction in kpi_defs:
             kpi_results.append(KPIResult(
@@ -222,6 +269,7 @@ class ExperimentRunner:
             service=service,
             grid=grid,
             agent=all_metrics['agent'],
+            energy_sharing=energy_sharing,
             kpis=kpi_results,
             per_member=per_member,
             diagnostic_reports=[h.grid_diagnostics.model_dump() for h in self.history if h.grid_diagnostics],

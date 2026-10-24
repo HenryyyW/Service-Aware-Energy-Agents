@@ -61,7 +61,7 @@ const DEFAULT_SCENARIO: ScenarioConfig = {
     export_limit_kw: 200,
   },
   control: {
-    strategy: 'agent_policy',
+    strategy: 'rule_based',
     objective: [
       'minimize_cost',
       'minimize_peak',

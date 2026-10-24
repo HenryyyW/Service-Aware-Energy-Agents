@@ -298,8 +298,8 @@ class TestSettlementEngine:
         """Test settlement for a single timestep."""
         engine = SettlementEngine(scenario_config, energy_sharing_config)
         
-        grid_imports = {"building_0": 1.0, "building_1": 0.0, "building_2": 1.0}
-        grid_exports = {"building_0": 0.0, "building_1": 2.0, "building_2": 0.0}
+        grid_imports = {"building_0": 2.0, "building_1": 0.0, "building_2": 1.0}
+        grid_exports = {"building_0": 0.0, "building_1": 3.0, "building_2": 0.0}
         
         # Process one timestep - this runs the actual market clearing
         market_result = engine.process_timestep(0, building_states, grid_imports, grid_exports, carbon_intensity=0.5)
@@ -312,10 +312,12 @@ class TestSettlementEngine:
         
         # Check building settlements were updated
         assert engine.building_settlements["building_0"].net_settlement != 0 or engine.building_settlements["building_1"].net_settlement != 0
-        # Grid values are now in kWh (kW * timestep_hours)
+        # Baseline grid values are kW * timestep_hours; market trades offset actual flows.
         timestep_hours = scenario_config.timestep_minutes / 60.0
-        assert engine.building_settlements["building_0"].total_grid_import_kwh == 1.0 * timestep_hours
-        assert engine.building_settlements["building_1"].total_grid_export_kwh == 2.0 * timestep_hours
+        assert engine.building_settlements["building_0"].baseline_grid_import_kwh == 2.0 * timestep_hours
+        assert engine.building_settlements["building_0"].total_grid_import_kwh == 0.0
+        assert engine.building_settlements["building_1"].baseline_grid_export_kwh == 3.0 * timestep_hours
+        assert engine.building_settlements["building_1"].total_grid_export_kwh == 0.0
 
     def test_interval_finalization(self, scenario_config, energy_sharing_config, building_states):
         """Test interval finalization aggregates correctly."""
@@ -528,6 +530,86 @@ class TestRegressionInvariants:
             total_kw = sum(abs(t) for t in result.trades.values()) / 2.0
             expected_kwh = total_kw * timestep_hours
             assert abs(result.total_volume_kwh - expected_kwh) < 1e-9
+
+    def test_member_bill_and_savings_include_post_trade_grid_costs(
+        self, scenario_config, energy_sharing_config, building_states
+    ):
+        """REGRESSION: Savings compare the full no-sharing and shared bills."""
+        engine = SettlementEngine(scenario_config, energy_sharing_config)
+        engine.process_timestep(
+            0,
+            building_states,
+            {"building_0": 2.0, "building_1": 0.0, "building_2": 1.0},
+            {"building_0": 0.0, "building_1": 3.0, "building_2": 0.0},
+        )
+        assert engine.get_community_metrics()["total_savings_vs_baseline"] == pytest.approx(0.0375)
+
+        result = engine.finalize()
+        buyer = result.building_settlements["building_0"]
+        seller = result.building_settlements["building_1"]
+        second_buyer = result.building_settlements["building_2"]
+
+        assert buyer.total_grid_import_kwh == pytest.approx(0.0)
+        assert seller.total_grid_export_kwh == pytest.approx(0.0)
+        assert buyer.metadata["baseline_grid_bill"] == pytest.approx(0.05)
+        assert buyer.metadata["actual_total_bill"] == pytest.approx(0.0375)
+        assert buyer.metadata["savings_vs_baseline"] == pytest.approx(0.0125)
+        assert seller.metadata["baseline_grid_bill"] == pytest.approx(-0.0375)
+        assert seller.metadata["actual_total_bill"] == pytest.approx(-0.05625)
+        assert seller.metadata["savings_vs_baseline"] == pytest.approx(0.01875)
+        assert second_buyer.metadata["savings_vs_baseline"] == pytest.approx(0.00625)
+        community_metrics = engine.get_community_metrics()
+        assert community_metrics["baseline_grid_bill"] == pytest.approx(0.0375)
+        assert community_metrics["actual_total_bill"] == pytest.approx(0.0)
+        assert community_metrics["total_savings_vs_baseline"] == pytest.approx(0.0375)
+
+    def test_interval_volume_is_reported_in_kwh(
+        self, scenario_config, energy_sharing_config, building_states
+    ):
+        """REGRESSION: Interval volume uses energy, not summed power."""
+        energy_sharing_config.settlement_interval = "30min"
+        engine = SettlementEngine(scenario_config, energy_sharing_config)
+        expected_volume = 0.0
+        for timestep in range(2):
+            result = engine.process_timestep(timestep, building_states, {}, {})
+            expected_volume += result.total_volume_kwh
+
+        settlement_result = engine.finalize()
+
+        assert settlement_result.interval_results[0].total_volume_kwh == pytest.approx(
+            expected_volume
+        )
+
+    def test_default_tariff_and_demand_charge_are_in_member_bills(
+        self, scenario_config, energy_sharing_config, building_states
+    ):
+        """REGRESSION: Default energy rates and peak demand charges are billed."""
+        for state in building_states.values():
+            state.tariff_config = None
+        building_states["building_0"].tariff_config = TariffConfig(
+            import_prices={"off_peak": 0.1},
+            export_prices={"off_peak": 0.05},
+            demand_charge=10.0,
+        )
+        engine = SettlementEngine(scenario_config, energy_sharing_config)
+        engine.process_timestep(
+            0,
+            building_states,
+            {"building_0": 2.0, "building_1": 0.0, "building_2": 1.0},
+            {"building_0": 0.0, "building_1": 3.0, "building_2": 0.0},
+        )
+
+        result = engine.finalize()
+        buyer = result.building_settlements["building_0"]
+        seller = result.building_settlements["building_1"]
+        default_tariff_buyer = result.building_settlements["building_2"]
+
+        assert buyer.baseline_demand_charge == pytest.approx(20.0)
+        assert buyer.actual_demand_charge == pytest.approx(0.0)
+        assert buyer.metadata["baseline_grid_bill"] == pytest.approx(20.05)
+        assert seller.metadata["baseline_grid_bill"] == pytest.approx(-0.0375)
+        assert seller.metadata["actual_total_bill"] == pytest.approx(-0.05625)
+        assert default_tariff_buyer.baseline_grid_import_cost == pytest.approx(0.075)
 
     def test_savings_positive_when_community_cheaper(self, scenario_config, energy_sharing_config, building_states):
         """REGRESSION: Savings > 0 when community price < grid price."""

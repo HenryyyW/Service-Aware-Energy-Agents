@@ -241,9 +241,7 @@ export function ParameterControls({ onRun, running = false }: ParameterControlsP
           onChange={(e) => updateScenarioField('control.strategy', e.target.value)}
           options={[
             { value: 'rule_based', label: 'Rule-Based' },
-            { value: 'mpc', label: 'MPC' },
-            { value: 'rl_baseline', label: 'RL Baseline' },
-            { value: 'agent_policy', label: 'Agent Policy' },
+            { value: 'multi_agent', label: 'Multi-Agent Heuristic' },
             { value: 'centralized', label: 'Centralized' },
           ]}
         />

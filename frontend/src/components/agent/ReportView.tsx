@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { FileText, Download, Copy, CheckCircle, Eye, Edit, Share2 } from 'lucide-react';
+import { FileText, Download, Copy, CheckCircle, Eye, Edit } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { useAgentStore } from '../../store/agentStore';
 
 interface ReportViewProps {
   report?: string;
-  onDownload?: (format: 'markdown' | 'pdf') => void;
+  onDownload?: (format: 'markdown') => void;
 }
 
 export function ReportView({ report, onDownload }: ReportViewProps) {
@@ -56,9 +56,6 @@ export function ReportView({ report, onDownload }: ReportViewProps) {
           </Button>
           <Button variant="ghost" size="icon" onClick={() => onDownload?.('markdown')} aria-label="Download Markdown">
             <Download className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => onDownload?.('pdf')} aria-label="Download PDF">
-            <Share2 className="w-4 h-4" />
           </Button>
         </div>
       </div>

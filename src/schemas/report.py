@@ -111,6 +111,38 @@ class PerMemberMetrics(BaseModel):
     service_score: float = 0.0  # 0-1 composite
 
 
+class MemberSettlementMetrics(BaseModel):
+    """Member-level grid and community settlement totals."""
+    baseline_grid_bill: float = 0.0
+    actual_grid_bill: float = 0.0
+    actual_total_bill: float = 0.0
+    settlement_savings: float = 0.0
+    baseline_grid_import_kwh: float = 0.0
+    baseline_grid_export_kwh: float = 0.0
+    grid_import_kwh: float = 0.0
+    grid_export_kwh: float = 0.0
+    grid_import_cost: float = 0.0
+    grid_export_revenue: float = 0.0
+    demand_charge: float = 0.0
+    community_import_cost: float = 0.0
+    community_export_revenue: float = 0.0
+    net_settlement: float = 0.0
+
+
+class EnergySharingMetrics(BaseModel):
+    """Community-level settlement summary and member breakdown."""
+    market_type: str = "uniform_price"
+    settlement_interval_timesteps: int = 0
+    timestep_minutes: int = 0
+    total_community_volume_kwh: float = 0.0
+    total_community_revenue: float = 0.0
+    baseline_grid_bill: float = 0.0
+    actual_grid_bill: float = 0.0
+    actual_total_bill: float = 0.0
+    total_savings_vs_baseline: float = 0.0
+    per_member: Dict[str, MemberSettlementMetrics] = Field(default_factory=dict)
+
+
 class ExperimentResult(BaseModel):
     """Complete experiment result."""
     run_id: str
@@ -127,6 +159,7 @@ class ExperimentResult(BaseModel):
     service: ServiceMetrics = Field(default_factory=ServiceMetrics)
     grid: GridMetrics = Field(default_factory=GridMetrics)
     agent: AgentMetrics = Field(default_factory=AgentMetrics)
+    energy_sharing: Optional[EnergySharingMetrics] = None
     kpis: List[KPIResult] = Field(default_factory=list)
     per_member: List[PerMemberMetrics] = Field(default_factory=list)
     

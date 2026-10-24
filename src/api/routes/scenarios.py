@@ -1,7 +1,11 @@
 """Scenario management routes."""
+from pathlib import Path
+import json
+import re
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
 from pydantic import BaseModel
+import yaml
 
 from src.schemas.scenario import ScenarioConfig
 from src.simulation.coupling import SimulationCoupler
@@ -12,6 +16,25 @@ router = APIRouter()
 # In-memory storage for scenarios
 _scenarios: Dict[str, ScenarioConfig] = {}
 _couplers: Dict[str, SimulationCoupler] = {}
+_CONFIGS_DIR = Path(__file__).resolve().parents[3] / "configs"
+_SAVED_SCENARIOS_DIR = Path(__file__).resolve().parents[3] / "results" / "api_runs" / "scenarios"
+
+
+def _load_config_scenario(scenario_id: str) -> ScenarioConfig:
+    """Load a repository scenario by its validated ID."""
+    if not scenario_id.replace("_", "").isalnum():
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    config_path = _CONFIGS_DIR / f"{scenario_id}.yaml"
+    try:
+        if config_path.is_file():
+            with config_path.open("r", encoding="utf-8") as config_file:
+                return ScenarioConfig.model_validate(yaml.safe_load(config_file))
+        saved_path = _SAVED_SCENARIOS_DIR / f"{scenario_id}.json"
+        if saved_path.is_file():
+            return ScenarioConfig.model_validate_json(saved_path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError, ValueError) as error:
+        raise HTTPException(status_code=500, detail=f"Invalid scenario config: {error}") from error
+    raise HTTPException(status_code=404, detail="Scenario not found")
 
 
 class ScenarioCreateRequest(BaseModel):
@@ -25,34 +48,49 @@ class ScenarioCreateRequest(BaseModel):
 @router.get("")
 async def list_scenarios() -> List[Dict[str, Any]]:
     """List all available scenarios."""
+    scenarios = {
+        scenario_id: scenario
+        for scenario_id, scenario in (
+            (path.stem, _load_config_scenario(path.stem))
+            for path in _CONFIGS_DIR.glob("scenario_*.yaml")
+        )
+    }
+    if _SAVED_SCENARIOS_DIR.exists():
+        for saved_path in _SAVED_SCENARIOS_DIR.glob("*.json"):
+            try:
+                scenarios[saved_path.stem] = ScenarioConfig.model_validate_json(saved_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+    scenarios.update(_scenarios)
     return [
-        {
-            "scenario_id": s.scenario_id,
-            "name": s.name,
-            "description": s.description,
-        }
-        for s in _scenarios.values()
+        {"scenario_id": scenario.scenario_id, "name": scenario.name, "description": scenario.description}
+        for scenario in scenarios.values()
     ]
 
 
 @router.get("/{scenario_id}")
 async def get_scenario(scenario_id: str) -> Dict[str, Any]:
     """Get scenario details."""
-    if scenario_id not in _scenarios:
-        raise HTTPException(status_code=404, detail="Scenario not found")
-    return _scenarios[scenario_id].model_dump()
+    scenario = _scenarios.get(scenario_id) or _load_config_scenario(scenario_id)
+    return scenario.model_dump()
 
 
 @router.post("")
 async def create_scenario(request: ScenarioCreateRequest) -> Dict[str, Any]:
     """Create a new scenario."""
+    if not re.fullmatch(r"[A-Za-z0-9_]+", request.scenario_id):
+        raise HTTPException(status_code=422, detail="Scenario ID may contain only letters, numbers, and underscores")
     config = ScenarioConfig(**request.config)
     config.scenario_id = request.scenario_id
     config.name = request.name
     config.description = request.description
     
     _scenarios[request.scenario_id] = config
-    return {"status": "created", "scenario_id": request.scenario_id}
+    if not (_CONFIGS_DIR / f"{request.scenario_id}.yaml").is_file():
+        _SAVED_SCENARIOS_DIR.mkdir(parents=True, exist_ok=True)
+        saved_path = _SAVED_SCENARIOS_DIR / f"{request.scenario_id}.json"
+        saved_path.write_text(config.model_dump_json(indent=2), encoding="utf-8")
+    return config.model_dump()
 
 
 @router.post("/{scenario_id}/initialize")

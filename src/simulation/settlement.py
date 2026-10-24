@@ -17,11 +17,21 @@ class BuildingSettlement:
     total_sold_kwh: float = 0.0
     total_grid_import_kwh: float = 0.0
     total_grid_export_kwh: float = 0.0
+    baseline_grid_import_kwh: float = 0.0
+    baseline_grid_export_kwh: float = 0.0
+    peak_grid_import_kw: float = 0.0
+    baseline_peak_grid_import_kw: float = 0.0
+    demand_charge_rate: float = 0.0
+    actual_demand_charge: float = 0.0
+    baseline_demand_charge: float = 0.0
     total_community_import_kwh: float = 0.0
     total_community_export_kwh: float = 0.0
-    # Grid cost tracking for proper baseline comparison
     total_grid_import_cost: float = 0.0
     total_grid_export_revenue: float = 0.0
+    baseline_grid_import_cost: float = 0.0
+    baseline_grid_export_revenue: float = 0.0
+    total_community_import_cost: float = 0.0
+    total_community_export_revenue: float = 0.0
     interval_settlements: Dict[int, float] = field(default_factory=dict)  # interval_idx -> settlement
     clearing_prices: List[float] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -137,27 +147,45 @@ class SettlementEngine:
                 settlement.total_sold_kwh += -trade_kwh
                 settlement.total_community_export_kwh += -trade_kwh
             
-            # Grid interaction (convert kW to kWh)
-            grid_import_kw = grid_imports.get(bid, 0.0)
-            grid_export_kw = grid_exports.get(bid, 0.0)
-            grid_import_kwh = max(0, grid_import_kw) * timestep_hours
-            grid_export_kwh = max(0, grid_export_kw) * timestep_hours
-            settlement.total_grid_import_kwh += grid_import_kwh
-            settlement.total_grid_export_kwh += grid_export_kwh
-            
-            # Track grid costs using tariff prices at this timestep
+            # Inputs are the no-sharing grid flows; trades offset those flows.
+            baseline_import_kw = max(0.0, grid_imports.get(bid, 0.0))
+            baseline_export_kw = max(0.0, grid_exports.get(bid, 0.0))
+            actual_import_kw = max(0.0, baseline_import_kw - max(trade_kw, 0.0))
+            actual_export_kw = max(0.0, baseline_export_kw - max(-trade_kw, 0.0))
+            baseline_import_kwh = baseline_import_kw * timestep_hours
+            baseline_export_kwh = baseline_export_kw * timestep_hours
+            actual_import_kwh = actual_import_kw * timestep_hours
+            actual_export_kwh = actual_export_kw * timestep_hours
+            settlement.baseline_grid_import_kwh += baseline_import_kwh
+            settlement.baseline_grid_export_kwh += baseline_export_kwh
+            settlement.total_grid_import_kwh += actual_import_kwh
+            settlement.total_grid_export_kwh += actual_export_kwh
+            settlement.baseline_peak_grid_import_kw = max(
+                settlement.baseline_peak_grid_import_kw, baseline_import_kw
+            )
+            settlement.peak_grid_import_kw = max(
+                settlement.peak_grid_import_kw, actual_import_kw
+            )
+
+            # Track baseline and post-trade grid bills at this timestep's tariff.
             state = building_states.get(bid)
-            if state and state.tariff_config:
-                # Import cost
-                period = self._timestep_to_period(timestep)
-                import_price = state.tariff_config.import_prices.get(period, 0.3)
-                export_price = state.tariff_config.export_prices.get(period, 0.05)
-                settlement.total_grid_import_cost += grid_import_kwh * import_price
-                settlement.total_grid_export_revenue += grid_export_kwh * export_price
+            tariff = state.tariff_config if state else None
+            period = self._timestep_to_period(timestep)
+            import_price = tariff.import_prices.get(period, 0.3) if tariff else 0.3
+            export_price = tariff.export_prices.get(period, 0.05) if tariff else 0.05
+            settlement.demand_charge_rate = tariff.demand_charge if tariff else 0.0
+            settlement.baseline_grid_import_cost += baseline_import_kwh * import_price
+            settlement.baseline_grid_export_revenue += baseline_export_kwh * export_price
+            settlement.total_grid_import_cost += actual_import_kwh * import_price
+            settlement.total_grid_export_revenue += actual_export_kwh * export_price
             
             # Settlement (community trades)
             settlement_amount = market_result.settlements.get(bid, 0.0)
             settlement.net_settlement += settlement_amount
+            if settlement_amount < 0:
+                settlement.total_community_import_cost += -settlement_amount
+            else:
+                settlement.total_community_export_revenue += settlement_amount
             
             # Track clearing price
             if market_result.clearing_price > 0:
@@ -195,12 +223,13 @@ class SettlementEngine:
             self.building_settlements[bid].interval_settlements[self.current_interval_idx] = interval_settlement
         
         # Calculate interval stats
-        avg_price = np.mean([p for p in self.interval_clearing_prices if p > 0]) if self.interval_clearing_prices else 0.0
+        valid_prices = [p for p in self.interval_clearing_prices if p > 0]
+        avg_price = float(np.mean(valid_prices)) if valid_prices else 0.0
         total_volume = sum(
             abs(trade) 
             for ts in range(interval_start, interval_end + 1)
             for trade in self.interval_trades[ts].values()
-        ) / 2.0
+        ) / 2.0 * (self.timestep_minutes / 60.0)
         
         interval_result = IntervalSettlementResult(
             interval_idx=self.current_interval_idx,
@@ -251,15 +280,33 @@ class SettlementEngine:
     
     def _calculate_savings(self, settlement: BuildingSettlement) -> float:
         """Calculate savings vs. baseline (no community sharing)."""
-        # Baseline cost: all grid imports at tariff prices, all grid exports at export prices
-        baseline_cost = settlement.total_grid_import_cost - settlement.total_grid_export_revenue
-        
-        # Actual cost: baseline cost + community settlement (negative = cost, positive = revenue)
-        actual_cost = baseline_cost + settlement.net_settlement
-        
-        # Savings = baseline - actual (positive = saved money)
-        savings = baseline_cost - actual_cost
-        return savings
+        baseline_bill = (
+            settlement.baseline_grid_import_cost
+            - settlement.baseline_grid_export_revenue
+            + settlement.baseline_peak_grid_import_kw * settlement.demand_charge_rate
+        )
+        settlement.baseline_demand_charge = (
+            settlement.baseline_peak_grid_import_kw * settlement.demand_charge_rate
+        )
+        settlement.actual_demand_charge = (
+            settlement.peak_grid_import_kw * settlement.demand_charge_rate
+        )
+        actual_grid_bill = (
+            settlement.total_grid_import_cost
+            - settlement.total_grid_export_revenue
+            + settlement.actual_demand_charge
+        )
+        actual_total_bill = (
+            actual_grid_bill
+            + settlement.total_community_import_cost
+            - settlement.total_community_export_revenue
+        )
+        settlement.metadata.update({
+            "baseline_grid_bill": baseline_bill,
+            "actual_grid_bill": actual_grid_bill,
+            "actual_total_bill": actual_total_bill,
+        })
+        return baseline_bill - actual_total_bill
     
     def _calculate_self_sufficiency(self, settlement: BuildingSettlement) -> float:
         """Calculate self-sufficiency ratio (community energy / total energy)."""
@@ -272,7 +319,7 @@ class SettlementEngine:
     def get_building_savings(self) -> Dict[str, float]:
         """Get per-building savings vs. baseline."""
         return {
-            bid: s.metadata.get("savings_vs_baseline", 0.0)
+            bid: self._calculate_savings(s)
             for bid, s in self.building_settlements.items()
         }
     
@@ -281,6 +328,26 @@ class SettlementEngine:
         total_import = sum(s.total_grid_import_kwh for s in self.building_settlements.values())
         total_export = sum(s.total_grid_export_kwh for s in self.building_settlements.values())
         total_community = sum(s.total_community_import_kwh for s in self.building_settlements.values())
+        baseline_grid_bill = sum(
+            s.baseline_grid_import_cost
+            - s.baseline_grid_export_revenue
+            + s.baseline_peak_grid_import_kw * s.demand_charge_rate
+            for s in self.building_settlements.values()
+        )
+        actual_grid_bill = sum(
+            s.total_grid_import_cost
+            - s.total_grid_export_revenue
+            + s.peak_grid_import_kw * s.demand_charge_rate
+            for s in self.building_settlements.values()
+        )
+        actual_total_bill = sum(
+            s.total_grid_import_cost
+            - s.total_grid_export_revenue
+            + s.peak_grid_import_kw * s.demand_charge_rate
+            + s.total_community_import_cost
+            - s.total_community_export_revenue
+            for s in self.building_settlements.values()
+        )
         
         return {
             "total_grid_import_kwh": total_import,
@@ -288,6 +355,10 @@ class SettlementEngine:
             "total_community_volume_kwh": total_community,
             "community_self_sufficiency": total_community / (total_import + total_community) if (total_import + total_community) > 0 else 0.0,
             "total_settlement_volume_kwh": self.total_community_volume_kwh,
+            "baseline_grid_bill": baseline_grid_bill,
+            "actual_grid_bill": actual_grid_bill,
+            "actual_total_bill": actual_total_bill,
+            "total_savings_vs_baseline": sum(self.get_building_savings().values()),
             "avg_clearing_price": np.mean([
                 s for s in self.building_settlements.values() 
                 for s in s.clearing_prices if s > 0

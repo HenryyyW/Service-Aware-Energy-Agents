@@ -44,7 +44,12 @@ class ApiClient {
   }
 
   async createScenario(scenario: ScenarioConfig): Promise<ScenarioConfig> {
-    const response = await this.client.post('/api/scenarios', scenario);
+    const response = await this.client.post('/api/scenarios', {
+      scenario_id: scenario.scenario_id,
+      name: scenario.name || scenario.community.name,
+      description: scenario.description || '',
+      config: scenario,
+    });
     return response.data;
   }
 
@@ -117,7 +122,7 @@ class ApiClient {
     return response.data;
   }
 
-  async downloadReport(runId: string, format: 'markdown' | 'pdf' | 'zip'): Promise<Blob> {
+  async downloadReport(runId: string, format: 'markdown'): Promise<Blob> {
     const response = await this.client.get(`/api/reports/${runId}/download`, {
       params: { format },
       responseType: 'blob',

@@ -1,4 +1,6 @@
 """Network geometry routes for pandapower network visualization."""
+import yaml
+from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 from typing import Dict, Any, Optional
 
@@ -20,7 +22,15 @@ def set_pandapower_adapter(adapter: PandapowerAdapter):
 def get_pandapower_adapter() -> PandapowerAdapter:
     """Get the global pandapower adapter instance."""
     if _pandapower_adapter is None:
-        raise HTTPException(status_code=404, detail="Network not initialized. Load a scenario first.")
+        scenario_path = Path(__file__).resolve().parents[3] / "configs" / "scenario_a.yaml"
+        try:
+            with scenario_path.open("r", encoding="utf-8") as scenario_file:
+                scenario = ScenarioConfig.model_validate(yaml.safe_load(scenario_file))
+            if scenario.pandapower is None:
+                raise ValueError("Scenario has no pandapower configuration")
+            set_pandapower_adapter(PandapowerAdapter(scenario.pandapower))
+        except (OSError, yaml.YAMLError, ValueError) as error:
+            raise HTTPException(status_code=503, detail=f"Default network could not be loaded: {error}") from error
     return _pandapower_adapter
 
 
