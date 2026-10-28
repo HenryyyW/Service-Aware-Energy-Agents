@@ -342,7 +342,15 @@ class WeightedClearing(MarketClearingEngine):
         base_result = base_engine.clear_market(building_states, timestep, carbon_intensity)
         
         if base_result.total_volume_kwh <= 1e-6:
-            return base_result
+            # Return result with correct market type even when no volume
+            return MarketClearingResult(
+                clearing_price=0.0,
+                trades={b: 0.0 for b in building_states},
+                settlements={b: 0.0 for b in building_states},
+                total_volume_kwh=0.0,
+                market_type=MarketType.WEIGHTED,
+                metadata={"reason": "no_overlapping_volume", "base_reason": base_result.metadata.get("reason", "unknown")}
+            )
         
         # Weighted allocation respecting per-building limits
         trades = {b: 0.0 for b in building_states}
@@ -565,7 +573,15 @@ class FairnessAwareClearing(UniformPriceClearing):
         base_result = base_engine.clear_market(building_states, timestep, carbon_intensity)
         
         if base_result.total_volume_kwh <= 1e-6:
-            return base_result
+            # Return result with correct market type even when no volume
+            return MarketClearingResult(
+                clearing_price=0.0,
+                trades={b: 0.0 for b in building_states},
+                settlements={b: 0.0 for b in building_states},
+                total_volume_kwh=0.0,
+                market_type=MarketType.FAIRNESS_AWARE,
+                metadata={"reason": "no_overlapping_volume", "base_reason": base_result.metadata.get("reason", "unknown")}
+            )
         
         # Fairness-aware: minimize Gini coefficient of net benefits
         # Net benefit = settlement (revenue for sellers, -cost for buyers)
