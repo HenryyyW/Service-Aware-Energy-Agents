@@ -88,6 +88,8 @@
 
 `experiments/run_benchmark.py` 当前支持 `rule_based`、`multi_agent` 和 `centralized` 三个控制器标签。集中式实现是启发式控制器，并非 MPC 或强化学习基线。Benchmark 脚本支持多个随机种子并计算统计量和 95% 置信区间，但小型 smoke run 不足以支撑论文结论。研究 brief 要求每种配置至少运行 3–5 次，并补充 MPC／RL 和智能体验证机制消融实验。
 
+> **修复前的 benchmark 数字无效。** 在种子可复现性修复（PR #1）之前生成的 benchmark 结果未给所有随机源设定种子，无法复现，请勿引用。引用任何数字前，请用当前代码重新运行；复现性门禁见 `docs/reproducibility.md`。
+
 ## 安装与运行
 
 ### Python 仿真
@@ -165,12 +167,12 @@ Vite 开发服务器带有只读本地中间件，会扫描仓库 `results/` 中
 pytest -q tests
 ```
 
-测试覆盖控制器协同、CityLearn adapter、pandapower adapter、指标和智能体修复框架。**最近一次完整测试记录为 27 项通过、4 项 CityLearn adapter 测试失败**；失败发生在环境构建期间，异常为 `TypeError: slice indices must be integers or None or have an __index__ method`。修改后请重新运行测试；当前测试失败时，不应将历史 benchmark 产物视为已验证结果。
+测试覆盖控制器协同、CityLearn adapter、pandapower adapter、指标和智能体修复框架。**当前 93 项测试全部通过**，包括针对 CityLearn adapter 时间步约定的回归测试（整数切片索引、CSV 长度与 episode_time_steps 匹配、3600/3600.0 参数化覆盖）。
 
 ## 当前限制
 
 - Vite 本地结果中间件不是生产 API／后端。
-- CityLearn adapter 测试目前因非整数切片索引失败；需要统一数据步长约定并增加回归测试。
+- CityLearn adapter 时间步约定已统一并有回归测试保护（整数 schema 字段、CSV 长度与 episode 步数对齐、3600/3600.0 秒步长处理）。
 - 电网违规会被记录，但尚未证明完整的电网反馈与重新调度闭环。
 - 情景 schema 中有 `energy_sharing` 和结算选项，但没有端到端市场撮合或结算流程；成员结算收益仍是占位值。
 - Scenario E 声明了故障，但配置化故障注入与恢复尚未端到端实现。
