@@ -63,8 +63,14 @@ class ApiClient {
   }
 
   // Network geometry endpoints
-  async getNetworkGeometry(): Promise<NetworkGeometry> {
-    const response = await this.client.get('/api/network/geometry');
+  async getNetworkGeometry(scenarioId?: string): Promise<NetworkGeometry> {
+    const params = scenarioId ? { scenario_id: scenarioId } : {};
+    const response = await this.client.get('/api/network/geometry', { params });
+    return response.data;
+  }
+
+  async getAssetMetadata(scenarioId: string): Promise<any> {
+    const response = await this.client.get(`/api/network/asset-metadata/${scenarioId}`);
     return response.data;
   }
 

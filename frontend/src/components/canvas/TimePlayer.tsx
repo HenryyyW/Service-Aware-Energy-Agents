@@ -6,6 +6,7 @@ import { useTimePlayerAutoAdvance, useTimePlayerKeyboard } from '../../hooks/use
 import { Slider } from '../ui/Slider';
 import { Button } from '../ui/Button';
 import { Tooltip } from '../ui/Modal';
+import { useCurrentStepData, useTrajectories } from '../../store/simulationStore';
 
 export function TimePlayer() {
   const {
@@ -23,14 +24,35 @@ export function TimePlayer() {
     setCurrentTimestep,
   } = useTimePlayer();
 
+  // Get current step data for actual timestamp
+  const currentStepData = useCurrentStepData();
+  const trajectories = useTrajectories();
+
   // Enable auto-advance and keyboard shortcuts
   useTimePlayerAutoAdvance();
   useTimePlayerKeyboard();
 
   const sliderRef = useRef<HTMLInputElement>(null);
 
+  const getTimestampForTimestep = (timestep: number): Date | null => {
+    if (currentStepData?.timestamp && currentStepData.timestep === timestep) {
+      return new Date(currentStepData.timestamp);
+    }
+    // Look up in trajectories
+    const stepData = trajectories.find(t => t.timestep === timestep);
+    if (stepData?.timestamp) {
+      return new Date(stepData.timestamp);
+    }
+    return null;
+  };
+
   const formatTime = (timestep: number) => {
-    const hours = Math.floor(timestep * 0.25); // 15-min timesteps
+    const date = getTimestampForTimestep(timestep);
+    if (date) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+    // Fallback to 15-min calculation for other timesteps
+    const hours = Math.floor(timestep * 0.25);
     const minutes = (timestep % 4) * 15;
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   };
