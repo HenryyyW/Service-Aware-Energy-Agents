@@ -281,13 +281,9 @@ class CityLearnAdapter:
             periods=timesteps,
             freq=f"{self.scenario_config.timestep_minutes}min"
         )
-        # Seeded generator: otherwise the synthetic load/PV trace changes on every
-        # process, so two runs with the same scenario seed are not reproducible.
-        rng = np.random.default_rng(self.scenario_config.random_seed)
-        # Generate realistic dummy data matching EnergySimulation expected columns
-        # Set all thermal demands to 0 to avoid CityLearn assertions for buildings without those devices
         # Deterministic per (scenario seed, building file): regeneration must not
-        # change the physics between runs of the same seed.
+        # change the physics between runs of the same seed, and distinct building
+        # files must not share one synthetic trace.
         import zlib
         rng = np.random.default_rng(
             self.scenario_config.random_seed + (zlib.crc32(filepath.name.encode()) & 0xFFFF)

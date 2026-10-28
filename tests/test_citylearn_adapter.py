@@ -388,6 +388,7 @@ def test_dummy_energy_file_is_reproducible_for_a_seed(tmp_path):
     from types import SimpleNamespace
 
     def write(seed, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
         adapter = CityLearnAdapter.__new__(CityLearnAdapter)
         adapter.data_dir = str(tmp_path)
         adapter.dataset_seconds_per_step = 3600
@@ -395,9 +396,18 @@ def test_dummy_energy_file_is_reproducible_for_a_seed(tmp_path):
         adapter._create_dummy_energy_file(path)
         return path.read_bytes()
 
-    first = write(42, tmp_path / "a.csv")
-    second = write(42, tmp_path / "b.csv")
-    other = write(123, tmp_path / "c.csv")
+    # Same seed and same filename in a different directory: identical bytes
+    # (this is the run-to-run reproducibility contract).
+    first = write(42, tmp_path / "run1" / "a.csv")
+    second = write(42, tmp_path / "run2" / "a.csv")
+    other = write(123, tmp_path / "run3" / "a.csv")
 
     assert first == second
     assert first != other
+
+    # Different filenames under one seed get distinct synthetic traces, so
+    # buildings are not copies of each other.
+    building_0 = write(42, tmp_path / "run4" / "building_0.csv")
+    building_1 = write(42, tmp_path / "run5" / "building_1.csv")
+
+    assert building_0 != building_1
