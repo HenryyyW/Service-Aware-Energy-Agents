@@ -381,3 +381,23 @@ class TestMultiStepSimulation:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_dummy_energy_file_is_reproducible_for_a_seed(tmp_path):
+    """Synthetic building data must not change between runs of the same seed."""
+    from types import SimpleNamespace
+
+    def write(seed, path):
+        adapter = CityLearnAdapter.__new__(CityLearnAdapter)
+        adapter.data_dir = str(tmp_path)
+        adapter.dataset_seconds_per_step = 3600
+        adapter.scenario_config = SimpleNamespace(timestep_minutes=60, random_seed=seed)
+        adapter._create_dummy_energy_file(path)
+        return path.read_bytes()
+
+    first = write(42, tmp_path / "a.csv")
+    second = write(42, tmp_path / "b.csv")
+    other = write(123, tmp_path / "c.csv")
+
+    assert first == second
+    assert first != other
