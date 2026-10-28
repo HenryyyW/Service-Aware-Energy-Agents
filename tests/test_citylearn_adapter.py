@@ -411,3 +411,34 @@ def test_dummy_energy_file_is_reproducible_for_a_seed(tmp_path):
     building_1 = write(42, tmp_path / "run5" / "building_1.csv")
 
     assert building_0 != building_1
+
+
+def test_saea_run_id_reads_back_its_own_schema_dir(minimal_scenario, temp_data_dir, monkeypatch):
+    """A SAEA_RUN_ID run must read the schema files it wrote, not the bare scenario dir.
+
+    Regression: root_directory pointed at data/schemas/<scenario_id> while the
+    files were written to data/schemas/<SAEA_RUN_ID>, so every run that set a
+    run id (RL training, benchmark workers) hit FileNotFoundError on a fresh
+    checkout.
+    """
+    import json
+    import os
+
+    run_id = "regression_run_id_check"
+    monkeypatch.setenv("SAEA_RUN_ID", run_id)
+    adapter = create_citylearn_adapter(minimal_scenario, data_dir=temp_data_dir)
+    try:
+        run_dir = os.path.join(temp_data_dir, "schemas", run_id)
+        with open(os.path.join(run_dir, "schema.json"), encoding="utf-8") as handle:
+            saved = json.load(handle)
+        from pathlib import Path as _Path
+        assert _Path(saved["root_directory"]).resolve() == _Path(run_dir).resolve()
+        # At least one building energy file lives in the exact directory the
+        # schema points at.
+        energy_files = [
+            name for name in os.listdir(run_dir)
+            if name.endswith(".csv") and "building" in name
+        ]
+        assert energy_files, f"no building energy files in {run_dir}"
+    finally:
+        adapter.close()

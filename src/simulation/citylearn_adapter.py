@@ -85,9 +85,7 @@ class CityLearnAdapter:
         # Save schema to a per-run directory for CityLearn. Concurrent benchmark
         # runs pass a unique SAEA_RUN_ID; otherwise all runs of one scenario
         # would write the same schema.json and race (corrupting each other).
-        run_suffix = os.environ.get("SAEA_RUN_ID", "").strip()
-        dir_name = run_suffix or self.scenario_config.scenario_id
-        schema_dir = Path(self.data_dir) / "schemas" / dir_name
+        schema_dir = self._schema_dir()
         schema_dir.mkdir(parents=True, exist_ok=True)
         
         # Copy dataset files to our schema directory (using original root dir)
@@ -189,7 +187,11 @@ class CityLearnAdapter:
         schema['simulation_end_time_step'] = int(episode_time_steps - 1)
         
         # Update root directory to our data dir - use absolute path to avoid double resolution
-        schema['root_directory'] = str(Path(self.data_dir).resolve() / "schemas" / self.scenario_config.scenario_id)
+        # Must be the same directory the schema files are written to
+        # (_schema_dir, honors SAEA_RUN_ID); pointing at the bare scenario_id dir
+        # made any SAEA_RUN_ID run (training, benchmark workers) read a missing
+        # directory on a fresh checkout.
+        schema['root_directory'] = str(self._schema_dir().resolve())
         
         # Keep ONLY the buildings from our scenario - no fallback to dataset buildings
         # This ensures dummy data is created for all scenario buildings
@@ -215,6 +217,18 @@ class CityLearnAdapter:
         
         return schema
     
+    def _schema_dir(self) -> Path:
+        """Per-run CityLearn schema directory.
+
+        Concurrent benchmark runs pass a unique SAEA_RUN_ID; otherwise all runs
+        of one scenario would write the same schema.json and race (corrupting
+        each other). Both the schema writer and ``root_directory`` MUST use this
+        method so a run reads back exactly the files it wrote.
+        """
+        run_suffix = os.environ.get("SAEA_RUN_ID", "").strip()
+        dir_name = run_suffix or self.scenario_config.scenario_id
+        return Path(self.data_dir) / "schemas" / dir_name
+
     def _copy_dataset_files(self, schema: Dict[str, Any], schema_dir: Path, source_dir: Path):
         """Copy dataset files to our schema directory."""
         source_dir = Path(source_dir)
