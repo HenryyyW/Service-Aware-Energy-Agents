@@ -96,14 +96,22 @@ class ExperimentRunner:
         
         self.controller.reset()
         step = 0
+        last_grid_diagnostics = None
         
         while True:
-            # Get actions from controller
+            # Get actions from controller (pass grid diagnostics from previous step)
             requested_actions = self.controller.get_actions(observations, step)
             
             # Step co-simulation
             cosim_result = self.coupler.step(requested_actions)
             self.history.append(cosim_result)
+            
+            # Extract grid diagnostics for next step's controller
+            last_grid_diagnostics = cosim_result.citylearn_result.grid_diagnostics
+            
+            # Update controller with grid diagnostics from this step for next step's action selection
+            if hasattr(self.controller, 'update_grid_diagnostics'):
+                self.controller.update_grid_diagnostics(last_grid_diagnostics)
             
             # Update observations
             observations = cosim_result.citylearn_result.observations

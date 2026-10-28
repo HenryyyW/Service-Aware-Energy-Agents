@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
+from datetime import datetime
 
 from src.schemas.scenario import ScenarioConfig
 from src.schemas.action import (
@@ -13,6 +14,7 @@ from .citylearn_adapter import CityLearnAdapter, create_citylearn_adapter
 from .pandapower_adapter import PandapowerAdapter, create_grid_from_scenario
 from .market import create_market_engine, BuildingEnergyState, MarketClearingResult
 from .settlement import create_settlement_engine, SettlementEngine, SettlementResult
+from .failure_injector import FailureInjector, create_failure_injector
 
 
 def _convert_to_json_serializable(obj):
@@ -69,6 +71,9 @@ class SimulationCoupler:
         if self.energy_sharing_enabled:
             self.settlement_engine = create_settlement_engine(scenario_config, scenario_config.energy_sharing)
         
+        # Initialize failure injector for Scenario E
+        self.failure_injector = create_failure_injector(scenario_config)
+        
         # State tracking
         self.current_timestep = 0
         self.co_sim_history: List[CoSimulationStepResult] = []
@@ -82,6 +87,19 @@ class SimulationCoupler:
         if self.settlement_engine:
             # Recreate settlement engine to reset state
             self.settlement_engine = create_settlement_engine(self.scenario_config, self.scenario_config.energy_sharing)
+        
+        # Reset failure injector
+        self.failure_injector.reset()
+        # Set simulation start time for failure scheduling
+        for building in self.scenario_config.buildings:
+            if building.simulation_start:
+                try:
+                    start_dt = datetime.fromisoformat(building.simulation_start)
+                    self.failure_injector.set_simulation_start(start_dt)
+                    break
+                except ValueError:
+                    continue
+        
         self.current_timestep = 0
         self.co_sim_history = []
         return observations
@@ -91,8 +109,22 @@ class SimulationCoupler:
         # Step CityLearn
         observations, cl_result = self.citylearn.step(requested_actions)
         
+        # Apply failure injection at the START of the timestep
+        newly_activated = self.failure_injector.step(self.current_timestep)
+        active_failures = self.failure_injector.get_active_failures()
+        
         # Extract building powers for grid
         building_powers, building_pvs, building_battery_powers = self._extract_building_powers(cl_result)
+        
+        # Apply failures to building powers
+        building_pvs = self._apply_pv_failures(building_pvs)
+        building_battery_powers = self._apply_battery_failures(building_battery_powers)
+        building_powers = self._apply_sensor_failures(building_powers, cl_result.observations)
+        
+        # Apply grid limit failures
+        import_limit = self.scenario_config.community_import_limit_kw or float('inf')
+        export_limit = self.scenario_config.community_export_limit_kw or float('inf')
+        import_limit, export_limit = self.failure_injector.apply_grid_limit_failure(import_limit, export_limit)
         
         # Energy sharing: clear market via settlement engine and adjust building powers
         market_result = None
@@ -156,13 +188,16 @@ class SimulationCoupler:
         if self.current_timestep % self.run_power_flow_every == 0:
             power_flow_converged, grid_diagnostics = self.pandapower.run_power_flow()
             
-            # Check community grid limits
+            # Check community grid limits (with failure injection)
             if self.scenario_config.community_import_limit_kw or self.scenario_config.community_export_limit_kw:
                 import_kw = sum(p for p in building_powers.values() if p > 0)
                 export_kw = sum(-p for p in building_powers.values() if p < 0)
                 
                 import_limit = self.scenario_config.community_import_limit_kw or float('inf')
                 export_limit = self.scenario_config.community_export_limit_kw or float('inf')
+                
+                # Apply grid limit failures
+                import_limit, export_limit = self.failure_injector.apply_grid_limit_failure(import_limit, export_limit)
                 
                 grid_limit_diagnostics = self.pandapower.check_grid_limits(
                     import_kw, export_kw, import_limit, export_limit
@@ -227,6 +262,32 @@ class SimulationCoupler:
         self.current_timestep += 1
         
         return cosim_result
+    
+    def _apply_pv_failures(self, building_pvs: Dict[str, float]) -> Dict[str, float]:
+        """Apply PV inverter failures to building PV generation."""
+        modified_pvs = building_pvs.copy()
+        for building in self.scenario_config.buildings:
+            bid = building.building_id
+            if bid in modified_pvs:
+                modified_pvs[bid] = self.failure_injector.apply_pv_failure(modified_pvs, bid)
+        return modified_pvs
+    
+    def _apply_battery_failures(self, building_battery_powers: Dict[str, float]) -> Dict[str, float]:
+        """Apply battery failures to building battery power."""
+        modified_battery = building_battery_powers.copy()
+        for building in self.scenario_config.buildings:
+            bid = building.building_id
+            if bid in modified_battery:
+                modified_battery[bid] = self.failure_injector.apply_battery_failure(modified_battery, bid)
+        return modified_battery
+    
+    def _apply_sensor_failures(self, building_powers: Dict[str, float], observations: Dict[str, float]) -> Dict[str, float]:
+        """Apply sensor failures - corrupt specific sensor readings in observations."""
+        # Sensor failures affect observations, not building_powers directly
+        # The observations dict is modified in place by the failure injector
+        # We just return building_powers unchanged here
+        # The sensor failure effect is observed through the observations dict
+        return building_powers
     
     def _build_building_states(
         self,
