@@ -1,6 +1,7 @@
 """CityLearn v3 adapter using built-in datasets for renewable energy community simulation."""
 import os
 import json
+import random
 import shutil
 from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
@@ -285,6 +286,12 @@ class CityLearnAdapter:
         rng = np.random.default_rng(self.scenario_config.random_seed)
         # Generate realistic dummy data matching EnergySimulation expected columns
         # Set all thermal demands to 0 to avoid CityLearn assertions for buildings without those devices
+        # Deterministic per (scenario seed, building file): regeneration must not
+        # change the physics between runs of the same seed.
+        import zlib
+        rng = np.random.default_rng(
+            self.scenario_config.random_seed + (zlib.crc32(filepath.name.encode()) & 0xFFFF)
+        )
         data = pd.DataFrame({
             "month": timestamps.month,
             "hour": timestamps.hour,
@@ -340,6 +347,11 @@ class CityLearnAdapter:
     def reset(self, random_seed: Optional[int] = None) -> Dict[str, Any]:
         """Reset environment and return initial observations."""
         seed = random_seed or self.scenario_config.random_seed
+        # CityLearn samples device state (e.g. battery initial SOC) through the
+        # process-wide RNGs as well as the environment RNG. Seed both so that a
+        # given scenario/seed pair reproduces exactly across runs.
+        random.seed(seed)
+        np.random.seed(seed)
         result = self.env.reset(seed=seed)
         # CityLearn v3 reset returns (observations, info)
         observations = result[0] if isinstance(result, tuple) else result
