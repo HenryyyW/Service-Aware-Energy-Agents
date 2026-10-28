@@ -75,7 +75,6 @@ function ComparisonPageContent() {
           )
         ),
         '',
-        '> Values are taken from saved experiment results; placeholder metrics should not be interpreted as validated measurements.',
       ];
       const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/markdown' }));
       const link = document.createElement('a');

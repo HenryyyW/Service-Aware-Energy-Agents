@@ -1,5 +1,6 @@
 import { clsx } from 'clsx';
 import { Download, CheckCircle, XCircle, BarChart2, GitCompare } from 'lucide-react';
+import { isFeatureEnabled } from '../../config/featureFlags';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Input';
 import { useSimulationStore } from '../../store/simulationStore';
@@ -273,17 +274,19 @@ export function ScenarioComparison({
         ))}
       </div>
 
-      {/* Radar Chart Placeholder */}
-      <div className="glass-card p-4">
-        <h3 className="font-body font-medium text-body text-text mb-4">Radar Comparison</h3>
-        <div className="aspect-square flex items-center justify-center bg-surface/50 rounded-lg border border-border/30">
-          <div className="text-center text-text-muted">
-            <BarChart2 className="w-12 h-12 mx-auto mb-2 text-text-muted/30" />
-            <p>Radar chart visualization</p>
-            <p className="text-caption mt-1">(Integrate with recharts or similar)</p>
+      {/* Radar Chart - gated behind feature flag */}
+      {isFeatureEnabled('radarChart') && (
+        <div className="glass-card p-4">
+          <h3 className="font-body font-medium text-body text-text mb-4">Radar Comparison</h3>
+          <div className="aspect-square flex items-center justify-center bg-surface/50 rounded-lg border border-border/30">
+            <div className="text-center text-text-muted">
+              <BarChart2 className="w-12 h-12 mx-auto mb-2 text-text-muted/30" />
+              <p>Radar chart visualization</p>
+              <p className="text-caption mt-1">(Integrate with recharts or similar)</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
