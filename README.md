@@ -112,7 +112,7 @@ python experiments/run_experiment.py `
 
 Supported controller arguments are `rule_based`, `multi_agent`, `centralized`, `mpc`, and `rl`. Optional arguments include `--max-steps`, `--output-dir`, `--seed`, `--run-id`, and `--rl-policy` (required for `rl`).
 
-Train the tabular Q-learning baseline before running the `rl` controller:
+Train the tabular Q-learning baseline before running the `rl` controller. Training writes to `experiments/rl_policy/` (gitignored); curated policies for the benchmark matrix are checked in under `experiments/reference/rl_policy/`.
 
 ```powershell
 python -m experiments.train_rl `

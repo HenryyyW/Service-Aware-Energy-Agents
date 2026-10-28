@@ -231,9 +231,13 @@ python -m experiments.summarize_results --input experiments/phase1_pilot `
   --reference rule_based --out experiments/phase1_pilot/summary.md
 ```
 
-The RL policies for all five scenarios are checked in under
-`experiments/rl_policy/<scenario>.json` (trained with `--seed 0`, 60 episodes, on
-this branch's adapter; they are gitignored by the artifact rules, so adding a
-regenerated one requires `git add -f`). If a policy file is missing, the runner
-skips `rl` runs for that scenario and lists them in `failed_runs.json` rather
-than substituting a different controller.
+The RL policies for all five scenarios are checked in as curated fixtures under
+`experiments/reference/rl_policy/<scenario>.json` (trained with `--seed 0`, 60
+episodes, on this branch's adapter; `experiments/rl_policy/` itself stays
+untracked — the artifact-hygiene gate forbids generated output under
+`experiments/`, so regenerated or newly trained policies are published as
+release artifacts, or copied into `experiments/reference/rl_policy/` only after
+a deliberate review). Point the runner at them with
+`--rl-policy-dir experiments/reference/rl_policy`. If a policy file is missing,
+the runner skips `rl` runs for that scenario and lists them in
+`failed_runs.json` rather than substituting a different controller.
