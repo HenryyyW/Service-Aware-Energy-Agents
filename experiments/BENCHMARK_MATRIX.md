@@ -108,33 +108,33 @@ attempts runs whose `result.json` is missing; failed runs are listed in
 
 ## 5. Pilot: scenario A head-to-head
 
-Pilot command: scenario A, controllers `rule_based`, `multi_agent`, `mpc`, `rl`, seeds 42/123/456, output `experiments/phase1_pilot`. 12/12 runs succeeded in 172 s at `--workers 3`.
+Pilot command: scenario A, controllers `rule_based`, `multi_agent`, `mpc`, `rl`, seeds 42/123/456, output `experiments/phase1_pilot`. 12/12 runs succeeded in 219.5 s at `--workers 3` (re-run after the determinism fixes; numbers below supersede any earlier pilot).
 
-| Controller | Cost USD | Grid import kWh | Peak kW | PV self-consumption kWh | EV completion | Mean SOC at departure |
-|---|---|---|---|---|---|---|
-| `rule_based` | 109.06 +/- 0.13 | 1089.70 +/- 2.10 | 22.11 +/- 0.00 | 512.63 +/- 3.04 | 0.05 +/- 0.00 | 0.62 +/- 0.00 |
-| `multi_agent` | 101.20 +/- 0.00 | 1020.98 +/- 0.00 | 13.16 +/- 0.00 | 466.28 +/- 0.00 | 0.00 +/- 0.00 | 0.55 +/- 0.00 |
-| `mpc` | 162.40 +/- 1.37 | 1655.31 +/- 6.95 | 52.36 +/- 0.00 | 497.95 +/- 3.87 | 1.00 +/- 0.00 | 0.93 +/- 0.01 |
-| `rl` | 192.95 +/- 6.08 | 1901.73 +/- 51.56 | 58.35 +/- 0.00 | 403.66 +/- 34.24 | 0.83 +/- 0.07 | 0.94 +/- 0.01 |
+| Controller | Cost USD | Grid import kWh | Peak kW | PV self-consumption kWh | EV completion |
+|---|---|---|---|---|---|
+| `rule_based` | 104.29 +/- 1.90 | 1056.23 +/- 18.75 | 20.82 +/- 2.03 | 512.65 +/- 2.98 | 0.05 +/- 0.00 |
+| `multi_agent` | 96.42 +/- 2.01 | 987.51 +/- 19.01 | 13.77 +/- 0.90 | 466.31 +/- 0.06 | 0.00 +/- 0.00 |
+| `mpc` | 157.64 +/- 3.13 | 1609.70 +/- 26.26 | 50.82 +/- 2.60 | 507.05 +/- 7.43 | 1.00 +/- 0.00 |
+| `rl` | 196.98 +/- 10.32 | 1879.22 +/- 69.51 | 52.93 +/- 15.44 | 315.93 +/- 28.32 | 0.86 +/- 0.00 |
 
 Cells are mean +/- Student-t 95% confidence half-width over three seeds. Paired per-seed deltas are in `experiments/phase1_pilot/summary.md`.
 
 ### What the pilot shows
 
 1. **Cost alone ranks the controllers backwards.** The two cheapest controllers
-   (`multi_agent` 101 USD, `rule_based` 109 USD) meet 0% and 5% of EV departure
-   requirements, while `mpc` meets 100% at 162 USD and `rl` meets 83% at 193 USD.
-   The 53 USD MPC premium buys roughly 0.3 extra mean departure SOC and 0.95
-   extra completion. Any cost comparison that does not condition on the service
-   constraint is not a valid controller comparison.
+   (`multi_agent` 96 USD, `rule_based` 104 USD) meet 0% and 5% of EV departure
+   requirements, while `mpc` meets 100% at 158 USD and `rl` meets 86% at 197 USD.
+   The ~53 USD MPC premium buys the EV service level; any cost comparison that
+   does not condition on the service constraint is not a valid controller
+   comparison.
 2. **The legacy controllers under-charge EVs because their bookkeeping uses the
-   YAML EV parameters** (e.g. target SOC/capacity), while the simulator runs the
+    YAML EV parameters** (e.g. target SOC/capacity), while the simulator runs the
    dataset EV (60 kWh, required SOC 0.87). They therefore stop charging early and
    report low SOC at departure. This is a scenario-fidelity issue, not an EV
    charging strategy result.
 3. **Peak demand needs reconciliation before publication.** `mpc` and `rl` charge
-   EVs at charger maximum when they start, producing 52-58 kW community peaks;
-   the heuristics spread charging over the day (13-22 kW). Scenario tariffs carry
+   EVs at charger maximum when they start, producing 51-53 kW community peaks;
+   the heuristics spread charging over the day (14-21 kW). Scenario tariffs carry
    a 5 USD/kW demand charge, but the energy metrics do not bill it, so peak and
    cost currently measure different objectives. The MPC includes only a small
    0.1 USD/kW peak proxy.
@@ -152,6 +152,17 @@ Cells are mean +/- Student-t 95% confidence half-width over three seeds. Paired 
    controllers for the first time. Departed SOC is still only defined for
    observed departures (21 per week); configured-vs-simulated EV mismatches remain
    (see caveats).
+6. **Distinctness checks (run by QA/DevOps):** on `main` (before the adapter
+   action-translation fix landed) a 12-run matrix produced byte-identical
+   `rule_based` and `multi_agent` metrics per seed, because every controller
+   action was silently dropped there. On this branch the four pilot controllers
+   produce distinct physics per seed (table above). Separately, scenario B's
+   energy totals equal scenario A's at the same seed even on this branch: the
+   synthetic building traces depend only on (seed, filename), and scenario YAML
+   differences currently reach the simulation only as community limits and
+   sharing flags (caveats 1 and 4). Scenario B/C/E rows in the full matrix
+   therefore measure the same physics as A with different community limits until
+   caveat 1 is resolved.
 
 
 ## 6. Caveats that block paper-level claims
@@ -220,5 +231,9 @@ python -m experiments.summarize_results --input experiments/phase1_pilot `
   --reference rule_based --out experiments/phase1_pilot/summary.md
 ```
 
-The RL policies for scenarios B-E must be trained before the full matrix run:
-`python -m experiments.train_rl --config configs/scenario_b.yaml --out experiments/rl_policy/scenario_b.json --episodes 60` (and likewise for C, D, E). The runner skips `rl` runs whose policy is missing and lists them in `failed_runs.json` rather than substituting a different controller.
+The RL policies for all five scenarios are checked in under
+`experiments/rl_policy/<scenario>.json` (trained with `--seed 0`, 60 episodes, on
+this branch's adapter; they are gitignored by the artifact rules, so adding a
+regenerated one requires `git add -f`). If a policy file is missing, the runner
+skips `rl` runs for that scenario and lists them in `failed_runs.json` rather
+than substituting a different controller.
