@@ -88,6 +88,8 @@ The evaluation code defines metrics in these groups:
 
 `experiments/run_benchmark.py` currently supports `rule_based`, `multi_agent`, and `centralized` controller labels. The centralized implementation is a heuristic controller; it is not an MPC or reinforcement-learning baseline. The benchmark script supports multiple seeds and computes summary statistics and 95% confidence intervals, but a small smoke run is not sufficient evidence for a paper claim. The research brief calls for at least 3–5 runs per configuration and additional MPC/RL and agent-verification ablations.
 
+> **Pre-fix benchmark numbers are invalid.** Benchmark results generated before the seed-reproducibility fix (PR #1) did not seed every RNG source, so they cannot be reproduced and must not be cited. Re-run any benchmark with the current code before using its numbers; see [`docs/reproducibility.md`](docs/reproducibility.md) for the reproducibility gate.
+
 ## Install and run
 
 ### Python simulation
@@ -165,7 +167,7 @@ Run tests from the repository root:
 pytest -q tests
 ```
 
-The suite covers controller coordination, CityLearn adapter behavior, pandapower adapter behavior, metrics and agent repair scaffolding. **All 21 tests currently pass**, including comprehensive regression tests for the CityLearn adapter time step convention (integer slice indices, CSV length matching episode_time_steps, 3600/3600.0 parametrized coverage).
+The suite covers controller coordination, CityLearn adapter behavior, pandapower adapter behavior, metrics and agent repair scaffolding. **All 93 tests currently pass**, including comprehensive regression tests for the CityLearn adapter time step convention (integer slice indices, CSV length matching episode_time_steps, 3600/3600.0 parametrized coverage).
 
 ## Current limitations
 
