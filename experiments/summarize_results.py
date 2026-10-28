@@ -14,11 +14,54 @@ Usage::
 
 import argparse
 import json
+import math
 import statistics
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from experiments.run_benchmark import METRICS, compute_statistics
+
+
+def holm_adjust(pvalues: List[float]) -> List[float]:
+    """Holm step-down adjusted p-values (family-wise error rate controlled).
+
+    Order the raw p-values ascending, compare the i-th to alpha/(m-i), and
+    enforce monotonicity so no adjusted p is smaller than a previous one.
+    """
+    m = len(pvalues)
+    if m == 0:
+        return []
+    order = sorted(range(m), key=lambda i: pvalues[i])
+    adjusted_sorted: List[float] = []
+    running_max = 0.0
+    for rank, idx in enumerate(order):
+        value = pvalues[idx] * (m - rank)
+        running_max = max(running_max, value)
+        adjusted_sorted.append(min(1.0, running_max))
+    adjusted = [0.0] * m
+    for rank, idx in enumerate(order):
+        adjusted[idx] = adjusted_sorted[rank]
+    return adjusted
+
+
+def paired_t_test(deltas: List[float]) -> Optional[Dict[str, float]]:
+    """Two-sided paired t-test on per-seed deltas (null: mean delta = 0)."""
+    n = len(deltas)
+    if n < 2:
+        return None
+    try:
+        from scipy import stats as scipy_stats
+    except ImportError:
+        return None
+    mean = statistics.fmean(deltas)
+    if all(d == 0 for d in deltas):
+        return {"n": float(n), "mean": 0.0, "t": 0.0, "p": 1.0}
+    if statistics.stdev(deltas) == 0:
+        # Zero seed variance: the difference is deterministic for these seeds.
+        # Report an infinite t rather than a numerically meaningless huge one.
+        return {"n": float(n), "mean": mean, "t": math.copysign(math.inf, mean), "p": 0.0}
+    result = scipy_stats.ttest_rel(deltas, [0.0] * n)
+    return {"n": float(n), "mean": mean, "t": float(result.statistic), "p": float(result.pvalue)}
 
 
 def load_results(directory: Path) -> List[Dict]:
@@ -109,6 +152,66 @@ def build_markdown(
         "A paired delta whose interval excludes zero is evidence of a difference "
         "for these seeds; it is not yet a paper-level claim."
     )
+
+    # Holm-corrected paired t-tests. Family = the controller comparisons within
+    # one (scenario, metric) cell, matching the protocol in BENCHMARK_MATRIX.md
+    # section 4 ("with 4 comparisons per scenario, apply Holm correction").
+    test_rows: List[Dict] = []
+    for scenario in scenarios:
+        reference_rows = {
+            row["seed"]: row for row in grouped.get((scenario, reference), [])
+        }
+        for metric in metrics:
+            family: List[Dict] = []
+            for controller in controllers:
+                if controller == reference:
+                    continue
+                paired = [
+                    (row, reference_rows[row["seed"]])
+                    for row in grouped.get((scenario, controller), [])
+                    if row["seed"] in reference_rows
+                    and row.get(metric) is not None
+                    and reference_rows[row["seed"]].get(metric) is not None
+                ]
+                deltas = [row[metric] - baseline[metric] for row, baseline in paired]
+                test = paired_t_test(deltas)
+                family.append(
+                    {
+                        "scenario": scenario,
+                        "comparison": controller,
+                        "metric": metric,
+                        "n": len(paired),
+                        "delta": statistics.fmean(deltas) if deltas else float("nan"),
+                        "p": test["p"] if test else None,
+                        "t": test["t"] if test else None,
+                    }
+                )
+            tested = [row for row in family if row["p"] is not None]
+            adjusted = holm_adjust([row["p"] for row in tested])
+            for row, p_adj in zip(tested, adjusted):
+                row["p_holm"] = p_adj
+            test_rows.extend(family)
+
+    significant = [row for row in test_rows if row.get("p_holm") is not None]
+    if significant:
+        lines.append("")
+        lines.append("Paired t-tests vs `" + reference + "` (Holm within scenario x metric family):")
+        lines.append("")
+        lines.append("| Scenario | Comparison | Metric | n | mean delta | t | p | p (Holm) | sig 0.05 |")
+        lines.append("|---|---|---|---|---|---|---|---|---|")
+        for row in significant:
+            sign = "+" if row["delta"] >= 0 else ""
+            sig = "yes" if row["p_holm"] < 0.05 else "no"
+            lines.append(
+                f"| {row['scenario']} | {row['comparison']} | {row['metric']} | {row['n']} "
+                f"| {sign}{row['delta']:.2f} | {row['t']:.2f} | {row['p']:.4f} "
+                f"| {row['p_holm']:.4f} | {sig} |"
+            )
+        lines.append("")
+        lines.append(
+            "With n = 3-5 seeds these tests are sensitive only to large effects; "
+            "report interval widths alongside significance."
+        )
     return "\n".join(lines) + "\n"
 
 
