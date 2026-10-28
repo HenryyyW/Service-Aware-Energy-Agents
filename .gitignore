@@ -5,3 +5,10 @@ notes.md
 .agents/skills/
 .agents/**/__pycache__/
 .agents/**/*.py[cod]
+# Generated per-run CityLearn schema copies and experiment artifacts
+data/schemas/scenario_[a-e]_*/
+experiments/_rea_smoke/
+experiments/_smoke/
+experiments/phase1_pilot/scenario_*/*/
+experiments/rl_policy/_*.json
+

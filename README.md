@@ -86,7 +86,7 @@ The evaluation code defines metrics in these groups:
 - **Grid feasibility:** power-flow convergence, voltage bounds and violations, line/transformer loading, and community import/export limits.
 - **Agent execution:** task and simulation success, first-attempt validity, repair iterations, runtime and report completeness.
 
-`experiments/run_benchmark.py` currently supports `rule_based`, `multi_agent`, and `centralized` controller labels. The centralized implementation is a heuristic controller; it is not an MPC or reinforcement-learning baseline. The benchmark script supports multiple seeds and computes summary statistics and 95% confidence intervals, but a small smoke run is not sufficient evidence for a paper claim. The research brief calls for at least 3–5 runs per configuration and additional MPC/RL and agent-verification ablations.
+`experiments/run_benchmark.py` supports the `rule_based`, `multi_agent`, `centralized`, `mpc`, and `rl` controller labels. `mpc` is a deterministic receding-horizon linear program; `rl` is a tabular Q-learning policy loaded from `experiments/rl_policy/<scenario>.json`. The `centralized` implementation remains a heuristic controller, not an optimizer. Controllers request power in kW under the published asset ids (`{building}_battery`, `{building}_ev_{i}`, `{building}_flex_{i}`); the CityLearn adapter converts those to the simulator's normalized device actions using live device ratings. The benchmark script runs each configuration in its own process, supports parallel workers, and reports mean, sample standard deviation, and Student-t 95% confidence intervals. See `experiments/BENCHMARK_MATRIX.md` for the planned matrix, seeds, runtime budget, and known measurement caveats. A small smoke run is not sufficient evidence for a paper claim.
 
 ## Install and run
 
@@ -110,7 +110,16 @@ python experiments/run_experiment.py `
   --seed 42
 ```
 
-Supported controller arguments are `rule_based`, `multi_agent`, and `centralized`. Optional arguments include `--max-steps`, `--output-dir`, `--seed`, and `--run-id`.
+Supported controller arguments are `rule_based`, `multi_agent`, `centralized`, `mpc`, and `rl`. Optional arguments include `--max-steps`, `--output-dir`, `--seed`, `--run-id`, and `--rl-policy` (required for `rl`).
+
+Train the tabular Q-learning baseline before running the `rl` controller:
+
+```powershell
+python -m experiments.train_rl `
+  --config configs/scenario_a.yaml `
+  --out experiments/rl_policy/scenario_a.json `
+  --episodes 60
+```
 
 Run a small benchmark, for example:
 
@@ -122,7 +131,7 @@ python experiments/run_benchmark.py `
   --output experiments/benchmark_test
 ```
 
-The benchmark command defaults to scenarios A–E, three controller labels, and five seeds. Full runs can take substantially longer than a smoke test. `experiments/run_all.sh` is a Bash script; use Git Bash, WSL, or another Bash environment on Windows.
+The benchmark command defaults to scenarios A-E, five controller labels, and five seeds (42, 123, 456, 789, 999). Use `--workers N` to run configurations in parallel and `--rl-policy-dir` to point at per-scenario RL policies. Full runs take hours, not minutes: budget from the measured per-run time in `experiments/BENCHMARK_MATRIX.md`. `experiments/run_all.sh` is a Bash script; use Git Bash, WSL, or another Bash environment on Windows.
 
 ### React frontend
 
@@ -164,8 +173,7 @@ Run tests from the repository root:
 ```powershell
 pytest -q tests
 ```
-
-The suite covers controller coordination, CityLearn adapter behavior, pandapower adapter behavior, metrics and agent repair scaffolding. **All 21 tests currently pass**, including comprehensive regression tests for the CityLearn adapter time step convention (integer slice indices, CSV length matching episode_time_steps, 3600/3600.0 parametrized coverage).
+The suite covers controller coordination, CityLearn adapter behavior, pandapower adapter behavior, metrics, the benchmark supervisor, and agent repair scaffolding. **The full suite passes**, including regression tests for the CityLearn adapter time-step convention and for the controller action interface (kW request to normalized CityLearn action, including asset-id aliases and EV observation sourcing).
 
 ## Current limitations
 
