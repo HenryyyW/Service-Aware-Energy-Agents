@@ -279,6 +279,53 @@ class ExperimentRunner:
         
         return result
     
+    def _write_manifest(self, result: ExperimentResult):
+        """Write the reproducibility manifest for this run.
+
+        Records the semantic scenario-config hash, seed, git commit and library
+        versions so a published number can be traced back to its inputs.
+        """
+        import platform
+        import subprocess
+
+        config_payload = json.dumps(
+            self.scenario_config.model_dump(), sort_keys=True, default=str
+        ).encode("utf-8")
+        try:
+            git_commit = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True, text=True, timeout=10,
+            ).stdout.strip() or None
+            git_dirty = bool(subprocess.run(
+                ["git", "status", "--porcelain"],
+                capture_output=True, text=True, timeout=10,
+            ).stdout.strip())
+        except Exception:
+            git_commit, git_dirty = None, None
+
+        versions: Dict[str, str] = {}
+        for package in ("citylearn", "pandapower", "numpy", "pandas"):
+            try:
+                versions[package] = getattr(__import__(package), "__version__", "unknown")
+            except Exception:
+                versions[package] = "missing"
+
+        manifest = {
+            "run_id": result.run_id,
+            "scenario_id": result.scenario_id,
+            "controller": result.controller_config,
+            "random_seed": result.random_seed,
+            "scenario_config_sha256": hashlib.sha256(config_payload).hexdigest(),
+            "git_commit": git_commit,
+            "git_dirty": git_dirty,
+            "python": platform.python_version(),
+            "packages": versions,
+            "timestep_minutes": self.scenario_config.timestep_minutes,
+            "history_steps": len(self.history),
+        }
+        with open(self.run_dir / "manifest.json", "w") as f:
+            json.dump(manifest, f, indent=2, default=str)
+
     def _save_results(self, result: ExperimentResult):
         """Save experiment results."""
         # Export trajectories and diagnostics
@@ -292,6 +339,8 @@ class ExperimentRunner:
         
         with open(self.run_dir / "result.json", "w") as f:
             json.dump(result_dict, f, indent=2, default=str)
+
+        self._write_manifest(result)
         
         # Generate plots
         plots_dir = self.run_dir / "plots"

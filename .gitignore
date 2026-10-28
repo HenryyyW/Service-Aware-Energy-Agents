@@ -5,3 +5,46 @@ notes.md
 .agents/skills/
 .agents/**/__pycache__/
 .agents/**/*.py[cod]
+
+# ---------------------------------------------------------------------------
+# Generated experiment output. These are reproducible from config + seed and
+# are published as release artifacts instead of commits. See
+# scripts/check_artifacts.py and docs/reproducibility.md.
+# ---------------------------------------------------------------------------
+experiments/*/
+!experiments/reference/
+
+# Saved run browser data (the Vite dev middleware scans results/ at runtime).
+results/*
+!results/.gitkeep
+!results/README.md
+
+# Generated CityLearn schema/data copies, rebuilt on each adapter init.
+data/schemas/
+
+# Local reports / benchmark scratch space
+reports/
+*.jsonl
+
+# Python / tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.coverage
+htmlcov/
+
+# Environment files (keep the checked-in examples)
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Logs
+*.log
