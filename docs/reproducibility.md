@@ -69,6 +69,29 @@ fixtures belong under `experiments/reference/` and must stay small.
 If a paper needs the raw trajectories, publish them as a GitHub release asset or
 an archive with a DOI, and reference the release in the paper's artifact section.
 
+## Long benchmark runs
+
+Use the supervisor for multi-hour sweeps. It runs one experiment per
+subprocess, writes a log per run, retries failures, and resumes after a crash
+by skipping combinations that already have `result.json` and `manifest.json`.
+
+```powershell
+python scripts/run_benchmark_supervisor.py `
+  --scenarios configs/scenario_a.yaml configs/scenario_b.yaml `
+  --controllers rule_based multi_agent `
+  --seeds 42 123 456 `
+  --output-dir experiments/benchmark_phase1 `
+  --max-steps 672 `
+  --retries 1
+```
+
+`<output-dir>/status.json` is rewritten atomically on every state change, so an
+external watcher can poll it; `<output-dir>/summary.json` is the final record
+with per-run duration, attempts, exit code and headline metrics. Exit code is
+non-zero when any run exhausted its retries. Use `--dry-run` to inspect the
+matrix, `--fail-fast` to stop at the first exhausted run, and `--force` to
+re-run completed combinations.
+
 ## Packaging a release artifact
 
 ```powershell
