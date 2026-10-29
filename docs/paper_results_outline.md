@@ -11,8 +11,8 @@ QA/DevOps knows exactly what to package from the (re-run) 125-run matrix on
 | T1 | Scenario & controller setup (A-E device mixes, tariffs, controller list, seeds) | `configs/scenario_*.yaml`, `experiments/BENCHMARK_MATRIX.md` section 3 | hand-compiled, numbers checked against manifests |
 | T2 | Main results: mean ± 95% CI per (scenario, controller) for the 5 core KPIs | `experiments/matrix_full/summary.csv`, `summary_statistics.json` | `experiments/run_benchmark.py` |
 | T3 | Paired deltas vs `rule_based` with Holm-adjusted p, significance flags | `experiments/matrix_full/summary.md` (t-test table) | `experiments/summarize_results.py` |
-| T4 | Ablation: `llm_agent` vs `llm_agent_verified` vs `multi_agent` — KPI deltas + agent-execution metrics (first-attempt validity, repairs, wall time, token/cost) | ablation run dirs + `raw_results.json` | `experiments/run_benchmark.py` + ablation controller |
-| T5 | Reproducibility/artifact table: seed-pair reproducibility check, manifest fields (config sha256, git commit, versions), run failures | per-run `manifest.json`, `failed_runs.json`, CI reproducibility gate | `scripts/check_artifacts.py`, supervisor `summary.json` |
+| T4 | Ablation: `llm_agent` vs `llm_agent_verified` vs `multi_agent` — KPI deltas + agent-execution metrics (first-attempt validity, repairs, wall time, token/cost) | ablation run dirs + `ablation_kpis.md`, `ablation_agent_execution.md` | `experiments/ablation_analysis.py ablation` |
+| T5 | Reproducibility/artifact table: seed-pair reproducibility check, manifest fields (config sha256, git commit, versions), run failures | `reproducibility.md`/`.json` from per-run `manifest.json`, `failed_runs.json` | `experiments/ablation_analysis.py repro` + `scripts/check_artifacts.py` |
 
 ## Figures
 
@@ -23,7 +23,7 @@ QA/DevOps knows exactly what to package from the (re-run) 125-run matrix on
 | F3 | Cost vs EV-completion Pareto scatter (annotated with peak) | `raw_results.json` | `experiments/make_figures.py` |
 | F4 | Weekly trajectories: community import, battery/EV SOC, price vs dispatch — one panel per scenario | run `trajectories.jsonl` + existing `plots/*.png` of the reference runs | `experiments/run_experiment.py` plots |
 | F5 | Scenario E failure-injection response timeline (grid diagnostics around injected events) | run `grid_diagnostics.jsonl` + failure-injector log | failure-injection integration test outputs |
-| F6 (appendix) | Verification/repair flow: first-attempt validity vs repair iterations | ablation `result.json` agent-execution block | ablation controller |
+| F6 (appendix) | Verification/repair flow: first-attempt validity vs repair iterations | ablation `ablation_agent_execution.md` + per-run `manifest.json` agent block | ablation controller |
 
 ## Packaging instructions for QA
 

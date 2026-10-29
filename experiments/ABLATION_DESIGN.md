@@ -66,7 +66,27 @@ already defined in the evaluation code:
 4. **No generated trajectories in git** (artifact hygiene): policies/trajectories
    publish via `scripts/package_results.py` zips as with the main matrix.
 
-## 5. Paper claims this supports
+## 5. Analysis commands
+
+Both tables are generated from the run directories (not hand-computed), and
+reuse the T2/T3 statistical helpers:
+
+```bash
+# T4: KPIs with paired deltas vs multi_agent (Holm within scenario x metric)
+#     plus the agent-execution table (backend, validity, repairs, wall time)
+python -m experiments.ablation_analysis ablation \
+    --input experiments/ablation_fallback --reference multi_agent
+
+# T5: reproducibility sweep (commit, git_dirty, config hashes, seeding, failures)
+python -m experiments.ablation_analysis repro --input experiments/matrix_full_v2
+```
+
+Outputs: `ablation_kpis.md`, `ablation_agent_execution.md`,
+`ablation_stats.json`, `reproducibility.md`, `reproducibility.json` — all in
+the run directory, which is gitignored. Only the filled paper tables and the
+`docs/paper_results_section.md` text are committed.
+
+## 6. Paper claims this supports
 
 - Verified vs unverified: does the repair loop buy service-level compliance
   (EV deadlines, flex deadlines, grid feasibility) cheaply enough?
