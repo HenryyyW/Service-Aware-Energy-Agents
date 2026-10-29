@@ -128,7 +128,8 @@ class TestLLMConfig:
         assert config.max_latency_ms == 5000
     
     def test_validate_fallback_ok(self):
-        config = LLMConfig(backend="fallback")
+        config = LLMConfig()
+        config.backend = "fallback"
         errors = config.validate()
         assert len(errors) == 0
     
@@ -136,7 +137,8 @@ class TestLLMConfig:
         # Temporarily remove env var
         old_key = os.environ.pop("OPENAI_API_KEY", None)
         try:
-            config = LLMConfig(backend="openai_gpt4")
+            config = LLMConfig()
+            config.backend = "openai_gpt4"
             errors = config.validate()
             assert any("OPENAI_API_KEY" in e for e in errors)
         finally:
@@ -146,12 +148,27 @@ class TestLLMConfig:
     def test_validate_anthropic_missing_key(self):
         old_key = os.environ.pop("ANTHROPIC_API_KEY", None)
         try:
-            config = LLMConfig(backend="anthropic_claude")
+            config = LLMConfig()
+            config.backend = "anthropic_claude"
             errors = config.validate()
             assert any("ANTHROPIC_API_KEY" in e for e in errors)
         finally:
             if old_key:
                 os.environ["ANTHROPIC_API_KEY"] = old_key
+    
+    def test_validate_ollama_ok(self):
+        config = LLMConfig()
+        config.backend = "ollama"
+        errors = config.validate()
+        assert len(errors) == 0
+    
+    def test_validate_ollama_with_model(self):
+        config = LLMConfig()
+        config.backend = "ollama:llama3.2:3b"
+        assert config.backend == "ollama"
+        assert config.ollama_model == "llama3.2:3b"
+        errors = config.validate()
+        assert len(errors) == 0
     
     def test_create_cost_budget(self):
         config = LLMConfig(max_usd=5.0, max_latency_ms=10000, max_tokens=8000)
@@ -167,8 +184,8 @@ class TestBackendRegistry:
     def test_fallback_available(self):
         assert BackendRegistry.is_available("fallback")
     
-    def test_local_llama_available(self):
-        assert BackendRegistry.is_available("local_llama")
+    def test_ollama_available(self):
+        assert BackendRegistry.is_available("ollama")
     
     def test_get_fallback(self):
         backend = BackendRegistry.get("fallback")
@@ -177,7 +194,7 @@ class TestBackendRegistry:
     def test_list_available(self):
         available = BackendRegistry.list_available()
         assert "fallback" in available
-        assert "local_llama" in available
+        assert "ollama" in available
     
     def test_unknown_backend_raises(self):
         with pytest.raises(ValueError, match="Unknown backend"):

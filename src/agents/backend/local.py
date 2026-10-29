@@ -1,4 +1,8 @@
-"""Local LLM backend - for llama.cpp / Ollama local inference."""
+"""Ollama local LLM backend - for Ollama local inference (free, no API key).
+
+This backend uses a local Ollama server running at LLM_LOCAL_ENDPOINT (default http://localhost:11434)
+with the model specified by LLM_LOCAL_MODEL. Supports backend selection via AGENT_BACKEND=ollama:<model>.
+"""
 
 import asyncio
 import json
@@ -12,15 +16,24 @@ from src.schemas.scenario import ScenarioConfig
 from src.schemas.action import Action
 
 
-class LocalLLMBackend(AgentBackend):
-    """Local LLM backend using llama.cpp / Ollama compatible API.
+class OllamaBackend(AgentBackend):
+    """Ollama local LLM backend - free local inference with no API key required.
     
-    Expects a local server running at LLM_LOCAL_ENDPOINT (default http://localhost:11434)
-    with the model specified by LLM_LOCAL_MODEL.
+    Expects a local Ollama server running at LLM_LOCAL_ENDPOINT (default http://localhost:11434)
+    with the model specified by LLM_LOCAL_MODEL (default: llama3.2:3b).
+    
+    Backend selection: AGENT_BACKEND=ollama:<model_name>
+    - AGENT_BACKEND=ollama:llama3.2:3b (recommended default)
+    - AGENT_BACKEND=ollama:qwen:latest
+    - AGENT_BACKEND=ollama:qwen2.5-coder:7b
+    - etc.
     """
     
-    backend_id = "local_llama"
+    backend_id = "ollama"
     supports_streaming = True
+    
+    # Recommended default model (available on this machine)
+    DEFAULT_MODEL = "llama3.2:3b"
     
     def __init__(
         self,
@@ -29,7 +42,8 @@ class LocalLLMBackend(AgentBackend):
         prompt_template_id: Optional[str] = None,
     ):
         self.endpoint = endpoint or os.getenv("LLM_LOCAL_ENDPOINT", "http://localhost:11434")
-        self.model = model or os.getenv("LLM_LOCAL_MODEL", "llama3")
+        # Default to recommended model if not specified
+        self.model = model or os.getenv("LLM_LOCAL_MODEL", self.DEFAULT_MODEL)
         self.prompt_template_id = prompt_template_id or os.getenv("LLM_PROMPT_TEMPLATE", "llm_agent_v1")
         self._session: Optional[aiohttp.ClientSession] = None
     
@@ -110,7 +124,7 @@ class LocalLLMBackend(AgentBackend):
             latency_ms=latency_ms,
             cost_usd=0.0,  # Local inference has no API cost
             metadata={
-                "backend": "local_llama",
+                "backend": "ollama",
                 "model": self.model,
                 "prompt_template": self.prompt_template_id
             }
@@ -168,7 +182,7 @@ class LocalLLMBackend(AgentBackend):
         return "unknown"
     
     async def health_check(self) -> bool:
-        """Check if local LLM server is reachable."""
+        """Check if Ollama server is reachable."""
         try:
             session = await self._get_session()
             async with session.get(f"{self.endpoint}/api/tags") as response:

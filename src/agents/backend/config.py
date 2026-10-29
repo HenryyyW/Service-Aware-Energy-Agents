@@ -1,6 +1,7 @@
 """Configuration loading for LLM backends from environment variables."""
 
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 
@@ -9,8 +10,29 @@ from typing import Optional, Dict, Any, List
 class LLMConfig:
     """Configuration for LLM backend from environment variables."""
     
-    # Backend selection
-    backend: str = field(default_factory=lambda: os.getenv("LLM_BACKEND", "fallback"))
+    # Backend selection - supports AGENT_BACKEND=ollama:<model>
+    _backend_raw: str = field(default_factory=lambda: os.getenv("AGENT_BACKEND", os.getenv("LLM_BACKEND", "fallback")))
+    
+    @property
+    def backend(self) -> str:
+        """Parse backend from AGENT_BACKEND env var (supports ollama:<model>)."""
+        raw = self._backend_raw
+        if raw.startswith("ollama:"):
+            return "ollama"
+        return raw
+    
+    @backend.setter
+    def backend(self, value: str):
+        self._backend_raw = value
+    
+    @property
+    def ollama_model(self) -> Optional[str]:
+        """Extract model from AGENT_BACKEND=ollama:<model> format."""
+        raw = self._backend_raw
+        if raw.startswith("ollama:"):
+            return raw.split(":", 1)[1]
+        return None
+    
     model: str = field(default_factory=lambda: os.getenv("LLM_MODEL", "gpt-4-turbo"))
     prompt_template_id: str = field(default_factory=lambda: os.getenv("LLM_PROMPT_TEMPLATE", "llm_agent_v1"))
     
@@ -20,7 +42,7 @@ class LLMConfig:
     
     # Local LLM settings
     local_endpoint: str = field(default_factory=lambda: os.getenv("LLM_LOCAL_ENDPOINT", "http://localhost:11434"))
-    local_model: str = field(default_factory=lambda: os.getenv("LLM_LOCAL_MODEL", "llama3"))
+    local_model: str = field(default_factory=lambda: os.getenv("LLM_LOCAL_MODEL", "llama3.2:3b"))
     
     # Budget limits
     max_usd: float = field(default_factory=lambda: float(os.getenv("LLM_MAX_USD", "1.00")))
@@ -56,7 +78,7 @@ class LLMConfig:
         """Return list of validation errors."""
         errors = []
         
-        valid_backends = ["fallback", "local_llama", "openai_gpt4", "anthropic_claude"]
+        valid_backends = ["fallback", "ollama", "openai_gpt4", "anthropic_claude"]
         if self.backend not in valid_backends:
             errors.append(f"Invalid backend: {self.backend}. Must be one of {valid_backends}")
         
@@ -66,8 +88,8 @@ class LLMConfig:
         if self.backend in ("anthropic_claude", "anthropic_claude_sonnet", "anthropic_claude_opus", "anthropic_claude_haiku") and not self.anthropic_api_key:
             errors.append("ANTHROPIC_API_KEY required for Anthropic backend")
         
-        if self.backend == "local_llama":
-            # Local backend doesn't require API key
+        if self.backend == "ollama":
+            # Ollama backend doesn't require API key
             pass
         
         if self.max_usd <= 0:
@@ -129,7 +151,7 @@ def get_llm_config_for_scenario(scenario_id: str) -> "LLMConfig":
     
     # Override backend if specified
     if os.getenv(f"{prefix}BACKEND"):
-        config.backend = os.getenv(f"{prefix}BACKEND")
+        config._backend_raw = os.getenv(f"{prefix}BACKEND")
     
     # Override model
     if os.getenv(f"{prefix}MODEL"):

@@ -16,7 +16,7 @@ from src.agents.sandbox import Sandbox, SandboxResult, validate_controller_in_sa
 from src.agents.repair_loop import RepairLoop, RepairIteration, RepairLoopResult, run_repair_loop
 from src.agents.backend import (
     AgentBackend, BackendResponse, CostBudget,
-    FallbackBackend, LocalLLMBackend, RemoteAPIBackend,
+    FallbackBackend, OllamaBackend, RemoteAPIBackend,
     BackendRegistry, create_backend_from_config,
     LLMConfig, load_llm_config, get_llm_config_for_scenario,
     PromptTemplate, PROMPT_REGISTRY,
@@ -37,7 +37,7 @@ __all__ = [
     "RepairLoop", "RepairIteration", "RepairLoopResult", "run_repair_loop",
     # Backend interface
     "AgentBackend", "BackendResponse", "CostBudget",
-    "FallbackBackend", "LocalLLMBackend", "RemoteAPIBackend",
+    "FallbackBackend", "OllamaBackend", "RemoteAPIBackend",
     "BackendRegistry", "create_backend_from_config",
     "LLMConfig", "load_llm_config", "get_llm_config_for_scenario",
     "PromptTemplate", "PROMPT_REGISTRY",

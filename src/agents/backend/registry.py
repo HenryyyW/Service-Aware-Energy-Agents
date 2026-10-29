@@ -3,7 +3,7 @@
 from typing import Any, Dict, Type, Optional, List
 from src.agents.backend.interface import AgentBackend
 from src.agents.backend.fallback import FallbackBackend
-from src.agents.backend.local import LocalLLMBackend
+from src.agents.backend.local import OllamaBackend
 from src.agents.backend.remote import RemoteAPIBackend
 
 
@@ -12,7 +12,7 @@ class BackendRegistry:
     
     _backends: Dict[str, type] = {
         "fallback": FallbackBackend,
-        "local_llama": LocalLLMBackend,
+        "ollama": OllamaBackend,
         "openai_gpt4": "RemoteAPIBackend",  # Will resolve at runtime
         "anthropic_claude": "RemoteAPIBackend",
     }
@@ -68,10 +68,10 @@ def create_backend_from_config(config: Dict[str, Any]) -> "AgentBackend":
     
     Expected config format:
     {
-        "backend": "fallback|local_llama|openai_gpt4|anthropic_claude",
+        "backend": "fallback|ollama|openai_gpt4|anthropic_claude",
         "model": "gpt-4-turbo",  # for remote
         "endpoint": "http://localhost:11434",  # for local
-        "model": "llama3",  # for local
+        "model": "llama3.2:3b",  # for local
         "prompt_template": "llm_agent_v1",
         "max_usd": 1.00,
         "max_latency_ms": 5000,

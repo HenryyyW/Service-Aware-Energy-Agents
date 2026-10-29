@@ -3,7 +3,7 @@
 This package provides a pluggable interface for LLM backends used by agent controllers.
 It supports:
 - FallbackBackend: Deterministic rule-based fallback (always available, zero cost)
-- LocalLLMBackend: Local inference via llama.cpp/Ollama (zero marginal cost)
+- OllamaBackend: Local inference via Ollama (free, no API key, default model: llama3.2:3b)
 - RemoteAPIBackend: Cloud APIs (OpenAI, Anthropic) with cost/latency tracking
 
 Usage:
@@ -27,7 +27,7 @@ from src.agents.backend.interface import (
     CostBudget,
 )
 from src.agents.backend.fallback import FallbackBackend
-from src.agents.backend.local import LocalLLMBackend
+from src.agents.backend.local import OllamaBackend
 from src.agents.backend.remote import RemoteAPIBackend
 from src.agents.backend.registry import (
     BackendRegistry,
@@ -54,7 +54,7 @@ __all__ = [
     "CostBudget",
     # Backends
     "FallbackBackend",
-    "LocalLLMBackend",
+    "OllamaBackend",
     "RemoteAPIBackend",
     # Registry & Config
     "BackendRegistry",
