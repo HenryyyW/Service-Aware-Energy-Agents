@@ -61,8 +61,10 @@ class EVAgent(CoordinationAgent):
         net_demand = context.get("building_net_demand", 0)
         pv_generation = context.get("pv_generation", 0)
         
-        # Calculate current hour
-        hour_of_day = (timestep * 0.25) % 24  # assuming 15-min steps
+        # Calculate current hour from the real simulation resolution (agents
+        # previously assumed 15-min steps, drifting 4x at hourly resolution)
+        hours_per_step = float(context.get("hours_per_step", 0.25))
+        hour_of_day = (timestep * hours_per_step) % 24  # assuming 15-min steps
         
         # Check connection
         self.connected = self._is_connected(hour_of_day)
@@ -75,7 +77,7 @@ class EVAgent(CoordinationAgent):
             
             # Energy needed
             energy_needed = (self.config.target_soc - self.current_soc) * self.config.capacity_kwh
-            required_power = energy_needed / max(hours_remaining, 0.25)
+            required_power = energy_needed / max(hours_remaining, hours_per_step)
             
             # Determine charge power
             charge_kw = min(required_power, self.config.max_charge_kw)

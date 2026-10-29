@@ -79,7 +79,8 @@ class BuildingAgent(CoordinationAgent):
                 "observations": self.current_observations,
                 "timestep": self.current_timestep,
                 "building_net_demand": net_demand,
-                "pv_generation": pv_generation
+                "pv_generation": pv_generation,
+                "hours_per_step": context.get("hours_per_step", 0.25),
             }
             battery_msg = self.battery_agent.propose(battery_ctx)
             battery_proposal = battery_msg.payload.get("proposal")
@@ -91,7 +92,8 @@ class BuildingAgent(CoordinationAgent):
                 "observations": self.current_observations,
                 "timestep": self.current_timestep,
                 "building_net_demand": net_demand,
-                "pv_generation": pv_generation
+                "pv_generation": pv_generation,
+                "hours_per_step": context.get("hours_per_step", 0.25),
             }
             ev_msg = ev_agent.propose(ev_ctx)
             ev_proposal = ev_msg.payload.get("proposal")
@@ -104,7 +106,8 @@ class BuildingAgent(CoordinationAgent):
             fl_ctx = {
                 "observations": self.current_observations,
                 "timestep": self.current_timestep,
-                "pv_generation": pv_generation
+                "pv_generation": pv_generation,
+                "hours_per_step": context.get("hours_per_step", 0.25),
             }
             fl_msg = fl_agent.propose(fl_ctx)
             fl_proposal = fl_msg.payload.get("proposal")
@@ -221,7 +224,8 @@ class FlexibleLoadAgent(CoordinationAgent):
         # Check if within operating window
         from src.controllers import RuleBasedController
         controller = RuleBasedController.__new__(RuleBasedController)
-        hour_of_day = (timestep * 0.25) % 24  # assuming 15-min steps
+        hours_per_step = float(context.get("hours_per_step", 0.25))
+        hour_of_day = (timestep * hours_per_step) % 24
         
         start_hour = controller._time_to_hour(self.config.earliest_start)
         end_hour = controller._time_to_hour(self.config.latest_end)

@@ -105,7 +105,12 @@ class MultiAgentCoordinator:
         """Phase 1: Collect proposals from all building agents."""
         context = {
             "observations": self.current_observations,
-            "timestep": self.current_timestep
+            "timestep": self.current_timestep,
+            # Real simulation resolution: agents must not assume 15-min steps
+            # (the dataset adapter overrides the scenario to hourly, and any
+            # scenario may differ; the hardcoded 0.25 h/step drifted every
+            # agent clock 4x off the simulator's actual departures).
+            "hours_per_step": self.scenario_config.timestep_minutes / 60.0,
         }
         
         proposals = {}
