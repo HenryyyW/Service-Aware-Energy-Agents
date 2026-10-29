@@ -159,24 +159,27 @@ class TestFailureInjector:
         injector.reset()
         
         # Before PV failure (Day 2, 10:00 = timestep 136)
-        newly_activated = injector.step(135)
-        assert len(newly_activated) == 0
+        result = injector.step(135)
+        assert len(result['activated']) == 0
+        assert len(result['deactivated']) == 0
         assert len(injector.get_active_failures()) == 0
         
         # At PV failure start (timestep 136)
-        newly_activated = injector.step(136)
-        assert len(newly_activated) == 1
-        assert newly_activated[0].failure_id == 'pv_failure_building_2'
+        result = injector.step(136)
+        assert len(result['activated']) == 1
+        assert result['activated'][0].failure_id == 'pv_failure_building_2'
         assert len(injector.get_active_failures()) == 1
         
         # During PV failure (timestep 140)
-        newly_activated = injector.step(140)
-        assert len(newly_activated) == 0
+        result = injector.step(140)
+        assert len(result['activated']) == 0
         assert len(injector.get_active_failures()) == 1
         
         # At PV failure end (timestep 152)
-        newly_activated = injector.step(152)
-        assert len(newly_activated) == 0
+        result = injector.step(152)
+        assert len(result['activated']) == 0
+        assert len(result['deactivated']) == 1
+        assert result['deactivated'][0].failure_id == 'pv_failure_building_2'
         assert len(injector.get_active_failures()) == 0
     
     def test_pv_failure_application(self, scenario_config_with_failures):
