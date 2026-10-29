@@ -10,14 +10,52 @@ from src.schemas.scenario import ScenarioConfig
 from src.evaluation.metrics import _time_to_hour
 
 
+def _tariff_price(tariff_config, hour_of_day: float, is_import: bool) -> float:
+    """Import/export price for a tariff at a given hour of day.
+
+    Accepts both the ``TariffConfig`` model and the ``model_dump()`` dict, so
+    fairness costs follow the same tariff rule as the energy totals.
+    """
+    if tariff_config is None:
+        return 0.0
+    if isinstance(tariff_config, dict):
+        prices = tariff_config.get("import_prices" if is_import else "export_prices") or {}
+    else:
+        prices = getattr(tariff_config, "import_prices" if is_import else "export_prices", None) or {}
+    if hour_of_day < 7 or hour_of_day >= 23:
+        period = "off_peak"
+    elif hour_of_day < 12 or (hour_of_day >= 18 and hour_of_day < 21):
+        period = "mid_peak"
+    else:
+        period = "on_peak"
+    return prices.get(period, 0.0)
+
+
 class FairnessAnalyzer:
     """Analyzes fairness of energy community outcomes."""
     
     def __init__(self, scenario_config: ScenarioConfig):
         self.scenario_config = scenario_config
-        self.member_ids = [b.building_id for b in scenario_config.buildings]
+        # Accept either the ScenarioConfig model or its ``model_dump()`` form:
+        # compute_all_metrics receives the dict, run_experiment the model.
+        if isinstance(scenario_config, dict):
+            self._buildings = list(scenario_config.get('buildings') or [])
+            self.member_ids = [b['building_id'] for b in self._buildings]
+            self._timestep_minutes = int(scenario_config.get('timestep_minutes', 15))
+        else:
+            self._buildings = list(scenario_config.buildings)
+            self.member_ids = [b.building_id for b in self._buildings]
+            self._timestep_minutes = int(scenario_config.timestep_minutes)
+        self._tariffs = {
+            self._member_id(b): (b.get('tariff') if isinstance(b, dict) else b.tariff)
+            for b in self._buildings
+        }
         self.baseline_costs = None  # Will be set if baseline provided
         self.settlement_savings = None  # Will be set from settlement engine
+
+    @staticmethod
+    def _member_id(building) -> str:
+        return building['building_id'] if isinstance(building, dict) else building.building_id
     
     def set_baseline(self, baseline_history: List[SimulationStepResult]):
         """Set baseline history for savings calculation."""
@@ -60,8 +98,8 @@ class FairnessAnalyzer:
                 else:
                     metrics.per_member_savings[member_id] = 0.0
         else:
-            # No baseline available
-            metrics.per_member_savings = {m: 0.0 for m in self.member_ids}
+            # No baseline was simulated: savings are unmeasured, not zero.
+            metrics.per_member_savings = {}
 
         # Gini coefficient over valid members only
         metrics.gini_coefficient = self._gini(valid_costs)
@@ -76,24 +114,44 @@ class FairnessAnalyzer:
     def _compute_member_costs(self, history: List[SimulationStepResult]) -> Dict[str, Optional[float]]:
         """Compute cost per member.
 
-        A member whose cost is NaN in any step (e.g. an injected sensor or
-        supply failure) is marked ``None`` for the whole run: the service was
-        interrupted, so no meaningful economic total exists for it.
+        CityLearn's step ``info`` does not reliably carry a "cost" entry (in the
+        benchmark it is empty), so cost is derived from each member's net
+        electricity consumption and its own tariff — the same rule
+        ``compute_energy_metrics`` uses for the community total. A member whose
+        cost is NaN in any step (e.g. an injected sensor or supply failure) is
+        marked ``None`` for the whole run: the service was interrupted, so no
+        meaningful economic total exists for it.
         """
         costs: Dict[str, Optional[float]] = {m: 0.0 for m in self.member_ids}
         interrupted: set = set()
+        timestep_hours = self._timestep_minutes / 60.0
 
         for step in history:
-            for member, cost in step.costs.items():
-                if member not in costs:
-                    continue
+            obs = step.observations
+            hour_of_day = (step.timestep * self._timestep_minutes / 60.0) % 24.0
+            for member in self.member_ids:
                 if member in interrupted:
                     continue
-                if cost is None or math.isnan(cost):
+                net_key = f"{member}_net_electricity_consumption"
+                tariff = self._tariffs.get(member)
+                if net_key in obs and tariff is not None:
+                    net_kw = float(obs[net_key])
+                    if not math.isfinite(net_kw):
+                        interrupted.add(member)
+                        costs[member] = None
+                        continue
+                    energy_kwh = net_kw * timestep_hours
+                    price = _tariff_price(tariff, hour_of_day, energy_kwh > 0)
+                    costs[member] += energy_kwh * price
+                    continue
+
+                # No observation/tariff to price: fall back to CityLearn's cost.
+                step_cost = step.costs.get(member, 0.0)
+                if step_cost is None or math.isnan(step_cost):
                     interrupted.add(member)
                     costs[member] = None
                     continue
-                costs[member] += cost
+                costs[member] += float(step_cost)
 
         return costs
     

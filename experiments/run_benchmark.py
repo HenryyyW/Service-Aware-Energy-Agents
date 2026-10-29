@@ -46,6 +46,7 @@ METRICS: Dict[str, tuple[str, str]] = {
     "comfort_violations": ("service", "comfort_violation_degree_hours"),
     "gini_coefficient": ("service", "gini_coefficient"),
     "member_cost_coverage": ("service", "member_cost_coverage"),
+    "cost_coverage": ("energy", "cost_coverage"),
     "pf_convergence": ("grid", "power_flow_convergence_rate"),
     "voltage_violations": ("grid", "voltage_violations_count"),
     "line_violations": ("grid", "line_loading_violations"),

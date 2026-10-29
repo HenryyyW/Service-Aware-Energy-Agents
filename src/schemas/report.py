@@ -49,6 +49,12 @@ class EnergyMetrics(BaseModel):
     battery_cycles: float = 0.0
     carbon_emissions_kg: float = 0.0
     carbon_intensity_weighted_kg: float = 0.0
+    # Scenario E failure convention: an injected sensor failure returns NaN for
+    # the affected building's readings. Those building-steps cannot contribute a
+    # cost, so the totals cover valid data only and this ratio reports how much
+    # of the episode that was (1.0 = every building-step had valid data).
+    cost_coverage: float = 1.0
+    invalid_cost_steps: int = 0
 
 
 class ServiceMetrics(BaseModel):
