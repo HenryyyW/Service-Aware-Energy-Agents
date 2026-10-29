@@ -44,6 +44,7 @@ METRICS: Dict[str, tuple[str, str]] = {
     "ev_avg_soc_at_departure": ("service", "ev_avg_soc_at_departure"),
     "comfort_violations": ("service", "comfort_violation_degree_hours"),
     "gini_coefficient": ("service", "gini_coefficient"),
+    "member_cost_coverage": ("service", "member_cost_coverage"),
     "pf_convergence": ("grid", "power_flow_convergence_rate"),
     "voltage_violations": ("grid", "voltage_violations_count"),
     "line_violations": ("grid", "line_loading_violations"),
@@ -51,6 +52,15 @@ METRICS: Dict[str, tuple[str, str]] = {
 }
 
 STAT_KEYS = ("mean", "std", "min", "max", "count", "ci95")
+
+# Per-run fields that are derived rather than a plain (section, field) lookup.
+# Scenario E failure covariate: how many members had their cost data
+# interrupted by an injected failure (per-member cost reported as None by the
+# reporting convention in BENCHMARK_MATRIX.md section 4).
+DERIVED_METRICS: tuple = ("members_interrupted_count",)
+
+# Everything aggregated into summary_statistics.json / summary.csv.
+SUMMARY_METRICS: tuple = (*METRICS, *DERIVED_METRICS)
 
 
 def _t_critical(count: int, confidence: float = 0.95) -> float:
@@ -164,6 +174,36 @@ def _run_with_timeout(cmd, env, timeout: int, result_file: Path):
     return SimpleNamespace(returncode=returncode), tail
 
 
+def extract_run_metrics(
+    result_data: Dict[str, Any],
+    scenario_name: str,
+    controller: str,
+    seed: int,
+    runtime: float,
+    run_id: str = "",
+) -> Dict[str, Any]:
+    """Flatten one ``result.json`` into a matrix row.
+
+    ``METRICS`` entries are plain (section, field) lookups; the Scenario E
+    failure covariate is derived here because ``members_interrupted`` is a list.
+    """
+    metrics: Dict[str, Any] = {
+        "scenario": scenario_name,
+        "controller": controller,
+        "seed": seed,
+        "run_id": result_data.get("run_id", run_id),
+        "runtime_seconds": round(runtime, 1),
+        "status": result_data.get("status"),
+    }
+    for name, (section, field) in METRICS.items():
+        block = result_data.get(section) or {}
+        metrics[name] = block.get(field)
+    service_block = result_data.get("service") or {}
+    interrupted = service_block.get("members_interrupted") or []
+    metrics["members_interrupted_count"] = len(interrupted)
+    return metrics
+
+
 def run_experiment(
     scenario_file: str,
     controller: str,
@@ -226,18 +266,9 @@ def run_experiment(
         print(f"Error loading {result_file}: {exc}", file=sys.stderr)
         return None
 
-    metrics: Dict[str, Any] = {
-        "scenario": scenario_name,
-        "controller": controller,
-        "seed": seed,
-        "run_id": result_data.get("run_id", run_id),
-        "runtime_seconds": round(runtime, 1),
-        "status": result_data.get("status"),
-    }
-    for name, (section, field) in METRICS.items():
-        block = result_data.get(section) or {}
-        metrics[name] = block.get(field)
-    return metrics
+    return extract_run_metrics(
+        result_data, scenario_name, controller, seed, runtime, run_id
+    )
 
 
 def run_benchmark(
@@ -308,7 +339,7 @@ def run_benchmark(
     for (scenario_name, controller), rows in grouped.items():
         key = f"{scenario_name}::{controller}"
         summary_stats[key] = {}
-        for metric in METRICS:
+        for metric in SUMMARY_METRICS:
             values = [row.get(metric) for row in rows if row.get(metric) is not None]
             if values:
                 summary_stats[key][metric] = compute_statistics(values)

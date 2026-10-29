@@ -18,9 +18,9 @@ QA/DevOps knows exactly what to package from the (re-run) 125-run matrix on
 
 | # | Element | Source artifact | Producer |
 |---|---|---|---|
-| F1 | KPI comparison bars with CI whiskers per scenario (cost, peak, EV completion) | `summary_statistics.json` | plotting script from `summary_statistics.json` |
-| F2 | Seed-variant strips: per-seed values per (scenario, controller) | `raw_results.json` | same plotting script |
-| F3 | Cost vs EV-completion Pareto scatter (annotated with peak) | `raw_results.json` | same plotting script |
+| F1 | KPI comparison bars with CI whiskers per scenario (cost, peak, EV completion) | `summary_statistics.json` | `experiments/make_figures.py` |
+| F2 | Seed-variant strips: per-seed values per (scenario, controller) | `raw_results.json` | `experiments/make_figures.py` |
+| F3 | Cost vs EV-completion Pareto scatter (annotated with peak) | `raw_results.json` | `experiments/make_figures.py` |
 | F4 | Weekly trajectories: community import, battery/EV SOC, price vs dispatch — one panel per scenario | run `trajectories.jsonl` + existing `plots/*.png` of the reference runs | `experiments/run_experiment.py` plots |
 | F5 | Scenario E failure-injection response timeline (grid diagnostics around injected events) | run `grid_diagnostics.jsonl` + failure-injector log | failure-injection integration test outputs |
 | F6 (appendix) | Verification/repair flow: first-attempt validity vs repair iterations | ablation `result.json` agent-execution block | ablation controller |

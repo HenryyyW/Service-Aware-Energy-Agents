@@ -63,3 +63,27 @@ def test_build_markdown_skips_tests_without_reference_pairs():
     results = [_row("scenario_a", "mpc", 42, 120.0)]  # no rule_based rows
     markdown = build_markdown(results, ["total_cost"], "rule_based")
     assert "Paired t-tests" not in markdown
+
+
+def test_missing_scenario_e_covariate_renders_as_dash_not_zero():
+    """Old artifacts have no member_cost_coverage; 0.00 would read as
+    'every member interrupted', the opposite of 'not recorded'."""
+    results = [_row("scenario_e", "rule_based", 42, 100.0)]
+    markdown = build_markdown(
+        results, ["total_cost", "member_cost_coverage", "members_interrupted_count"], "rule_based"
+    )
+    assert "member_cost_coverage | members_interrupted_count |" in markdown
+    row = next(line for line in markdown.splitlines() if line.startswith("| scenario_e |"))
+    assert "| 100.00 ± 0.00 | — | — |" in row
+
+
+def test_scenario_e_covariate_is_reported_after_the_fix():
+    results = [_row("scenario_e", "multi_agent", seed, 95.0) for seed in (42, 123)]
+    for row in results:
+        row["member_cost_coverage"] = 0.75
+        row["members_interrupted_count"] = 1
+    markdown = build_markdown(
+        results, ["member_cost_coverage", "members_interrupted_count"], "multi_agent"
+    )
+    row = next(line for line in markdown.splitlines() if line.startswith("| scenario_e |"))
+    assert "| 0.75 ± 0.00 | 1.00 ± 0.00 |" in row
