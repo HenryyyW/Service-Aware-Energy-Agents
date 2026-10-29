@@ -1,0 +1,31 @@
+{
+  "header": {
+    "runName": "執行名稱",
+    "scenario": "情境",
+    "controller": "控制器",
+    "runId": "執行 ID"
+  },
+  "timeline": {
+    "title": "派送時間軸",
+    "timestep": "時間步",
+    "action": "動作",
+    "reason": "原因",
+    "change": "變化",
+    "groupedByTimestep": "按時間步分組",
+    "noDispatches": "尚無派送 — 等待執行"
+  },
+  "kpi": {
+    "violationsFixed": "修正違規",
+    "costSavings": "成本節省",
+    "gridImportReduced": "電網進口減少",
+    "pvUtilization": "光電利用率"
+  },
+  "live": {
+    "staleBanner": "資料過期 — 重新連線中...",
+    "reconnected": "已重新連線",
+    "timestamp": "時間戳"
+  },
+  "empty": {
+    "noRunSelected": "選擇一個執行以檢視工作區"
+  }
+}

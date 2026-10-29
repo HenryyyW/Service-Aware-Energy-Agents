@@ -1,0 +1,53 @@
+{
+  "steps": {
+    "data": "Data",
+    "model": "Model",
+    "options": "Options",
+    "verify": "Verify",
+    "decide": "Decide"
+  },
+  "data": {
+    "title": "Scenario Data",
+    "description": "Select scenario and configure data sources",
+    "scenario": "Scenario",
+    "seed": "Random Seed",
+    "timeRange": "Time Range",
+    "healthChecks": "Health Checks",
+    "valid": "Valid",
+    "invalid": "Invalid"
+  },
+  "model": {
+    "title": "Grid Model",
+    "description": "Review bus, line, transformer and DER counts",
+    "buses": "Buses",
+    "lines": "Lines",
+    "transformers": "Transformers",
+    "der": "DERs",
+    "matchesMap": "Matches map (single source of truth)"
+  },
+  "options": {
+    "title": "Controller Options",
+    "description": "Choose controller and parameters",
+    "controller": "Controller",
+    "baseline": "Baseline",
+    "verifiedAgent": "Verified Agent",
+    "parameters": "Parameters",
+    "whyItMatters": "Why it matters"
+  },
+  "verify": {
+    "title": "Pre-flight Verification",
+    "description": "Blockers vs warnings",
+    "blockers": "Blockers",
+    "warnings": "Warnings",
+    "fixHint": "Fix hint",
+    "noBlockers": "No blockers — ready to run",
+    "runEnabled": "Run scenario enabled"
+  },
+  "decide": {
+    "title": "Run Scenario",
+    "description": "Click to start simulation",
+    "runCta": "Run scenario",
+    "dedupeNote": "Dedupe: identical config_hash + seed returns same run",
+    "progress": "Progress"
+  }
+}

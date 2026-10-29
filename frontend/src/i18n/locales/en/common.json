@@ -1,0 +1,65 @@
+{
+  "status": {
+    "ok": "OK",
+    "dispatched": "Dispatched",
+    "faulted": "Faulted",
+    "stale": "Stale",
+    "pending": "Pending",
+    "running": "Running",
+    "completed": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled"
+  },
+  "state": {
+    "loading": "Loading...",
+    "error": "Error",
+    "empty": "No data available",
+    "retry": "Retry"
+  },
+  "action": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "view": "View",
+    "download": "Download",
+    "copy": "Copy",
+    "refresh": "Refresh",
+    "run": "Run",
+    "stop": "Stop",
+    "pause": "Pause",
+    "resume": "Resume",
+    "retry": "Retry",
+    "close": "Close",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "submit": "Submit"
+  },
+  "common": {
+    "yes": "Yes",
+    "no": "No",
+    "none": "None",
+    "unknown": "Unknown",
+    "select": "Select",
+    "search": "Search",
+    "filter": "Filter",
+    "sort": "Sort",
+    "export": "Export",
+    "import": "Import",
+    "settings": "Settings",
+    "help": "Help",
+    "about": "About",
+    "language": "Language",
+    "theme": "Theme"
+  },
+  "units": {
+    "kw": "kW",
+    "kwh": "kWh",
+    "mwh": "MWh",
+    "currency": "$",
+    "percent": "%",
+    "degree": "°C",
+    "hour": "h"
+  }
+}

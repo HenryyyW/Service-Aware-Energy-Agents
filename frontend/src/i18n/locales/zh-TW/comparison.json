@@ -1,0 +1,17 @@
+{
+  "title": "執行比較",
+  "selectRuns": "選擇兩個執行進行比較",
+  "runA": "執行 A",
+  "runB": "執行 B",
+  "metrics": {
+    "energy": "能源",
+    "service": "服務",
+    "grid": "電網",
+    "settlement": "結算"
+  },
+  "diff": {
+    "better": "較佳",
+    "worse": "較差",
+    "same": "相同"
+  }
+}

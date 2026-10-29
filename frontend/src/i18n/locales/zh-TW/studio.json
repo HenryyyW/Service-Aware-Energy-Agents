@@ -1,0 +1,53 @@
+{
+  "steps": {
+    "data": "資料",
+    "model": "模型",
+    "options": "選項",
+    "verify": "驗證",
+    "decide": "決定"
+  },
+  "data": {
+    "title": "情境資料",
+    "description": "選擇情境並設定資料來源",
+    "scenario": "情境",
+    "seed": "隨機種子",
+    "timeRange": "時間範圍",
+    "healthChecks": "健康檢查",
+    "valid": "有效",
+    "invalid": "無效"
+  },
+  "model": {
+    "title": "電網模型",
+    "description": "檢視匯流排、線路、變壓器與 DER 數量",
+    "buses": "匯流排",
+    "lines": "線路",
+    "transformers": "變壓器",
+    "der": "DER",
+    "matchesMap": "符合地圖 (單一真實來源)"
+  },
+  "options": {
+    "title": "控制器選項",
+    "description": "選擇控制器與參數",
+    "controller": "控制器",
+    "baseline": "基準",
+    "verifiedAgent": "驗證代理",
+    "parameters": "參數",
+    "whyItMatters": "為什麼重要"
+  },
+  "verify": {
+    "title": "預飛行驗證",
+    "description": "阻擋項 vs 警告",
+    "blockers": "阻擋項",
+    "warnings": "警告",
+    "fixHint": "修正提示",
+    "noBlockers": "無阻擋項 — 可執行",
+    "runEnabled": "執行情境已啟用"
+  },
+  "decide": {
+    "title": "執行情境",
+    "description": "點擊開始模擬",
+    "runCta": "執行情境",
+    "dedupeNote": "去重：相同 config_hash + seed 回傳相同執行",
+    "progress": "進度"
+  }
+}
