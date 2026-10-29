@@ -42,7 +42,7 @@ class LLMConfig:
     
     # Local LLM settings
     local_endpoint: str = field(default_factory=lambda: os.getenv("LLM_LOCAL_ENDPOINT", "http://localhost:11434"))
-    local_model: str = field(default_factory=lambda: os.getenv("LLM_LOCAL_MODEL", "llama3.2:3b"))
+    local_model: str = field(default_factory=lambda: os.getenv("LLM_LOCAL_MODEL", "qwen2.5-coder:7b"))
     
     # Budget limits
     max_usd: float = field(default_factory=lambda: float(os.getenv("LLM_MAX_USD", "1.00")))

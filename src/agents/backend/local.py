@@ -20,20 +20,20 @@ class OllamaBackend(AgentBackend):
     """Ollama local LLM backend - free local inference with no API key required.
     
     Expects a local Ollama server running at LLM_LOCAL_ENDPOINT (default http://localhost:11434)
-    with the model specified by LLM_LOCAL_MODEL (default: llama3.2:3b).
+    with the model specified by LLM_LOCAL_MODEL (default: qwen2.5-coder:7b).
     
     Backend selection: AGENT_BACKEND=ollama:<model_name>
-    - AGENT_BACKEND=ollama:llama3.2:3b (recommended default)
+    - AGENT_BACKEND=ollama:qwen2.5-coder:7b (recommended default - code generation optimized)
+    - AGENT_BACKEND=ollama:llama3.2:3b
     - AGENT_BACKEND=ollama:qwen:latest
-    - AGENT_BACKEND=ollama:qwen2.5-coder:7b
     - etc.
     """
     
     backend_id = "ollama"
     supports_streaming = True
     
-    # Recommended default model (available on this machine)
-    DEFAULT_MODEL = "llama3.2:3b"
+    # Recommended default model (available on this machine, optimized for code generation)
+    DEFAULT_MODEL = "qwen2.5-coder:7b"
     
     def __init__(
         self,
