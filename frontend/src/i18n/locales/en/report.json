@@ -1,0 +1,50 @@
+{
+  "title": "Simulation Report",
+  "runId": "Run ID",
+  "tabs": {
+    "run": "Run",
+    "community": "Community",
+    "asset": "Asset",
+    "settlement": "Settlement"
+  },
+  "layer": {
+    "run": "Run",
+    "community": "Community",
+    "asset": "Asset"
+  },
+  "runLayer": {
+    "outcomeSentence": "Outcome",
+    "kpiBlock": "KPI",
+    "detailSections": "Details"
+  },
+  "communityLayer": {
+    "title": "Community Rollup",
+    "totalConsumption": "Total Consumption",
+    "totalCost": "Total Cost",
+    "totalSavings": "Total Savings",
+    "participation": "Participation",
+    "kpis": "Community KPIs"
+  },
+  "assetLayer": {
+    "title": "Asset Detail",
+    "selectAsset": "Select an asset",
+    "perAssetTable": "Per-Asset Table"
+  },
+  "actions": {
+    "copySummary": "Copy Summary",
+    "downloadJson": "Download JSON",
+    "downloadMarkdown": "Download Markdown",
+    "copied": "Copied!"
+  },
+  "empty": {
+    "community": "This run has no community rollup",
+    "asset": "This run has no asset data",
+    "noReport": "No report generated yet"
+  },
+  "generation": {
+    "pending": "Generating...",
+    "computing": "Computing...",
+    "ready": "Ready",
+    "failed": "Failed"
+  }
+}

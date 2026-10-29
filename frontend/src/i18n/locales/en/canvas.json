@@ -1,0 +1,43 @@
+{
+  "layers": {
+    "buildings": "Buildings",
+    "pv": "PV",
+    "batteries": "Batteries",
+    "evs": "EVs",
+    "flexibleLoads": "Flexible Loads",
+    "feeders": "Feeders",
+    "transformers": "Transformers",
+    "violations": "Violations",
+    "flows": "Flows",
+    "voltageHeatmap": "Voltage Heatmap",
+    "loadingHeatmap": "Loading Heatmap"
+  },
+  "controls": {
+    "mapStyle": "Map Style",
+    "dark": "Dark",
+    "light": "Light",
+    "satellite": "Satellite",
+    "fitToBounds": "Fit to Bounds",
+    "resetView": "Reset View"
+  },
+  "selection": {
+    "noAssetSelected": "No asset selected",
+    "selectAsset": "Click an asset to inspect",
+    "building": "Building",
+    "pv": "PV Asset",
+    "battery": "Battery",
+    "ev": "EV",
+    "feeder": "Feeder",
+    "transformer": "Transformer"
+  },
+  "schematic": {
+    "badge": "Schematic network layout"
+  },
+  "timePlayer": {
+    "play": "Play",
+    "pause": "Pause",
+    "reset": "Reset",
+    "speed": "Speed",
+    "timestep": "Timestep"
+  }
+}

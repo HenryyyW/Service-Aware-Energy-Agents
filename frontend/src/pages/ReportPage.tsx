@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useSimulationStore } from '../store/simulationStore';
 import { useAgentStore } from '../store/agentStore';
 import { api } from '../api/client';
@@ -11,6 +11,7 @@ import { Download, ChevronLeft, RotateCcw, FileText } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Table, TableHeaderCell, TableCell } from '../components/ui/Table';
 import type { ReportResponse } from '../api/types';
+import { LayerSwitcher, CommunityLayer, AssetLayer, CopySummaryButton } from '../components/report';
 
 function SettlementView({ settlement, run }: { settlement: any; run: any }) {
   if (!settlement) {
@@ -154,12 +155,35 @@ function SettlementView({ settlement, run }: { settlement: any; run: any }) {
 
 function ReportPageContent() {
   const { runId } = useParams<{ runId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { runs, currentRun } = useSimulationStore();
   const { currentTask } = useAgentStore();
   const { addToast } = useToast();
   const [report, setReport] = useState<ReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [format] = useState<'markdown'>('markdown');
+  const [format] = useState<'markdown' | 'json'>('markdown');
+  const [selectedAsset, setSelectedAsset] = useState<string>('');
+  const [layer, setLayer] = useState<'run' | 'community' | 'asset'>(
+    (searchParams.get('layer') as 'run' | 'community' | 'asset') || 'run'
+  );
+
+  const assetIdFromUrl = searchParams.get('asset');
+  if (assetIdFromUrl) {
+    setSelectedAsset(assetIdFromUrl);
+  }
+
+  const handleLayerChange = (newLayer: 'run' | 'community' | 'asset') => {
+    setLayer(newLayer);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('layer', newLayer);
+      if (newLayer !== 'asset') {
+        next.delete('asset');
+      }
+      return next;
+    });
+    setSelectedAsset('');
+  };
 
   useEffect(() => {
     if (runId) {
@@ -211,7 +235,7 @@ function ReportPageContent() {
     }
   };
 
-  const handleDownload = async (fmt: 'markdown') => {
+  const handleDownload = async (fmt: 'markdown' | 'json') => {
     try {
       addToast({ type: 'info', title: `Generating ${fmt.toUpperCase()}...`, duration: 2000 });
       const blob = await api.downloadReport(runId!, fmt);
@@ -250,6 +274,7 @@ function ReportPageContent() {
               className="input w-auto min-w-[140px] py-1.5 text-body-sm"
             >
               <option value="markdown">Markdown</option>
+              <option value="json">JSON</option>
             </select>
             <Button onClick={() => handleDownload(format)}>
               <Download className="w-4 h-4 mr-2" />
@@ -270,6 +295,15 @@ function ReportPageContent() {
           </div>
         ) : (
           <div className="max-w-4xl mx-auto">
+            {/* Layer Switcher */}
+            <LayerSwitcher
+              currentLayer={layer}
+              onLayerChange={handleLayerChange}
+              disabled={!report}
+              className="mb-4"
+            />
+
+            {/* Report Layers */}
             <Tabs defaultValue="report">
               <TabList className="mb-4">
                 <Tab value="report">Report</Tab>
@@ -277,10 +311,57 @@ function ReportPageContent() {
               </TabList>
 
               <TabPanel value="report">
-                <ReportView
-                  report={report?.markdown || ''}
-                  onDownload={handleDownload}
-                />
+                <div className="space-y-4">
+                  {/* Header Actions */}
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <h2 className="font-body font-medium text-body text-text">Report</h2>
+                    <div className="flex items-center gap-2">
+                      <CopySummaryButton report={report} />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDownload('json')}
+                        className="flex items-center gap-2"
+                      >
+                        <FileText className="w-4 h-4" />
+                        <span>Download JSON</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDownload('markdown')}
+                        className="flex items-center gap-2"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        <span>Download Markdown</span>
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Layer Content */}
+                  {layer === 'run' && report && (
+                    <ReportView
+                      report={report?.markdown || ''}
+                      onDownload={handleDownload}
+                    />
+                  )}
+                  {layer === 'community' && report && (
+                    <CommunityLayer report={report} />
+                  )}
+                  {layer === 'asset' && report && (
+                    <AssetLayer
+                      report={report}
+                      selectedAsset={selectedAsset}
+                      onAssetSelect={setSelectedAsset}
+                    />
+                  )}
+                  {!report && (
+                    <div className="glass-card p-8 text-center text-text-muted">
+                      <FileText className="w-16 h-16 mx-auto mb-4 text-text-muted/30" />
+                      <p className="text-body">No report data available</p>
+                    </div>
+                  )}
+                </div>
               </TabPanel>
 
               <TabPanel value="settlement">

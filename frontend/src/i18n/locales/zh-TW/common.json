@@ -1,0 +1,65 @@
+{
+  "status": {
+    "ok": "正常",
+    "dispatched": "已派送",
+    "faulted": "故障",
+    "stale": "過期",
+    "pending": "等待中",
+    "running": "運行中",
+    "completed": "已完成",
+    "failed": "失敗",
+    "cancelled": "已取消"
+  },
+  "state": {
+    "loading": "載入中...",
+    "error": "錯誤",
+    "empty": "無資料",
+    "retry": "重試"
+  },
+  "action": {
+    "save": "儲存",
+    "cancel": "取消",
+    "delete": "刪除",
+    "edit": "編輯",
+    "view": "檢視",
+    "download": "下載",
+    "copy": "複製",
+    "refresh": "重新整理",
+    "run": "執行",
+    "stop": "停止",
+    "pause": "暫停",
+    "resume": "繼續",
+    "retry": "重試",
+    "close": "關閉",
+    "confirm": "確認",
+    "back": "返回",
+    "next": "下一步",
+    "submit": "提交"
+  },
+  "common": {
+    "yes": "是",
+    "no": "否",
+    "none": "無",
+    "unknown": "未知",
+    "select": "選擇",
+    "search": "搜尋",
+    "filter": "篩選",
+    "sort": "排序",
+    "export": "匯出",
+    "import": "匯入",
+    "settings": "設定",
+    "help": "說明",
+    "about": "關於",
+    "language": "語言",
+    "theme": "主題"
+  },
+  "units": {
+    "kw": "kW",
+    "kwh": "kWh",
+    "mwh": "MWh",
+    "currency": "$",
+    "percent": "%",
+    "degree": "°C",
+    "hour": "h"
+  }
+}

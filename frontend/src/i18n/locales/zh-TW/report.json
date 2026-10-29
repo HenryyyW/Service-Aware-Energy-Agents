@@ -1,0 +1,50 @@
+{
+  "title": "模擬報告",
+  "runId": "執行 ID",
+  "tabs": {
+    "run": "執行",
+    "community": "社群",
+    "asset": "資產",
+    "settlement": "結算"
+  },
+  "layer": {
+    "run": "執行",
+    "community": "社群",
+    "asset": "資產"
+  },
+  "runLayer": {
+    "outcomeSentence": "結果摘要",
+    "kpiBlock": "KPI",
+    "detailSections": "詳細資料"
+  },
+  "communityLayer": {
+    "title": "社群彙總",
+    "totalConsumption": "總消耗",
+    "totalCost": "總成本",
+    "totalSavings": "總節省",
+    "participation": "參與度",
+    "kpis": "社群 KPI"
+  },
+  "assetLayer": {
+    "title": "資產詳情",
+    "selectAsset": "選擇一個資產",
+    "perAssetTable": "每資產表格"
+  },
+  "actions": {
+    "copySummary": "複製摘要",
+    "downloadJson": "下載 JSON",
+    "downloadMarkdown": "下載 Markdown",
+    "copied": "已複製!"
+  },
+  "empty": {
+    "community": "此執行無社群彙總",
+    "asset": "此執行無資產資料",
+    "noReport": "尚未產生報告"
+  },
+  "generation": {
+    "pending": "產生中...",
+    "computing": "計算中...",
+    "ready": "就緒",
+    "failed": "失敗"
+  }
+}

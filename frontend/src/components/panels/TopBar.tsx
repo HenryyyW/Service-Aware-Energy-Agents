@@ -4,6 +4,7 @@ import { Select } from '../ui/Input';
 import { useCanvasStore } from '../../store/canvasStore';
 import { useSimulationStore } from '../../store/simulationStore';
 import { api } from '../../api/client';
+import { useI18n } from '../../i18n';
 
 interface TopBarProps {
   communityName: string;
@@ -22,6 +23,7 @@ export function TopBar({
 }: TopBarProps) {
   const { mapStyle, setMapStyle } = useCanvasStore();
   const { runs, currentRun, setCurrentRun, setTrajectories } = useSimulationStore();
+  const { changeLanguage, language, languages } = useI18n();
   const selfConsumption = currentRun?.energy_metrics?.pv_self_consumption;
   const pvGeneration = currentRun?.energy_metrics?.pv_generation_kwh;
   const selfConsumptionRate = pvGeneration && pvGeneration > 0 && selfConsumption !== undefined
@@ -110,6 +112,17 @@ export function TopBar({
 
         {/* Right: Controls */}
         <div className="flex items-center gap-2">
+          {/* Language Switcher */}
+          <div className="hidden sm:flex items-center gap-2">
+            <span className="text-caption text-text-muted">Lang:</span>
+            <Select
+              value={language}
+              onChange={(e) => { void changeLanguage(e.target.value); }}
+              options={languages.map(l => ({ value: l.code, label: l.nativeName }))}
+              className="w-auto min-w-[120px]"
+            />
+          </div>
+
           {/* Map Style Selector */}
           <div className="hidden sm:flex items-center gap-2">
             <span className="text-caption text-text-muted">Map:</span>

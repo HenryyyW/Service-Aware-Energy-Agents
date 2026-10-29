@@ -1,0 +1,43 @@
+{
+  "layers": {
+    "buildings": "建築物",
+    "pv": "光電",
+    "batteries": "電池",
+    "evs": "電動車",
+    "flexibleLoads": "彈性負載",
+    "feeders": "饋線",
+    "transformers": "變壓器",
+    "violations": "違規",
+    "flows": "流向",
+    "voltageHeatmap": "電壓熱圖",
+    "loadingHeatmap": "負載熱圖"
+  },
+  "controls": {
+    "mapStyle": "地圖樣式",
+    "dark": "深色",
+    "light": "淺色",
+    "satellite": "衛星",
+    "fitToBounds": "適應邊界",
+    "resetView": "重置視圖"
+  },
+  "selection": {
+    "noAssetSelected": "未選擇資產",
+    "selectAsset": "點擊資產以檢視",
+    "building": "建築物",
+    "pv": "光電資產",
+    "battery": "電池",
+    "ev": "電動車",
+    "feeder": "饋線",
+    "transformer": "變壓器"
+  },
+  "schematic": {
+    "badge": "示意圖電網佈局"
+  },
+  "timePlayer": {
+    "play": "播放",
+    "pause": "暫停",
+    "reset": "重置",
+    "speed": "速度",
+    "timestep": "時間步"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "header": {
+    "runName": "Run Name",
+    "scenario": "Scenario",
+    "controller": "Controller",
+    "runId": "Run ID"
+  },
+  "timeline": {
+    "title": "Dispatch Timeline",
+    "timestep": "Timestep",
+    "action": "Action",
+    "reason": "Reason",
+    "change": "Change",
+    "groupedByTimestep": "Grouped by timestep",
+    "noDispatches": "No dispatches yet — waiting for run"
+  },
+  "kpi": {
+    "violationsFixed": "Violations Fixed",
+    "costSavings": "Cost Savings",
+    "gridImportReduced": "Grid Import Reduced",
+    "pvUtilization": "PV Utilization"
+  },
+  "live": {
+    "staleBanner": "Stale data — reconnecting...",
+    "reconnected": "Reconnected",
+    "timestamp": "Timestamp"
+  },
+  "empty": {
+    "noRunSelected": "Select a run to view workspace"
+  }
+}

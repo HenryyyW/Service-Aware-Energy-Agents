@@ -1,0 +1,17 @@
+{
+  "title": "Run Comparison",
+  "selectRuns": "Select two runs to compare",
+  "runA": "Run A",
+  "runB": "Run B",
+  "metrics": {
+    "energy": "Energy",
+    "service": "Service",
+    "grid": "Grid",
+    "settlement": "Settlement"
+  },
+  "diff": {
+    "better": "Better",
+    "worse": "Worse",
+    "same": "Same"
+  }
+}

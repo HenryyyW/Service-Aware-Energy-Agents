@@ -8,6 +8,7 @@ import asyncio
 import numpy as np
 import hashlib
 import json
+import traceback
 from fastapi.encoders import jsonable_encoder
 
 def _convert_numpy(obj):
@@ -44,6 +45,7 @@ from src.schemas.scenario import ScenarioConfig
 from src.simulation.coupling import SimulationCoupler
 from src.schemas.action import RequestedActions
 from src.controllers import RuleBasedController, CentralizedController, MultiAgentController
+from app.routers.scenarios import _scenarios, _load_scenario_from_disk, SCENARIO_DATA_DIR
 
 router = APIRouter()
 
@@ -105,8 +107,31 @@ async def _run_simulation_background(run_id: str, scenario: ScenarioConfig, cont
         _runs[run_id]["stage"] = "initializing"
         _runs[run_id]["progress"] = 0.0
         
+        # Use the same data directory resolution as scenarios router
+        data_dir = str(SCENARIO_DATA_DIR.parent)
+        # Write debug info to file
+        import os
+        debug_log = os.path.join(os.environ.get("TEMP", "C:\\tmp"), "debug_sim.log")
+        with open(debug_log, "a") as f:
+            f.write(f"DEBUG: data_dir = {data_dir}\n")
+            f.write(f"DEBUG: SCENARIO_DATA_DIR = {SCENARIO_DATA_DIR}\n")
+            f.write(f"DEBUG: scenario = {scenario.scenario_id}\n")
+        
+        # Disable colorama to prevent stdout flush issues in background task
+        import colorama
+        colorama.deinit()
+        
         # Initialize coupler and controller
-        coupler = SimulationCoupler(scenario)
+        try:
+            coupler = SimulationCoupler(scenario, data_dir=data_dir)
+            with open(debug_log, "a") as f:
+                f.write(f"DEBUG: Coupler created successfully\n")
+        except Exception as e:
+            with open(debug_log, "a") as f:
+                f.write(f"DEBUG: Coupler creation failed: {e}\n")
+                f.write(traceback.format_exc())
+            raise
+        
         controller = _get_controller(controller_type, scenario)
         
         _couplers[run_id] = coupler
