@@ -27,6 +27,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from types import SimpleNamespace
 
 # Metrics collected for every run. (section, field) pairs tolerate older or
 # newer result files instead of raising KeyError.
@@ -104,6 +105,65 @@ def rl_policy_path(policy_dir: Optional[str], scenario_name: str) -> Optional[st
     return str(candidate) if candidate.exists() else None
 
 
+def _kill_process_tree(process: "subprocess.Popen") -> None:
+    """Kill a timed-out child and everything it spawned.
+
+    Without tree-kill a grandchild that inherited the log-file handle keeps the
+    run's artifacts locked and can keep CPU busy after the runner moved on.
+    """
+    if process.poll() is not None:
+        return
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                capture_output=True, timeout=30,
+            )
+        else:
+            import signal
+
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+    except Exception as exc:  # pragma: no cover - best-effort cleanup
+        print(f"Warning: failed to kill process tree for PID {process.pid}: {exc}",
+              file=sys.stderr)
+    try:
+        process.wait(timeout=30)
+    except Exception:  # pragma: no cover
+        process.kill()
+
+
+def _run_with_timeout(cmd, env, timeout: int, result_file: Path):
+    """Run one experiment, enforcing the timeout even when pipes are inherited.
+
+    Capturing via pipes is unsafe for long runs: ``subprocess.run(timeout=...)``
+    kills the direct child on expiry but then blocks in ``communicate()`` until
+    every handle to the pipe closes, so a grandchild (or an unkillable child)
+    turns the 900 s timeout into a 33,000 s hang — what the first full matrix's
+    three scenario_e multi_agent runs did. Writing stdout/stderr to a per-run
+    log file removes the pipe from the equation, and the timeout kills the
+    whole process tree.
+    """
+    log_path = result_file.parent / "run_output.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    kwargs: Dict[str, Any] = {}
+    if os.name == "nt":
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        kwargs["start_new_session"] = True
+    with open(log_path, "w", encoding="utf-8") as log_file:
+        process = subprocess.Popen(
+            cmd, stdout=log_file, stderr=subprocess.STDOUT, env=env, **kwargs
+        )
+        try:
+            returncode = process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_process_tree(process)
+            raise
+    with open(log_path, "r", encoding="utf-8", errors="replace") as log_file:
+        tail = "".join(log_file.readlines()[-15:])
+    return SimpleNamespace(returncode=returncode), tail
+
+
 def run_experiment(
     scenario_file: str,
     controller: str,
@@ -145,16 +205,13 @@ def run_experiment(
 
     started = time.time()
     try:
-        completed = subprocess.run(
-            cmd, capture_output=True, text=True, env=env, timeout=timeout
-        )
+        completed, stderr_tail = _run_with_timeout(cmd, env, timeout, result_file)
     except subprocess.TimeoutExpired:
         print(f"Timeout after {timeout}s: {run_id}", file=sys.stderr)
         return None
     runtime = time.time() - started
 
     if completed.returncode != 0:
-        stderr_tail = "\n".join((completed.stderr or "").strip().splitlines()[-15:])
         print(f"Error running {run_id}:\n{stderr_tail}", file=sys.stderr)
         return None
 
