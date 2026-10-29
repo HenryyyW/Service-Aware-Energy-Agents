@@ -91,4 +91,19 @@ def create_backend_from_config(config: Dict[str, Any]) -> "AgentBackend":
     if "local_model" in backend_config:
         backend_config["model"] = backend_config.pop("local_model")
     
+    # Filter out irrelevant keys based on backend type
+    if backend_type == "ollama":
+        # OllamaBackend only accepts: endpoint, model, prompt_template_id
+        allowed_keys = {"endpoint", "model", "prompt_template_id"}
+        backend_config = {k: v for k, v in backend_config.items() if k in allowed_keys}
+    elif backend_type in ("openai_gpt4", "openai_gpt4_turbo", "openai_gpt4o", "openai_gpt4o_mini"):
+        allowed_keys = {"model", "openai_api_key", "endpoint", "prompt_template_id", "max_usd", "max_latency_ms", "max_tokens"}
+        backend_config = {k: v for k, v in backend_config.items() if k in allowed_keys}
+    elif backend_type in ("anthropic_claude", "anthropic_claude_sonnet", "anthropic_claude_opus", "anthropic_claude_haiku"):
+        allowed_keys = {"model", "anthropic_api_key", "endpoint", "prompt_template_id", "max_usd", "max_latency_ms", "max_tokens"}
+        backend_config = {k: v for k, v in backend_config.items() if k in allowed_keys}
+    elif backend_type == "fallback":
+        allowed_keys = set()
+        backend_config = {k: v for k, v in backend_config.items() if k in allowed_keys}
+    
     return BackendRegistry.get(backend_type, **backend_config)
