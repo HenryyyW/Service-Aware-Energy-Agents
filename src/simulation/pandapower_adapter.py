@@ -19,11 +19,135 @@ from src.schemas.diagnostics import (
 from src.schemas.action import SimulationStepResult
 
 
+def _create_geographic_coordinates_from_buildings(
+    net,
+    building_locations: Dict[str, Dict[str, float]],
+    bus_mapping,
+    coordinate_system: str = "geographic"
+) -> None:
+    """Assign real geographic coordinates to pandapower network buses based on building locations.
+    
+    This function maps the pandapower buses that have building connections to their 
+    real geographic coordinates, then interpolates coordinates for other buses 
+    based on network topology (line connectivity).
+    
+    Args:
+        net: pandapower network
+        building_locations: Dict of building_id -> {lat, lon}
+        bus_mapping: List of GridBusMapping or Dict of building_id -> bus_idx
+        coordinate_system: "geographic" to enable lat/lon, "schematic" for x/y
+    """
+    if coordinate_system != "geographic":
+        return
+    
+    # Create a mapping from bus_idx to geographic coordinates
+    bus_geo_coords = {}
+    
+    # Convert bus_mapping to dict if it's a list
+    if isinstance(bus_mapping, list):
+        bus_mapping_dict = {m.building_id: m.bus_idx for m in bus_mapping}
+    else:
+        bus_mapping_dict = bus_mapping
+    
+    # First, assign coordinates to buses that have building connections
+    for building_id, bus_idx in bus_mapping_dict.items():
+        if building_id in building_locations:
+            loc = building_locations[building_id]
+            bus_geo_coords[bus_idx] = {
+                'lat': loc.get('lat', 0),
+                'lon': loc.get('lon', 0)
+            }
+    
+    # If we have at least 2 buses with coordinates, we can interpolate
+    if len(bus_geo_coords) >= 2:
+        # Build adjacency graph from lines
+        adj = {}
+        for _, line in net.line.iterrows():
+            from_bus = int(line['from_bus'])
+            to_bus = int(line['to_bus'])
+            if from_bus not in adj:
+                adj[from_bus] = []
+            if to_bus not in adj:
+                adj[to_bus] = []
+            adj[from_bus].append(to_bus)
+            adj[to_bus].append(from_bus)
+        
+        # Also add transformer connections
+        for _, trafo in net.trafo.iterrows():
+            hv_bus = int(trafo['hv_bus'])
+            lv_bus = int(trafo['lv_bus'])
+            if hv_bus not in adj:
+                adj[hv_bus] = []
+            if lv_bus not in adj:
+                adj[lv_bus] = []
+            adj[hv_bus].append(lv_bus)
+            adj[lv_bus].append(hv_bus)
+        
+        # Use graph propagation to assign coordinates to unassigned buses
+        # Start from buses with known coordinates
+        known_buses = set(bus_geo_coords.keys())
+        all_buses = set(net.bus.index)
+        unassigned = all_buses - known_buses
+        
+        # Simple BFS from known buses to assign coordinates
+        # For each unassigned bus, find path to nearest known bus and interpolate
+        max_iterations = 50
+        for _ in range(max_iterations):
+            if not unassigned:
+                break
+            newly_assigned = set()
+            for bus_idx in list(unassigned):
+                # Find shortest path to any known bus
+                if bus_idx not in adj:
+                    continue
+                for known_bus in known_buses:
+                    if known_bus in adj.get(bus_idx, []):
+                        # Directly connected to known bus - interpolate
+                        known_coords = bus_geo_coords[known_bus]
+                        # Place slightly offset from known bus (approximate line length)
+                        # Use a small offset to create geographic spread
+                        offset_lat = 0.0001  # ~11 meters
+                        offset_lon = 0.0001
+                        # Alternate offset direction based on bus index
+                        direction = 1 if bus_idx % 2 == 0 else -1
+                        bus_geo_coords[bus_idx] = {
+                            'lat': known_coords['lat'] + direction * offset_lat,
+                            'lon': known_coords['lon'] + direction * offset_lon
+                        }
+                        newly_assigned.add(bus_idx)
+                        break
+            for bus in newly_assigned:
+                known_buses.add(bus)
+                unassigned.discard(bus)
+    
+    # Assign the coordinates to the network's bus geodata
+    # Ensure 'geo' column exists
+    if 'geo' not in net.bus.columns:
+        net.bus['geo'] = None
+    
+    for idx, row in net.bus.iterrows():
+        bus_name = row['name']
+        if idx in bus_geo_coords:
+            coords = bus_geo_coords[idx]
+            # pandapower geodata format: {"type": "Point", "coordinates": [lon, lat]}
+            net.bus.at[idx, 'geo'] = {
+                'type': 'Point',
+                'coordinates': [coords['lon'], coords['lat']]
+            }
+        else:
+            # Fallback: place at origin if no coordinates available
+            net.bus.at[idx, 'geo'] = {
+                'type': 'Point',
+                'coordinates': [0, 0]
+            }
+
+
 class PandapowerAdapter:
     """Adapter for pandapower distribution grid simulation and power flow analysis."""
     
-    def __init__(self, config: PandapowerConfig):
+    def __init__(self, config: PandapowerConfig, building_locations: Optional[Dict[str, Dict[str, float]]] = None):
         self.config = config
+        self.building_locations = building_locations or {}
         self.net = None
         self.bus_mapping: Dict[str, int] = {}  # building_id -> bus_idx
         self.phase_mapping: Dict[str, str] = {}  # building_id -> phase
@@ -36,33 +160,33 @@ class PandapowerAdapter:
         self.loading_history: List[Dict[str, Dict[int, float]]] = []
         
         self._create_network()
+        self._assign_geographic_coordinates()
         self._setup_bus_mapping()
     
     def _create_network(self):
         """Create pandapower network from configuration."""
+        coordinate_system = getattr(self.config, 'coordinate_system', 'schematic')
+        
         if self.config.network_type == "ieee_13":
-            self.coordinate_system = "schematic"
-            # IEEE 13-node test feeder - use pandapower's IEEE 14 bus as base and modify
+            self.coordinate_system = coordinate_system
             self.net = self._create_ieee13_network()
         elif self.config.network_type == "ieee_34":
-            self.coordinate_system = "schematic"
-            # IEEE 34-node test feeder
+            self.coordinate_system = coordinate_system
             self.net = self._create_ieee34_network()
         elif self.config.network_type == "ieee_123":
-            self.coordinate_system = "schematic"
-            # IEEE 123-node test feeder
+            self.coordinate_system = coordinate_system
             self.net = self._create_ieee123_network()
         elif self.config.network_type == "cigre_lv":
-            self.coordinate_system = "schematic"
+            self.coordinate_system = coordinate_system
             self.net = pn.create_cigre_network_lv()
         elif self.config.network_type == "simbench":
-            self.coordinate_system = "schematic"
+            self.coordinate_system = coordinate_system
             self.net = self._create_simbench_network()
         elif self.config.network_type == "custom" and self.config.network_file:
             self.coordinate_system = self.config.coordinate_system
             self.net = pp.from_json(self.config.network_file)
         else:
-            self.coordinate_system = "schematic"
+            self.coordinate_system = coordinate_system
             # Default to CIGRE LV network
             self.net = pn.create_cigre_network_lv()
         
@@ -74,6 +198,16 @@ class PandapowerAdapter:
         for idx in self.net.bus.index:
             self.net.bus.at[idx, 'vn_kv'] = self.net.bus.at[idx, 'vn_kv']
             # Voltage limits will be checked in _check_voltages
+    
+    def _assign_geographic_coordinates(self):
+        """Assign real geographic coordinates to network buses based on building locations."""
+        if self.coordinate_system == "geographic" and self.building_locations:
+            _create_geographic_coordinates_from_buildings(
+                self.net,
+                self.building_locations,
+                self.config.bus_mappings or {},
+                self.coordinate_system
+            )
     
     def _create_simbench_network(self):
         """Create a SimBench network using the simbench library if available."""
@@ -1197,4 +1331,21 @@ def create_grid_from_scenario(scenario: ScenarioConfig) -> PandapowerAdapter:
     else:
         pandapower_config = scenario.pandapower
     
-    return PandapowerAdapter(pandapower_config)
+    # Extract building locations from scenario
+    building_locations = {}
+    for building in scenario.buildings:
+        if building.location:
+            # Handle both dict and object with lat/lon attributes
+            loc = building.location
+            if isinstance(loc, dict):
+                lat = loc.get('lat', 0)
+                lon = loc.get('lon', 0)
+            else:
+                lat = getattr(loc, 'lat', 0)
+                lon = getattr(loc, 'lon', 0)
+            building_locations[building.building_id] = {
+                'lat': lat,
+                'lon': lon
+            }
+    
+    return PandapowerAdapter(pandapower_config, building_locations)

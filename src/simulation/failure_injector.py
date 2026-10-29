@@ -114,14 +114,15 @@ class FailureInjector:
         self.failure_history = []
         self.current_timestep = 0
     
-    def step(self, timestep: int) -> List[ActiveFailure]:
+    def step(self, timestep: int) -> Dict[str, List[ActiveFailure]]:
         """
         Advance to next timestep, activate/deactivate failures as scheduled.
         
-        Returns list of newly activated failures at this timestep.
+        Returns dict with newly activated and newly deactivated failures at this timestep.
         """
         self.current_timestep = timestep
         newly_activated = []
+        newly_deactivated = []
         
         # Check for new failures starting at this timestep
         for parsed in self.parsed_failures:
@@ -156,6 +157,7 @@ class FailureInjector:
             # Deactivate failure
             if end_ts is not None and end_ts == timestep and config.failure_id in self.active_failures:
                 active = self.active_failures.pop(config.failure_id)
+                newly_deactivated.append(active)
                 
                 self.failure_history.append({
                     'event': 'deactivated',
@@ -167,7 +169,7 @@ class FailureInjector:
                 })
                 logger.info(f"Failure DEACTIVATED at timestep {timestep}: {config.failure_id}")
         
-        return newly_activated
+        return {'activated': newly_activated, 'deactivated': newly_deactivated}
     
     def get_active_failures(self) -> List[ActiveFailure]:
         """Get list of currently active failures."""
