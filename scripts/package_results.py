@@ -26,6 +26,26 @@ from pathlib import Path
 from typing import Iterable
 
 INCLUDED_FILES = ("result.json", "manifest.json", "trajectories.jsonl")
+# Per-run files included when present (simulation diagnostics needed by the
+# paper figures); --minimal keeps the old result/manifest/trajectories set.
+RUN_OPTIONAL_FILES = (
+    "grid_diagnostics.jsonl",
+    "kpis.json",
+    "market_results.jsonl",
+    "pandapower_network.json",
+)
+# Matrix/experiment root artifacts (e.g. written by experiments/run_benchmark.py
+# and experiments/summarize_results.py) that travel with the release so reviewers
+# can regenerate every table from one archive; failed_runs.json is kept even
+# when empty.
+ROOT_ARTIFACTS = (
+    "failed_runs.json",
+    "raw_results.json",
+    "summary_statistics.json",
+    "summary.csv",
+    "summary_table.tex",
+    "summary.md",
+)
 METRIC_KEYS = (
     ("energy", "total_cost"),
     ("energy", "grid_import_kwh"),
@@ -43,8 +63,10 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def find_run_dirs(roots: Iterable[str]) -> list[Path]:
+def find_run_dirs(roots: Iterable[str]) -> tuple[list[Path], list[Path]]:
+    """Return (run directories, root-level artifact files)."""
     found: dict[Path, None] = {}
+    root_artifacts: dict[Path, None] = {}
     for root in roots:
         root_path = Path(root)
         if not root_path.exists():
@@ -54,7 +76,11 @@ def find_run_dirs(roots: Iterable[str]) -> list[Path]:
             continue
         for result_file in root_path.rglob("result.json"):
             found[result_file.parent.resolve()] = None
-    return sorted(found)
+        for name in ROOT_ARTIFACTS:
+            artifact = root_path / name
+            if artifact.is_file():
+                root_artifacts[artifact.resolve()] = None
+    return sorted(found), sorted(root_artifacts)
 
 
 def summarize(run_dir: Path) -> dict:
@@ -93,9 +119,13 @@ def main() -> int:
     parser.add_argument("--output", required=True, help="Destination .zip path")
     parser.add_argument("--include-plots", action="store_true",
                         help="Also include plots/ directories")
+    parser.add_argument("--minimal", action="store_true",
+                        help="Only include result.json/manifest.json/trajectories.jsonl "
+                             "per run (skip grid diagnostics, kpis, market results and "
+                             "the pandapower network snapshot)")
     args = parser.parse_args()
 
-    run_dirs = find_run_dirs(args.runs)
+    run_dirs, root_artifacts = find_run_dirs(args.runs)
     if not run_dirs:
         print("[package] no runs found (looked for result.json)", file=sys.stderr)
         return 1
@@ -120,6 +150,15 @@ def main() -> int:
                 archive.write(path, arcname)
                 checksums.append((arcname, sha256_file(path)))
 
+            if not args.minimal:
+                for name in RUN_OPTIONAL_FILES:
+                    path = run_dir / name
+                    if not path.is_file():
+                        continue
+                    arcname = f"{arc_root}/{name}"
+                    archive.write(path, arcname)
+                    checksums.append((arcname, sha256_file(path)))
+
             if args.include_plots:
                 for plot in sorted(run_dir.glob("plots/*")):
                     if plot.is_file():
@@ -127,14 +166,25 @@ def main() -> int:
                         archive.write(plot, arcname)
                         checksums.append((arcname, sha256_file(plot)))
 
+        for artifact in root_artifacts:
+            if artifact.parent.resolve() in {run_dir.resolve() for run_dir in run_dirs}:
+                continue
+            arcname = artifact.name
+            archive.write(artifact, arcname)
+            checksums.append((arcname, sha256_file(artifact)))
+
         sums_payload = "".join(f"{digest}  {name}\n" for name, digest in sorted(checksums))
         archive.writestr("SHA256SUMS", sums_payload)
         archive.writestr(
             "INDEX.json",
-            json.dumps({"created_by": "scripts/package_results.py", "runs": index}, indent=2),
+            json.dumps({
+                "created_by": "scripts/package_results.py",
+                "root_artifacts": [a.name for a in root_artifacts],
+                "runs": index,
+            }, indent=2),
         )
 
-    print(f"[package] {len(run_dirs)} run(s), {len(checksums)} file(s) -> {output}")
+    print(f"[package] {len(run_dirs)} run(s), {len(checksums)} file(s), {len(root_artifacts)} root artifact(s) -> {output}")
     print(f"[package] size {output.stat().st_size / (1024 * 1024):.1f} MB")
     return 0
 
