@@ -263,6 +263,78 @@ def _compute_observed_ev_metrics(history: List[SimulationStepResult]):
     )
 
 
+def _compute_ev_metrics_fallback(
+    history: List[SimulationStepResult],
+    scenario_config: Dict[str, Any]
+) -> tuple:
+    """
+    Fallback EV metrics using scenario config and stock observation keys.
+    
+    This is used when explicit EV observation keys are not available.
+    Uses the stock CityLearn observation key format.
+    """
+    _time_to_hour = lambda t: int(t.split(':')[0]) + int(t.split(':')[1]) / 60.0
+    
+    ev_target_soc = {}
+    ev_departures = {}
+    ev_arrivals = {}
+    ev_soc_tracking = {}
+    ev_departure_soc = {}
+    ev_departed = {}
+    
+    timestep_minutes = scenario_config.get('timestep_minutes', 15)
+    steps_per_hour = 60 // timestep_minutes
+    
+    # Extract EV configs from scenario
+    for building in scenario_config.get('buildings', []):
+        bid = building['building_id']
+        for i, ev in enumerate(building.get('evs') or []):
+            ev_id = f"{bid}_ev_{i}"
+            ev_target_soc[ev_id] = ev.get('target_soc', 0.8)
+            arrival_hour = _time_to_hour(ev.get('arrival_time', '00:00'))
+            departure_hour = _time_to_hour(ev.get('departure_time', '07:00'))
+            arrival_timestep = int(arrival_hour * 60 / timestep_minutes)
+            departure_timestep = int(departure_hour * 60 / timestep_minutes)
+            ev_arrivals[ev_id] = arrival_timestep
+            ev_departures[ev_id] = departure_timestep
+            ev_soc_tracking[ev_id] = ev.get('initial_soc', 0.3)
+            ev_departed[ev_id] = False
+    
+    # Track SOC from observations using adapter's key format
+    for step in history:
+        timestep = step.timestep
+        obs = step.observations
+        
+        # Update SOC from observations (adapter's key format: {bid}_ev_{i}_soc)
+        for ev_id in ev_soc_tracking.keys():
+            soc_key = f"{ev_id}_soc"
+            if soc_key in obs:
+                ev_soc_tracking[ev_id] = float(obs[soc_key])
+            # Also try stock CityLearn key format as fallback
+            stock_key = f"{ev_id.split('_ev_')[0]}_connected_electric_vehicle_at_charger_soc"
+            if stock_key in obs and soc_key not in obs:
+                ev_soc_tracking[ev_id] = float(obs[stock_key])
+        
+        # Check for departures
+        for ev_id, departure_timestep in ev_departures.items():
+            if timestep >= departure_timestep and not ev_departed.get(ev_id, False):
+                ev_departed[ev_id] = True
+                if ev_id in ev_soc_tracking:
+                    # Use the SOC tracked from observations
+                    ev_soc = ev_soc_tracking[ev_id]
+                    # Also check required_soc from observations
+                    req_key = f"{ev_id}_required_soc"
+                    if req_key in step.observations:
+                        target = float(step.observations[req_key]) / 100.0  # required_soc is in percentage
+                    else:
+                        target = ev_target_soc.get(ev_id, 0.8)
+                    # Record departure with SOC at departure time
+                    return (ev_id, ev_soc, target)
+    
+    # This should not be reached if departures are detected in loop
+    return None
+
+
 def compute_service_metrics(
     history: List[SimulationStepResult],
     scenario_config: Dict[str, Any]
