@@ -39,6 +39,7 @@ class CityLearnAdapter:
         self.action_names: List[str] = []  # All action names from schema
         self.active_action_names: List[str] = []  # Only active actions globally
         self.building_actions: Dict[str, List[str]] = {}  # Active actions per building
+        self.device_metadata: Dict[str, Dict[str, Any]] = {}
         self.episode_step = 0
         self.observation_history: List[Dict[str, Any]] = []
         self.action_history: List[SimulationStepResult] = []
@@ -81,8 +82,10 @@ class CityLearnAdapter:
         # Build per-building action lists
         self._build_per_building_actions(schema)
         
-        # Save schema to temp directory for CityLearn
-        schema_dir = Path(self.data_dir) / "schemas" / self.scenario_config.scenario_id
+        # Save schema to a per-run directory for CityLearn. Concurrent benchmark
+        # runs pass a unique SAEA_RUN_ID; otherwise all runs of one scenario
+        # would write the same schema.json and race (corrupting each other).
+        schema_dir = self._schema_dir()
         schema_dir.mkdir(parents=True, exist_ok=True)
         
         # Copy dataset files to our schema directory (using original root dir)
@@ -115,6 +118,8 @@ class CityLearnAdapter:
         print(f"Loaded CityLearn dataset: {self.dataset_name}")
         print(f"Buildings: {self.building_ids}")
         print(f"Observations: {len(self.observation_names)}")
+
+        self.device_metadata = self.get_device_metadata()
     
     def _build_per_building_actions(self, schema: Dict[str, Any]):
         """Build action list for each building based on its devices."""
@@ -182,7 +187,11 @@ class CityLearnAdapter:
         schema['simulation_end_time_step'] = int(episode_time_steps - 1)
         
         # Update root directory to our data dir - use absolute path to avoid double resolution
-        schema['root_directory'] = str(Path(self.data_dir).resolve() / "schemas" / self.scenario_config.scenario_id)
+        # Must be the same directory the schema files are written to
+        # (_schema_dir, honors SAEA_RUN_ID); pointing at the bare scenario_id dir
+        # made any SAEA_RUN_ID run (training, benchmark workers) read a missing
+        # directory on a fresh checkout.
+        schema['root_directory'] = str(self._schema_dir().resolve())
         
         # Keep ONLY the buildings from our scenario - no fallback to dataset buildings
         # This ensures dummy data is created for all scenario buildings
@@ -208,6 +217,18 @@ class CityLearnAdapter:
         
         return schema
     
+    def _schema_dir(self) -> Path:
+        """Per-run CityLearn schema directory.
+
+        Concurrent benchmark runs pass a unique SAEA_RUN_ID; otherwise all runs
+        of one scenario would write the same schema.json and race (corrupting
+        each other). Both the schema writer and ``root_directory`` MUST use this
+        method so a run reads back exactly the files it wrote.
+        """
+        run_suffix = os.environ.get("SAEA_RUN_ID", "").strip()
+        dir_name = run_suffix or self.scenario_config.scenario_id
+        return Path(self.data_dir) / "schemas" / dir_name
+
     def _copy_dataset_files(self, schema: Dict[str, Any], schema_dir: Path, source_dir: Path):
         """Copy dataset files to our schema directory."""
         source_dir = Path(source_dir)
@@ -274,10 +295,9 @@ class CityLearnAdapter:
             periods=timesteps,
             freq=f"{self.scenario_config.timestep_minutes}min"
         )
-        # Generate realistic dummy data matching EnergySimulation expected columns
-        # Set all thermal demands to 0 to avoid CityLearn assertions for buildings without those devices
         # Deterministic per (scenario seed, building file): regeneration must not
-        # change the physics between runs of the same seed.
+        # change the physics between runs of the same seed, and distinct building
+        # files must not share one synthetic trace.
         import zlib
         rng = np.random.default_rng(
             self.scenario_config.random_seed + (zlib.crc32(filepath.name.encode()) & 0xFFFF)
@@ -347,6 +367,8 @@ class CityLearnAdapter:
         observations = result[0] if isinstance(result, tuple) else result
         # Convert list to dict if needed
         observations = self._convert_observations_to_dict(observations)
+        observations = self._enrich_electric_vehicle_observations(observations)
+        observations = self._apply_tariff_pricing(observations)
         self.episode_step = 0
         self.observation_history = [observations]
         self.action_history = []
@@ -367,7 +389,9 @@ class CityLearnAdapter:
         
         # Convert observations to dict if it's a list (one per building)
         observations = self._convert_observations_to_dict(observations)
-        
+        observations = self._enrich_electric_vehicle_observations(observations)
+        observations = self._apply_tariff_pricing(observations)
+
         # Get limited and applied actions from info
         limited_actions = self._extract_limited_actions(info, requested_actions)
         applied_actions = self._extract_applied_actions(info, requested_actions)
@@ -407,28 +431,217 @@ class CityLearnAdapter:
     
     def _actions_to_citylearn(self, requested: RequestedActions) -> List[List[float]]:
         """Convert RequestedActions to CityLearn action format.
-        
-        CityLearn expects a list of actions per building, where each building's
-        action list contains only the actions for devices that building has,
-        in the same order as the global active actions list.
+
+        Controllers speak the project's action schema: ``value_kw`` is a power
+        in kW and ``asset_id`` names a configured asset (``{building}_battery``,
+        ``{building}_ev_{i}``, ``{building}_flex_{i}``). CityLearn instead wants
+        one normalized value per *active* device, in [-1, 1], for each building.
+        This method owns that translation:
+
+        * ``{building}_battery`` -> ``electrical_storage`` (kW / nominal_power)
+        * ``{building}_ev_{i}`` -> ``electric_vehicle_storage``
+          (kW / max charging or discharging power)
+        * ``{building}_flex_{i}`` -> ``deferrable_appliance`` (fraction of the
+          appliance's cycle energy, so any positive kW clamps to 1.0)
+
+        Controllers that emit CityLearn-shaped ids
+        (``{building}_electrical_storage`` etc.) are accepted too. Without device
+        metadata the raw value is passed through, which keeps the low-level
+        adapter tests usable.
         """
+        metadata = getattr(self, "device_metadata", None) or {}
         actions = []
         for bid in self.building_ids:
             building_actions = []
-            
-            # Only include actions for devices this building has
             for action_name in self.building_actions.get(bid, []):
-                asset_id = f"{bid}_{action_name}"
-                action = requested.get_action(asset_id, None)  # Find by asset_id only
-                if action is not None:
-                    building_actions.append(action.value_kw)
-                else:
+                action = self._find_action(requested, bid, action_name)
+                if action is None:
                     building_actions.append(0.0)
-            
+                else:
+                    building_actions.append(
+                        self._to_normalized_action(bid, action_name, action.value_kw, metadata)
+                    )
             actions.append(building_actions)
-        
         return actions
-    
+
+    @staticmethod
+    def _clamp(value: float, low: float = -1.0, high: float = 1.0) -> float:
+        return max(low, min(high, float(value)))
+
+    def _find_action(self, requested: RequestedActions, bid: str, action_name: str) -> Optional[Action]:
+        """Find the controller action for a CityLearn action name.
+
+        Matches both the CityLearn-shaped asset id and the ids used by the
+        configured-asset controllers (battery / ev / flex). Asset ids are unique
+        per building and device, so no action_type filter is applied;
+        ``ActionSet.get_action`` would filter on the type and silently drop
+        actions.
+        """
+        aliases = [f"{bid}_{action_name}"]
+        if action_name == "electrical_storage":
+            aliases.append(f"{bid}_battery")
+        elif action_name == "electric_vehicle_storage":
+            aliases.extend([f"{bid}_ev_0", f"{bid}_ev"])
+        elif action_name == "deferrable_appliance":
+            aliases.extend([f"{bid}_flex_0", f"{bid}_flex"])
+
+        for alias in aliases:
+            for action in requested.actions:
+                if action.asset_id == alias:
+                    return action
+        return None
+
+    def _to_normalized_action(
+        self,
+        bid: str,
+        action_name: str,
+        value_kw: float,
+        metadata: Dict[str, Dict[str, Any]],
+    ) -> float:
+        """Map a requested power (kW) to CityLearn's normalized device action."""
+        building_meta = metadata.get(bid) or {}
+        if action_name == "electrical_storage":
+            battery = building_meta.get("battery") or {}
+            power = float(battery.get("power_kw") or 0.0)
+            return self._clamp(value_kw / power) if power > 0.0 else self._clamp(value_kw)
+
+        if action_name == "electric_vehicle_storage":
+            chargers = building_meta.get("chargers") or []
+            max_charge = max((float(c.get("max_charge_kw") or 0.0) for c in chargers), default=0.0)
+            max_discharge = max((float(c.get("max_discharge_kw") or 0.0) for c in chargers), default=0.0)
+            if value_kw >= 0.0 and max_charge > 0.0:
+                return self._clamp(value_kw / max_charge)
+            if value_kw < 0.0 and max_discharge > 0.0:
+                return -self._clamp(-value_kw / max_discharge)
+            return self._clamp(value_kw)
+
+        if action_name == "deferrable_appliance":
+            return self._clamp(value_kw, 0.0, 1.0)
+
+        return self._clamp(value_kw)
+
+    def get_device_metadata(self) -> Dict[str, Dict[str, Any]]:
+        """Live device ratings for every configured building.
+
+        Controllers must not size actions from the scenario YAML: the adapter
+        builds the CityLearn schema from a dataset template, so the simulated
+        battery/charger ratings are what the simulator will actually accept.
+        """
+        metadata: Dict[str, Dict[str, Any]] = {}
+        if self.env is None:
+            return metadata
+        hours_per_step = float(getattr(self, "dataset_seconds_per_step", 3600)) / 3600.0
+        for bid, building in zip(self.building_ids, self.env.buildings):
+            battery = getattr(building, "electrical_storage", None)
+            battery_meta = None
+            if battery is not None:
+                battery_meta = {
+                    "capacity_kwh": float(getattr(battery, "capacity", 0.0) or 0.0),
+                    "power_kw": float(getattr(battery, "nominal_power", 0.0) or 0.0),
+                    "efficiency": float(getattr(battery, "efficiency", 1.0) or 1.0),
+                }
+            chargers = []
+            for charger in getattr(building, "electric_vehicle_chargers", None) or []:
+                chargers.append({
+                    "charger_id": str(getattr(charger, "charger_id", "")),
+                    "max_charge_kw": float(getattr(charger, "max_charging_power", 0.0) or 0.0),
+                    "min_charge_kw": float(getattr(charger, "min_charging_power", 0.0) or 0.0),
+                    "max_discharge_kw": float(getattr(charger, "max_discharging_power", 0.0) or 0.0),
+                    "efficiency": float(getattr(charger, "efficiency", 1.0) or 1.0),
+                })
+            deferrable = [
+                {"power_kw": float(getattr(appliance, "nominal_power", 0.0) or 0.0)}
+                for appliance in getattr(building, "deferrable_appliances", None) or []
+            ]
+            pv = getattr(building, "pv", None)
+            metadata[bid] = {
+                "battery": battery_meta,
+                "chargers": chargers,
+                "deferrable": deferrable,
+                "pv_kw": float(getattr(pv, "nominal_power", 0.0) or 0.0) if pv else 0.0,
+                "hours_per_step": hours_per_step,
+            }
+        return metadata
+
+    def _enrich_electric_vehicle_observations(self, observations: Dict[str, Any]) -> Dict[str, Any]:
+        """Add unambiguous EV state keys.
+
+        The stock dataset observation names for chargers do not line up with the
+        underlying arrays (``*_at_charger_soc`` can carry battery capacity,
+        ``*_battery_capacity`` can carry hours-to-departure), so these keys are
+        derived from the live charger devices instead.
+        """
+        if self.env is None:
+            return observations
+        for bid, building in zip(self.building_ids, self.env.buildings):
+            chargers = getattr(building, "electric_vehicle_chargers", None) or []
+            for index, charger in enumerate(chargers):
+                prefix = f"{bid}_ev_{index}"
+                simulation = getattr(charger, "charger_simulation", None)
+                vehicle = getattr(charger, "connected_electric_vehicle", None)
+                connected = vehicle is not None
+                observations[f"{prefix}_connected"] = 1.0 if connected else 0.0
+                if vehicle is not None:
+                    battery = vehicle.battery
+                    step = int(getattr(building, "time_step", 0) or 0)
+                    soc_series = getattr(battery, "soc", None)
+                    if soc_series is not None and len(soc_series) > step:
+                        soc = float(soc_series[step] or 0.0)
+                    else:
+                        soc = 0.0
+                    capacity = float(getattr(battery, "capacity", 0.0) or 0.0)
+                    observations[f"{prefix}_soc"] = soc
+                    observations[f"{prefix}_capacity_kwh"] = capacity
+                    observations[f"{prefix}_energy_kwh"] = soc * capacity
+                if simulation is not None:
+                    step = int(getattr(building, "time_step", 0) or 0)
+                    departure = getattr(simulation, "electric_vehicle_departure_time", None)
+                    required = getattr(simulation, "electric_vehicle_required_soc_departure", None)
+                    if departure is not None and len(departure) > step:
+                        observations[f"{prefix}_hours_to_departure"] = float(departure[step])
+                    if required is not None and len(required) > step:
+                        observations[f"{prefix}_required_soc"] = float(required[step])
+                observations[f"{prefix}_max_charge_kw"] = float(
+                    getattr(charger, "max_charging_power", 0.0) or 0.0
+                )
+                observations[f"{prefix}_min_charge_kw"] = float(
+                    getattr(charger, "min_charging_power", 0.0) or 0.0
+                )
+        return observations
+
+    @staticmethod
+    def _tariff_period(hour: int) -> str:
+        """TOU period used by the scenario tariff and the metric code."""
+        if hour < 7 or hour >= 23:
+            return "off_peak"
+        if hour < 12 or (18 <= hour < 21):
+            return "mid_peak"
+        return "on_peak"
+
+    def _tariff_price(self, building, hour: int, is_import: bool) -> Optional[float]:
+        tariff = getattr(building, "tariff", None)
+        if tariff is None:
+            return None
+        prices = getattr(tariff, "import_prices" if is_import else "export_prices", None) or {}
+        if not prices:
+            return None
+        return float(prices.get(self._tariff_period(hour), 0.0))
+
+    def _apply_tariff_pricing(self, observations: Dict[str, Any]) -> Dict[str, Any]:
+        """Publish the scenario tariff as the price observation.
+
+        CityLearn datasets ship their own ``pricing.csv``; the scenario YAML
+        tariff is what the cost metrics and settlement use. Without this
+        override, controllers optimise a price that the evaluation does not
+        charge (the two differ by roughly 2x on scenario A).
+        """
+        for building in self.scenario_config.buildings:
+            hour = int(observations.get(f"{building.building_id}_hour", 0)) % 24
+            price = self._tariff_price(building, hour, is_import=True)
+            if price is not None:
+                observations[f"{building.building_id}_electricity_pricing"] = price
+        return observations
+
     def _extract_limited_actions(self, info: Dict, requested: RequestedActions) -> LimitedActions:
         """Extract limited actions from CityLearn info."""
         limited = LimitedActions(timestep=self.episode_step)

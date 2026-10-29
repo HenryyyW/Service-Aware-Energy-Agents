@@ -200,13 +200,70 @@ def compute_energy_metrics(
     metrics.carbon_intensity_weighted_kg = carbon_emissions
     
     return metrics
+def _compute_observed_ev_metrics(history: List[SimulationStepResult]):
+    """EV service metrics from the adapter's explicit EV observations.
+
+    Returns ``(completion_rate, avg_soc, worst_soc)``, or ``None`` when the
+    history predates the ``{building}_ev_{i}_*`` observation keys. A departure is
+    the step where ``*_connected`` changes from 1 to 0; SOC and the required SOC
+    are taken from the last connected step.
+    """
+    soc: Dict[str, float] = {}
+    required: Dict[str, float] = {}
+    connected_prev: Dict[str, bool] = {}
+    departures: List[tuple] = []
+    saw_ev_observation = False
+
+    for step in history:
+        observations = step.observations
+        prefixes = {
+            key[: -len("_connected")]
+            for key in observations
+            if key.endswith("_connected") and "_ev_" in key
+        }
+        if prefixes:
+            saw_ev_observation = True
+        for prefix in prefixes:
+            is_connected = bool(observations.get(f"{prefix}_connected"))
+            if is_connected:
+                if f"{prefix}_soc" in observations:
+                    soc[prefix] = float(observations[f"{prefix}_soc"])
+                if f"{prefix}_required_soc" in observations:
+                    required[prefix] = float(observations[f"{prefix}_required_soc"])
+            elif connected_prev.get(prefix, False):
+                if prefix in soc:
+                    departures.append((soc[prefix], required.get(prefix, 0.8)))
+            connected_prev[prefix] = is_connected
+
+    if not saw_ev_observation:
+        return None
+    if not departures:
+        return (0.0, 0.0, 0.0)
+
+    completed = sum(1 for value, target in departures if value >= target)
+    values = [value for value, _ in departures]
+    return (
+        completed / len(values),
+        float(np.mean(values)),
+        float(np.min(values)),
+    )
+
+
 def compute_service_metrics(
     history: List[SimulationStepResult],
     scenario_config: Dict[str, Any]
 ) -> ServiceMetrics:
     """Compute service and fairness metrics from simulation history."""
     metrics = ServiceMetrics()
-    
+
+    observed_ev = _compute_observed_ev_metrics(history)
+    if observed_ev is not None:
+        (
+            metrics.ev_completion_rate,
+            metrics.ev_avg_soc_at_departure,
+            metrics.ev_worst_soc_at_departure,
+        ) = observed_ev
+
     # EV metrics
     ev_departures = {}
     ev_target_soc = {}
@@ -253,21 +310,21 @@ def compute_service_metrics(
                 if ev_id in ev_soc_tracking:
                     ev_departure_soc[ev_id] = ev_soc_tracking[ev_id]
     
-    # Calculate EV metrics
-    if ev_departure_soc:
-        departed_socs = list(ev_departure_soc.values())
-        metrics.ev_avg_soc_at_departure = np.mean(departed_socs)
-        metrics.ev_worst_soc_at_departure = np.min(departed_socs)
-        
-        # Completion rate: percentage of EVs that reached target SOC at departure
-        completed_count = sum(1 for ev_id, soc in ev_departure_soc.items() 
-                             if soc >= ev_target_soc.get(ev_id, 0.8))
-        metrics.ev_completion_rate = completed_count / len(ev_departure_soc) if ev_departure_soc else 0.0
-    else:
-        # Fallback if no departure data
-        metrics.ev_completion_rate = 0.0
-        metrics.ev_avg_soc_at_departure = 0.0
-        metrics.ev_worst_soc_at_departure = 0.0
+    # Fallback for histories that predate the explicit EV observation keys.
+    if observed_ev is None:
+        if ev_departure_soc:
+            departed_socs = list(ev_departure_soc.values())
+            metrics.ev_avg_soc_at_departure = np.mean(departed_socs)
+            metrics.ev_worst_soc_at_departure = np.min(departed_socs)
+
+            # Completion rate: percentage of EVs that reached target SOC at departure
+            completed_count = sum(1 for ev_id, soc in ev_departure_soc.items()
+                                 if soc >= ev_target_soc.get(ev_id, 0.8))
+            metrics.ev_completion_rate = completed_count / len(ev_departure_soc) if ev_departure_soc else 0.0
+        else:
+            metrics.ev_completion_rate = 0.0
+            metrics.ev_avg_soc_at_departure = 0.0
+            metrics.ev_worst_soc_at_departure = 0.0
     
     # Comfort violations: use indoor dry bulb temperature per building
     comfort_violations = 0.0

@@ -425,10 +425,17 @@ class RuleBasedControllerWithGrid(RuleBasedController):
 from src.controllers.multi_agent import MultiAgentController
 from src.controllers.centralized import CentralizedController
 
+# Import optimization / learning baselines. Kept at the bottom so the base
+# classes above are defined before these modules import them.
+from src.controllers.mpc import MPCController
+from src.controllers.rl import QLearningController
+
 __all__ = [
     "BaseController",
     "RuleBasedController",
     "RuleBasedControllerWithGrid",
     "MultiAgentController",
     "CentralizedController",
+    "MPCController",
+    "QLearningController",
 ]

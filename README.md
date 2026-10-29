@@ -1,6 +1,6 @@
 # Service-Aware Energy Agents
 
-**English** | [简体中文](README.zh-CN.md)
+**English** | [蝞雿葉?(README.zh-CN.md)
 
 A research prototype for simulating renewable-energy communities and investigating whether code-generating agents can coordinate buildings, PV, batteries, EVs, and flexible loads while respecting participant service requirements and distribution-grid constraints.
 
@@ -44,23 +44,23 @@ The current co-simulation sequence is: obtain CityLearn observations, request an
 
 ```text
 .
-├── configs/                 # Scenario A–E YAML configurations
-├── data/schemas/            # CityLearn schemas and scenario data
-├── experiments/
-│   ├── run_experiment.py    # Run one scenario/controller experiment
-│   ├── run_benchmark.py    # Run scenario/controller/seed combinations
-│   └── ...                  # Saved experiment outputs and summaries
-├── frontend/                # React + TypeScript + Vite application
-├── src/
-│   ├── agents/              # Planner, coder, executor, verifier, repair and reporter
-│   ├── controllers/         # Rule-based, centralized heuristic and multi-agent controllers
-│   ├── coordination/       # Building/resource agents and community aggregator
-│   ├── evaluation/          # Energy, service, grid, fairness metrics and plots
-│   ├── schemas/             # Pydantic scenario, action, diagnostic and report models
-│   └── simulation/          # CityLearn adapter, pandapower adapter and co-simulation
-├── tests/                   # Python automated tests
-├── project brief.md         # Full product/research brief and target milestone
-└── notes.md                 # Research and publication planning notes
+??? configs/                 # Scenario A? YAML configurations
+??? data/schemas/            # CityLearn schemas and scenario data
+??? experiments/
+??  ??? run_experiment.py    # Run one scenario/controller experiment
+??  ??? run_benchmark.py    # Run scenario/controller/seed combinations
+??  ??? ...                  # Saved experiment outputs and summaries
+??? frontend/                # React + TypeScript + Vite application
+??? src/
+??  ??? agents/              # Planner, coder, executor, verifier, repair and reporter
+??  ??? controllers/         # Rule-based, centralized heuristic and multi-agent controllers
+??  ??? coordination/       # Building/resource agents and community aggregator
+??  ??? evaluation/          # Energy, service, grid, fairness metrics and plots
+??  ??? schemas/             # Pydantic scenario, action, diagnostic and report models
+??  ??? simulation/          # CityLearn adapter, pandapower adapter and co-simulation
+??? tests/                   # Python automated tests
+??? project brief.md         # Full product/research brief and target milestone
+??? notes.md                 # Research and publication planning notes
 ```
 
 Generated runs are written under the selected output directory. Avoid committing large generated trajectories or plots unless they are intentionally part of a reproducibility artifact.
@@ -86,7 +86,7 @@ The evaluation code defines metrics in these groups:
 - **Grid feasibility:** power-flow convergence, voltage bounds and violations, line/transformer loading, and community import/export limits.
 - **Agent execution:** task and simulation success, first-attempt validity, repair iterations, runtime and report completeness.
 
-`experiments/run_benchmark.py` currently supports `rule_based`, `multi_agent`, and `centralized` controller labels. The centralized implementation is a heuristic controller; it is not an MPC or reinforcement-learning baseline. The benchmark script supports multiple seeds and computes summary statistics and 95% confidence intervals, but a small smoke run is not sufficient evidence for a paper claim. The research brief calls for at least 3–5 runs per configuration and additional MPC/RL and agent-verification ablations.
+`experiments/run_benchmark.py` supports the `rule_based`, `multi_agent`, `centralized`, `mpc`, and `rl` controller labels. `mpc` is a deterministic receding-horizon linear program; `rl` is a tabular Q-learning policy loaded from `experiments/rl_policy/<scenario>.json`. The `centralized` implementation remains a heuristic controller, not an optimizer. Controllers request power in kW under the published asset ids (`{building}_battery`, `{building}_ev_{i}`, `{building}_flex_{i}`); the CityLearn adapter converts those to the simulator's normalized device actions using live device ratings. The benchmark script runs each configuration in its own process, supports parallel workers, and reports mean, sample standard deviation, and Student-t 95% confidence intervals. See `experiments/BENCHMARK_MATRIX.md` for the planned matrix, seeds, runtime budget, and known measurement caveats. A small smoke run is not sufficient evidence for a paper claim.
 
 > **Pre-fix benchmark numbers are invalid.** Benchmark results generated before the seed-reproducibility fix (PR #1) did not seed every RNG source, so they cannot be reproduced and must not be cited. Re-run any benchmark with the current code before using its numbers; see [`docs/reproducibility.md`](docs/reproducibility.md) for the reproducibility gate.
 
@@ -112,7 +112,16 @@ python experiments/run_experiment.py `
   --seed 42
 ```
 
-Supported controller arguments are `rule_based`, `multi_agent`, and `centralized`. Optional arguments include `--max-steps`, `--output-dir`, `--seed`, and `--run-id`.
+Supported controller arguments are `rule_based`, `multi_agent`, `centralized`, `mpc`, and `rl`. Optional arguments include `--max-steps`, `--output-dir`, `--seed`, `--run-id`, and `--rl-policy` (required for `rl`).
+
+Train the tabular Q-learning baseline before running the `rl` controller. Training writes to `experiments/rl_policy/` (gitignored); curated policies for the benchmark matrix are checked in under `experiments/reference/rl_policy/`.
+
+```powershell
+python -m experiments.train_rl `
+  --config configs/scenario_a.yaml `
+  --out experiments/rl_policy/scenario_a.json `
+  --episodes 60
+```
 
 Run a small benchmark, for example:
 
@@ -124,7 +133,7 @@ python experiments/run_benchmark.py `
   --output experiments/benchmark_test
 ```
 
-The benchmark command defaults to scenarios A–E, three controller labels, and five seeds. Full runs can take substantially longer than a smoke test. `experiments/run_all.sh` is a Bash script; use Git Bash, WSL, or another Bash environment on Windows.
+The benchmark command defaults to scenarios A-E, five controller labels, and five seeds (42, 123, 456, 789, 999). Use `--workers N` to run configurations in parallel and `--rl-policy-dir` to point at per-scenario RL policies. Full runs take hours, not minutes: budget from the measured per-run time in `experiments/BENCHMARK_MATRIX.md`. `experiments/run_all.sh` is a Bash script; use Git Bash, WSL, or another Bash environment on Windows.
 
 ### React frontend
 
@@ -166,8 +175,7 @@ Run tests from the repository root:
 ```powershell
 pytest -q tests
 ```
-
-The suite covers controller coordination, CityLearn adapter behavior, pandapower adapter behavior, metrics and agent repair scaffolding. **All 93 tests currently pass**, including comprehensive regression tests for the CityLearn adapter time step convention (integer slice indices, CSV length matching episode_time_steps, 3600/3600.0 parametrized coverage).
+The suite covers controller coordination, CityLearn adapter behavior, pandapower adapter behavior, metrics, the benchmark supervisor, and agent repair scaffolding. **The full suite passes**, including regression tests for the CityLearn adapter time-step convention and for the controller action interface (kW request to normalized CityLearn action, including asset-id aliases and EV observation sourcing).
 
 ## Current limitations
 
@@ -183,7 +191,7 @@ The suite covers controller coordination, CityLearn adapter behavior, pandapower
 
 ## Roadmap
 
-1. ✅ **DONE** — Restored clean test baseline; unified timestep/data-unit contract with integer-only schema fields, CSV/episode step alignment, and parametrized 3600/3600.0 regression coverage.
+1. ??**DONE** ??Restored clean test baseline; unified timestep/data-unit contract with integer-only schema fields, CSV/episode step alignment, and parametrized 3600/3600.0 regression coverage.
 2. Close the co-simulation loop so grid diagnostics can constrain or trigger a verified re-dispatch.
 3. Make agent patches behavior-changing and verify repairs against full-run service/grid metrics.
 4. Implement energy sharing, settlement and configured failure injection as executable simulation behavior.
