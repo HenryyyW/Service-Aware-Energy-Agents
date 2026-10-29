@@ -19,7 +19,7 @@ import statistics
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from experiments.run_benchmark import METRICS, compute_statistics
+from experiments.run_benchmark import SUMMARY_METRICS, compute_statistics
 
 
 def holm_adjust(pvalues: List[float]) -> List[float]:
@@ -82,6 +82,16 @@ def format_cell(stats: Optional[Dict[str, float]], digits: int = 2) -> str:
     return f"{stats['mean']:.{digits}f} ± {stats['ci95']:.{digits}f}"
 
 
+def cell(rows: List[Dict], metric: str) -> str:
+    """Format one mean ± CI cell; a metric with no data renders as an em dash.
+
+    Missing data must not render as 0.00: a 0.00 member_cost_coverage would read
+    as "every member was interrupted", which is the opposite of "not recorded".
+    """
+    values = [row.get(metric) for row in rows if row.get(metric) is not None]
+    return format_cell(compute_statistics(values) if values else None)
+
+
 def build_markdown(
     results: List[Dict],
     metrics: List[str],
@@ -98,12 +108,7 @@ def build_markdown(
             rows = grouped.get((scenario, controller))
             if not rows:
                 continue
-            cells = [
-                format_cell(
-                    compute_statistics([r.get(metric) for r in rows if r.get(metric) is not None])
-                )
-                for metric in metrics
-            ]
+            cells = [cell(rows, metric) for metric in metrics]
             lines.append(
                 f"| {scenario} | {controller} | {len(rows)} | " + " | ".join(cells) + " |"
             )
@@ -223,12 +228,13 @@ def main() -> int:
         "--metrics",
         nargs="+",
         default=["total_cost", "grid_import_kwh", "peak_demand_kw",
-                 "pv_self_consumption_kwh", "ev_completion_rate"],
+                 "pv_self_consumption_kwh", "ev_completion_rate",
+                 "member_cost_coverage", "members_interrupted_count"],
     )
     parser.add_argument("--out", default=None, help="Markdown output path")
     args = parser.parse_args()
 
-    unknown = [metric for metric in args.metrics if metric not in METRICS]
+    unknown = [metric for metric in args.metrics if metric not in SUMMARY_METRICS]
     if unknown:
         parser.error(f"unknown metrics: {unknown}")
 

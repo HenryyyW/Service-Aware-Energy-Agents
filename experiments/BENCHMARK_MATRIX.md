@@ -113,6 +113,9 @@ attempts runs whose `result.json` is missing; failed runs are listed in
   explicitly via ``members_interrupted`` and ``member_cost_coverage`` in the
   service metrics. The Scenario E section must state this convention and
   report the interruption counts alongside every economic comparison.
+  `experiments/run_benchmark.py` aggregates `member_cost_coverage` and the
+  derived `members_interrupted_count` into `summary_statistics.json` /
+  `summary.csv`, so both become T2/T3 columns with no post-processing.
 
 ## 5. Pilot: scenario A head-to-head
 
