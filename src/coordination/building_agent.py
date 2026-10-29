@@ -49,14 +49,14 @@ class BuildingAgent(CoordinationAgent):
             from src.coordination.ev_agent import EVAgent
             self.ev_agents = [
                 EVAgent(f"{building_id}_ev_{i}", ev_config)
-                for i, ev_config in enumerate(building_config.evs)
+                for i, ev_config in enumerate(building_config.evs or [])
             ]
         
         if not self.flexible_load_agents and building_config.flexible_loads:
             from src.coordination.flexible_load_agent import FlexibleLoadAgent
             self.flexible_load_agents = [
                 FlexibleLoadAgent(f"{building_id}_flex_{i}", fl_config)
-                for i, fl_config in enumerate(building_config.flexible_loads)
+                for i, fl_config in enumerate(building_config.flexible_loads or [])
             ]
     
     def propose(self, context: Dict[str, Any]) -> CoordinationMessage:

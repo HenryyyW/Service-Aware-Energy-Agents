@@ -162,7 +162,11 @@ Cells are mean +/- Student-t 95% confidence half-width over three seeds. Paired 
    differences currently reach the simulation only as community limits and
    sharing flags (caveats 1 and 4). Scenario B/C/E rows in the full matrix
    therefore measure the same physics as A with different community limits until
-   caveat 1 is resolved.
+   caveat 1 is resolved. **Update: caveat 1 is now fixed on
+   `feature/scenario-aware-schemas`** — device mixes reach the simulation, and
+   A vs B diverge at equal seed; the synthetic building *load* traces still
+   depend only on (seed, filename) by design, so cross-scenario load-profile
+   differences remain future work.
 
 
 ## 6. Caveats that block paper-level claims
@@ -175,6 +179,17 @@ Cells are mean +/- Student-t 95% confidence half-width over three seeds. Paired 
    appliance in the dataset despite a configured one). Scenario B, C and E
    differences are therefore mostly community limits and sharing flags, not the
    device mixes their YAML describes.
+   **Fixed on `feature/scenario-aware-schemas`:** the adapter now applies the
+   scenario YAML's device parameters (battery capacity/power/efficiency, PV
+   size or removal at zero capacity, one charger + synthesized connection
+   schedule per EV, one deferrable appliance + synthesized cycle/flexibility
+   CSVs per flexible load), with unconfigured devices keeping stock dataset
+   defaults and explicit `[]`/zero-capacity removing them. Action vectors are
+   per-device (one dimension per charger/appliance). Scenario A and B now
+   produce different physics at the same seed. This changes simulation physics
+   for every scenario, so matrix results produced on
+   `feature/baselines-mpc-rl` must be re-run after this branch merges, and the
+   RL policies must be retrained (they encode the old device ratings).
 2. **EV service metrics are partially repaired.** The dataset observation
    columns are mismatched (`*_at_charger_soc` carries battery capacity in some
    rows, `*_battery_capacity` carries hours-to-departure). The adapter now emits
