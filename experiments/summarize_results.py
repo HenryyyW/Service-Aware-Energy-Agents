@@ -45,7 +45,13 @@ def holm_adjust(pvalues: List[float]) -> List[float]:
 
 
 def paired_t_test(deltas: List[float]) -> Optional[Dict[str, float]]:
-    """Two-sided paired t-test on per-seed deltas (null: mean delta = 0)."""
+    """Two-sided paired t-test on per-seed deltas (null: mean delta = 0).
+
+    Non-finite deltas (NaN/Inf — e.g. a scenario whose reference run has a
+    non-finite cost after an injected failure) are excluded; with fewer than
+    two valid deltas the test reports no result rather than crashing.
+    """
+    deltas = [d for d in deltas if d is not None and math.isfinite(d)]
     n = len(deltas)
     if n < 2:
         return None
@@ -178,7 +184,11 @@ def build_markdown(
                     and row.get(metric) is not None
                     and reference_rows[row["seed"]].get(metric) is not None
                 ]
-                deltas = [row[metric] - baseline[metric] for row, baseline in paired]
+                deltas = [
+                    row[metric] - baseline[metric]
+                    for row, baseline in paired
+                    if math.isfinite(row[metric] - baseline[metric])
+                ]
                 test = paired_t_test(deltas)
                 family.append(
                     {
