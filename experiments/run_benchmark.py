@@ -18,6 +18,7 @@ Design notes
 import argparse
 import csv
 import json
+import math
 import os
 import statistics
 import subprocess
@@ -69,8 +70,17 @@ def _t_critical(count: int, confidence: float = 0.95) -> float:
 
 
 def compute_statistics(values: List[float]) -> Dict[str, float]:
-    """Mean, sample std, min/max, and the 95% half-width for a metric."""
-    clean = [float(v) for v in values if v is not None]
+    """Mean, sample std, min/max, and the 95% half-width for a metric.
+
+    Non-finite values (NaN/Inf — e.g. a member cost after an injected failure)
+    are excluded before aggregating; if nothing remains the zero dict is
+    returned so the summary never crashes on failed sub-metrics.
+    """
+    clean = [
+        float(v)
+        for v in values
+        if v is not None and math.isfinite(float(v))
+    ]
     count = len(clean)
     if count == 0:
         return {key: 0.0 for key in STAT_KEYS}
