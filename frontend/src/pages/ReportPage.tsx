@@ -255,7 +255,7 @@ function ReportPageContent() {
 
               <TabPanel value="settlement">
                 <SettlementView
-                  settlement={null}
+                  settlement={report?.kpi_blocks?.settlement || report?.detail_sections?.settlement || null}
                   run={run}
                 />
               </TabPanel>
