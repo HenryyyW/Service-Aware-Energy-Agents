@@ -146,9 +146,51 @@ async def _run_simulation_background(run_id: str, scenario: ScenarioConfig, cont
         }
         
         if settlement:
+            # Extract per-member settlement data for frontend table
+            member_settlements = []
+            for member_id, member_settlement in settlement.building_settlements.items():
+                member_settlements.append({
+                    "member_id": member_id,
+                    "net_settlement": member_settlement.net_settlement,
+                    "total_bought_kwh": member_settlement.total_bought_kwh,
+                    "total_sold_kwh": member_settlement.total_sold_kwh,
+                    "total_grid_import_kwh": member_settlement.total_grid_import_kwh,
+                    "total_grid_export_kwh": member_settlement.total_grid_export_kwh,
+                    "baseline_grid_import_kwh": member_settlement.baseline_grid_import_kwh,
+                    "baseline_grid_export_kwh": member_settlement.baseline_grid_export_kwh,
+                    "total_community_import_kwh": member_settlement.total_community_import_kwh,
+                    "total_community_export_kwh": member_settlement.total_community_export_kwh,
+                    "peak_grid_import_kw": member_settlement.peak_grid_import_kw,
+                    "baseline_peak_grid_import_kw": member_settlement.baseline_peak_grid_import_kw,
+                    "demand_charge_rate": member_settlement.demand_charge_rate,
+                    "actual_demand_charge": member_settlement.actual_demand_charge,
+                    "baseline_demand_charge": member_settlement.baseline_demand_charge,
+                    "total_grid_import_cost": member_settlement.total_grid_import_cost,
+                    "total_grid_export_revenue": member_settlement.total_grid_export_revenue,
+                    "baseline_grid_import_cost": member_settlement.baseline_grid_import_cost,
+                    "baseline_grid_export_revenue": member_settlement.baseline_grid_export_revenue,
+                    "total_community_import_cost": member_settlement.total_community_import_cost,
+                    "total_community_export_revenue": member_settlement.total_community_export_revenue,
+                    "savings_vs_baseline": member_settlement.metadata.get("savings_vs_baseline", 0),
+                    "self_sufficiency": member_settlement.metadata.get("self_sufficiency", 0),
+                })
+            
             _runs[run_id]["settlement"] = {
                 "total_community_volume_kwh": settlement.total_community_volume_kwh,
                 "total_community_revenue": settlement.total_community_revenue,
+                "member_settlements": member_settlements,
+                "interval_results": [
+                    {
+                        "interval_idx": r.interval_idx,
+                        "start_timestep": r.start_timestep,
+                        "end_timestep": r.end_timestep,
+                        "building_settlements": r.building_settlements,
+                        "avg_clearing_price": r.avg_clearing_price,
+                        "total_volume_kwh": r.total_volume_kwh,
+                    }
+                    for r in settlement.interval_results
+                ],
+                "metadata": settlement.metadata,
             }
         
     except Exception as e:

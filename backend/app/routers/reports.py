@@ -161,6 +161,18 @@ def _generate_report(run: dict) -> str:
 
 def _generate_report_json(run: dict) -> dict:
     """Generate JSON report structure."""
+    settlement = run.get("settlement", {})
+    member_settlements = settlement.get("member_settlements", [])
+    
+    # Build kpi_blocks for frontend table rendering
+    kpi_blocks = {}
+    if member_settlements:
+        kpi_blocks["settlement"] = {
+            "member_settlements": member_settlements,
+            "total_community_volume_kwh": settlement.get("total_community_volume_kwh", 0),
+            "total_community_revenue": settlement.get("total_community_revenue", 0),
+        }
+    
     return {
         "run_id": run["run_id"],
         "scenario_id": run["scenario_id"],
@@ -172,7 +184,15 @@ def _generate_report_json(run: dict) -> dict:
         "energy_metrics": run.get("energy_metrics", {}),
         "service_metrics": run.get("service_metrics", {}),
         "grid_metrics": run.get("grid_metrics", {}),
-        "settlement": run.get("settlement"),
+        "settlement": settlement,
+        "kpi_blocks": kpi_blocks,
+        "detail_sections": {
+            "settlement": {
+                "member_settlements": member_settlements,
+                "total_community_volume_kwh": settlement.get("total_community_volume_kwh", 0),
+                "total_community_revenue": settlement.get("total_community_revenue", 0),
+            }
+        } if member_settlements else {},
     }
 
 
