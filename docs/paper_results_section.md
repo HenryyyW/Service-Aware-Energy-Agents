@@ -175,7 +175,12 @@ and why.
    `Electric_Vehicle_{building}_{index}` definition per charger; verified EV load
    now exists (completion 0.0286 `rule_based` / 1.000 `mpc` on scenario A, and
    `rule_based` scenario A peak demand 12.4 → 32.6 kW). The matrix must be
-   re-run; the pre-fix EV columns are invalid.
+   re-run; the pre-fix EV columns are invalid. The charging sessions are not
+   compressed by the episode horizon (169 hourly steps = 7 days, with arrivals
+   and departures every day), so a short horizon is not an alternative or
+   contributing explanation. The market/settlement layer is also ruled out: a
+   separate market-scoring trace shows it clears on building-level net demand
+   and never masks charger state, so the pre-fix zeros originate at the charger.
 3. **Metric-collection defects on the pre-fix base (fixed on this branch).**
    (a) `scenario_e` community `total_cost` was NaN in all 25 runs because an
    injected sensor failure returns NaN for `building_3`'s reading and the metric
