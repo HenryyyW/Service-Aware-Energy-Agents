@@ -16,15 +16,26 @@ class BaseController(ABC):
         self.scenario_config = scenario_config
         self.building_ids = [b.building_id for b in scenario_config.buildings]
         self.timestep = 0
+        self.last_grid_diagnostics: Optional[Dict[str, Any]] = None
     
     @abstractmethod
     def get_actions(self, observations: Dict[str, Any], timestep: int) -> RequestedActions:
         """Get requested actions for the current timestep."""
         pass
     
+    def update_grid_diagnostics(self, grid_diagnostics: Optional[Dict[str, Any]]):
+        """Update controller with grid diagnostics from previous step.
+        
+        Args:
+            grid_diagnostics: Dictionary containing grid diagnostics from pandapower,
+                            including voltage violations, line loading, etc.
+        """
+        self.last_grid_diagnostics = grid_diagnostics
+    
     def reset(self):
         """Reset controller state."""
         self.timestep = 0
+        self.last_grid_diagnostics = None
     
     def _create_requested_actions(self, actions: List[Action]) -> RequestedActions:
         """Helper to create RequestedActions from action list."""
@@ -298,6 +309,96 @@ class RuleBasedController(BaseController):
                     a.value_kw *= scale
         
         return actions
+
+    def _apply_grid_violation_redispatch(self, actions: List[Action]) -> List[Action]:
+        """Re-dispatch actions based on grid violations from previous step.
+        
+        If voltage or line loading violations were detected, adjust battery/EV/flexible load
+        actions to mitigate the violations.
+        """
+        if not self.last_grid_diagnostics:
+            return actions
+        
+        diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
+        voltage_violated = False
+        line_loading_violated = False
+        transformer_loading_violated = False
+        
+        for d in diagnostics:
+            category = d.get("category", "")
+            severity = d.get("severity", "")
+            if severity in ["violation", "critical"]:
+                if category == "voltage":
+                    voltage_violated = True
+                elif category == "line_loading":
+                    line_loading_violated = True
+                elif category == "transformer_loading":
+                    transformer_loading_violated = True
+        
+        # If violations detected, apply re-dispatch scaling
+        if voltage_violated or line_loading_violated or transformer_loading_violated:
+            # Determine scaling factor based on violation type
+            if voltage_violated:
+                scale = 0.85  # Reduce export/charging to raise voltage
+            elif line_loading_violated:
+                scale = 0.8   # Reduce power to fix line loading
+            else:  # transformer_loading
+                scale = 0.9
+            
+            # Apply scaling to controllable actions (battery, EV, flexible load)
+            for a in actions:
+                if a.action_type in [ActionType.BATTERY_CHARGE, ActionType.BATTERY_DISCHARGE,
+                                     ActionType.EV_CHARGE, ActionType.FLEXIBLE_LOAD]:
+                    a.value_kw *= scale
+        
+        return actions
+    
+    def get_actions(self, observations: Dict[str, Any], timestep: int) -> RequestedActions:
+        """Generate rule-based actions with grid-aware re-dispatch."""
+        self.timestep = timestep
+        actions = []
+        
+        # Get current hour for time-of-use decisions
+        current_hour = (timestep * self.scenario_config.timestep_minutes) / 60
+        hour_of_day = current_hour % 24
+        
+        for building in self.scenario_config.buildings:
+            bid = building.building_id
+            
+            # Get observations for this building
+            net_demand = observations.get(f"{bid}_net_electricity_consumption", 0)
+            pv_gen = observations.get(f"{bid}_solar_generation", 0)
+            load = observations.get(f"{bid}_non_shiftable_load", 0)
+            
+            # Battery control
+            if building.battery:
+                battery_action = self._control_battery(
+                    bid, building.battery, net_demand, pv_gen, hour_of_day
+                )
+                if battery_action:
+                    actions.append(battery_action)
+            
+            # EV control
+            for i, ev in enumerate(building.evs):
+                ev_id = f"{bid}_ev_{i}"
+                ev_action = self._control_ev(ev_id, ev, net_demand, pv_gen, hour_of_day, timestep)
+                if ev_action:
+                    actions.append(ev_action)
+            
+            # Flexible load control
+            for i, fl in enumerate(building.flexible_loads):
+                fl_id = f"{bid}_flex_{i}"
+                fl_action = self._control_flexible_load(fl_id, fl, pv_gen, hour_of_day, timestep)
+                if fl_action:
+                    actions.append(fl_action)
+        
+        # Apply community-level grid limits
+        actions = self._apply_grid_limits(actions)
+        
+        # Apply grid violation re-dispatch based on previous step diagnostics
+        actions = self._apply_grid_violation_redispatch(actions)
+        
+        return self._create_requested_actions(actions)
     
     def _time_to_hour(self, time_str: str) -> float:
         """Convert HH:MM to hour float."""
@@ -324,10 +425,17 @@ class RuleBasedControllerWithGrid(RuleBasedController):
 from src.controllers.multi_agent import MultiAgentController
 from src.controllers.centralized import CentralizedController
 
+# Import optimization / learning baselines. Kept at the bottom so the base
+# classes above are defined before these modules import them.
+from src.controllers.mpc import MPCController
+from src.controllers.rl import QLearningController
+
 __all__ = [
     "BaseController",
     "RuleBasedController",
     "RuleBasedControllerWithGrid",
     "MultiAgentController",
     "CentralizedController",
+    "MPCController",
+    "QLearningController",
 ]

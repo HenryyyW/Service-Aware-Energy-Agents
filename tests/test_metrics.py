@@ -272,3 +272,60 @@ def test_two_step_reference_case_matches_hand_calculated_metrics():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def _ev_step(timestep, connected, soc, required=0.87):
+    """Minimal step with the adapter's explicit EV observation keys."""
+    from types import SimpleNamespace
+    return SimpleNamespace(
+        timestep=timestep,
+        observations={
+            "b0_ev_0_connected": 1.0 if connected else 0.0,
+            "b0_ev_0_soc": soc,
+            "b0_ev_0_required_soc": required,
+        },
+        applied_actions=AppliedActions(timestep=timestep, actions=[]),
+        costs={},
+        grid_diagnostics=None,
+    )
+
+
+def test_ev_metrics_use_explicit_observation_keys():
+    history = [
+        _ev_step(0, True, 0.30),
+        _ev_step(1, True, 0.90),
+        _ev_step(2, False, 0.0),   # departure, last connected SOC 0.90
+        _ev_step(3, True, 0.20),
+        _ev_step(4, True, 0.50),
+        _ev_step(5, False, 0.0),   # departure, last connected SOC 0.50
+    ]
+
+    metrics = compute_service_metrics(history, {"buildings": [], "timestep_minutes": 60})
+
+    assert metrics.ev_completion_rate == pytest.approx(0.5)
+    assert metrics.ev_avg_soc_at_departure == pytest.approx(0.70)
+    assert metrics.ev_worst_soc_at_departure == pytest.approx(0.50)
+
+
+def test_ev_metrics_fall_back_without_explicit_keys():
+    history = [
+        _ev_step(0, True, 0.30),
+    ]
+    history[0].observations = {"b0_connected_electric_vehicle_at_charger_soc": 0.5}
+
+    metrics = compute_service_metrics(
+        history,
+        {
+            "timestep_minutes": 60,
+            "buildings": [
+                {
+                    "building_id": "b0",
+                    "evs": [{"target_soc": 0.8, "arrival_time": "18:00",
+                             "departure_time": "07:00", "initial_soc": 0.3}],
+                }
+            ],
+        },
+    )
+
+    assert metrics.ev_completion_rate == 0.0
+    assert metrics.ev_avg_soc_at_departure == 0.0

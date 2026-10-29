@@ -725,25 +725,25 @@ class TestRegressionInvariants:
 class TestCouplerIntegration:
     """Integration tests with SimulationCoupler."""
 
-    def test_coupler_initializes_market_components(self, scenario_config):
+    def test_coupler_initializes_market_components(self, scenario_config, tmp_path):
         """Test coupler initializes settlement engine when energy sharing enabled."""
-        coupler = SimulationCoupler(scenario_config, data_dir="data")
+        coupler = SimulationCoupler(scenario_config, data_dir=str(tmp_path))
         
         assert coupler.energy_sharing_enabled is True
         assert coupler.settlement_engine is not None
         assert coupler.settlement_engine.market_engine is not None
 
-    def test_coupler_no_energy_sharing(self, scenario_config):
+    def test_coupler_no_energy_sharing(self, scenario_config, tmp_path):
         """Test coupler works without energy sharing."""
         scenario_config.energy_sharing = None
-        coupler = SimulationCoupler(scenario_config, data_dir="data")
+        coupler = SimulationCoupler(scenario_config, data_dir=str(tmp_path))
         
         assert coupler.energy_sharing_enabled is False
         assert coupler.settlement_engine is None
 
-    def test_coupler_step_includes_market_data(self, scenario_config):
+    def test_coupler_step_includes_market_data(self, scenario_config, tmp_path):
         """Test coupler step includes market and settlement data in result."""
-        coupler = SimulationCoupler(scenario_config, data_dir="data")
+        coupler = SimulationCoupler(scenario_config, data_dir=str(tmp_path))
         observations = coupler.reset()
         
         from src.schemas.action import RequestedActions, Action, ActionType

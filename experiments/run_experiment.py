@@ -19,7 +19,10 @@ from src.schemas.report import (
     EnergySharingMetrics, MemberSettlementMetrics
 )
 from src.simulation import SimulationCoupler
-from src.controllers import RuleBasedController, BaseController, MultiAgentController, CentralizedController
+from src.controllers import (
+    RuleBasedController, BaseController, MultiAgentController, CentralizedController,
+    MPCController, QLearningController,
+)
 from src.evaluation import compute_all_metrics, generate_report_plots, compute_per_member_metrics
 
 
@@ -44,7 +47,7 @@ class ExperimentRunner:
         self.start_time: Optional[float] = None
         self.end_time: Optional[float] = None
     
-    def setup(self, controller_type: str = "rule_based"):
+    def setup(self, controller_type: str = "rule_based", rl_policy: Optional[str] = None):
         """Setup simulator and controller."""
         # Create coupler
         self.coupler = SimulationCoupler(self.scenario_config, data_dir="data")
@@ -56,6 +59,19 @@ class ExperimentRunner:
             self.controller = MultiAgentController(self.scenario_config)
         elif controller_type == "centralized":
             self.controller = CentralizedController(self.scenario_config)
+        elif controller_type == "mpc":
+            self.controller = MPCController(
+                self.scenario_config,
+                device_metadata=self.coupler.citylearn.get_device_metadata(),
+            )
+        elif controller_type in ("rl", "rl_single"):
+            if not rl_policy:
+                raise ValueError("--rl-policy is required for the rl controller")
+            self.controller = QLearningController(
+                self.scenario_config,
+                policy_path=rl_policy,
+                device_metadata=self.coupler.citylearn.get_device_metadata(),
+            )
         else:
             raise ValueError(f"Unknown controller type: {controller_type}")
     
@@ -80,14 +96,22 @@ class ExperimentRunner:
         
         self.controller.reset()
         step = 0
+        last_grid_diagnostics = None
         
         while True:
-            # Get actions from controller
+            # Get actions from controller (pass grid diagnostics from previous step)
             requested_actions = self.controller.get_actions(observations, step)
             
             # Step co-simulation
             cosim_result = self.coupler.step(requested_actions)
             self.history.append(cosim_result)
+            
+            # Extract grid diagnostics for next step's controller
+            last_grid_diagnostics = cosim_result.citylearn_result.grid_diagnostics
+            
+            # Update controller with grid diagnostics from this step for next step's action selection
+            if hasattr(self.controller, 'update_grid_diagnostics'):
+                self.controller.update_grid_diagnostics(last_grid_diagnostics)
             
             # Update observations
             observations = cosim_result.citylearn_result.observations
@@ -247,6 +271,22 @@ class ExperimentRunner:
         if isinstance(self.controller, MultiAgentController):
             controller_type_enum = ControllerType.LLM_AGENT
             controller_config = {"type": "multi_agent", "workflow": "planner_coder_executor_verifier_reporter"}
+        elif isinstance(self.controller, MPCController):
+            controller_type_enum = ControllerType.MPC
+            controller_config = {
+                "type": "mpc",
+                "approach": "deterministic_receding_horizon_lp",
+                "horizon_steps": self.controller.horizon_steps,
+                "fallback_steps": self.controller.fallback_steps,
+            }
+        elif isinstance(self.controller, QLearningController):
+            controller_type_enum = ControllerType.RL_SINGLE
+            controller_config = {
+                "type": "rl_single",
+                "algorithm": "tabular_q_learning",
+                "policy_path": str(self.controller.policy_path),
+                "unseen_states": self.controller.unseen_states,
+            }
         elif isinstance(self.controller, CentralizedController):
             controller_type_enum = ControllerType.RULE_BASED
             controller_config = {"type": "centralized", "approach": "joint_optimization"}
@@ -279,6 +319,53 @@ class ExperimentRunner:
         
         return result
     
+    def _write_manifest(self, result: ExperimentResult):
+        """Write the reproducibility manifest for this run.
+
+        Records the semantic scenario-config hash, seed, git commit and library
+        versions so a published number can be traced back to its inputs.
+        """
+        import platform
+        import subprocess
+
+        config_payload = json.dumps(
+            self.scenario_config.model_dump(), sort_keys=True, default=str
+        ).encode("utf-8")
+        try:
+            git_commit = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True, text=True, timeout=10,
+            ).stdout.strip() or None
+            git_dirty = bool(subprocess.run(
+                ["git", "status", "--porcelain"],
+                capture_output=True, text=True, timeout=10,
+            ).stdout.strip())
+        except Exception:
+            git_commit, git_dirty = None, None
+
+        versions: Dict[str, str] = {}
+        for package in ("citylearn", "pandapower", "numpy", "pandas"):
+            try:
+                versions[package] = getattr(__import__(package), "__version__", "unknown")
+            except Exception:
+                versions[package] = "missing"
+
+        manifest = {
+            "run_id": result.run_id,
+            "scenario_id": result.scenario_id,
+            "controller": result.controller_config,
+            "random_seed": result.random_seed,
+            "scenario_config_sha256": hashlib.sha256(config_payload).hexdigest(),
+            "git_commit": git_commit,
+            "git_dirty": git_dirty,
+            "python": platform.python_version(),
+            "packages": versions,
+            "timestep_minutes": self.scenario_config.timestep_minutes,
+            "history_steps": len(self.history),
+        }
+        with open(self.run_dir / "manifest.json", "w") as f:
+            json.dump(manifest, f, indent=2, default=str)
+
     def _save_results(self, result: ExperimentResult):
         """Save experiment results."""
         # Export trajectories and diagnostics
@@ -292,6 +379,8 @@ class ExperimentRunner:
         
         with open(self.run_dir / "result.json", "w") as f:
             json.dump(result_dict, f, indent=2, default=str)
+
+        self._write_manifest(result)
         
         # Generate plots
         plots_dir = self.run_dir / "plots"
@@ -331,7 +420,10 @@ def main():
     parser = argparse.ArgumentParser(description="Run energy community experiment")
     parser.add_argument("--config", type=str, required=True, help="Path to scenario YAML config")
     parser.add_argument("--controller", type=str, default="rule_based", 
-                       choices=["rule_based", "multi_agent", "centralized"], help="Controller type")
+                       choices=["rule_based", "multi_agent", "centralized", "mpc", "rl", "rl_single"],
+                       help="Controller type")
+    parser.add_argument("--rl-policy", type=str, default=None,
+                       help="Path to a trained RL policy JSON (required for --controller rl)")
     parser.add_argument("--max-steps", type=int, default=None, help="Maximum steps to run")
     parser.add_argument("--output-dir", type=str, default="experiments/results", help="Output directory")
     parser.add_argument("--seed", type=int, default=None, help="Random seed (overrides scenario config)")
@@ -348,7 +440,7 @@ def main():
     
     # Run experiment
     runner = ExperimentRunner(scenario, args.output_dir, run_id=args.run_id)
-    runner.setup(args.controller)
+    runner.setup(args.controller, rl_policy=args.rl_policy)
     result = runner.run(args.max_steps)
     
     # Verify result matches command line
@@ -362,6 +454,10 @@ def main():
         expected_enum = ControllerType.LLM_AGENT
     elif expected_controller == "centralized":
         expected_enum = ControllerType.RULE_BASED  # centralized maps to RULE_BASED in _create_result
+    elif expected_controller == "mpc":
+        expected_enum = ControllerType.MPC
+    elif expected_controller in ("rl", "rl_single"):
+        expected_enum = ControllerType.RL_SINGLE
     else:
         expected_enum = ControllerType.RULE_BASED
     assert result.controller_type == expected_enum, f"Controller mismatch: {result.controller_type} vs {expected_enum}"
