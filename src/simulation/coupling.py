@@ -14,7 +14,7 @@ from .citylearn_adapter import CityLearnAdapter, create_citylearn_adapter
 from .pandapower_adapter import PandapowerAdapter, create_grid_from_scenario
 from .market import create_market_engine, BuildingEnergyState, MarketClearingResult
 from .settlement import create_settlement_engine, SettlementEngine, SettlementResult
-from .failure_injector import FailureInjector, create_failure_injector
+from .failure_injector import FailureInjector, create_failure_injector, FailureType
 
 
 def _convert_to_json_serializable(obj):
@@ -113,6 +113,37 @@ class SimulationCoupler:
         newly_activated = self.failure_injector.step(self.current_timestep)
         active_failures = self.failure_injector.get_active_failures()
         
+        # Collect failure diagnostics to merge later (after run_power_flow)
+        failure_diagnostics = []
+        
+        # Log failure activation/deactivation as diagnostics
+        for failure in newly_activated:
+            failure_diagnostics.append(Diagnostic(
+                diagnostic_id=f"failure_activated_{failure.failure_id}_{self.current_timestep}",
+                category=DiagnosticCategory.GRID_LIMIT,  # Use closest category
+                severity=Severity.WARNING,
+                message=f"Failure activated: {failure.failure_id} ({failure.failure_type}) on {failure.asset_id}, severity={failure.severity}",
+                timestep=self.current_timestep,
+                values={"severity": failure.severity},
+                limits={},
+                metadata={"failure_type": failure.failure_type, "asset_id": failure.asset_id, "event": "activated"}
+            ))
+        
+        # Check for deactivated failures (they were in active_failures before step)
+        # The failure_injector tracks this in history
+        for event in self.failure_injector.failure_history:
+            if event.get('event') == 'deactivated' and event.get('timestep') == self.current_timestep:
+                failure_diagnostics.append(Diagnostic(
+                    diagnostic_id=f"failure_deactivated_{event['failure_id']}_{self.current_timestep}",
+                    category=DiagnosticCategory.GRID_LIMIT,
+                    severity=Severity.INFO,
+                    message=f"Failure deactivated: {event['failure_id']} ({event['failure_type']}) on {event['asset_id']}",
+                    timestep=self.current_timestep,
+                    values={},
+                    limits={},
+                    metadata={"failure_type": event['failure_type'], "asset_id": event['asset_id'], "event": "deactivated", "duration_timesteps": event.get('duration_timesteps', 0)}
+                ))
+        
         # Extract building powers for grid
         building_powers, building_pvs, building_battery_powers = self._extract_building_powers(cl_result)
         
@@ -178,15 +209,14 @@ class SimulationCoupler:
         self.pandapower.update_building_loads(building_powers, building_pvs, building_battery_powers)
         
         # Run power flow at specified intervals
-        grid_diagnostics = DiagnosticReport(
-            scenario_id=self.scenario_config.scenario_id,
-            run_id=f"cosim_step_{self.current_timestep}",
-            timestep=self.current_timestep
-        )
         power_flow_converged = True
         
         if self.current_timestep % self.run_power_flow_every == 0:
             power_flow_converged, grid_diagnostics = self.pandapower.run_power_flow()
+            
+            # Merge failure diagnostics into grid diagnostics
+            for d in failure_diagnostics:
+                grid_diagnostics.add_diagnostic(d)
             
             # Check community grid limits (with failure injection)
             if self.scenario_config.community_import_limit_kw or self.scenario_config.community_export_limit_kw:
@@ -282,11 +312,23 @@ class SimulationCoupler:
         return modified_battery
     
     def _apply_sensor_failures(self, building_powers: Dict[str, float], observations: Dict[str, float]) -> Dict[str, float]:
-        """Apply sensor failures - corrupt specific sensor readings in observations."""
-        # Sensor failures affect observations, not building_powers directly
-        # The observations dict is modified in place by the failure injector
-        # We just return building_powers unchanged here
-        # The sensor failure effect is observed through the observations dict
+        """Apply sensor failures - corrupt specific sensor readings in observations.
+        
+        Sensor failures affect the observations that the controller will see in the NEXT step.
+        This method modifies the observations dict in place to inject NaN for failed sensors.
+        Returns building_powers unchanged.
+        """
+        # Apply sensor failures to observations (in-place modification)
+        if self.failure_injector and self.failure_injector.get_active_failures():
+            for failure in self.failure_injector.get_active_failures():
+                if failure.failure_type == FailureType.SENSOR:
+                    # The failure injector's apply_sensor_failure returns modified observations
+                    # We need to update the observations dict that will be passed to controller
+                    # For now, we modify the observations that were passed in
+                    sensor_id = failure.asset_id
+                    if sensor_id in observations:
+                        observations[sensor_id] = float('nan')
+        
         return building_powers
     
     def _build_building_states(
@@ -544,6 +586,12 @@ class SimulationCoupler:
         
         # Export pandapower network
         self.pandapower.export_results(os.path.join(output_dir, "pandapower_network.json"))
+        
+        # Export failure injection history
+        if self.failure_injector:
+            failure_summary = self.failure_injector.get_failure_summary()
+            with open(os.path.join(output_dir, "failure_history.json"), "w") as f:
+                json.dump(_convert_to_json_serializable(failure_summary), f, indent=2)
         
         # Export KPIs
         kpis = self.get_kpis()
