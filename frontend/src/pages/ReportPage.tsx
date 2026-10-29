@@ -49,6 +49,11 @@ function SettlementView({ settlement, run }: { settlement: any; run: any }) {
                 <TableHeaderCell className="text-right">Grid Export (kWh)</TableHeaderCell>
                 <TableHeaderCell className="text-right">Community Import (kWh)</TableHeaderCell>
                 <TableHeaderCell className="text-right">Community Export (kWh)</TableHeaderCell>
+                <TableHeaderCell className="text-right">Total Bought (kWh)</TableHeaderCell>
+                <TableHeaderCell className="text-right">Total Sold (kWh)</TableHeaderCell>
+                <TableHeaderCell className="text-right">Baseline Grid Import (kWh)</TableHeaderCell>
+                <TableHeaderCell className="text-right">Baseline Grid Export (kWh)</TableHeaderCell>
+                <TableHeaderCell className="text-right">Self-Sufficiency (%)</TableHeaderCell>
                 <TableHeaderCell className="text-right">Savings vs Baseline ($)</TableHeaderCell>
               </tr>
             </thead>
@@ -79,6 +84,31 @@ function SettlementView({ settlement, run }: { settlement: any; run: any }) {
                   <TableCell className="text-right">
                     {typeof data === 'object' && data !== null && 'total_community_export_kwh' in data
                       ? (data.total_community_export_kwh as number).toFixed(2)
+                      : 'N/A'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {typeof data === 'object' && data !== null && 'total_bought_kwh' in data
+                      ? (data.total_bought_kwh as number).toFixed(2)
+                      : 'N/A'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {typeof data === 'object' && data !== null && 'total_sold_kwh' in data
+                      ? (data.total_sold_kwh as number).toFixed(2)
+                      : 'N/A'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {typeof data === 'object' && data !== null && 'baseline_grid_import_kwh' in data
+                      ? (data.baseline_grid_import_kwh as number).toFixed(2)
+                      : 'N/A'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {typeof data === 'object' && data !== null && 'baseline_grid_export_kwh' in data
+                      ? (data.baseline_grid_export_kwh as number).toFixed(2)
+                      : 'N/A'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {typeof data === 'object' && data !== null && 'self_sufficiency' in data
+                      ? `${(data.self_sufficiency as number * 100).toFixed(1)}%`
                       : 'N/A'}
                   </TableCell>
                   <TableCell className="text-right">
