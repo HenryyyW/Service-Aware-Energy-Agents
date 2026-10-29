@@ -18,23 +18,64 @@ class ReportRequest(BaseModel):
     include_sections: Optional[list[str]] = None
 
 
-@router.get("/reports/{run_id}")
+class ReportResponse(BaseModel):
+    """Structured report response with narrative."""
+    run_id: str
+    run_name: Optional[str] = None
+    scenario_id: str
+    controller_type: str
+    status: str
+    generation_status: str  # pending, computing, ready, failed
+    outcome_sentence: Optional[str] = None
+    markdown: str
+    kpi_blocks: dict
+    detail_sections: dict
+    start_time: str
+    end_time: Optional[str] = None
+
+
+@router.get("/reports/{run_id}", response_model=ReportResponse)
 async def get_report(run_id: str):
-    """Get simulation report as markdown text."""
+    """Get structured simulation report with narrative."""
     if run_id not in _runs:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     
     run = _runs[run_id]
     
-    # Try to get from agent task first (if available)
-    from app.routers.agent import _tasks
-    for task in _tasks.values():
-        if task.get("run_id") == run_id and task.get("report"):
-            return Response(content=task["report"], media_type="text/markdown")
-    
     # Generate report from simulation results
-    report = _generate_report(run)
-    return Response(content=report, media_type="text/markdown")
+    markdown = _generate_report(run)
+    
+    # Build structured response
+    kpi_blocks = {
+        "energy": run.get("energy_metrics", {}),
+        "service": run.get("service_metrics", {}),
+        "grid": run.get("grid_metrics", {}),
+    }
+    
+    detail_sections = {
+        "energy_metrics": _format_metrics_table(run.get("energy_metrics", {})),
+        "service_metrics": _format_metrics_table(run.get("service_metrics", {})),
+        "grid_metrics": _format_metrics_table(run.get("grid_metrics", {})),
+    }
+    
+    if run.get("settlement"):
+        kpi_blocks["settlement"] = run.get("settlement", {})
+        detail_sections["settlement"] = _format_metrics_table(run.get("settlement", {}))
+    
+    return ReportResponse(
+        run_id=run["run_id"],
+        run_name=run.get("run_name"),
+        scenario_id=run["scenario_id"],
+        controller_type=run["controller_type"],
+        status=run["status"],
+        generation_status=run.get("generation_status", "pending"),
+        outcome_sentence=run.get("outcome_sentence"),
+        markdown=markdown,
+        kpi_blocks=kpi_blocks,
+        detail_sections=detail_sections,
+        start_time=run["start_time"],
+        end_time=run.get("end_time"),
+    )
 
 
 @router.get("/reports/{run_id}/download")
@@ -66,6 +107,14 @@ async def download_report(run_id: str, format: str = Query("markdown")):
         media_type=media_type,
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+
+def _format_metrics_table(metrics: dict) -> list:
+    """Format metrics as a table for structured response."""
+    return [
+        {"metric": k, "value": v}
+        for k, v in metrics.items()
+    ]
 
 
 def _generate_report(run: dict) -> str:

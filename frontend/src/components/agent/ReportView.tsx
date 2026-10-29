@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { FileText, Download, Copy, CheckCircle, Eye, Edit } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { useAgentStore } from '../../store/agentStore';
+import { sanitizeMarkdown } from '../../utils/sanitize';
 
 interface ReportViewProps {
   report?: string;
@@ -63,9 +64,10 @@ export function ReportView({ report, onDownload }: ReportViewProps) {
       {/* Content */}
       <div className="flex-1 overflow-auto p-4">
         {viewMode === 'rendered' ? (
-          <div className="prose prose-invert max-w-none">
-            {renderMarkdown(taskReport)}
-          </div>
+          <div 
+            className="prose prose-invert max-w-none"
+            dangerouslySetInnerHTML={{ __html: sanitizeMarkdown(taskReport) }}
+          />
         ) : (
           <pre className="font-mono text-body-sm text-text leading-relaxed whitespace-pre-wrap">
             {taskReport}
@@ -88,58 +90,4 @@ export function ReportView({ report, onDownload }: ReportViewProps) {
       </div>
     </div>
   );
-}
-
-// Simple markdown renderer (in production, use react-markdown or similar)
-function renderMarkdown(markdown: string): React.ReactNode {
-  const lines = markdown.split('\n');
-  const elements: React.ReactNode[] = [];
-
-  let inCodeBlock = false;
-  let codeBlockContent = '';
-  let codeBlockLang = '';
-
-  lines.forEach((line, index) => {
-    if (line.startsWith('```')) {
-      if (!inCodeBlock) {
-        inCodeBlock = true;
-        codeBlockLang = line.slice(3).trim();
-        codeBlockContent = '';
-      } else {
-        inCodeBlock = false;
-        elements.push(
-          <pre key={index} className="bg-space rounded-lg p-4 overflow-x-auto my-3">
-            <code className={`language-${codeBlockLang} font-mono text-body-sm text-text`}>
-              {codeBlockContent.trim()}
-            </code>
-          </pre>
-        );
-      }
-      return;
-    }
-
-    if (inCodeBlock) {
-      codeBlockContent += line + '\n';
-      return;
-    }
-
-    if (line.startsWith('# ')) {
-      elements.push(<h1 key={index} className="font-display font-bold text-heading-1 text-text mt-6 mb-3">{line.slice(2)}</h1>);
-    } else if (line.startsWith('## ')) {
-      elements.push(<h2 key={index} className="font-display font-semibold text-heading-2 text-text mt-5 mb-2">{line.slice(3)}</h2>);
-    } else if (line.startsWith('### ')) {
-      elements.push(<h3 key={index} className="font-display font-medium text-heading-3 text-text mt-4 mb-2">{line.slice(4)}</h3>);
-    }
-    else if (line.startsWith('- ') || line.startsWith('* ')) {
-      elements.push(<li key={index} className="ml-4 mb-1 text-text">{line.slice(2)}</li>);
-    }
-    else if (line.trim()) {
-      elements.push(<p key={index} className="text-text mb-3">{line}</p>);
-    }
-    else {
-      elements.push(<br key={index} />);
-    }
-  });
-
-  return <div>{elements}</div>;
 }

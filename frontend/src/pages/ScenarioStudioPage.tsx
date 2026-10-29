@@ -107,7 +107,10 @@ function ScenarioStudioPageContent() {
       const scenarioId = `studio_${Date.now()}`;
       const effectiveScenario = await persistEditorScenario(scenario, scenarioId);
       const controllerType = scenario.control?.strategy || 'rule_based';
-      const maxSteps = scenario.community?.simulation_period === '1_day' ? 24 : 168;
+      // Calculate maxSteps based on actual timestep_minutes
+      const timestepMinutes = scenario.timestep_minutes || effectiveScenario.timestep_minutes || 60;
+      const durationDays = scenario.community?.simulation_period === '1_day' ? 1 : 7;
+      const maxSteps = Math.floor((durationDays * 24 * 60) / timestepMinutes);
       const run = await api.runSimulation(scenarioId, controllerType, {
         random_seed: effectiveScenario.random_seed,
         max_steps: maxSteps,
@@ -117,7 +120,7 @@ function ScenarioStudioPageContent() {
       addToast({
         type: 'success',
         title: 'Simulation queued',
-        message: `Run ${run.run_id}. CityLearn uses its native hourly timestep.`,
+        message: `Run ${run.run_id}. Timestep: ${timestepMinutes} min, ${maxSteps} steps.`,
       });
       navigate('/');
 

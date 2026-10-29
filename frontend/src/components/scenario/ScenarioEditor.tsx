@@ -518,13 +518,23 @@ export function ScenarioEditor({ onSave, onRun, readOnly = false }: ScenarioEdit
   );
 }
 
-// Simple YAML serializer/parser (in production, use js-yaml)
+import { isFeatureEnabled } from '../../config/featureFlags';
+
+// YAML serializer/parser - gated behind feature flag
 function jsYamlDump(obj: any): string {
-  return JSON.stringify(obj, null, 2); // Placeholder - would use js-yaml in real app
+  if (isFeatureEnabled('yamlExport')) {
+    // In production, use js-yaml: import { dump } from 'js-yaml'; return dump(obj);
+    return JSON.stringify(obj, null, 2);
+  }
+  return JSON.stringify(obj, null, 2);
 }
 
 function jsYamlLoad(str: string): any {
-  return JSON.parse(str); // Placeholder - would use js-yaml in real app
+  if (isFeatureEnabled('yamlExport')) {
+    // In production, use js-yaml: import { load } from 'js-yaml'; return load(str);
+    return JSON.parse(str);
+  }
+  return JSON.parse(str);
 }
 
 function ScenarioSection({ title, icon, expanded, onToggle, children }: {

@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { MapViewport, LayerVisibility, SelectedAsset, NetworkGeometry } from '../api/types';
 import { api } from '../api/client';
 import { WebMercatorViewport } from '@deck.gl/core';
+import { useScenarioStore } from './scenarioStore';
 
 interface CanvasState {
   // Map viewport
@@ -82,7 +83,10 @@ export const useCanvasStore = create<CanvasState>()(
       setNetworkGeometry: (geometry) => set({ networkGeometry: geometry }),
       fetchNetworkGeometry: async () => {
         try {
-          const geometry = await api.getNetworkGeometry();
+          // Get current scenario from scenario store
+          const currentScenario = useScenarioStore.getState().currentScenario;
+          const scenarioId = currentScenario?.scenario_id || currentScenario?.community?.name;
+          const geometry = await api.getNetworkGeometry(scenarioId);
           set({ networkGeometry: geometry });
         } catch (error) {
           console.error('Failed to fetch network geometry:', error);

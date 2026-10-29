@@ -32,8 +32,8 @@ function ReportPageContent() {
         setReport(currentTask.report);
       } else {
         // Fallback to API
-        const reportText = await api.getReport(runId!);
-        setReport(reportText);
+        const reportResponse = await api.getReport(runId!);
+        setReport(reportResponse.markdown);
       }
     } catch (error) {
       console.error('Failed to load report:', error);
@@ -74,7 +74,9 @@ function ReportPageContent() {
             </Link>
             <div>
               <h1 className="font-display font-semibold text-heading-1 text-text">Simulation Report</h1>
-              <p className="text-caption text-text-muted">{runId}</p>
+              <p className="text-caption text-text-muted">
+                {run?.run_name || run?.run_id} • {run?.scenario_id || 'Unknown Scenario'} • {run?.controller_type || 'Unknown Controller'}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">

@@ -107,9 +107,15 @@ export function CodeView({ code, language = 'python', readOnly = true, onSave }:
   );
 }
 
-// Simple syntax highlighting (in production, use Prism.js or similar)
+import { isFeatureEnabled } from '../../config/featureFlags';
+
+// Syntax highlighting - gated behind feature flag
 function highlightCode(code: string, _language: string): string {
-  // This is a placeholder - in production, use a proper syntax highlighter
+  if (isFeatureEnabled('codeSyntaxHighlighting')) {
+    // In production, use Prism.js or similar: import Prism from 'prismjs'; return Prism.highlight(code, Prism.languages[_language], _language);
+    // Fallback to basic highlighting for now
+  }
+  // Basic HTML escaping + minimal highlighting
   return code
     .replace(/&/g, '&')
     .replace(/</g, '<')

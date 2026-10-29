@@ -123,3 +123,7 @@ export const useCurrentStepData = () => {
   const currentTimestep = useSimulationStore((state) => state.timePlayer.currentTimestep);
   return trajectories.find(t => t.timestep === currentTimestep) || null;
 };
+
+export const useTrajectories = () => {
+  return useSimulationStore((state) => state.trajectories);
+};
