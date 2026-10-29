@@ -1,4 +1,6 @@
 """Tests for evaluation metrics."""
+import math
+
 import pytest
 import numpy as np
 
@@ -268,6 +270,81 @@ def test_two_step_reference_case_matches_hand_calculated_metrics():
     assert fairness.gini_coefficient == pytest.approx(0.14 / 0.92)
     assert fairness.worst_member_cost == pytest.approx(0.30)
     assert fairness.best_member_cost == pytest.approx(0.16)
+
+
+def _tariff_scenario(*member_ids, timestep_minutes=60):
+    tariff = {
+        "import_prices": {"off_peak": 0.10, "mid_peak": 0.20, "on_peak": 0.30},
+        "export_prices": {"off_peak": 0.04, "mid_peak": 0.04, "on_peak": 0.04},
+    }
+    return {
+        "timestep_minutes": timestep_minutes,
+        "buildings": [
+            {"building_id": member, "tariff": tariff} for member in member_ids
+        ],
+    }
+
+
+def _obs_step(timestep, observations):
+    return SimulationStepResult(
+        timestep=timestep,
+        requested_actions=RequestedActions(timestep=timestep),
+        limited_actions=LimitedActions(timestep=timestep),
+        applied_actions=AppliedActions(timestep=timestep),
+        observations=observations,
+    )
+
+
+def test_energy_metrics_skip_non_finite_demand_and_report_coverage():
+    """A NaN building reading (injected failure) must not poison total_cost."""
+    scenario = _tariff_scenario("m0", "m1")
+    history = [
+        _obs_step(0, {"m0_net_electricity_consumption": 2.0, "m1_net_electricity_consumption": 1.0}),
+        _obs_step(1, {"m0_net_electricity_consumption": float("nan"), "m1_net_electricity_consumption": 1.0}),
+    ]
+
+    metrics = compute_energy_metrics(history, scenario)
+
+    assert math.isfinite(metrics.total_cost)
+    # Only 3 of the 4 building-steps had a usable reading.
+    assert metrics.cost_coverage == pytest.approx(3 / 4)
+    assert metrics.invalid_cost_steps == 1
+    assert metrics.total_cost == pytest.approx(0.1 * (2 + 1 + 1))
+
+
+def test_compute_all_metrics_reports_per_member_costs_and_gini():
+    """Service metrics must carry computed member economics, not schema defaults."""
+    scenario = _tariff_scenario("m0", "m1")
+    history = [_obs_step(0, {
+        "m0_net_electricity_consumption": 2.0,
+        "m1_net_electricity_consumption": 4.0,
+    })]
+
+    service = compute_all_metrics(history, scenario)["service"]
+
+    assert service.per_member_costs == pytest.approx({"m0": 0.20, "m1": 0.40})
+    # (0.40 - 0.20) / (2 * 0.60)
+    assert service.gini_coefficient == pytest.approx(0.2 / 1.2)
+    assert service.member_cost_coverage == 1.0
+    assert service.members_interrupted == []
+    assert service.per_member_savings == {}
+
+
+def test_compute_all_metrics_marks_interrupted_member_as_none():
+    """A failed member is None with explicit coverage, never a free 0.0."""
+    scenario = _tariff_scenario("m0", "m1")
+    history = [_obs_step(0, {
+        "m0_net_electricity_consumption": 2.0,
+        "m1_net_electricity_consumption": float("nan"),
+    })]
+
+    service = compute_all_metrics(history, scenario)["service"]
+
+    assert service.per_member_costs["m0"] == pytest.approx(0.20)
+    assert service.per_member_costs["m1"] is None
+    assert service.members_interrupted == ["m1"]
+    assert service.member_cost_coverage == 0.5
+    assert math.isfinite(service.gini_coefficient)
 
 
 if __name__ == "__main__":

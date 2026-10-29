@@ -442,3 +442,60 @@ def test_saea_run_id_reads_back_its_own_schema_dir(minimal_scenario, temp_data_d
         assert energy_files, f"no building energy files in {run_dir}"
     finally:
         adapter.close()
+
+
+def test_synthesized_chargers_reference_registered_ev_definitions(temp_data_dir):
+    """Every synthesized charger schedule must name an EV in electric_vehicles_def.
+
+    Regression: schedules spelled a fixed ``Electric_Vehicle_scenario`` that had
+    no definition, so CityLearn never plugged an EV and ev_completion_rate was
+    0.000 in all 125 paper-matrix runs.
+    """
+    scenario = ScenarioConfig(
+        scenario_id="ev_definition_check",
+        name="EV definition check",
+        description="Two buildings, one synthesized EV each",
+        random_seed=42,
+        timestep_minutes=60,
+        buildings=[
+            BuildingConfig(
+                building_id=f"test_building_{i}",
+                building_type=BuildingType.RESIDENTIAL,
+                simulation_start="2023-01-01",
+                simulation_end="2023-01-08",
+                evs=[EVConfig(
+                    capacity_kwh=40.0,
+                    max_charge_kw=7.0,
+                    arrival_time="18:00",
+                    departure_time="07:00",
+                    initial_soc=0.3,
+                    target_soc=0.8,
+                )],
+            )
+            for i in range(2)
+        ],
+    )
+    adapter = create_citylearn_adapter(scenario, data_dir=temp_data_dir)
+    try:
+        schema_dir = os.path.join(temp_data_dir, "schemas", scenario.scenario_id)
+        with open(os.path.join(schema_dir, "schema.json"), encoding="utf-8") as handle:
+            schema = json.load(handle)
+
+        ev_defs = schema.get("electric_vehicles_def") or {}
+        labels = []
+        for building in schema["buildings"].values():
+            for charger in (building.get("chargers") or {}).values():
+                schedule = pd.read_csv(os.path.join(schema_dir, charger["charger_simulation"]))
+                ids = {
+                    value for value in schedule["electric_vehicle_id"].dropna().unique()
+                    if str(value).strip()
+                }
+                assert ids, f"charger {charger['charger_simulation']} names no EV"
+                labels.extend(ids)
+
+        assert labels, "no synthesized chargers in schema"
+        for label in labels:
+            assert label in ev_defs, f"{label} scheduled but not defined in electric_vehicles_def"
+        assert len(labels) == len(set(labels)), f"EV labels reused across chargers: {labels}"
+    finally:
+        adapter.close()

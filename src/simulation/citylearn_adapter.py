@@ -37,6 +37,12 @@ class CityLearnAdapter:
         # into the per-run schema directory by _copy_dataset_files.
         self._pending_charger_csvs: Dict[str, Any] = {}
         self._pending_flex_csvs: Dict[str, Any] = {}
+        # One electric-vehicle definition per synthesized charger. CityLearn
+        # resolves a schedule's electric_vehicle_id against the schema's
+        # electric_vehicles_def; a label with no definition is silently
+        # skipped, which left every EV permanently disconnected (EV service
+        # KPIs stuck at 0.000 in the paper matrix).
+        self._pending_ev_defs: Dict[str, Dict[str, Any]] = {}
         self.env: Optional[CityLearnEnv] = None
         self.building_ids: List[str] = []
         self.observation_names: List[str] = []
@@ -233,6 +239,14 @@ class CityLearnAdapter:
         schema['buildings'] = buildings_to_keep
         self.building_ids = list(buildings_to_keep.keys())
 
+        # Register the synthesized electric vehicles so each charger schedule
+        # resolves to a real vehicle definition (otherwise CityLearn skips the
+        # plug event and EV service stays at 0.000 for every controller).
+        if self._pending_ev_defs:
+            ev_defs = schema.get('electric_vehicles_def') or {}
+            ev_defs.update(self._pending_ev_defs)
+            schema['electric_vehicles_def'] = ev_defs
+
         return schema
 
     # ------------------------------------------------------------------
@@ -282,6 +296,7 @@ class CityLearnAdapter:
             chargers: Dict[str, Any] = {}
             for index, ev in enumerate(building_config.evs or []):
                 filename = f"{building_name}_charger_{index}.csv"
+                ev_label = self._ev_label(building_name, index)
                 chargers[f"charger_{index}"] = {
                     "type": "citylearn.electric_vehicle_charger.Charger",
                     "charger_simulation": filename,
@@ -296,7 +311,19 @@ class CityLearnAdapter:
                         "charger_type": 0,
                     },
                 }
-                self._pending_charger_csvs[filename] = self._charger_schedule_frame(ev)
+                self._pending_charger_csvs[filename] = self._charger_schedule_frame(ev, ev_label)
+                self._pending_ev_defs[ev_label] = {
+                    "include": True,
+                    "battery": {
+                        "type": "citylearn.energy_model.Battery",
+                        "autosize": False,
+                        "attributes": {
+                            "capacity": float(ev.capacity_kwh),
+                            "nominal_power": float(ev.max_charge_kw),
+                            "initial_soc": float(ev.initial_soc),
+                        },
+                    },
+                }
             building_schema['chargers'] = chargers
         elif building_config.evs == [] and 'chargers' in building_schema:
             # Explicit empty list: the scenario has no EVs on this building.
@@ -324,7 +351,7 @@ class CityLearnAdapter:
         steps_per_day = int(24 * 60 // step_minutes)
         return steps_per_day, int(7 * steps_per_day + 1)
 
-    def _charger_schedule_frame(self, ev) -> "pd.DataFrame":
+    def _charger_schedule_frame(self, ev, ev_label: str) -> "pd.DataFrame":
         """Build a charger schedule CSV from a scenario EVConfig.
 
         Mirrors the stock dataset columns: one row per episode step with the
@@ -351,7 +378,7 @@ class CityLearnAdapter:
                 departure_step = self._next_window_end(t, steps, arrival, departure, step_minutes)
                 state_rows.append({
                     "electric_vehicle_charger_state": 1,
-                    "electric_vehicle_id": self._ev_label,
+                    "electric_vehicle_id": ev_label,
                     "electric_vehicle_departure_time": float(departure_step - t),
                     "electric_vehicle_required_soc_departure": float(ev.target_soc * 100.0),
                     "electric_vehicle_estimated_arrival_time": None,
@@ -361,7 +388,7 @@ class CityLearnAdapter:
                 arrival_step = self._next_window_start(t, steps, arrival, departure, step_minutes)
                 state_rows.append({
                     "electric_vehicle_charger_state": 0,
-                    "electric_vehicle_id": self._ev_label,
+                    "electric_vehicle_id": ev_label,
                     "electric_vehicle_departure_time": None,
                     "electric_vehicle_required_soc_departure": None,
                     "electric_vehicle_estimated_arrival_time": float(arrival_step - t),
@@ -369,9 +396,14 @@ class CityLearnAdapter:
                 })
         return pd.DataFrame(state_rows)
 
-    @property
-    def _ev_label(self) -> str:
-        return "Electric_Vehicle_scenario"
+    @staticmethod
+    def _ev_label(building_name: str, index: int) -> str:
+        """Electric-vehicle definition name used by one synthesized charger.
+
+        Must be unique per charger: CityLearn plugs the vehicle object named in
+        the schedule, and two chargers cannot hold the same object.
+        """
+        return f"Electric_Vehicle_{building_name}_{index}"
 
     @staticmethod
     def _hhmm_to_minutes(value: str) -> int:
@@ -479,6 +511,7 @@ class CityLearnAdapter:
             schedule.to_csv(schema_dir / f"{base}_flexibility_schedule.csv", index=False)
         self._pending_charger_csvs.clear()
         self._pending_flex_csvs.clear()
+        self._pending_ev_defs.clear()
 
         """Copy dataset files to our schema directory."""
         source_dir = Path(source_dir)

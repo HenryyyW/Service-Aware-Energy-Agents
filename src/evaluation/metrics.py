@@ -1,5 +1,6 @@
 """Metrics computation for energy, service, grid, and agent performance."""
 from typing import List, Dict, Any, Optional
+import math
 import numpy as np
 import pandas as pd
 
@@ -33,6 +34,8 @@ def compute_energy_metrics(
     battery_cycles = 0.0
     
     demand_values = []
+    valid_building_steps = 0
+    total_building_steps = 0
     
     # Helper function to get tariff price based on hour of day and tariff config
     def _get_tariff_price(tariff_config, hour_of_day, is_import):
@@ -65,6 +68,15 @@ def compute_energy_metrics(
             net_demand_key = f"{bid}_net_electricity_consumption"
             if net_demand_key in obs:
                 net_demand_kw = float(obs[net_demand_key])
+                total_building_steps += 1
+                if not math.isfinite(net_demand_kw):
+                    # Injected sensor failure: the reading is NaN, so this
+                    # building-step has no measurable demand. Skipping it keeps
+                    # the community totals finite; cost_coverage records how
+                    # many building-steps were lost.
+                    metrics.invalid_cost_steps += 1
+                    continue
+                valid_building_steps += 1
                 if net_demand_kw > 0:
                     step_import += net_demand_kw
                 elif net_demand_kw < 0:
@@ -187,6 +199,8 @@ def compute_energy_metrics(
         carbon_emissions = grid_import * 0.5  # kg CO2/kWh
     
     metrics.total_cost = total_cost
+    if total_building_steps:
+        metrics.cost_coverage = valid_building_steps / total_building_steps
     metrics.grid_import_kwh = grid_import
     metrics.grid_export_kwh = grid_export
     metrics.peak_demand_kw = peak_demand
@@ -498,9 +512,28 @@ def compute_all_metrics(
     wall_clock_seconds: float = 0.0
 ) -> Dict[str, Any]:
     """Compute all metrics at once."""
+    # Local import: fairness imports tariff helpers from this module.
+    from src.evaluation.fairness import compute_fairness_metrics
+
+    service = compute_service_metrics(history, scenario_config)
+    # Overlay the per-member economics. Without this the report keeps the
+    # ServiceMetrics schema defaults (per_member_costs {}, gini 0.0, coverage
+    # 1.0), which look like measured evidence but are not.
+    fairness = compute_fairness_metrics(history, scenario_config)
+    for field in (
+        'per_member_costs',
+        'per_member_savings',
+        'members_interrupted',
+        'member_cost_coverage',
+        'gini_coefficient',
+        'worst_member_cost',
+        'best_member_cost',
+    ):
+        setattr(service, field, getattr(fairness, field))
+
     return {
         'energy': compute_energy_metrics(history, scenario_config, carbon_intensity),
-        'service': compute_service_metrics(history, scenario_config),
+        'service': service,
         'grid': compute_grid_metrics(history, scenario_config.get('timestep_minutes', 15)),
         'agent': compute_agent_metrics(history, repair_history or [], token_usage, wall_clock_seconds)
     }
