@@ -62,8 +62,14 @@ class ServiceMetrics(BaseModel):
     dr_requested_kw: float = 0.0
     dr_delivered_kw: float = 0.0
     dr_credited_kw: float = 0.0
-    per_member_costs: Dict[str, float] = Field(default_factory=dict)
-    per_member_savings: Dict[str, float] = Field(default_factory=dict)
+    per_member_costs: Dict[str, Optional[float]] = Field(default_factory=dict)
+    per_member_savings: Dict[str, Optional[float]] = Field(default_factory=dict)
+    # Scenario E failure-reporting convention: members whose cost data is
+    # interrupted by an injected failure get per-member cost None (service
+    # interrupted, cost undefined — never 0.0); economic aggregates use valid
+    # members only, and the interruption is reported explicitly.
+    members_interrupted: List[str] = Field(default_factory=list)
+    member_cost_coverage: float = 1.0
     gini_coefficient: float = 0.0
     worst_member_cost: float = 0.0
     best_member_cost: float = 0.0

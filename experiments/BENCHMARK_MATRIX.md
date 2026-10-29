@@ -105,6 +105,14 @@ attempts runs whose `result.json` is missing; failed runs are listed in
   total cost 96.28 vs 100.37 USD for seeds 42 and 123 before the interface fix).
   Variance is small relative to controller effects, which makes 3-5 seeds workable
   but means CIs will be narrow and should not be over-interpreted.
+- **Scenario E member-cost convention (failure injection):** a member whose
+  cost data is interrupted by an injected failure gets per-member cost ``None``
+  (JSON null) — service interrupted, cost undefined — never 0.0, which would
+  score a failed member as free. Economic aggregates (gini, worst/best member)
+  are computed over valid members only, and the interruption is reported
+  explicitly via ``members_interrupted`` and ``member_cost_coverage`` in the
+  service metrics. The Scenario E section must state this convention and
+  report the interruption counts alongside every economic comparison.
 
 ## 5. Pilot: scenario A head-to-head
 

@@ -1,5 +1,6 @@
 """Fairness analysis for multi-member energy communities."""
 from typing import List, Dict, Any, Optional
+import math
 import numpy as np
 import pandas as pd
 
@@ -29,18 +30,31 @@ class FairnessAnalyzer:
     def analyze(self, history: List[SimulationStepResult]) -> ServiceMetrics:
         """Analyze fairness metrics from simulation history."""
         metrics = ServiceMetrics()
-        
-        # Compute per-member costs
+
+        # Compute per-member costs. Members whose cost data is corrupted by an
+        # injected failure (NaN in any step) get cost None — service
+        # interrupted, cost undefined — never 0.0, which would score a failed
+        # member as free. Economic aggregates use valid members only, and the
+        # interruption is reported explicitly (paper Scenario E convention).
         member_costs = self._compute_member_costs(history)
+        interrupted = [m for m, cost in member_costs.items() if cost is None]
+        valid_costs = [cost for cost in member_costs.values() if cost is not None]
         metrics.per_member_costs = member_costs
-        
+        metrics.members_interrupted = interrupted
+        metrics.member_cost_coverage = (
+            len(valid_costs) / len(self.member_ids) if self.member_ids else 1.0
+        )
+
         # Compute savings vs baseline (if baseline available)
         if self.baseline_costs:
             metrics.per_member_savings = {}
             for member_id in self.member_ids:
-                current_cost = member_costs.get(member_id, 0.0)
+                current_cost = member_costs.get(member_id)
                 baseline_cost = self.baseline_costs.get(member_id, 0.0)
-                if baseline_cost > 0:
+                if current_cost is None:
+                    # Interrupted member: savings undefined, not zero.
+                    metrics.per_member_savings[member_id] = None
+                elif baseline_cost > 0:
                     # Savings = baseline - current (positive = saved money)
                     metrics.per_member_savings[member_id] = baseline_cost - current_cost
                 else:
@@ -48,27 +62,39 @@ class FairnessAnalyzer:
         else:
             # No baseline available
             metrics.per_member_savings = {m: 0.0 for m in self.member_ids}
-        
-        # Gini coefficient
-        cost_values = list(member_costs.values())
-        metrics.gini_coefficient = self._gini(cost_values)
-        
-        # Worst/best member
-        if cost_values:
-            metrics.worst_member_cost = max(cost_values)
-            metrics.best_member_cost = min(cost_values)
-        
+
+        # Gini coefficient over valid members only
+        metrics.gini_coefficient = self._gini(valid_costs)
+
+        # Worst/best member over valid members only
+        if valid_costs:
+            metrics.worst_member_cost = max(valid_costs)
+            metrics.best_member_cost = min(valid_costs)
+
         return metrics
-    
-    def _compute_member_costs(self, history: List[SimulationStepResult]) -> Dict[str, float]:
-        """Compute cost per member."""
-        costs = {m: 0.0 for m in self.member_ids}
-        
+
+    def _compute_member_costs(self, history: List[SimulationStepResult]) -> Dict[str, Optional[float]]:
+        """Compute cost per member.
+
+        A member whose cost is NaN in any step (e.g. an injected sensor or
+        supply failure) is marked ``None`` for the whole run: the service was
+        interrupted, so no meaningful economic total exists for it.
+        """
+        costs: Dict[str, Optional[float]] = {m: 0.0 for m in self.member_ids}
+        interrupted: set = set()
+
         for step in history:
             for member, cost in step.costs.items():
-                if member in costs:
-                    costs[member] += cost
-        
+                if member not in costs:
+                    continue
+                if member in interrupted:
+                    continue
+                if cost is None or math.isnan(cost):
+                    interrupted.add(member)
+                    costs[member] = None
+                    continue
+                costs[member] += cost
+
         return costs
     
     def _gini(self, values: List[float]) -> float:
