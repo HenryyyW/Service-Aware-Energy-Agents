@@ -24,8 +24,8 @@ export function TableBody({ children, className }: { children: ReactNode; classN
   return <tbody className={clsx('divide-y divide-border/30', className)}>{children}</tbody>;
 }
 
-export function TableRow({ children, className }: { children: ReactNode; className?: string }) {
-  return <tr className={clsx('hover:bg-surface/50 transition-colors', className)}>{children}</tr>;
+export function TableRow({ children, className, onClick }: { children: ReactNode; className?: string; onClick?: () => void }) {
+  return <tr className={clsx('hover:bg-surface/50 transition-colors', className)} onClick={onClick}>{children}</tr>;
 }
 
 export function TableHeaderCell({ children, className }: { children: ReactNode; className?: string }) {

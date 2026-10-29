@@ -129,7 +129,7 @@ class ApiClient {
     return response.data;
   }
 
-  async downloadReport(runId: string, format: 'markdown'): Promise<Blob> {
+  async downloadReport(runId: string, format: 'markdown' | 'json'): Promise<Blob> {
     const response = await this.client.get(`/api/reports/${runId}/download`, {
       params: { format },
       responseType: 'blob',
