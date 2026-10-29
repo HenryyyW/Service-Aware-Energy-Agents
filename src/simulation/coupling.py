@@ -480,7 +480,7 @@ class SimulationCoupler:
             
             # EV charger power (positive = charging)
             building_ev_powers = {}
-            for i, ev in enumerate(building.evs):
+            for i, ev in enumerate(building.evs or []):
                 asset_id = f"{bid}_ev_{i}"
                 # Check observations for EV charger power
                 ev_power_key = f"{asset_id}_charging_power"
@@ -512,7 +512,7 @@ class SimulationCoupler:
         for building in self.scenario_config.buildings:
             bid = building.building_id
             # Check for EV chargers in this building
-            for i, ev in enumerate(building.evs):
+            for i, ev in enumerate(building.evs or []):
                 asset_id = f"{bid}_ev_{i}"
                 if asset_id in modified_ev:
                     modified_ev[asset_id] = self.failure_injector.apply_ev_charger_failure(modified_ev, asset_id)
