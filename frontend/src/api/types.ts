@@ -280,21 +280,6 @@ export interface RepairPatch {
   diff: string;
 }
 
-export interface ReportResponse {
-  run_id: string;
-  run_name?: string;
-  scenario_id: string;
-  controller_type: string;
-  status: string;
-  generation_status: 'pending' | 'computing' | 'ready' | 'failed';
-  outcome_sentence?: string;
-  markdown: string;
-  kpi_blocks: Record<string, any>;
-  detail_sections: Record<string, any>;
-  start_time: string;
-  end_time?: string;
-}
-
 export interface WebSocketMessage {
   type: 'simulation_update' | 'simulation_complete' | 'simulation_error' | 'agent_update' | 'agent_complete' | 'connected' | 'echo';
   payload: any;
@@ -460,10 +445,10 @@ export interface ReportResponse {
   controller_type: string;
   status: string;
   generation_status: 'pending' | 'computing' | 'ready' | 'failed';
-  outcome_sentence?: string | null;
+  outcome_sentence?: string | undefined;
   markdown: string;
   kpi_blocks: Record<string, any>;
   detail_sections: Record<string, any>;
   start_time: string;
-  end_time?: string | null;
+  end_time?: string | undefined;
 }
