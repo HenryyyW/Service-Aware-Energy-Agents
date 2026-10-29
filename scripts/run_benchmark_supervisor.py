@@ -327,8 +327,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Cap each episode (omit for a full episode)")
     parser.add_argument("--retries", type=int, default=1,
                         help="Retries per run after the first failure (default 1)")
-    parser.add_argument("--timeout", type=int, default=0,
-                        help="Per-attempt timeout in seconds (0 = no limit)")
+    parser.add_argument("--timeout", type=int, default=900,
+                        help="Per-attempt timeout in seconds (default 900; 0 = no limit). "
+                             "A timed-out attempt is killed and counted as a failure so a "
+                             "hung run costs one timeout plus retries, not the whole matrix")
     parser.add_argument("--fail-fast", action="store_true",
                         help="Stop the matrix at the first exhausted run")
     parser.add_argument("--force", action="store_true",
