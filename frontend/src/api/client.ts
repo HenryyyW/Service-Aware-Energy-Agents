@@ -1,4 +1,4 @@
-import axios, { type AxiosInstance, type AxiosError } from 'axios';
+﻿import axios, { type AxiosInstance, type AxiosError } from 'axios';
 import type {
   ScenarioConfig,
   SimulationRun,
@@ -6,6 +6,7 @@ import type {
   AgentTask,
   WebSocketMessage,
   NetworkGeometry,
+  AssetMetadata,
   ReportResponse,
 } from './types';
 
@@ -64,13 +65,14 @@ class ApiClient {
   }
 
   // Network geometry endpoints
-  async getNetworkGeometry(scenarioId?: string): Promise<NetworkGeometry> {
-    const params = scenarioId ? { scenario_id: scenarioId } : {};
-    const response = await this.client.get('/api/network/geometry', { params });
+  async getNetworkGeometry(scenarioId: string): Promise<NetworkGeometry> {
+    const response = await this.client.get('/api/network/geometry', {
+      params: { scenario_id: scenarioId }
+    });
     return response.data;
   }
 
-  async getAssetMetadata(scenarioId: string): Promise<any> {
+  async getAssetMetadata(scenarioId: string): Promise<AssetMetadata> {
     const response = await this.client.get(`/api/network/asset-metadata/${scenarioId}`);
     return response.data;
   }
@@ -146,7 +148,7 @@ class ApiClient {
 
 export const api = new ApiClient();
 
-// WebSocket connection manager
+// WebSocket connection state
 export interface WebSocketConnectionState {
   isConnected: boolean;
   isReconnecting: boolean;
@@ -155,6 +157,7 @@ export interface WebSocketConnectionState {
   reconnectAttempts: number;
 }
 
+// WebSocket connection manager
 export class WebSocketManager {
   private ws: WebSocket | null = null;
   private messageHandlers: Map<string, Set<(payload: any, meta?: WebSocketMessage['meta']) => void>> = new Map();

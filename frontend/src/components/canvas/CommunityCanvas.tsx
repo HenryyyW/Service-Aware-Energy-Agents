@@ -28,7 +28,7 @@ import { LayerTree } from '../panels/LayerTree';
 import { AssetInspector } from '../panels/AssetInspector';
 import { GridExplorer } from '../panels/GridExplorer';
 import { TopBar } from '../panels/TopBar';
-import type { Building, PVAsset, BatteryAsset, EVAsset, Feeder, Transformer, GridDiagnostics, NetworkBus } from '../../api/types';
+import type { Building, PVAsset, BatteryAsset, EVAsset, Feeder, Transformer, GridDiagnostics, NetworkBus, PVAssetMetadata, BatteryAssetMetadata, EVAssetMetadata } from '../../api/types';
 
 interface CommunityCanvasProps {}
 
@@ -46,6 +46,8 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
     mapStyle,
     networkGeometry: sourceNetworkGeometry,
     fetchNetworkGeometry,
+    fetchAssetMetadata,
+    assetMetadata,
   } = useCanvasStore();
 
   const {
@@ -77,8 +79,17 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
 
   // Fetch network geometry on mount
   useEffect(() => {
-    fetchNetworkGeometry();
-  }, [fetchNetworkGeometry]);
+    if (currentRun?.scenario_id) {
+      fetchNetworkGeometry(currentRun.scenario_id);
+    }
+  }, [fetchNetworkGeometry, currentRun?.scenario_id]);
+
+  // Fetch asset metadata when scenario changes
+  useEffect(() => {
+    if (currentRun?.scenario_id) {
+      fetchAssetMetadata(currentRun.scenario_id);
+    }
+  }, [fetchAssetMetadata, currentRun?.scenario_id]);
 
   useEffect(() => {
     if (!currentRun?.scenario_id) return;
@@ -185,57 +196,41 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
     });
   }, [buildingIds, buildingLocations, currentStepData]);
 
+  // Use asset metadata from API for PV assets
   const pvAssets = useMemo((): PVAsset[] => {
-    return buildings.flatMap((building) => {
-      const hasGeneration = trajectories.some((step) =>
-        Number(step.observations[`${building.building_id}_solar_generation`] || 0) > 0
-      );
-      return hasGeneration ? [{
-        asset_id: `${building.building_id}_pv`,
-        building_id: building.building_id,
-        orientation: 180,
-        tilt: 30,
-      }] : []
-    });
-  }, [buildings, trajectories]);
+    if (!assetMetadata?.pv) return [];
+    return assetMetadata.pv.map((pv: PVAssetMetadata) => ({
+      asset_id: pv.asset_id,
+      building_id: pv.building_id,
+      orientation: pv.orientation,
+      tilt: pv.tilt,
+      location: pv.location,
+    }));
+  }, [assetMetadata]);
 
+  // Use asset metadata from API for battery assets
   const batteryAssets = useMemo((): BatteryAsset[] => {
-    return buildings.flatMap((building) => {
-      const hasBatteryActions = trajectories.some((step) =>
-        step.applied_actions?.some((action) =>
-          action.asset_id === `${building.building_id}_battery`
-          && ['battery_charge', 'battery_discharge'].includes(action.action_type)
-        )
-      );
-      return hasBatteryActions ? [{
-        asset_id: `${building.building_id}_battery`,
-        building_id: building.building_id,
-        community: false,
-        soc: 0,
-        location: building.location,
-      }] : []
-    });
-  }, [buildings, trajectories]);
+    if (!assetMetadata?.batteries) return [];
+    return assetMetadata.batteries.map((battery: BatteryAssetMetadata) => ({
+      asset_id: battery.asset_id,
+      building_id: battery.building_id,
+      community: false,
+      soc: 0,
+      location: battery.location,
+    }));
+  }, [assetMetadata]);
 
+  // Use asset metadata from API for EV assets
   const evAssets = useMemo((): EVAsset[] => {
-    const evIds = new Set(trajectories.flatMap((step) =>
-      (step.applied_actions || [])
-        .filter((action) => action.action_type === 'ev_charge')
-        .map((action) => action.asset_id)
-    ));
-    return [...evIds].flatMap((assetId) => {
-      const buildingId = assetId.match(/^(building_\d+)_/)?.[1];
-      const location = buildingId ? buildingLocations.get(buildingId) : undefined;
-      if (!buildingId || !location) return [];
-      return [{
-        asset_id: assetId,
-        building_id: buildingId,
-        hub: false,
-        soc: 0,
-        location,
-      }];
-    });
-  }, [buildingLocations, trajectories]);
+    if (!assetMetadata?.evs) return [];
+    return assetMetadata.evs.map((ev: EVAssetMetadata) => ({
+      asset_id: ev.asset_id,
+      building_id: ev.building_id,
+      hub: false,
+      soc: 0,
+      location: ev.location,
+    }));
+  }, [assetMetadata]);
 
   // Create feeders from real network line geometries
   const feeders = useMemo((): Feeder[] => {
