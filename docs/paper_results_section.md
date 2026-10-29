@@ -17,11 +17,13 @@ release artifacts:
 |---|---|
 | T2, T3 | `python -m experiments.summarize_results --input experiments/matrix_full_v2 --reference rule_based` |
 | T3 (ablation reference) | same, `--reference multi_agent`, input `experiments/ablation_fallback` |
+| T4 | `python -m experiments.ablation_analysis ablation --input experiments/ablation_fallback --reference multi_agent` → `ablation_kpis.md`, `ablation_agent_execution.md` |
 | F1, F2, F3 | `python -m experiments.make_figures --input experiments/matrix_full_v2 --out experiments/figures` |
 | F4 | reference-controller `plots/*.png` produced by `experiments/run_experiment.py` |
 | F5 | `grid_diagnostics.jsonl` + failure-injector log from the `scenario_e` runs |
 | F6 | `result.json` → `agent_execution` block of the ablation runs |
 | T5 | per-run `manifest.json`, `failed_runs.json`, `scripts/check_artifacts.py` |
+| T5 table | `python -m experiments.ablation_analysis repro --input experiments/matrix_full_v2` → `reproducibility.md` |
 
 ## 5.1 Experimental setup (T1)
 
