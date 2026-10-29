@@ -333,6 +333,12 @@ def build_repro_markdown(report: Dict[str, Any]) -> str:
             f"{report['runs_without_agent_stats']} runs carry no agent block "
             "(non-ablation controllers); expected outside the ablation directory."
         )
+    if report["runs_with_manifest"] == 0:
+        lines.append(
+            "**Warning:** no per-run `manifest.json` found — this directory only has "
+            "aggregated output, so T5 cannot be generated from it. Point `--input` at "
+            "the benchmark output directory that contains `<scenario>/<run_id>/`."
+        )
     if len(report["git_commits"]) > 1:
         lines.append(
             "**Warning:** runs came from more than one commit; T5 must report each "

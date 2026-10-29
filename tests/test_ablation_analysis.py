@@ -179,6 +179,16 @@ def test_repro_report_flags_seed_mismatch_and_dirty_tree(tmp_path):
     assert "Sampling-seed mismatches" in markdown
 
 
+def test_repro_report_warns_when_only_aggregates_are_present(tmp_path):
+    """An aggregates-only directory (raw_results.json) must not look like a clean T5."""
+    (tmp_path / "raw_results.json").write_text("[]")
+    report = repro_report(tmp_path)
+    assert report["runs_with_manifest"] == 0
+    markdown = build_repro_markdown(report)
+    assert "no per-run `manifest.json` found" in markdown
+    assert "T5 cannot be generated" in markdown
+
+
 def test_repro_report_accepts_clean_matrix(tmp_path):
     for seed in (42, 123):
         _write_run(tmp_path, "scenario_a", "rule_based", seed, with_agent_block=False)
