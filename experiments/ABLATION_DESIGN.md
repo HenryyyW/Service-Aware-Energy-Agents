@@ -56,6 +56,10 @@ already defined in the evaluation code:
 2. **Seeding.** LLM sampling temperature is fixed and the sampling seed is
    recorded per run; prompts are versioned (prompt hash in the manifest) so an
    LLM-backend rerun is traceable even if the provider is not bit-reproducible.
+   In fallback mode (no LLM backend) the sampling seed defaults to the run's
+   scenario seed (`LLMAgentController.__init__`), so `sampling_seed ==
+   random_seed` in every manifest; there is no independent RNG stream to look
+   for, and the deterministic fallback path consumes no sampling randomness.
 3. **Failure handling.** A step whose LLM output is unparseable counts as a
    first-attempt failure, applies the deterministic fallback for that step, and
    continues; the run only fails on simulation errors like any other run.
