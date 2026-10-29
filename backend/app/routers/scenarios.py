@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from uuid import uuid4
 import json
+import os
 from pathlib import Path
 
 from src.schemas.scenario import ScenarioConfig, BuildingConfig, PandapowerConfig
@@ -13,10 +14,26 @@ router = APIRouter()
 # In-memory storage for scenarios (in production, use a database)
 _scenarios: dict[str, ScenarioConfig] = {}
 
-# Path to scenario data directory
-import os
-PROJECT_ROOT = Path(os.environ.get("PROJECT_ROOT", Path(__file__).parent.parent.parent.parent.parent))
-SCENARIO_DATA_DIR = PROJECT_ROOT / "data" / "schemas"
+
+def _get_scenario_data_dir() -> Path:
+    """Get the scenario data directory, resolving from multiple possible locations."""
+    # Try environment variable first
+    if "PROJECT_ROOT" in os.environ:
+        return Path(os.environ["PROJECT_ROOT"]) / "data" / "schemas"
+    
+    # Try to find data/schemas by walking up from this file
+    current = Path(__file__).parent
+    for _ in range(6):
+        candidate = current / "data" / "schemas"
+        if candidate.exists():
+            return candidate
+        current = current.parent
+    
+    # Fallback to relative path from project root
+    return Path(__file__).parent.parent.parent.parent.parent / "data" / "schemas"
+
+
+SCENARIO_DATA_DIR = _get_scenario_data_dir()
 
 
 def _load_scenario_from_disk(scenario_id: str) -> Optional[ScenarioConfig]:

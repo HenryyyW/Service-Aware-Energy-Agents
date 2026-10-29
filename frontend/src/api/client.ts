@@ -148,12 +148,30 @@ class ApiClient {
 export const api = new ApiClient();
 
 // WebSocket connection manager
+export interface WebSocketConnectionState {
+  isConnected: boolean;
+  isReconnecting: boolean;
+  lastMessageTime: number | null;
+  stale: boolean;
+  reconnectAttempts: number;
+}
+
 export class WebSocketManager {
   private ws: WebSocket | null = null;
-  private messageHandlers: Map<string, Set<(payload: any) => void>> = new Map();
+  private messageHandlers: Map<string, Set<(payload: any, meta?: WebSocketMessage['meta']) => void>> = new Map();
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
+  private connectionState: WebSocketConnectionState = {
+    isConnected: false,
+    isReconnecting: false,
+    lastMessageTime: null,
+    stale: false,
+    reconnectAttempts: 0,
+  };
+  private stateListeners: Set<(state: WebSocketConnectionState) => void> = new Set();
+  private staleCheckInterval: number | null = null;
+  private readonly STALE_THRESHOLD = 5000; // 5 seconds
 
   connect(runId?: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -166,13 +184,24 @@ export class WebSocketManager {
       this.ws.onopen = () => {
         console.log('WebSocket connected');
         this.reconnectAttempts = 0;
+        this.updateConnectionState({
+          isConnected: true,
+          isReconnecting: false,
+          reconnectAttempts: 0,
+        });
+        this.startStaleCheck();
         resolve();
       };
 
       this.ws.onmessage = (event) => {
         try {
           const message: WebSocketMessage = JSON.parse(event.data);
-          this.dispatchMessage(message.type, message.payload);
+          const now = Date.now();
+          this.updateConnectionState({
+            lastMessageTime: now,
+            stale: false,
+          });
+          this.dispatchMessage(message.type, message.payload, message.meta);
         } catch (error) {
           console.error('Failed to parse WebSocket message:', error);
         }
@@ -185,33 +214,69 @@ export class WebSocketManager {
 
       this.ws.onclose = () => {
         console.log('WebSocket disconnected');
+        this.updateConnectionState({
+          isConnected: false,
+        });
+        this.stopStaleCheck();
         this.attemptReconnect(runId);
       };
     });
   }
 
-  private attemptReconnect(runId?: string) {
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++;
-      const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-      console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
-      setTimeout(() => this.connect(runId), delay);
+  private updateConnectionState(partial: Partial<WebSocketConnectionState>) {
+    this.connectionState = { ...this.connectionState, ...partial };
+    this.stateListeners.forEach((listener) => listener(this.connectionState));
+  }
+
+  private startStaleCheck() {
+    this.stopStaleCheck();
+    this.staleCheckInterval = window.setInterval(() => {
+      if (this.connectionState.lastMessageTime) {
+        const timeSinceLastMessage = Date.now() - this.connectionState.lastMessageTime;
+        if (timeSinceLastMessage > this.STALE_THRESHOLD && !this.connectionState.stale) {
+          this.updateConnectionState({ stale: true });
+        }
+      }
+    }, 1000);
+  }
+
+  private stopStaleCheck() {
+    if (this.staleCheckInterval !== null) {
+      clearInterval(this.staleCheckInterval);
+      this.staleCheckInterval = null;
     }
   }
 
-  private dispatchMessage(type: string, payload: any) {
+  private attemptReconnect(runId?: string) {
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++;
+      this.updateConnectionState({
+        isReconnecting: true,
+        reconnectAttempts: this.reconnectAttempts,
+      });
+      const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+      console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+      setTimeout(() => this.connect(runId), delay);
+    } else {
+      this.updateConnectionState({
+        isReconnecting: false,
+      });
+    }
+  }
+
+  private dispatchMessage(type: string, payload: any, meta?: WebSocketMessage['meta']) {
     const handlers = this.messageHandlers.get(type);
     if (handlers) {
-      handlers.forEach((handler) => handler(payload));
+      handlers.forEach((handler) => handler(payload, meta));
     }
     // Also dispatch to wildcard handlers
     const wildcardHandlers = this.messageHandlers.get('*');
     if (wildcardHandlers) {
-      wildcardHandlers.forEach((handler) => handler({ type, payload }));
+      wildcardHandlers.forEach((handler) => handler({ type, payload }, meta));
     }
   }
 
-  on(messageType: string, handler: (payload: any) => void): () => void {
+  on(messageType: string, handler: (payload: any, meta?: WebSocketMessage['meta']) => void): () => void {
     if (!this.messageHandlers.has(messageType)) {
       this.messageHandlers.set(messageType, new Set());
     }
@@ -223,8 +288,17 @@ export class WebSocketManager {
     };
   }
 
-  off(messageType: string, handler: (payload: any) => void) {
+  off(messageType: string, handler: (payload: any, meta?: WebSocketMessage['meta']) => void) {
     this.messageHandlers.get(messageType)?.delete(handler);
+  }
+
+  onConnectionStateChange(listener: (state: WebSocketConnectionState) => void): () => void {
+    this.stateListeners.add(listener);
+    // Immediately call with current state
+    listener(this.connectionState);
+    return () => {
+      this.stateListeners.delete(listener);
+    };
   }
 
   send(message: any) {
@@ -234,16 +308,24 @@ export class WebSocketManager {
   }
 
   disconnect() {
+    this.stopStaleCheck();
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
     this.messageHandlers.clear();
+    this.stateListeners.clear();
+    this.updateConnectionState({
+      isConnected: false,
+      isReconnecting: false,
+      lastMessageTime: null,
+      stale: false,
+      reconnectAttempts: 0,
+    });
   }
 
-  get isConnected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN;
+  getConnectionState(): WebSocketConnectionState {
+    return { ...this.connectionState };
   }
-}
 
 export const wsManager = new WebSocketManager();

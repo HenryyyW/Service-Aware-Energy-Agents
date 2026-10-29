@@ -270,8 +270,16 @@ export interface RepairPatch {
 }
 
 export interface WebSocketMessage {
-  type: 'simulation_update' | 'simulation_complete' | 'simulation_error' | 'agent_update' | 'agent_complete';
+  type: 'simulation_update' | 'simulation_complete' | 'simulation_error' | 'agent_update' | 'agent_complete' | 'connected' | 'echo';
   payload: any;
+  meta?: {
+    timestamp: string;
+    stale: boolean;
+    reconnecting: boolean;
+    correlation_id: string;
+    stage?: string;
+    eta_seconds?: number;
+  };
 }
 
 export interface TimePlayerState {
