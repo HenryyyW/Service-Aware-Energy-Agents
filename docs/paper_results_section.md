@@ -1,14 +1,16 @@
 # Results section (draft)
 
 Draft text for the paper's results section, following
-`docs/paper_results_outline.md`. **Status: v0.1 — structure, conventions and
-artifact map are final; every number marked `⟨pending⟩` is filled from the
-paper matrix (`experiments/matrix_full_v2`) and the ablation
-(`experiments/ablation_fallback`) once QA's runs land.** Numbers quoted from the
-first 125-run matrix are labelled *v1 diagnostic* and are not paper results:
-that matrix predates the controller-action fix and the scenario-aware schemas,
-so several scenarios collapse onto each other and `multi_agent` reports a
-spurious 0.000 EV completion (see Caveats).
+`docs/paper_results_outline.md`. **Status: v0.2 — structure, conventions and
+artifact map are final; every number marked `⟨pending⟩` is filled from a fresh
+paper matrix + ablation run on the metric-fixed tree.** The 125-run matrix at
+`Shared/paper_artifacts/matrix/` (base `571bdfd`) and 50-run ablation (base
+`bb6f24f`) are **not** usable for paper numbers: both predate three
+metric-collection fixes landed on this branch (see Caveats) — EV service was
+structurally 0.000 everywhere, `scenario_e` community cost was NaN, and
+`gini_coefficient`/`member_cost_coverage` were schema defaults rather than
+computed values. QA re-runs after this branch merges. Numbers quoted from the
+first 125-run matrix are labelled *v1 diagnostic* and are not paper results.
 
 All tables/figures in this section are generated from committed summaries plus
 release artifacts:
@@ -65,8 +67,11 @@ single KPI:
   read this as evidence that the coordination gain is not an artefact of
   "having an optimizer at all".
 
-⟨pending⟩ Replace the v1 magnitudes with matrix_full_v2 T2/T3 values; state
-whether the ordering of the front is unchanged and report the paired CIs.
+⟨pending⟩ Replace the v1 magnitudes with the metric-fixed matrix T2/T3 values;
+state whether the ordering of the front is unchanged and report the paired CIs.
+The EV-service arm of the front is only meaningful after the EV-definition fix
+(Caveat 2), which restores real EV load (e.g. `rule_based` scenario A peak
+demand rises 12.4 → 32.6 kW, `mpc` reaches 1.000 completion at avg SOC 0.88).
 
 **F1** (per-scenario KPI bars with CI whiskers) and **F2** (per-seed strips)
 carry the variance evidence; **F3** is the Pareto panel annotated with peak
@@ -107,6 +112,13 @@ serialisation, `allow_nan=False`).
 paper matrix), then the cost/peak comparison restricted to runs with coverage
 1.0, with the interrupted-run subset described separately. F5 shows the grid
 response timeline around the injected events.
+
+The community cost must be reported with a second coverage covariate,
+`energy.cost_coverage` (valid building-steps / total building-steps in the
+episode), because the injected sensor failure also blanks individual building
+readings: `total_cost` is computed over valid building-steps only, and
+`invalid_cost_steps` counts the blanked ones (Scenario E seed 42 on the fixed
+tree: `total_cost` 104.51, `cost_coverage` 0.973, 23 invalid steps).
 
 ## 5.4 Ablation: verified versus unverified agents (T4, F6)
 
@@ -154,20 +166,38 @@ and why.
    the paper tree (`scenario-aware schemas`, per-device action dimensions,
    coordination clock). The v1 125-run matrix is retained only as a
    controller-distinctness diagnostic and must not be cited as a result.
-2. **The multi_agent EV-completion artifact.** The published v1 matrix reports
-   `multi_agent` EV completion 0.000. This is a clock bug (agents scheduled on a
-   15-minute grid while the scenario steps hourly) plus a YAML-versus-dataset EV
-   mismatch, not a strategy outcome. The paper matrix re-runs on the fixed clock;
-   if completion is still 0.000 the fix was insufficient and the number must be
-   investigated before publication.
-3. **Scenario fidelity.** Synthetic load traces depend only on (seed, filename),
+2. **The EV-completion artifact (root cause found; fixed on this branch).** The
+   0.000 EV completion in every one of the 125 runs was not a strategy outcome
+   and not the clock: the synthesized charger schedules named a fixed
+   `Electric_Vehicle_scenario`, which had no entry in the schema's
+   `electric_vehicles_def`, so CityLearn resolved no vehicle and never plugged
+   one (`connected` stayed 0 for all 168 steps). Fixed by registering one
+   `Electric_Vehicle_{building}_{index}` definition per charger; verified EV load
+   now exists (completion 0.0286 `rule_based` / 1.000 `mpc` on scenario A, and
+   `rule_based` scenario A peak demand 12.4 → 32.6 kW). The matrix must be
+   re-run; the pre-fix EV columns are invalid.
+3. **Metric-collection defects on the pre-fix base (fixed on this branch).**
+   (a) `scenario_e` community `total_cost` was NaN in all 25 runs because an
+   injected sensor failure returns NaN for `building_3`'s reading and the metric
+   summed it; totals now skip invalid building-steps and report `cost_coverage`.
+   (b) `per_member_costs` was `{}` in every run, so `gini_coefficient` 0.0 and
+   `member_cost_coverage` 1.0 were `ServiceMetrics` schema defaults, not
+   evidence: `FairnessAnalyzer` was never called from the run pipeline and
+   CityLearn's step info carries no `cost` entry. Per-member cost is now derived
+   in the pipeline from each member's net demand and tariff, and the report
+   carries computed member costs, Gini, coverage and interruption. The 50-run
+   ablation has the same defects (EV 0/50, `scenario_e` cost non-finite) and is
+   re-run too.
+4. **Scenario fidelity.** Synthetic load traces depend only on (seed, filename),
    so cross-scenario load-profile differentiation remains limited even though
    device mixes now differ. Reported scenario effects are device-mix effects.
-4. **Fallback-mode ablation.** See §5.4 — labelled in every table; no claims
+   With the EV fix in place, retrained Q-learning policies for A, D and E share
+   the same 126-state table (same device mix); only B and C differ.
+5. **Fallback-mode ablation.** See §5.4 — labelled in every table; no claims
    about LLM proposal quality.
-5. **Seed count.** Five seeds give narrow CIs; significance is assessed on
+6. **Seed count.** Five seeds give narrow CIs; significance is assessed on
    paired per-seed deltas with Holm correction, and effect sizes are reported
    next to p-values.
-6. **Runtime tail.** Three `multi_agent` runs in v1 hung on a killed subprocess
+7. **Runtime tail.** Three `multi_agent` runs in v1 hung on a killed subprocess
    and were reclaimed by the per-run timeout; runtime is reported as median/IQR
    with that footnote rather than as a mean.
