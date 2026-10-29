@@ -110,7 +110,9 @@ class SimulationCoupler:
         observations, cl_result = self.citylearn.step(requested_actions)
         
         # Apply failure injection at the START of the timestep
-        newly_activated = self.failure_injector.step(self.current_timestep)
+        failure_events = self.failure_injector.step(self.current_timestep)
+        newly_activated = failure_events['activated']
+        newly_deactivated = failure_events['deactivated']
         active_failures = self.failure_injector.get_active_failures()
         
         # Collect failure diagnostics to merge later (after run_power_flow)
@@ -145,12 +147,14 @@ class SimulationCoupler:
                 ))
         
         # Extract building powers for grid
-        building_powers, building_pvs, building_battery_powers = self._extract_building_powers(cl_result)
+        building_powers, building_pvs, building_battery_powers, building_ev_powers = self._extract_building_powers(cl_result)
         
         # Apply failures to building powers
         building_pvs = self._apply_pv_failures(building_pvs)
         building_battery_powers = self._apply_battery_failures(building_battery_powers)
-        building_powers = self._apply_sensor_failures(building_powers, cl_result.observations)
+        building_ev_powers = self._apply_ev_charger_failures(building_ev_powers)
+        # Apply sensor failures to observations (corrupt sensor readings)
+        cl_result.observations = self._apply_sensor_failures(cl_result.observations)
         
         # Apply grid limit failures
         import_limit = self.scenario_config.community_import_limit_kw or float('inf')
@@ -285,6 +289,47 @@ class SimulationCoupler:
             }
         if settlement_snapshot:
             grid_diag_dict["settlement_snapshot"] = settlement_snapshot
+        
+        # Add failure injection data for verification harness
+        if active_failures:
+            grid_diag_dict["active_failures"] = [
+                {
+                    "failure_id": f.failure_id,
+                    "asset_id": f.asset_id,
+                    "failure_type": f.failure_type,
+                    "severity": f.severity,
+                    "start_timestep": f.start_timestep,
+                    "end_timestep": f.end_timestep,
+                }
+                for f in active_failures
+            ]
+        failure_events_list = []
+        if newly_activated:
+            failure_events_list.extend([
+                {
+                    "event": "activated",
+                    "timestep": self.current_timestep,
+                    "failure_id": f.failure_id,
+                    "asset_id": f.asset_id,
+                    "failure_type": f.failure_type,
+                    "severity": f.severity,
+                }
+                for f in newly_activated
+            ])
+        if newly_deactivated:
+            failure_events_list.extend([
+                {
+                    "event": "deactivated",
+                    "timestep": self.current_timestep,
+                    "failure_id": f.failure_id,
+                    "asset_id": f.asset_id,
+                    "failure_type": f.failure_type,
+                    "severity": f.severity,
+                }
+                for f in newly_deactivated
+            ])
+        if failure_events_list:
+            grid_diag_dict["failure_events"] = failure_events_list
         
         cl_result.grid_diagnostics = grid_diag_dict
         
@@ -432,8 +477,74 @@ class SimulationCoupler:
                         break
                 else:
                     building_battery_powers[bid] = 0.0
+            
+            # EV charger power (positive = charging)
+            building_ev_powers = {}
+            for i, ev in enumerate(building.evs):
+                asset_id = f"{bid}_ev_{i}"
+                # Check observations for EV charger power
+                ev_power_key = f"{asset_id}_charging_power"
+                if ev_power_key in obs:
+                    building_ev_powers[asset_id] = float(obs[ev_power_key])
+                else:
+                    # Try to infer from applied actions
+                    for action in cl_result.applied_actions.actions:
+                        if action.asset_id == asset_id and action.action_type == ActionType.EV_CHARGE:
+                            building_ev_powers[asset_id] = float(action.value_kw)
+                            break
+                    else:
+                        building_ev_powers[asset_id] = 0.0
         
-        return building_powers, building_pvs, building_battery_powers
+        return building_powers, building_pvs, building_battery_powers, building_ev_powers
+    
+    def _apply_pv_failures(self, building_pvs: Dict[str, float]) -> Dict[str, float]:
+        """Apply PV inverter failures to building PV generation."""
+        modified_pvs = building_pvs.copy()
+        for building in self.scenario_config.buildings:
+            bid = building.building_id
+            if bid in modified_pvs:
+                modified_pvs[bid] = self.failure_injector.apply_pv_failure(modified_pvs, bid)
+        return modified_pvs
+    
+    def _apply_ev_charger_failures(self, building_ev_powers: Dict[str, float]) -> Dict[str, float]:
+        """Apply EV charger failures to EV charging power."""
+        modified_ev = building_ev_powers.copy()
+        for building in self.scenario_config.buildings:
+            bid = building.building_id
+            # Check for EV chargers in this building
+            for i, ev in enumerate(building.evs):
+                asset_id = f"{bid}_ev_{i}"
+                if asset_id in modified_ev:
+                    modified_ev[asset_id] = self.failure_injector.apply_ev_charger_failure(modified_ev, asset_id)
+        return modified_ev
+    
+    def _apply_sensor_failures(self, observations: Dict[str, float]) -> Dict[str, float]:
+        """Apply sensor failures - corrupt specific sensor readings in observations."""
+        # Sensor failures affect observations - return NaN for failed sensors
+        modified_obs = observations.copy()
+        for building in self.scenario_config.buildings:
+            bid = building.building_id
+            # Check for sensor failures on this building's sensors
+            failure = self.failure_injector.is_asset_failed(f"{bid}_net_electricity_consumption")
+            if failure and failure.failure_type == "sensor":
+                sensor_key = f"{bid}_net_electricity_consumption"
+                if sensor_key in modified_obs:
+                    modified_obs[sensor_key] = float('nan')
+        return modified_obs
+    
+    def _apply_sensor_failures(self, observations: Dict[str, float]) -> Dict[str, float]:
+        """Apply sensor failures - corrupt specific sensor readings in observations."""
+        # Sensor failures affect observations - return NaN for failed sensors
+        modified_obs = observations.copy()
+        for building in self.scenario_config.buildings:
+            bid = building.building_id
+            # Check for sensor failures on this building's sensors
+            failure = self.failure_injector.is_asset_failed(f"{bid}_net_electricity_consumption")
+            if failure and failure.failure_type == "sensor":
+                sensor_key = f"{bid}_net_electricity_consumption"
+                if sensor_key in modified_obs:
+                    modified_obs[sensor_key] = float('nan')
+        return modified_obs
     
     def get_kpis(self) -> Dict[str, Any]:
         """Get combined KPIs from both simulators."""
@@ -449,6 +560,9 @@ class SimulationCoupler:
             # Add per-building savings
             sharing_kpis["per_building_savings"] = self.settlement_engine.get_building_savings()
         
+        # Add failure injection summary for verification harness
+        failure_summary = self.failure_injector.get_failure_summary() if self.failure_injector else {}
+        
         return {
             **cl_kpis,
             **grid_kpis,
@@ -462,6 +576,7 @@ class SimulationCoupler:
             "grid_trafo_violations": sum(1 for h in self.co_sim_history 
                                         for d in h.grid_diagnostics.diagnostics 
                                         if d.category == DiagnosticCategory.TRANSFORMER_LOADING),
+            "failure_summary": failure_summary,
         }
     
     def get_per_building_contributions(self) -> List[Dict[str, Dict[str, float]]]:
