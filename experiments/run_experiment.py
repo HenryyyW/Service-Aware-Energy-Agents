@@ -47,10 +47,31 @@ class ExperimentRunner:
         self.start_time: Optional[float] = None
         self.end_time: Optional[float] = None
     
-    def setup(self, controller_type: str = "rule_based", rl_policy: Optional[str] = None):
+    def setup(self, controller_type: str = "rule_based", rl_policy: Optional[str] = None, 
+              llm_backend: Optional[str] = None, llm_model: Optional[str] = None,
+              llm_prompt_template: Optional[str] = None, llm_max_usd: Optional[float] = None,
+              llm_max_latency_ms: Optional[int] = None, llm_max_tokens: Optional[int] = None):
         """Setup simulator and controller."""
         # Create coupler
         self.coupler = SimulationCoupler(self.scenario_config, data_dir="data")
+        
+        # Create LLM config if using LLM controllers
+        llm_config = None
+        if controller_type in ("llm_agent", "llm_agent_verified"):
+            from src.agents.backend.config import LLMConfig
+            llm_config = LLMConfig()
+            if llm_backend:
+                llm_config._backend_raw = llm_backend
+            if llm_model:
+                llm_config.model = llm_model
+            if llm_prompt_template:
+                llm_config.prompt_template_id = llm_prompt_template
+            if llm_max_usd is not None:
+                llm_config.max_usd = llm_max_usd
+            if llm_max_latency_ms is not None:
+                llm_config.max_latency_ms = llm_max_latency_ms
+            if llm_max_tokens is not None:
+                llm_config.max_tokens = llm_max_tokens
         
         # Create controller
         if controller_type == "rule_based":
@@ -77,6 +98,7 @@ class ExperimentRunner:
             self.controller = controller_cls(
                 self.scenario_config,
                 device_metadata=self.coupler.citylearn.get_device_metadata(),
+                llm_config=llm_config,
             )
         else:
             raise ValueError(f"Unknown controller type: {controller_type}")
@@ -451,6 +473,21 @@ def main():
     parser.add_argument("--seed", type=int, default=None, help="Random seed (overrides scenario config)")
     parser.add_argument("--run-id", type=str, default=None, help="Custom run ID (optional)")
     
+    # LLM arguments
+    parser.add_argument("--llm-backend", type=str, default=None,
+                       choices=["fallback", "ollama", "openai_gpt4", "anthropic_claude"],
+                       help="LLM backend to use for llm_agent/llm_agent_verified controllers")
+    parser.add_argument("--llm-model", type=str, default=None,
+                       help="Model name (e.g., qwen2.5-coder:7b for ollama, gpt-4-turbo for openai)")
+    parser.add_argument("--llm-prompt-template", type=str, default=None,
+                       help="Prompt template ID (e.g., llm_agent_v1)")
+    parser.add_argument("--llm-max-usd", type=float, default=None,
+                       help="Maximum USD budget per run")
+    parser.add_argument("--llm-max-latency-ms", type=int, default=None,
+                       help="Maximum latency budget per step in milliseconds")
+    parser.add_argument("--llm-max-tokens", type=int, default=None,
+                       help="Maximum token budget per run")
+    
     args = parser.parse_args()
     
     # Load scenario
@@ -462,7 +499,11 @@ def main():
     
     # Run experiment
     runner = ExperimentRunner(scenario, args.output_dir, run_id=args.run_id)
-    runner.setup(args.controller, rl_policy=args.rl_policy)
+    runner.setup(args.controller, rl_policy=args.rl_policy,
+                 llm_backend=args.llm_backend, llm_model=args.llm_model,
+                 llm_prompt_template=args.llm_prompt_template,
+                 llm_max_usd=args.llm_max_usd, llm_max_latency_ms=args.llm_max_latency_ms,
+                 llm_max_tokens=args.llm_max_tokens)
     result = runner.run(args.max_steps)
     
     # Verify result matches command line

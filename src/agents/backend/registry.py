@@ -83,4 +83,12 @@ def create_backend_from_config(config: Dict[str, Any]) -> "AgentBackend":
     # Extract relevant config for the backend
     backend_config = {k: v for k, v in config.items() if k != "backend"}
     
+    # Map config keys to backend constructor parameters
+    if "prompt_template" in backend_config:
+        backend_config["prompt_template_id"] = backend_config.pop("prompt_template")
+    if "local_endpoint" in backend_config:
+        backend_config["endpoint"] = backend_config.pop("local_endpoint")
+    if "local_model" in backend_config:
+        backend_config["model"] = backend_config.pop("local_model")
+    
     return BackendRegistry.get(backend_type, **backend_config)
