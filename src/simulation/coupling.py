@@ -168,9 +168,30 @@ class SimulationCoupler:
         grid_exports = {}
         
         if self.energy_sharing_enabled and self.settlement_engine:
+            # Check if dynamic/LMP pricing is enabled
+            dynamic_pricing_enabled = (
+                self.scenario_config.energy_sharing.dynamic_pricing is not None and
+                self.scenario_config.energy_sharing.dynamic_pricing.enabled
+            )
+            
+            # Compute LMP prices if dynamic pricing enabled
+            building_lmps = {}
+            if dynamic_pricing_enabled:
+                base_price = 0.1  # $/kWh fallback
+                # Try to get base price from first building's tariff
+                for building in self.scenario_config.buildings:
+                    if building.tariff and building.tariff.import_prices:
+                        # Use average of import prices as base
+                        prices = list(building.tariff.import_prices.values())
+                        if prices:
+                            base_price = sum(prices) / len(prices)
+                            break
+                
+                building_lmps = self.pandapower.get_lmp_prices_for_buildings(base_price)
+            
             # Build building states for market clearing
             building_states = self._build_building_states(
-                cl_result, building_powers, building_pvs, building_battery_powers
+                cl_result, building_powers, building_pvs, building_battery_powers, building_lmps
             )
             
             # Get current carbon intensity if available
@@ -381,7 +402,8 @@ class SimulationCoupler:
         cl_result: SimulationStepResult,
         building_powers: Dict[str, float],
         building_pvs: Dict[str, float],
-        building_battery_powers: Dict[str, float]
+        building_battery_powers: Dict[str, float],
+        building_lmps: Optional[Dict[str, float]] = None
     ) -> Dict[str, BuildingEnergyState]:
         """Build building energy states for market clearing."""
         states = {}
@@ -412,6 +434,11 @@ class SimulationCoupler:
             if hasattr(building, 'max_export_kw'):
                 max_export = min(max_export, building.max_export_kw)
             
+            # Get LMP price for this building
+            lmp_price = None
+            if building_lmps and bid in building_lmps:
+                lmp_price = building_lmps[bid]
+            
             states[bid] = BuildingEnergyState(
                 building_id=bid,
                 net_demand_kw=net_demand,
@@ -420,7 +447,8 @@ class SimulationCoupler:
                 battery_soc=battery_soc,
                 max_import_kw=max_import,
                 max_export_kw=max_export,
-                tariff_config=building.tariff
+                tariff_config=building.tariff,
+                lmp_price=lmp_price
             )
         
         return states

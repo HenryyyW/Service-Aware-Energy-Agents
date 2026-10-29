@@ -99,13 +99,25 @@ class PandapowerConfig(BaseModel):
     run_power_flow_every: int = 1  # every N timesteps
 
 
+class DynamicPricingConfig(BaseModel):
+    """Dynamic/LMP pricing configuration."""
+    enabled: bool = False
+    pricing_type: str = "lmp"  # lmp, dynamic_tariff, rtp
+    lmp_update_interval_minutes: int = 15
+    congestion_cost_method: str = "dc_approx"  # dc_approx, ac_full
+    loss_factor: float = 1.0
+    price_cap_per_kwh: Optional[float] = 1.0  # $/kWh cap
+    fallback_to_tariff: bool = True  # Fallback to building tariffs if LMP unavailable
+
+
 class EnergySharingConfig(BaseModel):
     """Local energy sharing and settlement configuration."""
     enabled: bool = False
-    market_type: str = "uniform_price"  # uniform_price, weighted, carbon_aware, fairness_aware
+    market_type: str = "uniform_price"  # uniform_price, weighted, carbon_aware, fairness_aware, lmp
     settlement_interval: str = "15min"  # 15min, hourly, daily
     export_limit_kw: Optional[float] = None
     import_limit_kw: Optional[float] = None
+    dynamic_pricing: Optional[DynamicPricingConfig] = None
 
     @field_validator("export_limit_kw", "import_limit_kw")
     @classmethod
@@ -117,7 +129,7 @@ class EnergySharingConfig(BaseModel):
     @field_validator("market_type")
     @classmethod
     def validate_market_type(cls, v: str) -> str:
-        valid = {"uniform_price", "weighted", "carbon_aware", "fairness_aware"}
+        valid = {"uniform_price", "weighted", "carbon_aware", "fairness_aware", "lmp"}
         if v not in valid:
             raise ValueError(f"market_type must be one of {valid}")
         return v

@@ -1309,6 +1309,80 @@ class PandapowerAdapter:
             'bounds': bounds
         }
 
+    def compute_lmp_prices(self, base_energy_price: float = 0.1) -> Dict[int, float]:
+        """
+        Compute Locational Marginal Prices (LMP) using DC OPF approximation.
+        
+        Uses pandapower's OPF to compute bus marginal prices (lambda).
+        Returns dict mapping bus_idx -> LMP price ($/kWh).
+        
+        Falls back to base_energy_price if OPF fails.
+        """
+        lmp_prices = {}
+        
+        if not self.net.converged:
+            # Power flow not converged, return base price for all buses
+            for bus_idx in self.net.bus.index:
+                lmp_prices[bus_idx] = base_energy_price
+            return lmp_prices
+        
+        try:
+            # Run DC OPF to get locational marginal prices
+            # Use pandapower's runopp for DC OPF
+            pp.runopp(
+                self.net,
+                algorithm='dc',
+                max_iteration=100,
+                tolerance_mva=1e-6,
+                calculate_voltage_angles=True,
+                enforce_q_lims=False,
+            )
+            
+            # Extract bus marginal prices (lambda) from OPF results
+            # The dual variable for the power balance constraint at each bus = LMP
+            if hasattr(self.net, 'res_bus') and 'lambda' in self.net.res_bus.columns:
+                for bus_idx in self.net.res_bus.index:
+                    lmp = self.net.res_bus.at[bus_idx, 'lambda']
+                    # Convert $/MWh to $/kWh
+                    lmp_prices[bus_idx] = float(lmp) / 1000.0
+            else:
+                # Fallback: use voltage sensitivities to approximate LMP
+                # LMP ≈ base_price * (1 + loss_factor * (1 - V))
+                # This is a very rough approximation
+                if hasattr(self.net, 'res_bus') and 'vm_pu' in self.net.res_bus.columns:
+                    avg_voltage = self.net.res_bus.vm_pu.mean()
+                    for bus_idx in self.net.res_bus.index:
+                        v = self.net.res_bus.at[bus_idx, 'vm_pu']
+                        # Simple approximation: higher voltage = lower losses = slightly lower LMP
+                        loss_factor = 0.1
+                        lmp_prices[bus_idx] = base_energy_price * (1 + loss_factor * (1 - v / avg_voltage))
+                else:
+                    for bus_idx in self.net.bus.index:
+                        lmp_prices[bus_idx] = base_energy_price
+                        
+        except Exception as e:
+            # OPF failed, fall back to base price
+            for bus_idx in self.net.bus.index:
+                lmp_prices[bus_idx] = base_energy_price
+        
+        return lmp_prices
+
+    def get_lmp_prices_for_buildings(self, base_energy_price: float = 0.1) -> Dict[str, float]:
+        """
+        Get LMP prices for each building based on their bus mapping.
+        Returns dict mapping building_id -> LMP price ($/kWh).
+        """
+        bus_lmps = self.compute_lmp_prices(base_energy_price)
+        building_lmps = {}
+        
+        for building_id, bus_idx in self.bus_mapping.items():
+            if bus_idx in bus_lmps:
+                building_lmps[building_id] = bus_lmps[bus_idx]
+            else:
+                building_lmps[building_id] = base_energy_price
+        
+        return building_lmps
+
 
 def create_grid_from_scenario(scenario: ScenarioConfig) -> PandapowerAdapter:
     """Factory function to create PandapowerAdapter from scenario config."""

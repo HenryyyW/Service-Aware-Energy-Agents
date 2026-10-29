@@ -14,6 +14,7 @@ class MarketType(str, Enum):
     WEIGHTED = "weighted"
     CARBON_AWARE = "carbon_aware"
     FAIRNESS_AWARE = "fairness_aware"
+    LMP = "lmp"
 
 
 @dataclass
@@ -27,6 +28,7 @@ class BuildingEnergyState:
     max_import_kw: float
     max_export_kw: float
     tariff_config: Optional[TariffConfig] = None
+    lmp_price: Optional[float] = None  # LMP price at building's bus ($/kWh)
 
 
 @dataclass
@@ -673,6 +675,158 @@ class FairnessAwareClearing(UniformPriceClearing):
         return (n + 1 - 2 * np.sum(cumsum) / cumsum[-1]) / n if cumsum[-1] > 0 else 0.0
 
 
+class LmpClearing(UniformPriceClearing):
+    """LMP-based market clearing - uses locational marginal prices from grid.
+    
+    Each building trades at its bus LMP price. The community pool clears
+    at a uniform price for residual energy after LMP-based bilateral trades.
+    """
+    
+    def clear_market(
+        self, 
+        building_states: Dict[str, BuildingEnergyState],
+        timestep: int,
+        carbon_intensity: Optional[float] = None
+    ) -> MarketClearingResult:
+        # Separate buyers and sellers based on net demand
+        buyers = []  # (bid_price, building_id, max_quantity)
+        sellers = []  # (ask_price, building_id, max_quantity)
+        
+        for bid, state in building_states.items():
+            # Use LMP price if available, otherwise fall back to tariff
+            lmp_price = state.lmp_price
+            tariff_price = None
+            
+            if lmp_price is not None:
+                # LMP-based pricing
+                bid_price = lmp_price
+                ask_price = lmp_price
+            else:
+                # Fall back to tariff-based pricing
+                bid_price = self._get_bid_price(state, timestep)
+                ask_price = self._get_ask_price(state, timestep)
+            
+            if state.net_demand_kw > 1e-3:  # Net buyer
+                max_qty = min(state.net_demand_kw, state.max_import_kw, self.import_limit)
+                if max_qty > 0:
+                    buyers.append((bid_price, bid, max_qty))
+            elif state.net_demand_kw < -1e-3:  # Net seller
+                max_qty = min(-state.net_demand_kw, state.max_export_kw, self.export_limit)
+                if max_qty > 0:
+                    sellers.append((ask_price, bid, max_qty))
+        
+        if not buyers or not sellers:
+            return MarketClearingResult(
+                clearing_price=0.0,
+                trades={b: 0.0 for b in building_states},
+                settlements={b: 0.0 for b in building_states},
+                total_volume_kwh=0.0,
+                market_type=MarketType.LMP,
+                metadata={"reason": "no_buyers_or_sellers"}
+            )
+        
+        # Sort buyers by bid price descending, sellers by ask price ascending
+        buyers.sort(key=lambda x: x[0], reverse=True)
+        sellers.sort(key=lambda x: x[0])
+        
+        # Build supply and demand curves
+        supply_qty = np.cumsum([s[2] for s in sellers])
+        supply_price = [s[0] for s in sellers]
+        demand_qty = np.cumsum([b[2] for b in buyers])
+        demand_price = [b[0] for b in buyers]
+        
+        # Find clearing quantity and price (intersection)
+        max_qty = min(supply_qty[-1], demand_qty[-1])
+        
+        if max_qty <= 1e-6:
+            return MarketClearingResult(
+                clearing_price=0.0,
+                trades={b: 0.0 for b in building_states},
+                settlements={b: 0.0 for b in building_states},
+                total_volume_kwh=0.0,
+                market_type=MarketType.LMP,
+                metadata={"reason": "no_overlapping_volume"}
+            )
+        
+        # Find marginal price at clearing quantity
+        supply_idx = np.searchsorted(supply_qty, max_qty, side='left')
+        supply_idx = min(supply_idx, len(supply_price) - 1)
+        marginal_supply_price = supply_price[supply_idx]
+        
+        demand_idx = np.searchsorted(demand_qty, max_qty, side='left')
+        demand_idx = min(demand_idx, len(demand_price) - 1)
+        marginal_demand_price = demand_price[demand_idx]
+        
+        # Price compatibility check: only clear if demand price >= supply price
+        if marginal_demand_price < marginal_supply_price - 1e-6:
+            return MarketClearingResult(
+                clearing_price=0.0,
+                trades={b: 0.0 for b in building_states},
+                settlements={b: 0.0 for b in building_states},
+                total_volume_kwh=0.0,
+                market_type=MarketType.LMP,
+                metadata={"reason": "no_price_overlap",
+                          "marginal_supply_price": marginal_supply_price,
+                          "marginal_demand_price": marginal_demand_price}
+            )
+        
+        # Community clearing price = average of marginal prices
+        clearing_price = (marginal_supply_price + marginal_demand_price) / 2.0
+        
+        # Allocate trades at clearing price
+        trades = {b: 0.0 for b in building_states}
+        
+        # Allocate to sellers (lowest ask first) up to clearing quantity
+        remaining = max_qty
+        for ask_price, bid, max_qty_seller in sellers:
+            if remaining <= 1e-6:
+                break
+            qty = min(max_qty_seller, remaining)
+            trades[bid] = -qty
+            remaining -= qty
+        
+        actual_cleared = max_qty - remaining
+        
+        # Allocate to buyers (highest bid first) to match actual cleared quantity
+        remaining = actual_cleared
+        for bid_price, bid, max_qty_buyer in buyers:
+            if remaining <= 1e-6:
+                break
+            qty = min(max_qty_buyer, remaining)
+            trades[bid] += qty
+            remaining -= qty
+        
+        # Validate trades (clip to limits but preserve balance)
+        trades = self._validate_trades_balanced(trades, actual_cleared)
+        
+        # Convert kW to kWh: multiply by timestep_hours
+        timestep_hours = self.scenario_config.timestep_minutes / 60.0
+        total_volume_kwh = sum(abs(t) for t in trades.values()) / 2.0 * timestep_hours
+        
+        # Apply kWh conversion to trades for settlement calculation
+        trades_kwh = {b: t * timestep_hours for b, t in trades.items()}
+        settlements = self._calculate_settlements(trades_kwh, clearing_price, building_states)
+        
+        # Track LMP prices used
+        lmp_prices = {bid: state.lmp_price for bid, state in building_states.items() if state.lmp_price is not None}
+        
+        return MarketClearingResult(
+            clearing_price=clearing_price,
+            trades=trades,  # Keep trades in kW for power flow
+            settlements=settlements,
+            total_volume_kwh=total_volume_kwh,
+            market_type=MarketType.LMP,
+            metadata={
+                "buyers_count": len(buyers),
+                "sellers_count": len(sellers),
+                "clearing_quantity_kw": max_qty,
+                "marginal_supply_price": marginal_supply_price,
+                "marginal_demand_price": marginal_demand_price,
+                "lmp_prices": lmp_prices,
+            }
+        )
+
+
 def create_market_engine(
     scenario_config: ScenarioConfig, 
     energy_sharing_config: EnergySharingConfig
@@ -685,6 +839,7 @@ def create_market_engine(
         MarketType.WEIGHTED: WeightedClearing,
         MarketType.CARBON_AWARE: CarbonAwareClearing,
         MarketType.FAIRNESS_AWARE: FairnessAwareClearing,
+        MarketType.LMP: LmpClearing,
     }
     
     engine_class = engines.get(market_type, UniformPriceClearing)
