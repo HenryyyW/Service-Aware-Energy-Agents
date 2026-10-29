@@ -438,4 +438,8 @@ __all__ = [
     "CentralizedController",
     "MPCController",
     "QLearningController",
+    "LLMAgentController",
+    "LLMVerifiedController",
 ]
+
+from src.controllers.llm_agent import LLMAgentController, LLMVerifiedController

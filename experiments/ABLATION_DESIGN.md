@@ -7,11 +7,17 @@ supervised pass.
 
 ## 1. Variants
 
-| Label | Implementation (to build) | Meaning |
+| Label | Implementation | Meaning |
 |---|---|---|
 | `multi_agent` | existing scaffold | Deterministic planner/coder/executor/verifier fallbacks, no LLM calls. Baseline for the ablation. |
-| `llm_agent` | new controller, single-pass | LLM produces each dispatch decision in one shot (no execution check); actions applied as-is if they parse, else deterministic fallback for that step. Records repair_iterations = 0 by construction. |
-| `llm_agent_verified` | new controller + verification harness | Same LLM decision path, but every action batch passes through `src/evaluation/verification_harness.py` before execution; failed checks trigger the repair loop (`src/agents/repair_loop.py`) up to a budget of 2 repairs per step, then deterministic fallback. |
+| `llm_agent` | `src/controllers/llm_agent.py::LLMAgentController` (implemented) | LLM produces each dispatch decision in one shot (no execution check); actions applied as-is if they parse, else deterministic fallback for that step. Records repair_iterations = 0 by construction. |
+| `llm_agent_verified` | `src/controllers/llm_agent.py::LLMVerifiedController` (implemented) | Same LLM decision path, plus per-step verification (shape + device power bounds from live metadata) with deterministic repair, budget 2 repairs per step, then deterministic fallback. Run-level before/after checks stay with `src/evaluation/verification_harness.py`. |
+
+Both variants run without an LLM backend (labelled `agent_backend: "fallback"`,
+recorded in `result.json` and `manifest.json` together with the prompt hash,
+prompt version, sampling temperature and sampling seed — see
+`tests/test_llm_controllers.py`), so the 50 ablation runs can execute and be
+packaged before real LLM credentials are wired.
 
 Interface: both LLM controllers emit the same `Action(value_kw, asset_id)`
 contract as every other controller, so the adapter, metrics, and runner are
