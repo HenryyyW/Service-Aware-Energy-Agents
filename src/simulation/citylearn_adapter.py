@@ -33,6 +33,10 @@ class CityLearnAdapter:
         self.dataset_type = dataset_type
         self.dataset_name = self.DATASET_MAP.get(dataset_type, "citylearn_challenge_2022_phase_all_plus_evs")
         self.data_dir = data_dir or "data"
+        # Synthesized schedule CSVs (from scenario YAML) waiting to be written
+        # into the per-run schema directory by _copy_dataset_files.
+        self._pending_charger_csvs: Dict[str, Any] = {}
+        self._pending_flex_csvs: Dict[str, Any] = {}
         self.env: Optional[CityLearnEnv] = None
         self.building_ids: List[str] = []
         self.observation_names: List[str] = []
@@ -143,12 +147,22 @@ class CityLearnAdapter:
             if bid in schema['buildings']:
                 building_schema = schema['buildings'][bid]
                 building_actions = []
-                
-                # Check which devices this building has
+
+                # Check which devices this building has. CityLearn allocates
+                # one action dimension per charger and per deferrable
+                # appliance, so those devices contribute one entry each.
                 for device, action_name in device_to_action.items():
-                    if device in building_schema and action_name in global_active:
-                        building_actions.append(action_name)
-                
+                    if action_name not in global_active:
+                        continue
+                    device_entry = building_schema.get(device)
+                    if device_entry is None:
+                        continue
+                    if device in ('chargers', 'deferrable_appliances'):
+                        for device_index in range(len(device_entry)):
+                            building_actions.append((action_name, device_index))
+                    else:
+                        building_actions.append((action_name, 0))
+
                 self.building_actions[bid] = building_actions
                 print(f"Building {bid} active actions: {building_actions}")
             else:
@@ -211,11 +225,237 @@ class CityLearnAdapter:
                 buildings_to_keep[new_name]['energy_simulation'] = f"{new_name}.csv"
                 # Ensure building is included
                 buildings_to_keep[new_name]['include'] = True
+                # Apply the scenario YAML's device parameters (battery, PV, EVs,
+                # flexible loads) so scenarios B-E differ from A by more than
+                # community limits (BENCHMARK_MATRIX.md caveat 1).
+                self._apply_device_overrides(new_name, buildings_to_keep[new_name], building_config)
         
         schema['buildings'] = buildings_to_keep
         self.building_ids = list(buildings_to_keep.keys())
-        
+
         return schema
+
+    # ------------------------------------------------------------------
+    # Scenario-aware device customization
+    # ------------------------------------------------------------------
+
+    def _apply_device_overrides(self, building_name: str, building_schema: Dict[str, Any], building_config) -> None:
+        """Apply the scenario YAML's device parameters to a building schema.
+
+        Semantics (BENCHMARK_MATRIX.md caveat 1):
+
+        - ``battery``/``pv`` are ``Optional``: ``None`` keeps the stock dataset
+          device, a config object overwrites its parameters.
+        - ``pv.capacity_kw == 0`` removes the PV.
+        - ``evs``/``flexible_loads`` are ``Optional`` lists: ``None`` keeps the
+          stock dataset devices, an explicit ``[]`` removes them, and a
+          non-empty list replaces them with one synthesized device each.
+        """
+        # Battery
+        if building_config.battery is not None:
+            storage = building_schema.get('electrical_storage') or {
+                "type": "citylearn.energy_model.Battery",
+                "autosize": False,
+                "attributes": {},
+            }
+            building_schema['electrical_storage'] = storage
+            attrs = storage.setdefault('attributes', {})
+            attrs['capacity'] = float(building_config.battery.capacity_kwh)
+            attrs['nominal_power'] = float(building_config.battery.power_kw)
+            attrs['efficiency'] = float(building_config.battery.efficiency_charge)
+
+        # PV
+        if building_config.pv is not None and building_config.pv.capacity_kw > 0:
+            pv = building_schema.get('pv') or {
+                "type": "citylearn.energy_model.PV",
+                "autosize": False,
+                "attributes": {},
+            }
+            building_schema['pv'] = pv
+            pv.setdefault('attributes', {})['nominal_power'] = float(building_config.pv.capacity_kw)
+        elif building_config.pv is not None and 'pv' in building_schema:
+            # Explicit zero-capacity PV removes the device.
+            del building_schema['pv']
+
+        # EV chargers: one charger + one synthesized schedule CSV per configured EV
+        if building_config.evs:
+            chargers: Dict[str, Any] = {}
+            for index, ev in enumerate(building_config.evs or []):
+                filename = f"{building_name}_charger_{index}.csv"
+                chargers[f"charger_{index}"] = {
+                    "type": "citylearn.electric_vehicle_charger.Charger",
+                    "charger_simulation": filename,
+                    "autosize": False,
+                    "attributes": {
+                        "nominal_power": float(ev.max_charge_kw),
+                        "max_charging_power": float(ev.max_charge_kw),
+                        "min_charging_power": 0.0,
+                        "max_discharging_power": 0.0,
+                        "min_discharging_power": 0.0,
+                        "efficiency": float(ev.efficiency),
+                        "charger_type": 0,
+                    },
+                }
+                self._pending_charger_csvs[filename] = self._charger_schedule_frame(ev)
+            building_schema['chargers'] = chargers
+        elif building_config.evs == [] and 'chargers' in building_schema:
+            # Explicit empty list: the scenario has no EVs on this building.
+            del building_schema['chargers']
+
+        # Deferrable appliances: one appliance + synthesized CSVs per flexible load
+        if building_config.flexible_loads:
+            appliances: Dict[str, Any] = {}
+            for index, flex in enumerate(building_config.flexible_loads or []):
+                base = f"{building_name}_deferrable_appliance_{index}"
+                appliances[f"deferrable_appliance_{index}"] = {
+                    "type": "citylearn.energy_model.DeferrableAppliance",
+                    "autosize": False,
+                    "cycle_profiles_file": f"{base}_cycle_profiles.csv",
+                    "flexibility_schedule_file": f"{base}_flexibility_schedule.csv",
+                }
+                self._pending_flex_csvs[base] = self._deferrable_frames(base, flex)
+            building_schema['deferrable_appliances'] = appliances
+        elif building_config.flexible_loads == [] and 'deferrable_appliances' in building_schema:
+            del building_schema['deferrable_appliances']
+
+    def _episode_shape(self) -> Tuple[int, int]:
+        """(steps_per_day, episode_steps) at the dataset's resolution."""
+        step_minutes = int(self.scenario_config.timestep_minutes)
+        steps_per_day = int(24 * 60 // step_minutes)
+        return steps_per_day, int(7 * steps_per_day + 1)
+
+    def _charger_schedule_frame(self, ev) -> "pd.DataFrame":
+        """Build a charger schedule CSV from a scenario EVConfig.
+
+        Mirrors the stock dataset columns: one row per episode step with the
+        connection state, a countdown to departure while connected (plus the
+        required SOC at departure) and a countdown to arrival while away (plus
+        the estimated SOC at arrival).
+        """
+        steps_per_day, steps = self._episode_shape()
+        step_minutes = int(self.scenario_config.timestep_minutes)
+        # 2023-07-01 (the episode start) is a Saturday -> weekday 5.
+        start_weekday = 5
+
+        arrival = self._hhmm_to_minutes(ev.arrival_time)
+        departure = self._hhmm_to_minutes(ev.departure_time)
+        connected_days = set(ev.connected_days) or set(range(7))
+
+        state_rows: List[Dict[str, Any]] = []
+        for t in range(steps):
+            minute_of_day = (t * step_minutes) % (24 * 60)
+            day_index = (start_weekday + t // steps_per_day) % 7
+            in_window = self._in_daily_window(minute_of_day, arrival, departure)
+            connected = in_window and day_index in connected_days
+            if connected:
+                departure_step = self._next_window_end(t, steps, arrival, departure, step_minutes)
+                state_rows.append({
+                    "electric_vehicle_charger_state": 1,
+                    "electric_vehicle_id": self._ev_label,
+                    "electric_vehicle_departure_time": float(departure_step - t),
+                    "electric_vehicle_required_soc_departure": float(ev.target_soc * 100.0),
+                    "electric_vehicle_estimated_arrival_time": None,
+                    "electric_vehicle_estimated_soc_arrival": None,
+                })
+            else:
+                arrival_step = self._next_window_start(t, steps, arrival, departure, step_minutes)
+                state_rows.append({
+                    "electric_vehicle_charger_state": 0,
+                    "electric_vehicle_id": self._ev_label,
+                    "electric_vehicle_departure_time": None,
+                    "electric_vehicle_required_soc_departure": None,
+                    "electric_vehicle_estimated_arrival_time": float(arrival_step - t),
+                    "electric_vehicle_estimated_soc_arrival": float(ev.initial_soc * 100.0),
+                })
+        return pd.DataFrame(state_rows)
+
+    @property
+    def _ev_label(self) -> str:
+        return "Electric_Vehicle_scenario"
+
+    @staticmethod
+    def _hhmm_to_minutes(value: str) -> int:
+        hours, minutes = str(value).split(":")[:2]
+        return int(hours) * 60 + int(minutes)
+
+    @staticmethod
+    def _in_daily_window(minute_of_day: int, arrival: int, departure: int) -> bool:
+        if arrival == departure:
+            return False
+        if arrival < departure:
+            return arrival <= minute_of_day < departure
+        # Overnight window (e.g. 18:30 -> 07:00)
+        return minute_of_day >= arrival or minute_of_day < departure
+
+    def _next_window_end(self, current_step: int, steps: int, arrival: int, departure: int, step_minutes: int) -> int:
+        steps_per_day, _ = self._episode_shape()
+        day = current_step // steps_per_day
+        candidates = []
+        for offset in (0, 1):
+            candidate = (day + offset) * steps_per_day + departure // step_minutes
+            if candidate > current_step:
+                candidates.append(candidate)
+        return min(candidates) if candidates else steps
+
+    def _next_window_start(self, current_step: int, steps: int, arrival: int, departure: int, step_minutes: int) -> int:
+        steps_per_day, _ = self._episode_shape()
+        day = current_step // steps_per_day
+        candidates = []
+        for offset in (0, 1):
+            candidate = (day + offset) * steps_per_day + arrival // step_minutes
+            if candidate > current_step:
+                candidates.append(candidate)
+        return min(candidates) if candidates else steps
+
+    def _deferrable_frames(self, base: str, flex) -> Tuple["pd.DataFrame", "pd.DataFrame"]:
+        """Build cycle-profile and flexibility-schedule CSVs from a FlexibleLoadConfig."""
+        steps_per_day, steps = self._episode_shape()
+        step_minutes = int(self.scenario_config.timestep_minutes)
+        duration_steps = max(1, int(round(flex.duration_hours * 60 / step_minutes)))
+        total_energy = float(flex.energy_kwh) if getattr(flex, 'energy_kwh', None) else float(flex.power_kw) * flex.duration_hours
+        mean_power = total_energy / (duration_steps * step_minutes / 60.0)
+
+        cycles = pd.DataFrame([{
+            "profile_id": f"{base}_profile_0001",
+            "duration_steps": duration_steps,
+            "total_energy_kwh": total_energy,
+            "load_profile": str([round(mean_power, 6)] * duration_steps),
+        }])
+
+        earliest = self._hhmm_to_minutes(flex.earliest_start)
+        latest_end = self._hhmm_to_minutes(flex.latest_end)
+        rows: List[Dict[str, Any]] = []
+        days = int(steps // steps_per_day) + 1
+        for day in range(days):
+            start_step = day * steps_per_day + earliest // step_minutes
+            if start_step >= steps:
+                # Cycle begins after the episode ends; CityLearn rejects
+                # windows that do not fit inside the simulation.
+                break
+            # A window ending at/before its start (e.g. 22:00 -> 06:00) ends
+            # on the NEXT day.
+            deadline_day = day if latest_end > earliest else day + 1
+            deadline_step = deadline_day * steps_per_day + max(1, latest_end // step_minutes)
+            latest_start = deadline_step - duration_steps
+            if latest_start < start_step:
+                latest_start = start_step
+            latest_start = min(latest_start, steps - 1)
+            if start_step > latest_start:
+                continue
+            # CityLearn requires the cycle to still finish by its deadline when
+            # started at latest_start_time_step (steps are inclusive).
+            deadline_step = max(deadline_step, latest_start + duration_steps - 1)
+            rows.append({
+                "cycle_id": f"{base}_cycle_{day + 1:04d}",
+                "profile_id": f"{base}_profile_0001",
+                "earliest_start_time_step": start_step,
+                "latest_start_time_step": latest_start,
+                "deadline_time_step": deadline_step,
+                "priority": 1.0,
+                "must_run": True,
+            })
+        schedule = pd.DataFrame(rows)
+        return cycles, schedule
     
     def _schema_dir(self) -> Path:
         """Per-run CityLearn schema directory.
@@ -230,6 +470,16 @@ class CityLearnAdapter:
         return Path(self.data_dir) / "schemas" / dir_name
 
     def _copy_dataset_files(self, schema: Dict[str, Any], schema_dir: Path, source_dir: Path):
+        # Synthesized schedule CSVs first (they are referenced by the schema we
+        # are about to write and may exist in place of dataset files).
+        for filename, frame in self._pending_charger_csvs.items():
+            frame.to_csv(schema_dir / filename, index=False)
+        for base, (cycles, schedule) in self._pending_flex_csvs.items():
+            cycles.to_csv(schema_dir / f"{base}_cycle_profiles.csv", index=False)
+            schedule.to_csv(schema_dir / f"{base}_flexibility_schedule.csv", index=False)
+        self._pending_charger_csvs.clear()
+        self._pending_flex_csvs.clear()
+
         """Copy dataset files to our schema directory."""
         source_dir = Path(source_dir)
         
@@ -453,22 +703,31 @@ class CityLearnAdapter:
         actions = []
         for bid in self.building_ids:
             building_actions = []
-            for action_name in self.building_actions.get(bid, []):
-                action = self._find_action(requested, bid, action_name)
+            for entry in self.building_actions.get(bid, []):
+                action_name, device_index = self._normalize_action_entry(entry)
+                action = self._find_action(requested, bid, action_name, device_index)
                 if action is None:
                     building_actions.append(0.0)
                 else:
                     building_actions.append(
-                        self._to_normalized_action(bid, action_name, action.value_kw, metadata)
+                        self._to_normalized_action(bid, action_name, action.value_kw, metadata, device_index)
                     )
             actions.append(building_actions)
         return actions
 
     @staticmethod
+    def _normalize_action_entry(entry) -> Tuple[str, int]:
+        """Allow (action_name, device_index) tuples and legacy plain names."""
+        if isinstance(entry, tuple):
+            return entry[0], int(entry[1])
+        return entry, 0
+
+    @staticmethod
     def _clamp(value: float, low: float = -1.0, high: float = 1.0) -> float:
         return max(low, min(high, float(value)))
 
-    def _find_action(self, requested: RequestedActions, bid: str, action_name: str) -> Optional[Action]:
+    def _find_action(self, requested: RequestedActions, bid: str, action_name: str,
+                     device_index: int = 0) -> Optional[Action]:
         """Find the controller action for a CityLearn action name.
 
         Matches both the CityLearn-shaped asset id and the ids used by the
@@ -481,9 +740,9 @@ class CityLearnAdapter:
         if action_name == "electrical_storage":
             aliases.append(f"{bid}_battery")
         elif action_name == "electric_vehicle_storage":
-            aliases.extend([f"{bid}_ev_0", f"{bid}_ev"])
+            aliases.extend([f"{bid}_ev_{device_index}", f"{bid}_ev"])
         elif action_name == "deferrable_appliance":
-            aliases.extend([f"{bid}_flex_0", f"{bid}_flex"])
+            aliases.extend([f"{bid}_flex_{device_index}", f"{bid}_flex"])
 
         for alias in aliases:
             for action in requested.actions:
@@ -497,6 +756,7 @@ class CityLearnAdapter:
         action_name: str,
         value_kw: float,
         metadata: Dict[str, Dict[str, Any]],
+        device_index: int = 0,
     ) -> float:
         """Map a requested power (kW) to CityLearn's normalized device action."""
         building_meta = metadata.get(bid) or {}
@@ -507,8 +767,13 @@ class CityLearnAdapter:
 
         if action_name == "electric_vehicle_storage":
             chargers = building_meta.get("chargers") or []
-            max_charge = max((float(c.get("max_charge_kw") or 0.0) for c in chargers), default=0.0)
-            max_discharge = max((float(c.get("max_discharge_kw") or 0.0) for c in chargers), default=0.0)
+            if device_index < len(chargers):
+                charger = chargers[device_index]
+                max_charge = float(charger.get("max_charge_kw") or 0.0)
+                max_discharge = float(charger.get("max_discharge_kw") or 0.0)
+            else:
+                max_charge = max((float(c.get("max_charge_kw") or 0.0) for c in chargers), default=0.0)
+                max_discharge = max((float(c.get("max_discharge_kw") or 0.0) for c in chargers), default=0.0)
             if value_kw >= 0.0 and max_charge > 0.0:
                 return self._clamp(value_kw / max_charge)
             if value_kw < 0.0 and max_discharge > 0.0:
@@ -651,9 +916,10 @@ class CityLearnAdapter:
                 if bid_idx < len(info['limited_actions']):
                     limited_action_values = info['limited_actions'][bid_idx]
                     # For each action in the building's active actions
-                    for act_idx, action_name in enumerate(self.building_actions.get(bid, [])):
+                    for act_idx, entry in enumerate(self.building_actions.get(bid, [])):
+                        action_name, device_index = self._normalize_action_entry(entry)
                         if act_idx < len(limited_action_values):
-                            asset_id = f"{bid}_{action_name}"
+                            asset_id = f"{bid}_{action_name}" if device_index == 0 else f"{bid}_{action_name}_{device_index}"
                             # Try to get the action_type from the requested actions for this asset_id
                             action_obj = requested.get_action(asset_id, None)
                             action_type = action_obj.action_type if action_obj is not None else ActionType.BATTERY_CHARGE
@@ -683,9 +949,10 @@ class CityLearnAdapter:
                 if bid_idx < len(info['applied_actions']):
                     applied_action_values = info['applied_actions'][bid_idx]
                     # For each action in the building's active actions
-                    for act_idx, action_name in enumerate(self.building_actions.get(bid, [])):
+                    for act_idx, entry in enumerate(self.building_actions.get(bid, [])):
+                        action_name, device_index = self._normalize_action_entry(entry)
                         if act_idx < len(applied_action_values):
-                            asset_id = f"{bid}_{action_name}"
+                            asset_id = f"{bid}_{action_name}" if device_index == 0 else f"{bid}_{action_name}_{device_index}"
                             # Try to get the action_type from the requested actions for this asset_id
                             action_obj = requested.get_action(asset_id, None)
                             action_type = action_obj.action_type if action_obj is not None else ActionType.BATTERY_CHARGE
@@ -763,7 +1030,7 @@ class CityLearnAdapter:
 def create_citylearn_adapter(scenario_config: ScenarioConfig, data_dir: str = "data") -> CityLearnAdapter:
     """Factory function to create CityLearnAdapter with appropriate dataset."""
     # Determine dataset type based on scenario features
-    has_evs = any(len(b.evs) > 0 for b in scenario_config.buildings)
+    has_evs = any(len(b.evs or []) > 0 for b in scenario_config.buildings)
     has_dr = False  # Could check for DR in scenario
     
     if has_evs:

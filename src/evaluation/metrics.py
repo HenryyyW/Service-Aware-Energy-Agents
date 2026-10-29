@@ -275,7 +275,7 @@ def compute_service_metrics(
     # Extract EV configs from scenario
     ev_arrivals = {}
     for building in scenario_config.get('buildings', []):
-        for i, ev in enumerate(building.get('evs', [])):
+        for i, ev in enumerate(building.get('evs') or []):
             ev_id = f"{building['building_id']}_ev_{i}"
             ev_target_soc[ev_id] = ev.get('target_soc', 0.8)
             arrival_hour = _time_to_hour(ev.get('arrival_time', '00:00'))
@@ -349,7 +349,7 @@ def compute_service_metrics(
     
     # Initialize flexible load tracking
     for building in scenario_config.get('buildings', []):
-        for i, fl in enumerate(building.get('flexible_loads', [])):
+        for i, fl in enumerate(building.get('flexible_loads') or []):
             fl_id = f"{building['building_id']}_flex_{i}"
             fl_target[fl_id] = fl.get('energy_kwh', 0.0)
             fl_progress[fl_id] = 0.0

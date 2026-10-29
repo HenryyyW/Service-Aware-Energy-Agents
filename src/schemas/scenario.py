@@ -68,8 +68,10 @@ class BuildingConfig(BaseModel):
     location: Dict[str, Any] = Field(default_factory=dict)  # lat, lon, timezone
     pv: Optional[PVConfig] = None
     battery: Optional[BatteryConfig] = None
-    evs: List[EVConfig] = Field(default_factory=list)
-    flexible_loads: List[FlexibleLoadConfig] = Field(default_factory=list)
+    # None = keep the simulator's stock devices for this building; an explicit
+    # empty list removes them (scenario-aware schema customization).
+    evs: Optional[List[EVConfig]] = None
+    flexible_loads: Optional[List[FlexibleLoadConfig]] = None
     tariff: Optional[TariffConfig] = None
     weather_file: Optional[str] = None
     simulation_start: str = "2023-01-01"

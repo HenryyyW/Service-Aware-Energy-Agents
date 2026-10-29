@@ -49,7 +49,8 @@ class FlexibleLoadAgent(CoordinationAgent):
         pv_generation = context.get("pv_generation", 0)
         
         # Calculate current hour
-        hour_of_day = (timestep * 0.25) % 24  # assuming 15-min steps
+        hours_per_step = float(context.get("hours_per_step", 0.25))
+        hour_of_day = (timestep * hours_per_step) % 24
         
         # Check if within operating window
         in_window = self._in_window(hour_of_day)

@@ -35,6 +35,7 @@ class BatteryAgent(CoordinationAgent):
         timestep = context.get("timestep", 0)
         net_demand = context.get("building_net_demand", 0)
         pv_generation = context.get("pv_generation", 0)
+        hours_per_step = float(context.get("hours_per_step", 0.25))
         
         # Calculate excess PV and deficit
         excess_pv = max(0, pv_generation - net_demand)
@@ -54,7 +55,7 @@ class BatteryAgent(CoordinationAgent):
             requested_power = max_charge
             action_type = ActionType.BATTERY_CHARGE
             self.target_soc = min(
-                self.current_soc + (max_charge * self.config.efficiency_charge * 0.25) / self.config.capacity_kwh,
+                self.current_soc + (max_charge * self.config.efficiency_charge * hours_per_step) / self.config.capacity_kwh,
                 self.config.soc_max
             )
         elif deficit > 0.1 and self.current_soc > self.config.soc_min:
@@ -67,7 +68,7 @@ class BatteryAgent(CoordinationAgent):
             requested_power = -max_discharge  # Negative = discharge (generate)
             action_type = ActionType.BATTERY_DISCHARGE
             self.target_soc = max(
-                self.current_soc - (max_discharge * 0.25) / (self.config.capacity_kwh * self.config.efficiency_discharge),
+                self.current_soc - (max_discharge * hours_per_step) / (self.config.capacity_kwh * self.config.efficiency_discharge),
                 self.config.soc_min
             )
         

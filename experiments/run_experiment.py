@@ -21,7 +21,7 @@ from src.schemas.report import (
 from src.simulation import SimulationCoupler
 from src.controllers import (
     RuleBasedController, BaseController, MultiAgentController, CentralizedController,
-    MPCController, QLearningController,
+    MPCController, QLearningController, LLMAgentController, LLMVerifiedController,
 )
 from src.evaluation import compute_all_metrics, generate_report_plots, compute_per_member_metrics
 
@@ -70,6 +70,12 @@ class ExperimentRunner:
             self.controller = QLearningController(
                 self.scenario_config,
                 policy_path=rl_policy,
+                device_metadata=self.coupler.citylearn.get_device_metadata(),
+            )
+        elif controller_type in ("llm_agent", "llm_agent_verified"):
+            controller_cls = LLMVerifiedController if controller_type == "llm_agent_verified" else LLMAgentController
+            self.controller = controller_cls(
+                self.scenario_config,
                 device_metadata=self.coupler.citylearn.get_device_metadata(),
             )
         else:
@@ -268,7 +274,13 @@ class ExperimentRunner:
             ))
         
         # Determine controller type from the actual controller instance
-        if isinstance(self.controller, MultiAgentController):
+        if isinstance(self.controller, LLMVerifiedController):
+            controller_type_enum = ControllerType.LLM_AGENT_VERIFIED
+            controller_config = {"type": "llm_agent_verified", **self.controller.agent_stats()}
+        elif isinstance(self.controller, LLMAgentController):
+            controller_type_enum = ControllerType.LLM_AGENT
+            controller_config = {"type": "llm_agent", **self.controller.agent_stats()}
+        elif isinstance(self.controller, MultiAgentController):
             controller_type_enum = ControllerType.LLM_AGENT
             controller_config = {"type": "multi_agent", "workflow": "planner_coder_executor_verifier_reporter"}
         elif isinstance(self.controller, MPCController):
@@ -366,6 +378,15 @@ class ExperimentRunner:
         with open(self.run_dir / "manifest.json", "w") as f:
             json.dump(manifest, f, indent=2, default=str)
 
+        # Agent traceability for the verified-vs-unverified ablation
+        # (ABLATION_DESIGN.md section 4): backend, prompt hash and sampling
+        # parameters must be present in manifest.json AND result.json.
+        agent_stats = getattr(self.controller, "agent_stats", None)
+        if callable(agent_stats):
+            manifest["agent"] = agent_stats()
+            with open(self.run_dir / "manifest.json", "w") as f:
+                json.dump(manifest, f, indent=2, default=str)
+
     def _save_results(self, result: ExperimentResult):
         """Save experiment results."""
         # Export trajectories and diagnostics
@@ -419,8 +440,9 @@ def load_scenario(config_path: str) -> ScenarioConfig:
 def main():
     parser = argparse.ArgumentParser(description="Run energy community experiment")
     parser.add_argument("--config", type=str, required=True, help="Path to scenario YAML config")
-    parser.add_argument("--controller", type=str, default="rule_based", 
-                       choices=["rule_based", "multi_agent", "centralized", "mpc", "rl", "rl_single"],
+    parser.add_argument("--controller", type=str, default="rule_based",
+                       choices=["rule_based", "multi_agent", "centralized", "mpc", "rl", "rl_single",
+                                "llm_agent", "llm_agent_verified"],
                        help="Controller type")
     parser.add_argument("--rl-policy", type=str, default=None,
                        help="Path to a trained RL policy JSON (required for --controller rl)")
@@ -458,6 +480,10 @@ def main():
         expected_enum = ControllerType.MPC
     elif expected_controller in ("rl", "rl_single"):
         expected_enum = ControllerType.RL_SINGLE
+    elif expected_controller == "llm_agent":
+        expected_enum = ControllerType.LLM_AGENT
+    elif expected_controller == "llm_agent_verified":
+        expected_enum = ControllerType.LLM_AGENT_VERIFIED
     else:
         expected_enum = ControllerType.RULE_BASED
     assert result.controller_type == expected_enum, f"Controller mismatch: {result.controller_type} vs {expected_enum}"

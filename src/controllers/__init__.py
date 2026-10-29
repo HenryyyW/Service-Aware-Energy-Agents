@@ -70,13 +70,13 @@ class RuleBasedController(BaseController):
                 self.battery_soc[f"{bid}_battery"] = building.battery.initial_soc
             
             # EV initial SOC and connection status
-            for i, ev in enumerate(building.evs):
+            for i, ev in enumerate(building.evs or []):
                 ev_id = f"{bid}_ev_{i}"
                 self.ev_soc[ev_id] = ev.initial_soc
                 self.ev_connected[ev_id] = False
             
             # Flexible load progress
-            for i, fl in enumerate(building.flexible_loads):
+            for i, fl in enumerate(building.flexible_loads or []):
                 fl_id = f"{bid}_flex_{i}"
                 self.flexible_load_progress[fl_id] = 0.0
     
@@ -106,14 +106,14 @@ class RuleBasedController(BaseController):
                     actions.append(battery_action)
             
             # EV control
-            for i, ev in enumerate(building.evs):
+            for i, ev in enumerate(building.evs or []):
                 ev_id = f"{bid}_ev_{i}"
                 ev_action = self._control_ev(ev_id, ev, net_demand, pv_gen, hour_of_day, timestep)
                 if ev_action:
                     actions.append(ev_action)
             
             # Flexible load control
-            for i, fl in enumerate(building.flexible_loads):
+            for i, fl in enumerate(building.flexible_loads or []):
                 fl_id = f"{bid}_flex_{i}"
                 fl_action = self._control_flexible_load(fl_id, fl, pv_gen, hour_of_day, timestep)
                 if fl_action:
@@ -379,14 +379,14 @@ class RuleBasedController(BaseController):
                     actions.append(battery_action)
             
             # EV control
-            for i, ev in enumerate(building.evs):
+            for i, ev in enumerate(building.evs or []):
                 ev_id = f"{bid}_ev_{i}"
                 ev_action = self._control_ev(ev_id, ev, net_demand, pv_gen, hour_of_day, timestep)
                 if ev_action:
                     actions.append(ev_action)
             
             # Flexible load control
-            for i, fl in enumerate(building.flexible_loads):
+            for i, fl in enumerate(building.flexible_loads or []):
                 fl_id = f"{bid}_flex_{i}"
                 fl_action = self._control_flexible_load(fl_id, fl, pv_gen, hour_of_day, timestep)
                 if fl_action:
@@ -438,4 +438,8 @@ __all__ = [
     "CentralizedController",
     "MPCController",
     "QLearningController",
+    "LLMAgentController",
+    "LLMVerifiedController",
 ]
+
+from src.controllers.llm_agent import LLMAgentController, LLMVerifiedController
