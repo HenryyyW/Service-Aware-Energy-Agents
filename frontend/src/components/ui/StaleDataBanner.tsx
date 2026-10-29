@@ -16,7 +16,6 @@ export function StaleDataBanner({
 }) {
   const connectionState = useWebSocketConnection();
   const [dismissed, setDismissed] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
 
   // Auto-hide when connection is healthy
   useEffect(() => {
@@ -96,52 +95,8 @@ export function StaleDataBanner({
           </Button>
         </div>
       </div>
-
-      {showDetails && (
-        <div className="max-w-7xl mx-auto px-4 pb-2 text-caption text-text-muted/70 border-t border-white/10">
-          <details className="flex items-center gap-2">
-            <summary className="cursor-pointer flex items-center gap-1">
-              <RotateCcw className="w-3 h-3" />
-              Connection Details
-            </summary>
-            <div className="ml-4 space-y-1 font-mono text-xs">
-              <div>Connected: {connectionState.isConnected ? 'Yes' : 'No'}</div>
-              <div>Reconnecting: {connectionState.isReconnecting ? 'Yes' : 'No'}</div>
-              <div>Reconnect Attempts: {connectionState.reconnectAttempts}</div>
-              <div>Last Message: {connectionState.lastMessageTime 
-                ? new Date(connectionState.lastMessageTime).toLocaleTimeString() 
-                : 'Never'}</div>
-              <div>Stale Threshold: 5s</div>
-            </div>
-          </details>
-        </div>
-      )}
     </div>
   );
-}
-
-/**
- * Hook to access WebSocket connection state
- */
-export function useWebSocketConnection() {
-  // This would be implemented to connect to the wsManager
-  // For now, return a mock state
-  const [state, setState] = useState({
-    isConnected: false,
-    isReconnecting: false,
-    lastMessageTime: null,
-    stale: false,
-    reconnectAttempts: 0,
-  });
-
-  // In a real implementation, this would subscribe to wsManager.onConnectionStateChange
-  useEffect(() => {
-    // Subscribe to wsManager connection state changes
-    // const unsubscribe = wsManager.onConnectionStateChange(setState);
-    // return unsubscribe;
-  }, []);
-
-  return state;
 }
 
 /**

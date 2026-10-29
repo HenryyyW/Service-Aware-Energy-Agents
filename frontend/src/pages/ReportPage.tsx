@@ -32,8 +32,8 @@ function ReportPageContent() {
         setReport(currentTask.report);
       } else {
         // Fallback to API
-        const reportText = await api.getReport(runId!);
-        setReport(reportText);
+        const reportResponse = await api.getReport(runId!);
+        setReport(reportResponse.markdown);
       }
     } catch (error) {
       console.error('Failed to load report:', error);

@@ -61,6 +61,20 @@ export function ReportView({ report, onDownload }: ReportViewProps) {
         </div>
       </div>
 
+      {/* Content */}
+      <div className="flex-1 overflow-auto p-4">
+        {viewMode === 'rendered' ? (
+          <div 
+            className="prose prose-invert max-w-none"
+            dangerouslySetInnerHTML={{ __html: sanitizeMarkdown(taskReport) }}
+          />
+        ) : (
+          <pre className="font-mono text-body-sm text-text leading-relaxed whitespace-pre-wrap">
+            {taskReport}
+          </pre>
+        )}
+      </div>
+
       {/* Status Bar */}
       <div className="flex items-center justify-between px-4 py-2 border-t border-border/30 bg-surface/50">
         <div className="flex items-center gap-4 text-caption text-text-muted">

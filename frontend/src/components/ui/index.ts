@@ -20,6 +20,6 @@ export {
 export { 
   StaleDataBanner, 
   InlineStaleIndicator, 
-  ConnectionStatusIndicator,
-  useWebSocketConnection 
+  ConnectionStatusIndicator
 } from './StaleDataBanner';
+export { useWebSocketConnection, useSimulationWebSocket, useSimulationUpdates, useAgentUpdates } from '../../hooks/useWebSocket';

@@ -2,9 +2,9 @@
  * Reusable async state components for consistent loading, empty, error, and success states
  * across all views (CommunityCanvas, ScenarioStudio, Report, Comparison, AgentWorkspace)
  */
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { clsx } from 'clsx';
-import { Loader2, AlertCircle, CheckCircle, XCircle, RefreshCw, Search, Plus } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle, RefreshCw, Search, Plus } from 'lucide-react';
 import { Button } from './Button';
 
 export type AsyncStatus = 'idle' | 'loading' | 'success' | 'error' | 'empty';
@@ -121,11 +121,11 @@ export function ErrorState({
   onRetry,
   className = ''
 }: { 
-  error: Error | string; 
+  error?: Error | string; 
   onRetry?: () => void;
   className?: string;
 }) {
-  const message = typeof error === 'string' ? error : error.message;
+  const message = error ? (typeof error === 'string' ? error : error.message) : 'An unknown error occurred';
   
   return (
     <div className={clsx('flex flex-col items-center justify-center p-8 text-center', className)}>
@@ -148,13 +148,11 @@ export function ErrorState({
 export function SuccessState({ 
   title, 
   description,
-  onContinue,
-  className = ''
+  onContinue
 }: { 
   title: string; 
   description?: string;
   onContinue?: () => void;
-  className?: string;
 }) {
   return (
     <div className="flex flex-col items-center justify-center p-8 text-center">

@@ -6,6 +6,7 @@ import type {
   AgentTask,
   WebSocketMessage,
   NetworkGeometry,
+  ReportResponse,
 } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -121,10 +122,8 @@ class ApiClient {
   }
 
   // Report endpoints
-  async getReport(runId: string): Promise<string> {
-    const response = await this.client.get(`/api/reports/${runId}`, {
-      responseType: 'text',
-    });
+  async getReport(runId: string): Promise<ReportResponse> {
+    const response = await this.client.get(`/api/reports/${runId}`);
     return response.data;
   }
 
@@ -327,5 +326,6 @@ export class WebSocketManager {
   getConnectionState(): WebSocketConnectionState {
     return { ...this.connectionState };
   }
+}
 
 export const wsManager = new WebSocketManager();
