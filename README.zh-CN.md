@@ -86,7 +86,7 @@
 - **电网可行性：** 潮流收敛、电压边界与违规、线路／变压器负载、社区购电／外送限制。
 - **智能体执行：** 任务和仿真成功率、首次代码有效率、修复次数、运行时间与报告完整性。
 
-`experiments/run_benchmark.py` 当前支持 `rule_based`、`multi_agent` 和 `centralized` 三个控制器标签。集中式实现是启发式控制器，并非 MPC 或强化学习基线。Benchmark 脚本支持多个随机种子并计算统计量和 95% 置信区间，但小型 smoke run 不足以支撑论文结论。研究 brief 要求每种配置至少运行 3–5 次，并补充 MPC／RL 和智能体验证机制消融实验。
+`experiments/run_benchmark.py` 当前支持 `rule_based`、`multi_agent`、`centralized`、`mpc` 和 `rl` 控制器标签：`mpc` 为确定性滚动时域线性规划，`rl` 从 `experiments/rl_policy/<scenario>.json` 加载表格 Q-learning 策略，集中式实现仍是启发式控制器。Benchmark 脚本支持多个随机种子并计算统计量和 95% 置信区间，但小型 smoke run 不足以支撑论文结论。研究 brief 要求每种配置至少运行 3–5 次，并补充 MPC／RL 和智能体验证机制消融实验。
 
 > **修复前的 benchmark 数字无效。** 在种子可复现性修复（PR #1）之前生成的 benchmark 结果未给所有随机源设定种子，无法复现，请勿引用。引用任何数字前，请用当前代码重新运行；复现性门禁见 `docs/reproducibility.md`。
 
@@ -167,7 +167,7 @@ Vite 开发服务器带有只读本地中间件，会扫描仓库 `results/` 中
 pytest -q tests
 ```
 
-测试覆盖控制器协同、CityLearn adapter、pandapower adapter、指标和智能体修复框架。**当前 93 项测试全部通过**，包括针对 CityLearn adapter 时间步约定的回归测试（整数切片索引、CSV 长度与 episode_time_steps 匹配、3600/3600.0 参数化覆盖）。
+测试覆盖控制器协同、CityLearn adapter、pandapower adapter、指标、benchmark 监督器和智能体修复框架。**全套测试当前通过**，包括针对 CityLearn adapter 时间步约定与控制器动作接口的回归测试。
 
 ## 当前限制
 
@@ -183,7 +183,7 @@ pytest -q tests
 
 ## 后续路线
 
-1. 修复 adapter 测试，统一数据、控制和显示的时间步／单位约定。
+1. ✅ **已完成** — 修复 adapter 测试，统一数据、控制和显示的时间步／单位约定。
 2. 建立闭环联合仿真，使电网诊断可以约束或触发重新调度，并验证违规是否消除。
 3. 让智能体补丁真正改变控制器行为，并通过完整实验的服务／电网指标验证修复。
 4. 把能源共享、结算和故障配置实现为可执行的仿真行为。
