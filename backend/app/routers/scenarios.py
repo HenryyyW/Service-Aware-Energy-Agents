@@ -126,11 +126,12 @@ def _scenario_to_dict(scenario: ScenarioConfig) -> dict:
 async def get_scenarios():
     """Get all scenarios."""
     # Load from disk first
-    for scenario_dir in SCENARIO_DATA_DIR.iterdir():
-        if scenario_dir.is_dir() and scenario_dir.name not in _scenarios:
-            scenario = _load_scenario_from_disk(scenario_dir.name)
-            if scenario:
-                _scenarios[scenario.scenario_id] = scenario
+    if SCENARIO_DATA_DIR.exists():
+        for scenario_dir in SCENARIO_DATA_DIR.iterdir():
+            if scenario_dir.is_dir() and scenario_dir.name not in _scenarios:
+                scenario = _load_scenario_from_disk(scenario_dir.name)
+                if scenario:
+                    _scenarios[scenario.scenario_id] = scenario
     
     return [_scenario_to_dict(s) for s in _scenarios.values()]
 
