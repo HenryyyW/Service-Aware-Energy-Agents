@@ -397,3 +397,73 @@ export interface LayerVisibility {
   voltage_heatmap: boolean;
   loading_heatmap: boolean;
 }
+
+export interface PVAssetMetadata {
+  asset_id: string;
+  building_id: string;
+  capacity_kw: number;
+  orientation: number;
+  tilt: number;
+  location: { lat: number; lon: number } | {};
+}
+
+export interface BatteryAssetMetadata {
+  asset_id: string;
+  building_id: string;
+  capacity_kwh: number;
+  power_kw: number;
+  soc_min: number;
+  soc_max: number;
+  location: { lat: number; lon: number } | undefined;
+}
+
+export interface EVAssetMetadata {
+  asset_id: string;
+  building_id: string;
+  capacity_kwh: number;
+  charger_power_kw: number;
+  arrival_time: string;
+  departure_time: string;
+  target_soc: number;
+  location: { lat: number; lon: number } | undefined;
+}
+
+export interface FlexibleLoadAssetMetadata {
+  asset_id: string;
+  building_id: string;
+  power_kw: number;
+  energy_kwh: number;
+  earliest_start: string;
+  latest_end: string;
+  location: { lat: number; lon: number } | {};
+}
+
+export interface BuildingMetadata {
+  building_id: string;
+  name: string;
+  location: { lat: number; lon: number } | {};
+  building_type: string;
+}
+
+export interface AssetMetadata {
+  pv: PVAssetMetadata[];
+  batteries: BatteryAssetMetadata[];
+  evs: EVAssetMetadata[];
+  flexible_loads: FlexibleLoadAssetMetadata[];
+  buildings: BuildingMetadata[];
+}
+
+export interface ReportResponse {
+  run_id: string;
+  run_name?: string;
+  scenario_id: string;
+  controller_type: string;
+  status: string;
+  generation_status: 'pending' | 'computing' | 'ready' | 'failed';
+  outcome_sentence?: string | null;
+  markdown: string;
+  kpi_blocks: Record<string, any>;
+  detail_sections: Record<string, any>;
+  start_time: string;
+  end_time?: string | null;
+}

@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { MapViewport, LayerVisibility, SelectedAsset, NetworkGeometry } from '../api/types';
+import type { MapViewport, LayerVisibility, SelectedAsset, NetworkGeometry, AssetMetadata } from '../api/types';
 import { api } from '../api/client';
-import { WebMercatorViewport } from '@deck.gl/core';
 import { useScenarioStore } from './scenarioStore';
+import { WebMercatorViewport } from '@deck.gl/core';
 
 interface CanvasState {
   // Map viewport
@@ -32,8 +32,13 @@ interface CanvasState {
   // Network geometry (real pandapower network data)
   networkGeometry: NetworkGeometry | null;
   setNetworkGeometry: (geometry: NetworkGeometry | null) => void;
-  fetchNetworkGeometry: () => Promise<void>;
+  fetchNetworkGeometry: (scenarioId: string) => Promise<void>;
   fitToNetworkBounds: () => void;
+
+  // Asset metadata (PV, batteries, EVs, flexible loads)
+  assetMetadata: AssetMetadata | null;
+  setAssetMetadata: (metadata: AssetMetadata | null) => void;
+  fetchAssetMetadata: (scenarioId: string) => Promise<void>;
 }
 
 const DEFAULT_VIEWPORT: MapViewport = {
@@ -81,11 +86,14 @@ export const useCanvasStore = create<CanvasState>()(
 
       networkGeometry: null,
       setNetworkGeometry: (geometry) => set({ networkGeometry: geometry }),
-      fetchNetworkGeometry: async () => {
+      fetchNetworkGeometry: async (scenarioIdParam?: string) => {
         try {
-          // Get current scenario from scenario store
-          const currentScenario = useScenarioStore.getState().currentScenario;
-          const scenarioId = currentScenario?.scenario_id || currentScenario?.community?.name;
+          // If no scenarioId provided, try to get it from the scenario store
+          const scenarioId = scenarioIdParam ?? useScenarioStore.getState().currentScenario?.scenario_id;
+          if (!scenarioId) {
+            console.warn('No scenarioId provided for fetchNetworkGeometry');
+            return;
+          }
           const geometry = await api.getNetworkGeometry(scenarioId);
           set({ networkGeometry: geometry });
         } catch (error) {
@@ -116,6 +124,17 @@ export const useCanvasStore = create<CanvasState>()(
           pitch: 0,
           bearing: 0,
         });
+      },
+
+      assetMetadata: null,
+      setAssetMetadata: (metadata) => set({ assetMetadata: metadata }),
+      fetchAssetMetadata: async (scenarioId: string) => {
+        try {
+          const metadata = await api.getAssetMetadata(scenarioId);
+          set({ assetMetadata: metadata });
+        } catch (error) {
+          console.error('Failed to fetch asset metadata:', error);
+        }
       },
     }),
     {

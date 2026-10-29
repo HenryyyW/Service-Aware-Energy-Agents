@@ -199,7 +199,7 @@ async def update_scenario(scenario_id: str, updates: dict):
     scenario_dir.mkdir(parents=True, exist_ok=True)
     schema_data = _scenario_to_dict(scenario)
     with open(scenario_dir / "schema.json", "w") as f:
-        json.dump(schema_data, f, indent=2)
+        json.dump(_scenario_to_dict(scenario), f, indent=2)
     
     return _scenario_to_dict(scenario)
 

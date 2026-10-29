@@ -23,3 +23,4 @@ export {
   ConnectionStatusIndicator
 } from './StaleDataBanner';
 export { useWebSocketConnection, useSimulationWebSocket, useSimulationUpdates, useAgentUpdates } from '../../hooks/useWebSocket';
+export { Table, TableHeader, TableBody, TableRow, TableHeaderCell, TableCell } from './Table';
