@@ -756,10 +756,11 @@ class PandapowerAdapter:
                 self.net.ext_grid.at[idx, 'max_p_mw'] = 1000.0
                 self.net.ext_grid.at[idx, 'controllable'] = True
                 # Create cost polynomial for slack: c0 + c1*P + c2*P^2
-                # Use a small quadratic cost so the dual is well-defined
+                # Use check=False to allow updating later
                 pp.create_poly_cost(self.net, idx, 'ext_grid', 
                                    cp1_eur_per_mw=1.0,  # linear cost coefficient
-                                   cp2_eur_per_mw2=0.01)  # small quadratic for convexity
+                                   cp2_eur_per_mw2=0.01,  # small quadratic for convexity
+                                   check=False)
         
         # Set min/max power for controllable sgen (PV)
         for building_id, sgen_idx in self.sgen_indices.items():
@@ -775,7 +776,8 @@ class PandapowerAdapter:
                 # Add cost curve for PV (zero marginal cost)
                 pp.create_poly_cost(self.net, sgen_idx, 'sgen',
                                    cp1_eur_per_mw=0.0,
-                                   cp2_eur_per_mw2=0.0)
+                                   cp2_eur_per_mw2=0.0,
+                                   check=False)
         
         # Set min/max power for storage (batteries)
         for building_id, storage_idx in self.storage_indices.items():
@@ -785,7 +787,8 @@ class PandapowerAdapter:
                 # Add cost curve for battery (small cost for cycling)
                 pp.create_poly_cost(self.net, storage_idx, 'storage',
                                    cp1_eur_per_mw=0.01,
-                                   cp2_eur_per_mw2=0.001)
+                                   cp2_eur_per_mw2=0.001,
+                                   check=False)
         
         # Set min/max for loads (they are not controllable in OPF, but we can set bounds)
         for building_id, load_idx in self.load_indices.items():
@@ -1399,6 +1402,15 @@ class PandapowerAdapter:
             self._setup_opf_parameters(price_cap_per_kwh)
             self._opf_params_set = True
         
+        # Update ext_grid cost to match base_energy_price for unconstrained case
+        if len(self.net.ext_grid) > 0:
+            for idx in self.net.ext_grid.index:
+                # Find and update existing cost entry
+                if hasattr(self.net, 'poly_cost') and len(self.net.poly_cost) > 0:
+                    cost_mask = (self.net.poly_cost.element == idx) & (self.net.poly_cost.et == 'ext_grid')
+                    if cost_mask.any():
+                        self.net.poly_cost.loc[cost_mask, 'cp1_eur_per_mw'] = base_energy_price * 1000.0
+        
         lmp_prices = {}
         cap_hits = 0
         
@@ -1428,9 +1440,11 @@ class PandapowerAdapter:
             
             # Extract bus marginal prices (lambda) from OPF results
             # The dual variable for the power balance constraint at each bus = LMP
-            if hasattr(self.net, 'res_bus') and 'lambda' in self.net.res_bus.columns:
+            # In newer pandapower versions, the column is 'lam_p' not 'lambda'
+            lambda_col = 'lam_p' if 'lam_p' in self.net.res_bus.columns else 'lambda'
+            if hasattr(self.net, 'res_bus') and lambda_col in self.net.res_bus.columns:
                 for bus_idx in self.net.res_bus.index:
-                    lmp = self.net.res_bus.at[bus_idx, 'lambda']
+                    lmp = self.net.res_bus.at[bus_idx, lambda_col]
                     # Convert $/MWh to $/kWh
                     price = float(lmp) / 1000.0
                     # Apply price cap if configured

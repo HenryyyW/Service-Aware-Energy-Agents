@@ -191,7 +191,9 @@ class SimulationCoupler:
             lmp_cap_hits = 0
             lmp_status = "success"
             lmp_reason = "opf_solved"
+            dp_config = None
             if dynamic_pricing_enabled:
+                dp_config = self.scenario_config.energy_sharing.dynamic_pricing
                 base_price = 0.1  # $/kWh fallback
                 # Try to get base price from first building's tariff
                 for building in self.scenario_config.buildings:
