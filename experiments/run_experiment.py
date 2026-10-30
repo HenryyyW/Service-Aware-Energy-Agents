@@ -224,6 +224,25 @@ class ExperimentRunner:
         per_member = compute_per_member_metrics(cl_history, self.scenario_config)
         energy_sharing = None
         settlement_result = self.coupler.get_settlement_result() if self.coupler else None
+        
+        # Populate LMP fields in EnergyMetrics from settlement layer
+        if settlement_result:
+            # Get LMP metrics from settlement
+            lmp_costs = [s.lmp_cost_usd for s in settlement_result.building_settlements.values() if s.cost_basis == "lmp"]
+            lmp_prices = []
+            for s in settlement_result.building_settlements.values():
+                if s.cost_basis == "lmp" and s.total_grid_import_kwh > 0:
+                    lmp_prices.append(s.lmp_cost_usd / s.total_grid_import_kwh)
+                elif s.cost_basis == "lmp" and s.total_grid_export_kwh > 0:
+                    lmp_prices.append(s.lmp_revenue_usd / s.total_grid_export_kwh)
+            
+            energy.cost_basis = "lmp" if lmp_costs else "tariff"
+            energy.lmp_cost_usd = sum(lmp_costs)
+            if lmp_prices:
+                energy.lmp_price_mean = float(np.mean(lmp_prices))
+                energy.lmp_price_spread = float(np.max(lmp_prices) - np.min(lmp_prices))
+                energy.lmp_price_spread_pct = (energy.lmp_price_spread / energy.lmp_price_mean * 100) if energy.lmp_price_mean > 0 else 0.0
+            energy.lmp_total_cost_usd = sum(lmp_costs)
         if settlement_result:
             settlement_members = {}
             settlement_savings = {}
@@ -283,6 +302,14 @@ class ExperimentRunner:
                 ('community_savings', 'Community Savings', '$', energy_sharing.total_savings_vs_baseline, 'maximize'),
                 ('community_settlement_volume', 'Community Settlement Volume', 'kWh', energy_sharing.total_community_volume_kwh, 'maximize'),
                 ('community_actual_bill', 'Community Actual Bill', '$', energy_sharing.actual_total_bill, 'minimize'),
+            ])
+        # LMP KPIs
+        if energy.cost_basis == "lmp":
+            kpi_defs.extend([
+                ('lmp_price_mean', 'LMP Price Mean', '$/kWh', energy.lmp_price_mean, 'none'),
+                ('lmp_price_spread', 'LMP Price Spread', '$/kWh', energy.lmp_price_spread, 'minimize'),
+                ('lmp_price_spread_pct', 'LMP Price Spread %', '%', energy.lmp_price_spread_pct, 'minimize'),
+                ('lmp_total_cost_usd', 'LMP Total Cost', '$', energy.lmp_total_cost_usd, 'minimize'),
             ])
         
         for kpi_id, name, unit, value, direction in kpi_defs:
