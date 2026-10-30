@@ -2,14 +2,21 @@ import { clsx } from 'clsx';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 
 interface TabsProps {
-  defaultValue: string;
+  value?: string;
+  defaultValue?: string;
+  onValueChange?: (value: string) => void;
   children: React.ReactNode;
   className?: string;
 }
 
-export function Tabs({ defaultValue, children, className }: TabsProps) {
+export function Tabs({ value, defaultValue, onValueChange, children, className }: TabsProps) {
   return (
-    <TabsPrimitive.Root defaultValue={defaultValue} className={clsx('w-full', className)}>
+    <TabsPrimitive.Root 
+      value={value} 
+      defaultValue={defaultValue} 
+      onValueChange={onValueChange} 
+      className={clsx('w-full', className)}
+    >
       {children}
     </TabsPrimitive.Root>
   );

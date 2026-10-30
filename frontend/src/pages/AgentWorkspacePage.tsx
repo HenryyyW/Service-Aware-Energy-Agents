@@ -1,12 +1,19 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAgentStore } from '../store/agentStore';
+import { useSimulationStore } from '../store/simulationStore';
 import { api } from '../api/client';
 import { TaskInput } from '../components/agent/TaskInput';
 import { AgentTimeline } from '../components/agent/AgentTimeline';
+import { WorkspaceTimeline } from '../components/workspace';
 import { ToastProvider } from '../components/ui/Toast';
+import { Tabs, TabList, Tab, TabPanel } from '../components/ui/Tabs';
+import { useTranslation } from 'react-i18next';
 
 function AgentWorkspacePageContent() {
   const { currentTask, tasks, setCurrentTask } = useAgentStore();
+  const { currentRun } = useSimulationStore();
+  const { t } = useTranslation('workspace');
+  const [activeTab, setActiveTab] = useState<'agent' | 'simulation'>('agent');
 
   useEffect(() => {
     // Load existing agent tasks
@@ -21,34 +28,67 @@ function AgentWorkspacePageContent() {
     loadTasks();
   }, []);
 
+  const hasSimulationData = currentRun && currentRun.run_id;
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-border/30 bg-surface/50">
-        <h1 className="font-display font-semibold text-heading-1 text-text">Agent Workspace</h1>
+        <h1 className="font-display font-semibold text-heading-1 text-text">
+          {t('header.title')}
+        </h1>
       </div>
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left: Task Input */}
+        {/* Left: Task Input / Run Selector */}
         <div className="w-96 flex-shrink-0 border-r border-border/30 bg-surface/30">
           <div className="p-4 h-full overflow-auto">
-            <TaskInput />
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'agent' | 'simulation')} className="mb-4">
+              <TabList>
+                <Tab value="agent">{t('tabs.agent')}</Tab>
+                <Tab value="simulation" disabled={!hasSimulationData}>{t('tabs.simulation')}</Tab>
+              </TabList>
+
+              <TabPanel value="agent">
+                <TaskInput />
+              </TabPanel>
+
+              <TabPanel value="simulation">
+                <div className="space-y-3">
+                  <p className="text-caption text-text-muted">{t('simulation.selectRun')}</p>
+                  <div className="space-y-1 max-h-64 overflow-auto">
+                    {/* This would list runs for the current scenario */}
+                    <p className="text-caption text-text-muted text-center py-4">
+                      {t('simulation.noRuns')}
+                    </p>
+                  </div>
+                </div>
+              </TabPanel>
+            </Tabs>
           </div>
         </div>
 
-        {/* Right: Timeline */}
+        {/* Right: Timeline Views */}
         <div className="flex-1 min-w-0">
-          <div className="p-4 h-full">
-            {currentTask ? (
-              <AgentTimeline compact={false} />
-            ) : (
-              <div className="h-full flex items-center justify-center text-text-muted">
-                <div className="text-center">
-                  <p className="text-body mb-2">No active agent task</p>
-                  <p className="text-caption">Submit a task from the panel to start the workflow</p>
-                </div>
+          <div className="h-full">
+            {activeTab === 'agent' ? (
+              <div className="h-full">
+                {currentTask ? (
+                  <AgentTimeline compact={false} />
+                ) : (
+                  <div className="h-full flex items-center justify-center text-text-muted">
+                    <div className="text-center">
+                      <p className="text-body mb-2">{t('empty.noActiveTask')}</p>
+                      <p className="text-caption">{t('empty.submitTask')}</p>
+                    </div>
+                  </div>
+                )}
               </div>
+            ) : (
+              <WorkspaceTimeline 
+                featureFlags={{ timelineRich: false }} 
+              />
             )}
           </div>
         </div>
@@ -58,7 +98,9 @@ function AgentWorkspacePageContent() {
       {tasks.length > 0 && (
         <div className="border-t border-border/30 bg-surface/30">
           <div className="p-4">
-            <h3 className="font-body font-medium text-body-sm text-text mb-3">Recent Tasks</h3>
+            <h3 className="font-body font-medium text-body-sm text-text mb-3">
+              {t('history.recentTasks')}
+            </h3>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {tasks.slice(0, 8).map((task) => (
                 <button

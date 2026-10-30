@@ -1,9 +1,18 @@
 {
   "header": {
+    "title": "代理工作區",
     "runName": "執行名稱",
     "scenario": "情境",
     "controller": "控制器",
     "runId": "執行 ID"
+  },
+  "tabs": {
+    "agent": "代理",
+    "simulation": "模擬"
+  },
+  "simulation": {
+    "selectRun": "選擇執行",
+    "noRuns": "此情境無可用執行"
   },
   "timeline": {
     "title": "派送時間軸",
@@ -12,7 +21,14 @@
     "reason": "原因",
     "change": "變化",
     "groupedByTimestep": "按時間步分組",
-    "noDispatches": "尚無派送 — 等待執行"
+    "noDispatches": "尚無派送 — 等待執行",
+    "dispatches": "派送數",
+    "selectTimestep": "選擇時間步",
+    "actions": "動作",
+    "value": "數值",
+    "requested": "請求值",
+    "limitedValue": "限制值",
+    "limited": "受限"
   },
   "kpi": {
     "violationsFixed": "修正違規",
@@ -26,6 +42,13 @@
     "timestamp": "時間戳"
   },
   "empty": {
-    "noRunSelected": "選擇一個執行以檢視工作區"
+    "noRunSelected": "選擇一個執行以檢視工作區",
+    "noActiveTask": "無進行中的代理任務",
+    "submitTask": "從面板提交任務以開始工作流程",
+    "noDispatches": "尚無派送 — 等待執行",
+    "waitingForRun": "執行模擬以查看派送資料"
+  },
+  "history": {
+    "recentTasks": "近期任務"
   }
 }
