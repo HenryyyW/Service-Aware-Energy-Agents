@@ -177,7 +177,10 @@ class SimulationCoupler:
         grid_imports = {}
         grid_exports = {}
         lmp_result = None
+<<<<<<< HEAD
         dynamic_pricing_enabled = False
+=======
+>>>>>>> bae8083 (P0-4 P2P prep: add market_type 'p2p', P2POrder/P2PTrade schemas, P2PMatchingEngine with invariant tests)
         
         if self.energy_sharing_enabled and self.settlement_engine:
             # Check if dynamic/LMP pricing is enabled
@@ -186,12 +189,25 @@ class SimulationCoupler:
                 self.scenario_config.energy_sharing.dynamic_pricing.enabled
             )
             
+            # Validate lmp_update_interval_minutes if dynamic pricing is enabled
+            if dynamic_pricing_enabled:
+                dp_config = self.scenario_config.energy_sharing.dynamic_pricing
+                if dp_config.lmp_update_interval_minutes != self.scenario_config.timestep_minutes:
+                    raise ValueError(
+                        f"lmp_update_interval_minutes ({dp_config.lmp_update_interval_minutes}) "
+                        f"must equal simulation timestep_minutes ({self.scenario_config.timestep_minutes}). "
+                        f"Interpolation is not supported."
+                    )
+            
             # Compute LMP prices if dynamic pricing enabled
             building_lmps = {}
             lmp_cap_hits = 0
             lmp_status = "success"
             lmp_reason = "opf_solved"
+<<<<<<< HEAD
             dp_config = None
+=======
+>>>>>>> bae8083 (P0-4 P2P prep: add market_type 'p2p', P2POrder/P2PTrade schemas, P2PMatchingEngine with invariant tests)
             if dynamic_pricing_enabled:
                 dp_config = self.scenario_config.energy_sharing.dynamic_pricing
                 base_price = 0.1  # $/kWh fallback

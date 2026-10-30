@@ -787,8 +787,12 @@ class PandapowerAdapter:
                 # Add cost curve for battery (small cost for cycling)
                 pp.create_poly_cost(self.net, storage_idx, 'storage',
                                    cp1_eur_per_mw=0.01,
+<<<<<<< HEAD
                                    cp2_eur_per_mw2=0.001,
                                    check=False)
+=======
+                                   cp2_eur_per_mw2=0.001)
+>>>>>>> bae8083 (P0-4 P2P prep: add market_type 'p2p', P2POrder/P2PTrade schemas, P2PMatchingEngine with invariant tests)
         
         # Set min/max for loads (they are not controllable in OPF, but we can set bounds)
         for building_id, load_idx in self.load_indices.items():
@@ -1402,6 +1406,7 @@ class PandapowerAdapter:
             self._setup_opf_parameters(price_cap_per_kwh)
             self._opf_params_set = True
         
+<<<<<<< HEAD
         # Update ext_grid cost to match base_energy_price for unconstrained case
         if len(self.net.ext_grid) > 0:
             for idx in self.net.ext_grid.index:
@@ -1411,6 +1416,8 @@ class PandapowerAdapter:
                     if cost_mask.any():
                         self.net.poly_cost.loc[cost_mask, 'cp1_eur_per_mw'] = base_energy_price * 1000.0
         
+=======
+>>>>>>> bae8083 (P0-4 P2P prep: add market_type 'p2p', P2POrder/P2PTrade schemas, P2PMatchingEngine with invariant tests)
         lmp_prices = {}
         cap_hits = 0
         
