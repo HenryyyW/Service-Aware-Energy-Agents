@@ -63,14 +63,17 @@ from src.agents.backend.local import ollama_prompt_callable
 
 # Versioned dispatch prompt. The hash of this template goes into the manifest;
 # bump the version string whenever the prompt changes. The prompt is fixed for
-# the whole matrix: any edit invalidates the arm.
+# the whole phase 2 matrix: any edit invalidates the arm. v2 makes the exact
+# asset_id values explicit (v1 left them implicit and the model invented
+# building-level ids the adapter silently dropped).
 LLM_PROMPT_TEMPLATE = """You are the dispatch agent for a renewable energy community.
 Current step: {timestep}. Observations (JSON): {observations}
 Assets (JSON): {assets}
 Decide charging/discharging power in kW for each asset for this step.
+Use EXACTLY the asset_id values listed in Assets (JSON); give an entry for every listed asset.
 Constraints: respect device power bounds and every SOC/deadline requirement.
 Reply with ONLY a JSON array of {{"asset_id": str, "value_kw": number}} objects.
-Prompt version: llm_dispatch_v1
+Prompt version: llm_dispatch_v2
 """
 
 # Corrective re-prompt for the verified arm: carries the exact violation text
@@ -80,12 +83,12 @@ LLM_REPAIR_PROMPT_TEMPLATE = """Your previous dispatch proposal violated these c
 {violations}
 Current step: {timestep}. Observations (JSON): {observations}
 Assets (JSON): {assets}
-Return a corrected JSON array of {{"asset_id": str, "value_kw": number}} objects that respects every device power bound.
+Return a corrected JSON array of {{"asset_id": str, "value_kw": number}} objects that respects every device power bound. Use EXACTLY the asset_id values listed in Assets (JSON).
 Reply with ONLY the JSON array.
 Prompt version: llm_dispatch_v1_repair
 """
 
-PROMPT_VERSION = "llm_dispatch_v1"
+PROMPT_VERSION = "llm_dispatch_v2"
 REPAIR_PROMPT_VERSION = "llm_dispatch_v1_repair"
 REPAIR_BUDGET = 2
 
@@ -335,10 +338,20 @@ class LLMAgentController(BaseController):
         )
 
     def _build_asset_list(self) -> List[Dict[str, Any]]:
-        """Build asset list for prompt."""
+        """Build asset list for prompt (with the exact asset_id values)."""
         assets = []
         for bid, meta in self.device_metadata.items():
+            asset_ids = []
+            if meta.get("battery"):
+                asset_ids.append(f"{bid}_battery")
+            asset_ids.extend(
+                f"{bid}_ev_{index}" for index in range(len(meta.get("chargers", [])))
+            )
+            asset_ids.extend(
+                f"{bid}_flex_{index}" for index in range(len(meta.get("deferrable", [])))
+            )
             assets.append({
+                "asset_ids": asset_ids,
                 "building": bid,
                 "battery_power_kw": (meta.get("battery") or {}).get("power_kw"),
                 "chargers": [c.get("max_charge_kw") for c in meta.get("chargers", [])],
