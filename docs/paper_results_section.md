@@ -205,6 +205,27 @@ a perfect proposer that machinery is a no-op**; it cannot discriminate
 unparseable proposals — is the Phase 2 real-LLM rerun
 (`docs/phase2_experiment_plan.md`), contingent on the API-key decision.
 
+**Why fallback-mode T4 cannot separate the arms (two reasons, not one).** The
+first reason is the fallback proposer: the deterministic proposer emits in-bounds
+proposals, so the verification loop never fires (evidence above). The second
+reason is an implementation artifact that a real backend alone would not have
+removed: both arms shared the same clamp-repair loop, so even with an imperfect
+proposer their action streams were identical by construction
+(`docs/phase2_experiment_plan.md`, P0-3). The controller fix (branch
+`feature/llm-arms-distinct`) makes the arms asymmetric: `llm_agent` now applies
+proposals as proposed — the simulation adapter clamps to device limits and the
+run reports `llm_unrepaired_violations` — while `llm_agent_verified` re-prompts
+once with the violation text and, if the proposal is still invalid, replaces the
+step with the deterministic rule-based action (repair cap 2; replacement, not
+silent clamping). No number in this section is retracted: in fallback mode both
+arms still coincide (the proposer is deterministic and in-bounds), and the
+fallback-mode tables remain labelled `agent_backend: "fallback"`. Whether
+verification buys anything is therefore a Phase 2 question: the real-LLM
+ablation (M2, RQ2 in `docs/phase2_experiment_plan.md`) on `ollama-local` is the
+first setting in which the arms can differ, and its agent-execution table must
+show non-zero `llm_unrepaired_violations` for the unverified arm and non-zero
+`repair_iterations` for the verified arm before any separation claim is made.
+
 ## 5.5 Reproducibility (T5)
 
 Each run writes a `manifest.json` with the scenario config SHA-256, the git

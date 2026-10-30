@@ -1,8 +1,16 @@
-"""Tests for LLM agent controllers."""
-import json
+"""Tests for the verified-vs-unverified LLM agent ablation controllers.
+
+Covers the traceability contract from experiments/ABLATION_DESIGN.md section 4
+(agent_backend, prompt hash and sampling parameters recorded, fallback mode
+labelled) and the arm-separation contract from docs/phase2_experiment_plan.md
+P0-3: the unverified arm applies proposals as proposed (the adapter clamps,
+violations are counted), the verified arm re-prompts once with the violation
+text and then replaces the step with the deterministic rule-based dispatch —
+the two arms must produce different action streams on an out-of-bounds
+proposal.
+"""
 from types import SimpleNamespace
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 import pytest
 
@@ -91,13 +99,33 @@ def _metadata() -> Dict[str, Dict[str, Any]]:
     }
 
 
+def _metadata_5kw_battery() -> Dict[str, Dict[str, Any]]:
+    """Same community with a 5 kW battery, for the P0-3 asymmetry test."""
+    meta = _metadata()
+    meta["ab"]["battery"]["power_kw"] = 5.0
+    return meta
+
+
 def _observations(timestep=0):
     return {
-        "ab_building_0_net_electricity_consumption": 3.0,
-        "ab_building_0_solar_generation": 1.0,
-        "ab_building_0_non_shiftable_load": 2.0,
-        "ab_building_0_electrical_storage_soc": 0.5,
+        "ab_net_electricity_consumption": 3.0,
+        "ab_solar_generation": 1.0,
+        "ab_non_shiftable_load": 2.0,
+        "ab_electrical_storage_soc": 0.5,
     }
+
+
+def _battery_action(value_kw: float) -> Action:
+    return Action(
+        asset_id="ab_battery",
+        action_type=ActionType.BATTERY_CHARGE,
+        value_kw=value_kw,
+        timestep=0,
+    )
+
+
+def _action_set(actions: List[Action]) -> set:
+    return {(a.asset_id, round(a.value_kw, 6)) for a in actions}
 
 
 class MockBackend:
@@ -122,7 +150,8 @@ class MockBackend:
         timestep: int,
         context: Optional[Dict[str, Any]] = None,
         budget: Optional[CostBudget] = None,
-    ) -> 'BackendResponse':
+    ) -> BackendResponse:
+        self._call_count += 1
         return BackendResponse(
             actions=self._actions,
             raw_output="mock",
@@ -139,89 +168,57 @@ class MockBackend:
         return 0.0
 
 
-def _make_mock_actions():
-    """Create mock actions for testing."""
-    return [
-        Action(asset_id="ab_battery", action_type=ActionType.BATTERY_CHARGE, value_kw=2.0, timestep=0),
-        Action(asset_id="ab_ev_0", action_type=ActionType.EV_CHARGE, value_kw=5.0, timestep=0),
-    ]
+class SequenceBackend:
+    """Mock backend returning a queued BackendResponse per call.
+
+    A queued exception is raised instead, to simulate a failed call.
+    """
+
+    def __init__(self, responses: List[Any]):
+        self._responses = list(responses)
+        self._call_count = 0
+
+    @property
+    def backend_id(self) -> str:
+        return "sequence_mock"
+
+    @property
+    def supports_streaming(self) -> bool:
+        return False
+
+    async def generate_actions(
+        self,
+        scenario,
+        observations: Dict[str, Any],
+        timestep: int,
+        context: Optional[Dict[str, Any]] = None,
+        budget: Optional[CostBudget] = None,
+    ) -> BackendResponse:
+        self._call_count += 1
+        response = self._responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    async def health_check(self) -> bool:
+        return True
+
+    def estimate_cost(self, prompt_tokens: int, max_completion_tokens: int) -> float:
+        return 0.0
 
 
-def _observations(timestep=0):
-    return {
-        "ab_building_0_net_electricity_consumption": 3.0,
-        "ab_building_0_solar_generation": 1.0,
-        "ab_building_0_non_shiftable_load": 2.0,
-        "ab_building_0_electrical_storage_soc": 0.5,
-    }
-
-
-def _metadata() -> Dict[str, Dict[str, Any]]:
-    return {
-        "ab": {
-            "battery": {"power_kw": 6.0},
-            "chargers": [{"max_charge_kw": 7.0}],
-            "deferrable": [{"power_kw": 3.0}],
-        }
-    }
-
-
-def _make_mock_actions():
-    """Create mock actions for testing."""
-    return [
-        Action(asset_id="ab_battery", action_type=ActionType.BATTERY_CHARGE, value_kw=2.0, timestep=0),
-        Action(asset_id="ab_ev_0", action_type=ActionType.EV_CHARGE, value_kw=5.0, timestep=0),
-    ]
-
-
-def _observations(timestep=0):
-    return {
-        "ab_building_0_net_electricity_consumption": 3.0,
-        "ab_building_0_solar_generation": 1.0,
-        "ab_building_0_non_shiftable_load": 2.0,
-        "ab_building_0_electrical_storage_soc": 0.5,
-    }
-
-
-def _metadata() -> Dict[str, Dict[str, Any]]:
-    return {
-        "ab": {
-            "battery": {"power_kw": 6.0},
-            "chargers": [{"max_charge_kw": 7.0}],
-            "deferrable": [{"power_kw": 3.0}],
-        }
-    }
-
-
-def _make_mock_actions():
-    """Create mock actions for testing."""
-    return [
-        Action(asset_id="ab_battery", action_type=ActionType.BATTERY_CHARGE, value_kw=2.0, timestep=0),
-        Action(asset_id="ab_ev_0", action_type=ActionType.EV_CHARGE, value_kw=5.0, timestep=0),
-    ]
-
-
-def _observations(timestep=0):
-    return {
-        "ab_building_0_net_electricity_consumption": 3.0,
-        "ab_building_0_solar_generation": 1.0,
-        "ab_building_0_non_shiftable_load": 2.0,
-        "ab_building_0_electrical_storage_soc": 0.5,
-    }
-
-
-def _metadata() -> Dict[str, Dict[str, Any]]:
-    return {
-        "ab": {
-            "battery": {"power_kw": 6.0},
-            "chargers": [{"max_charge_kw": 7.0}],
-            "deferrable": [{"power_kw": 3.0}],
-        }
-    }
+def _response(*actions: Action) -> BackendResponse:
+    return BackendResponse(
+        actions=list(actions),
+        raw_output="mock",
+        prompt_hash="test",
+        token_usage={"prompt": 100, "completion": 50, "total": 150},
+        latency_ms=10.0,
+        cost_usd=0.0,
+    )
 
 
 def _ev_step(timestep, connected, soc, required=0.87):
-    from types import SimpleNamespace
     return SimpleNamespace(
         timestep=timestep,
         observations={
@@ -247,11 +244,9 @@ def test_fallback_mode_is_labelled_and_matches_rule_based(scenario):
 
     obs = _observations()
     llm_actions = llm.get_actions(obs, 0)
-    rule_actions = RuleBasedController(scenario).get_actions(obs, 0)
+    rule_actions = rule.get_actions(obs, 0)
     assert llm_actions.timestep == 0
-    assert {(a.asset_id, round(a.value_kw, 6)) for a in llm_actions.actions} == {
-        (a.asset_id, round(a.value_kw, 6)) for a in rule_actions.actions
-    }
+    assert _action_set(llm_actions.actions) == _action_set(rule_actions.actions)
     stats = llm.agent_stats()
     assert stats["agent_backend"] == "fallback"
     assert stats["first_attempt_validity"] == 1.0
@@ -271,23 +266,144 @@ def test_llm_backend_proposals_are_parsed_and_applied(scenario):
     assert stats["first_attempt_validity"] == 1.0
     assert stats["repair_iterations"] == 0
     assert stats["unparseable_outputs"] == 0
+    assert stats["llm_unrepaired_violations"] == 0
 
 
-def test_out_of_bounds_proposal_is_verified_and_repaired(scenario):
-    mock_backend = MockBackend([
-        Action(asset_id="ab_battery", action_type=ActionType.BATTERY_CHARGE, value_kw=99.0, timestep=0),
+def _make_mock_actions():
+    """Create mock actions for testing."""
+    return [
+        Action(asset_id="ab_battery", action_type=ActionType.BATTERY_CHARGE, value_kw=2.0, timestep=0),
+        Action(asset_id="ab_ev_0", action_type=ActionType.EV_CHARGE, value_kw=5.0, timestep=0),
+    ]
+
+
+def test_unverified_arm_applies_out_of_bounds_proposal_unclamped(scenario):
+    """P0-3 unverified treatment: apply as proposed, count, never repair."""
+    llm = LLMAgentController(
+        scenario, device_metadata=_metadata(), backend=MockBackend([_battery_action(50.0)])
+    )
+    actions = llm.get_actions(_observations(), 0).actions
+    assert actions[0].value_kw == 50.0  # passed through to the adapter
+    # The adapter clamp is what bounds the value downstream: 50 kW on a 6 kW
+    # battery normalizes to 8.33 and clamps to 1.0 == 6 kW.
+    from src.simulation.citylearn_adapter import CityLearnAdapter
+
+    adapter = CityLearnAdapter.__new__(CityLearnAdapter)
+    normalized = adapter._to_normalized_action(
+        "ab", "electrical_storage", actions[0].value_kw, _metadata()
+    )
+    assert normalized == 1.0
+    stats = llm.agent_stats()
+    assert stats["llm_unrepaired_violations"] == 1
+    assert stats["repair_iterations"] == 0
+    assert stats["first_attempt_validity"] == 0.0
+
+
+def test_arms_diverge_on_synthetic_out_of_bounds_proposal(scenario):
+    """P0-3 asymmetry: 50 kW proposal on a 5 kW battery.
+
+    Unverified yields the proposal (adapter clamps to 5 kW); verified yields
+    the deterministic rule-based setpoint for that step.
+    """
+    obs = _observations()
+    rule = RuleBasedController(scenario)
+    expected = _action_set(rule.get_actions(obs, 0).actions)
+
+    unverified = LLMAgentController(
+        scenario,
+        device_metadata=_metadata_5kw_battery(),
+        backend=MockBackend([_battery_action(50.0)]),
+    )
+    unv = unverified.get_actions(obs, 0).actions
+    assert _action_set(unv) != expected
+    assert next(a.value_kw for a in unv if a.asset_id == "ab_battery") == 50.0
+
+    # The verified arm re-prompts; the mock always re-proposes 50 kW, so the
+    # step is replaced with the rule-based dispatch.
+    verified = LLMVerifiedController(
+        scenario,
+        device_metadata=_metadata_5kw_battery(),
+        backend=MockBackend([_battery_action(50.0)]),
+    )
+    ver = verified.get_actions(obs, 0).actions
+    assert _action_set(ver) == expected
+    stats = verified.agent_stats()
+    assert stats["repair_iterations"] == 2  # one re-prompt + deterministic replacement
+    assert stats["llm_fallback_steps"] == 1
+    assert stats["first_attempt_validity"] == 0.0
+    assert stats["verification_failures"].get("bound_violation", 0) == 1
+
+
+def test_out_of_bounds_proposal_is_verified_and_replaced(scenario):
+    # 99 kW exceeds every device bound; the verified arm must replace the
+    # step with the rule-based dispatch, never clamp silently.
+    verified = LLMVerifiedController(
+        scenario, device_metadata=_metadata(), backend=MockBackend([_battery_action(99.0)])
+    )
+    obs = _observations()
+    actions = verified.get_actions(obs, 0).actions
+    rule = RuleBasedController(scenario)
+    expected = _action_set(rule.get_actions(obs, 0).actions)
+    assert _action_set(actions) == expected
+    stats = verified.agent_stats()
+    assert stats["repair_iterations"] == 2
+    assert stats["verification_failures"].get("bound_violation", 0) == 1
+    assert stats["first_attempt_validity"] == 0.0
+
+
+def test_verified_reprompt_success_applies_corrected_proposal(scenario):
+    """A corrected re-prompt is applied without falling back (repair 1 of 2)."""
+    backend = SequenceBackend([
+        _response(_battery_action(50.0)),
+        _response(_battery_action(4.0)),
     ])
     verified = LLMVerifiedController(
-        scenario, device_metadata=_metadata(), backend=MockBackend([
-            Action(asset_id="ab_battery", action_type=ActionType.BATTERY_CHARGE, value_kw=99.0, timestep=0),
-        ])
+        scenario, device_metadata=_metadata(), backend=backend
     )
     actions = verified.get_actions(_observations(), 0).actions
-    assert actions[0].value_kw == 6.0  # battery power bound
+    assert actions[0].value_kw == 4.0
+    assert backend._call_count == 2
     stats = verified.agent_stats()
-    assert stats["repair_iterations"] >= 1
-    assert stats["verification_failures"].get("bound_violation", 0) >= 1
+    assert stats["repair_iterations"] == 1
+    assert stats["llm_fallback_steps"] == 0
     assert stats["first_attempt_validity"] == 0.0
+
+
+def test_verified_reprompt_unusable_output_replaces_with_rule_based(scenario):
+    backend = SequenceBackend([
+        _response(_battery_action(99.0)),
+        RuntimeError("backend down"),
+    ])
+    verified = LLMVerifiedController(
+        scenario, device_metadata=_metadata(), backend=backend
+    )
+    obs = _observations()
+    actions = verified.get_actions(obs, 0).actions
+    rule = RuleBasedController(scenario)
+    expected = _action_set(rule.get_actions(obs, 0).actions)
+    assert _action_set(actions) == expected
+    stats = verified.agent_stats()
+    assert stats["repair_iterations"] == 2
+    assert stats["llm_fallback_steps"] == 1
+    # The initial proposal parsed fine; the failed re-prompt is a call
+    # failure, not a parse failure.
+    assert stats["unparseable_outputs"] == 0
+
+
+def test_verified_unknown_asset_is_a_shape_violation_and_is_replaced(scenario):
+    bad = Action(
+        asset_id="ab_foo", action_type=ActionType.BATTERY_CHARGE, value_kw=1.0, timestep=0
+    )
+    verified = LLMVerifiedController(
+        scenario, device_metadata=_metadata(), backend=MockBackend([bad])
+    )
+    obs = _observations()
+    actions = verified.get_actions(obs, 0).actions
+    rule = RuleBasedController(scenario)
+    expected = _action_set(rule.get_actions(obs, 0).actions)
+    assert _action_set(actions) == expected
+    stats = verified.agent_stats()
+    assert stats["verification_failures"].get("action_shape", 0) == 1
 
 
 def test_unparseable_llm_output_falls_back_and_runs_continue(scenario):
@@ -324,6 +440,8 @@ def test_unparseable_llm_output_falls_back_and_runs_continue(scenario):
     stats = llm.agent_stats()
     assert stats["unparseable_outputs"] == 1
     assert stats["verification_failures"].get("unparseable_output", 0) == 1
+    assert stats["llm_fallback_steps"] == 1
+    assert stats["llm_fallback_step_share"] == 1.0
 
 
 def test_verified_fallback_mode_records_comparable_accounting(scenario):
