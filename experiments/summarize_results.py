@@ -259,7 +259,9 @@ def main() -> int:
     markdown = build_markdown(results, args.metrics, args.reference)
 
     if args.out:
-        Path(args.out).write_text(markdown)
+        # UTF-8 explicitly: the tables contain ± and — and the default locale
+        # encoding on Windows (cp936/cp1252) mangles them for reviewers.
+        Path(args.out).write_text(markdown, encoding="utf-8")
         print(f"Wrote {args.out}")
     print(markdown)
     return 0

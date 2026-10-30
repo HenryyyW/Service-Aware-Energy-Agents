@@ -164,6 +164,29 @@ def test_run_ablation_writes_tables_and_paired_tests(tmp_path):
     assert "| scenario_a | llm_agent_verified | total_cost | 3 | +6.00" in markdown
 
 
+def test_run_ablation_pairs_reference_from_a_second_directory(tmp_path):
+    """T4's reference (multi_agent) lives in the matrix, not the ablation sweep."""
+    ablation = tmp_path / "ablation"
+    matrix = tmp_path / "matrix"
+    for seed, delta in ((42, 5.0), (123, 7.0), (456, 6.0)):
+        _write_run(matrix, "scenario_a", "multi_agent", seed, cost=100.0)
+        _write_run(ablation, "scenario_a", "llm_agent", seed, cost=100.0 + delta)
+        _write_run(ablation, "scenario_a", "llm_agent_verified", seed, cost=100.0 + delta)
+
+    payload = run_ablation(
+        ablation, ablation, reference="multi_agent", reference_input=matrix
+    )
+
+    assert payload["reference_runs"] == 3
+    # Reference rows are included for pairing and for the mean table...
+    assert payload["kpis"]["scenario_a::multi_agent"]["n"] == 3
+    # ...but only ablation runs are "per_run" for the agent-execution summary.
+    assert len(payload["per_run"]) == 6
+    markdown = (ablation / "ablation_kpis.md").read_text(encoding="utf-8")
+    assert "| scenario_a | multi_agent | 3 |" in markdown
+    assert "| scenario_a | llm_agent | total_cost | 3 | +6.00" in markdown
+
+
 def test_repro_report_flags_seed_mismatch_and_dirty_tree(tmp_path):
     _write_run(tmp_path, "scenario_a", "llm_agent", 42, sampling_seed=999)
     _write_run(tmp_path, "scenario_a", "multi_agent", 123)
