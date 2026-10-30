@@ -347,30 +347,50 @@ def build_repro_markdown(report: Dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def run_ablation(input_dir: Path, out_dir: Path, reference: str = "multi_agent") -> Dict[str, Any]:
+def run_ablation(
+    input_dir: Path,
+    out_dir: Path,
+    reference: str = "multi_agent",
+    reference_input: Optional[Path] = None,
+) -> Dict[str, Any]:
     rows = load_ablation_rows(input_dir)
     if not rows:
         raise ValueError(f"no completed runs with result.json under {input_dir}")
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # T4 compares the ablation controllers against the reference controller on
+    # the same seeds. The reference (multi_agent) lives in the main matrix, not
+    # in the ablation sweep, so it is loaded from a second directory when given;
+    # without it the paired deltas and Holm tests are empty.
+    reference_rows: List[Dict[str, Any]] = []
+    if reference_input is not None:
+        reference_rows = [
+            row for row in load_ablation_rows(Path(reference_input))
+            if row.get("controller") == reference
+        ]
+
     metrics = [metric for metric in T4_METRICS if metric in SUMMARY_METRICS]
-    kpi_markdown = build_markdown(rows, metrics, reference)
+    kpi_markdown = build_markdown(rows + reference_rows, metrics, reference)
     agent_markdown = build_agent_execution_markdown(
         agent_execution_rows(rows), f"fallback ablation, reference {reference}"
     )
-    (out_dir / "ablation_kpis.md").write_text(kpi_markdown)
-    (out_dir / "ablation_agent_execution.md").write_text(agent_markdown)
+    # UTF-8 explicitly: the tables contain ± and — and the default locale
+    # encoding on Windows (cp936/cp1252) mangles them for reviewers.
+    (out_dir / "ablation_kpis.md").write_text(kpi_markdown, encoding="utf-8")
+    (out_dir / "ablation_agent_execution.md").write_text(agent_markdown, encoding="utf-8")
 
     payload = {
         "reference": reference,
+        "reference_input": str(reference_input) if reference_input is not None else None,
         "metrics": metrics,
         "per_run": rows,
+        "reference_runs": len(reference_rows),
         "kpis": {},
         "agent_execution": agent_execution_rows(rows),
     }
     # Per-group KPI stats, computed independently of the markdown formatting.
     grouped: Dict[str, List[Dict[str, Any]]] = {}
-    for row in rows:
+    for row in rows + reference_rows:
         grouped.setdefault(f"{row['scenario']}::{row['controller']}", []).append(row)
     for key, group_rows in sorted(grouped.items()):
         payload["kpis"][key] = {
@@ -380,7 +400,9 @@ def run_ablation(input_dir: Path, out_dir: Path, reference: str = "multi_agent")
             for metric in metrics
         }
         payload["kpis"][key]["n"] = len(group_rows)
-    (out_dir / "ablation_stats.json").write_text(json.dumps(payload, indent=2))
+    (out_dir / "ablation_stats.json").write_text(
+        json.dumps(payload, indent=2), encoding="utf-8"
+    )
     return payload
 
 
@@ -392,6 +414,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ablation.add_argument("--input", required=True)
     ablation.add_argument("--out", default=None)
     ablation.add_argument("--reference", default="multi_agent")
+    ablation.add_argument(
+        "--reference-input",
+        default=None,
+        help="Directory holding the reference controller's runs (e.g. the matrix), "
+             "when the reference is not part of the ablation sweep.",
+    )
 
     repro = sub.add_parser("repro", help="T5 reproducibility sweep")
     repro.add_argument("--input", required=True)
@@ -401,16 +429,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "ablation":
         out_dir = Path(args.out or args.input)
-        payload = run_ablation(Path(args.input), out_dir, args.reference)
+        reference_input = Path(args.reference_input) if args.reference_input else None
+        payload = run_ablation(
+            Path(args.input), out_dir, args.reference, reference_input
+        )
         print(f"wrote {out_dir}/ablation_kpis.md, ablation_agent_execution.md, ablation_stats.json")
-        print(f"runs: {len(payload['per_run'])}")
+        print(
+            f"runs: {len(payload['per_run'])} ablation + "
+            f"{payload['reference_runs']} {args.reference} reference"
+        )
         return 0
 
     out_dir = Path(args.out or args.input)
     out_dir.mkdir(parents=True, exist_ok=True)
     report = repro_report(Path(args.input))
-    (out_dir / "reproducibility.md").write_text(build_repro_markdown(report))
-    (out_dir / "reproducibility.json").write_text(json.dumps(report, indent=2))
+    (out_dir / "reproducibility.md").write_text(
+        build_repro_markdown(report), encoding="utf-8"
+    )
+    (out_dir / "reproducibility.json").write_text(
+        json.dumps(report, indent=2), encoding="utf-8"
+    )
     print(f"wrote {out_dir}/reproducibility.md and reproducibility.json")
     print(f"runs: {report['runs_with_manifest']}")
     return 0

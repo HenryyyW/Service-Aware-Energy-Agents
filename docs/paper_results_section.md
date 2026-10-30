@@ -1,31 +1,31 @@
 # Results section (draft)
 
 Draft text for the paper's results section, following
-`docs/paper_results_outline.md`. **Status: v0.2 — structure, conventions and
-artifact map are final; every number marked `⟨pending⟩` is filled from a fresh
-paper matrix + ablation run on the metric-fixed tree.** The 125-run matrix at
-`Shared/paper_artifacts/matrix/` (base `571bdfd`) and 50-run ablation (base
-`bb6f24f`) are **not** usable for paper numbers: both predate three
-metric-collection fixes landed on this branch (see Caveats) — EV service was
-structurally 0.000 everywhere, `scenario_e` community cost was NaN, and
-`gini_coefficient`/`member_cost_coverage` were schema defaults rather than
-computed values. QA re-runs after this branch merges. Numbers quoted from the
-first 125-run matrix are labelled *v1 diagnostic* and are not paper results.
+`docs/paper_results_outline.md`. **Status: v1.0 — every number is filled from
+the metric-fixed paper matrix and ablation.** The matrix is 125/125 runs on the
+merged fix commit `035a52f` (`git_dirty: false`, `failed_runs.json = []`) and the
+ablation is 50/50 runs on the same commit; both were re-run after the three
+metric-collection fixes recorded in Caveats 2–3 (the earlier pre-fix matrix is
+superseded and no longer cited). Generated summaries, figures and tables live in
+`Shared/paper_artifacts/analysis/`.
 
-All tables/figures in this section are generated from committed summaries plus
-release artifacts:
+All tables/figures in this section are generated from those artifacts:
 
 | Element | Command / source |
 |---|---|
-| T2, T3 | `python -m experiments.summarize_results --input experiments/matrix_full_v2 --reference rule_based` |
-| T3 (ablation reference) | same, `--reference multi_agent`, input `experiments/ablation_fallback` |
-| T4 | `python -m experiments.ablation_analysis ablation --input experiments/ablation_fallback --reference multi_agent` → `ablation_kpis.md`, `ablation_agent_execution.md` |
-| F1, F2, F3 | `python -m experiments.make_figures --input experiments/matrix_full_v2 --out experiments/figures` |
+| T2, T3 | `python -m experiments.summarize_results --input <matrix> --reference rule_based` |
+| T3, T4 (reference) | `... --reference multi_agent` |
+| T4 | `python -m experiments.ablation_analysis ablation --input <ablation> --reference multi_agent --reference-input <matrix>` → `ablation_kpis.md`, `ablation_agent_execution.md` |
+| F1, F2, F3 | `python -m experiments.make_figures --input <matrix> --out <figures>` |
 | F4 | reference-controller `plots/*.png` produced by `experiments/run_experiment.py` |
 | F5 | `grid_diagnostics.jsonl` + failure-injector log from the `scenario_e` runs |
-| F6 | `result.json` → `agent_execution` block of the ablation runs |
+| F6 | manifest `agent` block of the ablation runs |
 | T5 | per-run `manifest.json`, `failed_runs.json`, `scripts/check_artifacts.py` |
-| T5 table | `python -m experiments.ablation_analysis repro --input experiments/matrix_full_v2` → `reproducibility.md` |
+| T5 table | `python -m experiments.ablation_analysis repro --input <matrix>` → `reproducibility.md` |
+
+`<matrix>` and `<ablation>` are the release copies
+(`Shared/paper_artifacts/matrix`, `Shared/paper_artifacts/ablation`); analysis
+output is collected in `Shared/paper_artifacts/analysis/`.
 
 ## 5.1 Experimental setup (T1)
 
@@ -51,31 +51,54 @@ the five core KPIs; T3 reports paired per-seed deltas against `rule_based` with
 Holm-adjusted p-values over the family of controller comparisons.
 
 The section's spine is the **cost-versus-service Pareto front** (F3), not a
-single KPI:
+single KPI. Paired per-seed deltas against `rule_based` (mean ± 95% CI
+half-width; Holm within each scenario × metric family; `summary_vs_rule_based.md`):
 
-- `multi_agent` delivers the lowest cost and peak demand of the coordinated
-  controllers, at the price of weak EV service.
-  *v1 diagnostic:* −7.9 USD cost and −6.8 kW peak versus `rule_based`,
-  p_Holm < 0.0001.
-- `mpc`, with perfect forecasts, buys near-complete EV service for roughly
-  +53 USD relative to `rule_based` (v1 diagnostic), i.e. it sits at the
-  service-maximal end of the front.
-- `rl` lands between them (~+93 USD, ~86% EV completion in v1), showing that a
-  model-free learner recovers most of the service benefit without the LP.
-- `centralized` does **not** dominate: its only v1 advantage over `rule_based`
-  was a non-significant peak change (+0.22 kW, p_Holm = 0.72). Reviewers should
-  read this as evidence that the coordination gain is not an artefact of
-  "having an optimizer at all".
+| Scenario | Controller | Δ total cost (USD) | Δ peak demand (kW) | Δ EV completion | p_Holm (cost) |
+|---|---|---|---|---|---|
+| A | multi_agent | −17.68 ± 0.13 | −18.35 ± 0.84 | −0.11 ± 0.07 | < 0.0001 |
+| B | multi_agent | −41.37 ± 3.18 | −26.77 ± 1.49 | −0.12 ± 0.06 | < 0.0001 |
+| C | multi_agent | −13.42 ± 0.06 | −18.34 ± 0.81 | −0.11 ± 0.07 | < 0.0001 |
+| D | multi_agent | −17.68 ± 0.13 | −18.35 ± 0.84 | −0.11 ± 0.07 | < 0.0001 |
+| E | multi_agent | −17.90 ± 0.10 | −18.52 ± 0.98 | −0.11 ± 0.07 | < 0.0001 |
+| A | mpc | +64.30 ± 17.49 | +29.14 ± 0.77 | +0.82 ± 0.15 | 0.0005 |
+| A | rl | +86.84 ± 4.74 | +43.35 ± 4.44 | +0.49 ± 0.11 | < 0.0001 |
+| A | centralized | −3.87 ± 0.35 | +1.29 ± 0.96 | +0.01 ± 0.02 | < 0.0001 |
 
-⟨pending⟩ Replace the v1 magnitudes with the metric-fixed matrix T2/T3 values;
-state whether the ordering of the front is unchanged and report the paired CIs.
-The EV-service arm of the front is only meaningful after the EV-definition fix
-(Caveat 2), which restores real EV load (e.g. `rule_based` scenario A peak
-demand rises 12.4 → 32.6 kW, `mpc` reaches 1.000 completion at avg SOC 0.88).
+- `multi_agent` is the cost- and peak-minimal coordinated controller in **every**
+  scenario (A: −17.68 USD, −18.35 kW vs `rule_based`; B: −41.37 USD,
+  −26.77 kW; E: −17.90 USD, −18.52 kW; all p_Holm < 0.0001). The price is real
+  and measurable: EV completion falls to 0.07 ± 0.08 against `rule_based`
+  0.18 ± 0.15 (Δ = −0.11, p_Holm = 0.023 in A, C, D, E; p_Holm = 0.0275 in B).
+- `mpc`, with perfect forecasts, buys near-complete EV service — 1.00 ± 0.00 in
+  A, C and E, and 0.14 ± 0.06 in B where the device mix limits sessions — for
+  +19 to +69 USD and up to +29 kW peak. It is the service-maximal end of the
+  front, not a cost-competitive one.
+- `rl` **does not** recover the service benefit cheaply: in every scenario it has
+  both higher cost and lower EV completion than `mpc` (A: +86.84 ± 4.74 USD,
+  EV 0.66 ± 0.12 vs `mpc` 1.00), so the retrained model-free baseline is
+  dominated by `mpc` on this front. Its peak demand is the highest of all
+  controllers (A: 75.54 kW).
+- `centralized` again does **not** dominate: it shaves 3–4 USD off `rule_based`
+  cost, but its peak change is a small, significant *increase* in A/C/E
+  (+1.2–1.3 kW, p_Holm ≈ 0.02) and a decrease only in B (−7.31 kW), while its EV
+  service is statistically indistinguishable from `rule_based` (Δ = +0.01,
+  p_Holm = 0.37). The coordination gain is therefore not an artefact of "having
+  an optimizer at all".
+
+Scenarios A and D are numerically identical under every controller: they share a
+device mix and the synthetic traces depend only on (seed, filename), so D's
+comfort stressor changes bounds but not the realised cost/peak/EV trajectory
+(Caveat 4). The ordering of the front — `multi_agent` at the cost-minimal end,
+`mpc` at the service-maximal end — is unchanged from the v1 diagnostic, but the
+magnitudes are not, and `rl`'s position moved from "between them" to "dominated
+by `mpc`" once EV service was measured correctly.
 
 **F1** (per-scenario KPI bars with CI whiskers) and **F2** (per-seed strips)
 carry the variance evidence; **F3** is the Pareto panel annotated with peak
-demand.
+demand. CIs are narrow because the simulator is deterministic given the seed:
+5 seeds give tight intervals, so significance is read from the paired deltas
+rather than from interval width (Caveat 6).
 
 ## 5.3 Scenario E: failure injection (F5)
 
@@ -107,18 +130,35 @@ The convention is implemented in `src/evaluation/fairness.py`, typed in
 covered by `tests/test_member_cost_convention.py` (including strict-JSON
 serialisation, `allow_nan=False`).
 
-⟨pending⟩ Report per-controller `member_cost_coverage` and
-`members_interrupted_count` for Scenario E (both are columns in T2/T3 after the
-paper matrix), then the cost/peak comparison restricted to runs with coverage
-1.0, with the interrupted-run subset described separately. F5 shows the grid
-response timeline around the injected events.
+**Result.** The interruption is a property of the scenario, not of the strategy:
+in **all 25** Scenario E runs, for **every** controller,
+`members_interrupted = ["building_3"]` → `members_interrupted_count = 1.00 ± 0.00`
+and `member_cost_coverage = 0.80 ± 0.00`. The injected sensor failure on
+`building_3_net_electricity_consumption` (steps 96–119) is the only cost-blanking
+event, and no controller avoids or triggers it. Consequently there is **no**
+Scenario E subset with coverage 1.0 to compare against; the E deltas in §5.2 are
+already computed over valid members only, with `building_3` excluded from the
+Gini, worst/best-member and savings aggregates. Gini over the four valid members
+ranges 0.293–0.650 (median 0.523) across the 25 E runs.
 
-The community cost must be reported with a second coverage covariate,
+Scenario E community cost and peak, mean ± 95% CI (all 25 runs finite):
+
+| Controller | total cost (USD) | peak demand (kW) |
+|---|---|---|
+| rule_based | 104.22 ± 2.88 | 32.19 ± 0.84 |
+| multi_agent | 86.31 ± 2.90 | 13.66 ± 0.67 |
+| centralized | 100.00 ± 2.74 | 33.48 ± 0.72 |
+| mpc | 166.77 ± 18.78 | 61.33 ± 0.96 |
+| rl | 189.14 ± 5.50 | 75.54 ± 4.61 |
+
+The community cost is reported with a second coverage covariate,
 `energy.cost_coverage` (valid building-steps / total building-steps in the
 episode), because the injected sensor failure also blanks individual building
 readings: `total_cost` is computed over valid building-steps only, and
-`invalid_cost_steps` counts the blanked ones (Scenario E seed 42 on the fixed
-tree: `total_cost` 104.51, `cost_coverage` 0.973, 23 invalid steps).
+`invalid_cost_steps` counts the blanked ones. `cost_coverage = 0.9726`
+(23 of 840 building-steps blanked) in **every** E run — identical across
+controllers, so it does not confound the E comparison. F5 shows the grid
+response timeline around the injected events.
 
 ## 5.4 Ablation: verified versus unverified agents (T4, F6)
 
@@ -139,7 +179,31 @@ T4 columns: KPI deltas vs `multi_agent`, first-attempt validity rate, mean
 repairs per step, fallback rate, and wall time per run. F6 plots first-attempt
 validity against repair iterations.
 
-⟨pending⟩ Fill from `experiments/ablation_fallback`.
+**Result (fallback mode).** In fallback the two LLM controllers are
+*KPI-identical to each other and to `rule_based`* — the deterministic proposer is
+the rule-based policy. Scenario A, `llm_agent` = `llm_agent_verified` =
+106.44 ± 2.88 USD, peak 32.19 ± 0.84 kW, EV 0.18 ± 0.15, i.e. exactly the
+`rule_based` row. Against `multi_agent` both are therefore more expensive and
+higher-peaking on every scenario, and better on EV service:
+
+| Scenario | Controller | Δ cost (USD) | Δ peak (kW) | Δ EV completion | p_Holm (cost) |
+|---|---|---|---|---|---|
+| A | llm_agent / llm_agent_verified | +17.68 ± 0.13 | +18.35 ± 0.84 | +0.11 ± 0.07 | < 0.0001 |
+| B | llm_agent / llm_agent_verified | +41.37 ± 3.18 | +26.77 ± 1.49 | +0.12 ± 0.06 | < 0.0001 |
+| C | llm_agent / llm_agent_verified | +13.42 ± 0.06 | +18.34 ± 0.81 | +0.11 ± 0.07 | < 0.0001 |
+| E | llm_agent / llm_agent_verified | +17.90 ± 0.10 | +18.52 ± 0.98 | +0.11 ± 0.07 | < 0.0001 |
+
+The agent-execution evidence shows why the two arms coincide: under the
+deterministic proposer every proposal is valid on the first attempt
+(`first_attempt_validity = 1.000`), so the verification loop never fires —
+`repairs/run = 0.00`, `repairs/step = 0.0000`, `verification_failures = 0.00`,
+`unparseable_outputs = 0.00`, and `agent_backend = "fallback"` in all 50
+manifests. **The fallback ablation measures the verification machinery, and under
+a perfect proposer that machinery is a no-op**; it cannot discriminate
+`llm_agent` from `llm_agent_verified`. Wall time is 16–33 s per run (median
+20.8 s) and does not separate the arms. The real test — a backend that occasionally emits invalid or
+unparseable proposals — is the Phase 2 real-LLM rerun
+(`docs/phase2_experiment_plan.md`), contingent on the API-key decision.
 
 ## 5.5 Reproducibility (T5)
 
@@ -155,7 +219,30 @@ Runtime is reported as the **median** per controller with the interquartile
 range; a footnote records any run that had to be killed by the per-run timeout
 and why.
 
-⟨pending⟩ Fill commit hash, run counts, failure count, median/IQR runtime.
+**Result.** Both the matrix and the ablation ran on the merged fix commit
+`035a52f30776caa2d02ce7f3e9133a9f477764af` with `git_dirty: false` in all 175
+manifests (125 matrix + 50 ablation), Python 3.10.9; `failed_runs.json = []`
+(0 failed). Each scenario shows 5 distinct `scenario_config_sha256` values, one
+per seed, because the seed is part of the hashed config — the pairing key for T3
+is `(scenario, seed)`.
+
+Median per-run runtime and interquartile range (matrix):
+
+| Controller | median (s) | IQR (s) |
+|---|---|---|
+| rule_based | 56.6 | 53.8–72.1 |
+| multi_agent | 53.4 | 50.8–54.9 |
+| centralized | 58.6 | 53.8–83.4 |
+| mpc | 61.8 | 55.5–69.2 |
+| rl | 54.1 | 52.0–60.5 |
+
+Overall median 55.5 s, maximum 138.7 s. **No run was killed by the per-run
+timeout** in the fixed matrix (contrast the v1 diagnostic, where three
+`multi_agent` runs hung), so the runtime tail caveat is retired. The ablation
+runs are the same order (16–33 s per run, median 20.8 s, §5.4). Wall-clock time
+on this shared machine is load-sensitive (the 138.7 s outlier ran while other
+jobs were active), which is why the table reports median/IQR rather than the
+mean.
 
 ## Caveats (must appear in the paper, in this order)
 
@@ -173,9 +260,17 @@ and why.
    `electric_vehicles_def`, so CityLearn resolved no vehicle and never plugged
    one (`connected` stayed 0 for all 168 steps). Fixed by registering one
    `Electric_Vehicle_{building}_{index}` definition per charger; verified EV load
-   now exists (completion 0.0286 `rule_based` / 1.000 `mpc` on scenario A, and
-   `rule_based` scenario A peak demand 12.4 → 32.6 kW). The matrix must be
-   re-run; the pre-fix EV columns are invalid.
+   now exists (`rule_based` scenario A peak demand 12.39 kW pre-fix → 32.19 ± 0.84
+   kW in the fixed matrix, 32.6 kW on the seed-42 smoke run; `mpc` EV completion
+   1.000 at avg SOC 0.88). The matrix and ablation
+   were re-run on the fixed tree, where EV completion is non-zero in 116/125 and
+   50/50 runs and separates the controllers (mpc 0.83, rl 0.54, centralized
+   0.18, rule_based 0.17, multi_agent 0.06 mean). Charging sessions are not
+   compressed by the episode horizon (169 hourly steps = 7 days, with arrivals
+   and departures every day), so a short horizon is not an alternative or
+   contributing explanation. The market/settlement layer is also ruled out: a
+   separate market-scoring trace shows it clears on building-level net demand
+   and never masks charger state, so the pre-fix zeros originated at the charger.
 3. **Metric-collection defects on the pre-fix base (fixed on this branch).**
    (a) `scenario_e` community `total_cost` was NaN in all 25 runs because an
    injected sensor failure returns NaN for `building_3`'s reading and the metric
@@ -185,9 +280,11 @@ and why.
    evidence: `FairnessAnalyzer` was never called from the run pipeline and
    CityLearn's step info carries no `cost` entry. Per-member cost is now derived
    in the pipeline from each member's net demand and tariff, and the report
-   carries computed member costs, Gini, coverage and interruption. The 50-run
-   ablation has the same defects (EV 0/50, `scenario_e` cost non-finite) and is
-   re-run too.
+   carries computed member costs, Gini, coverage and interruption. The re-run
+   artifacts confirm finite cost in 175/175 runs, `member_cost_coverage` 0.80 in
+   every Scenario E run and a real per-member cost vector, e.g.
+   `{building_0 66.71, building_1 13.28, building_2 0.67, building_3 null,
+   building_4 11.39}` with Gini 0.543 for `scenario_e_centralized_123`.
 4. **Scenario fidelity.** Synthetic load traces depend only on (seed, filename),
    so cross-scenario load-profile differentiation remains limited even though
    device mixes now differ. Reported scenario effects are device-mix effects.
@@ -198,6 +295,7 @@ and why.
 6. **Seed count.** Five seeds give narrow CIs; significance is assessed on
    paired per-seed deltas with Holm correction, and effect sizes are reported
    next to p-values.
-7. **Runtime tail.** Three `multi_agent` runs in v1 hung on a killed subprocess
-   and were reclaimed by the per-run timeout; runtime is reported as median/IQR
-   with that footnote rather than as a mean.
+7. **Runtime tail (retired for the fixed matrix).** Three `multi_agent` runs in
+   the v1 diagnostic hung on a killed subprocess; in the fixed matrix no run hit
+   the per-run timeout (max 56.5 s), so runtime is reported as median/IQR on a
+   complete 125-run set.
