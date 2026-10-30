@@ -247,6 +247,9 @@ fixtures, not generated output, and follow the existing `git add -f` convention.
   across the 5 controllers within scenario × metric family.
 - F7: cost-vs-service scatter with regime as marker shape (extends F3).
 - F8: LMP price spread over the week for scenario C (the congestion case).
+- F8b (optional, gated on §11.1): per-step attribution of cost/service changes
+  for the LMP and Scenario E runs, once the structured dispatch-events endpoint
+  exists.
 
 ---
 
@@ -450,6 +453,13 @@ be re-timed after P0-1 lands.
 Long-run orchestration stays with QA/DevOps; this plan hands over commands and
 stopping rules, not runs.
 
+### 11.1 UI and attribution dependencies (not on the M1/M2 critical path)
+
+| Dependency | Estimate | Effect on this plan |
+|---|---|---|
+| Structured dispatch-events endpoint (Backend B scoping) | 2–3 days | `LmpClearing` today emits metadata only (buyers/sellers, LMP prices), with no per-timestep action/reason/grid_change/verification records. Until it lands, Scenario E and LMP analyses have run-level attribution only. Once it lands: Workspace timeline gains reason/verification columns, and an optional F8b (per-step attribution) becomes possible. **Not a gate for M1/M2 KPIs** — schedule in parallel. |
+| `community_id` membership | 1–2 days | Needed for multi-community UI and per-community LMP grouping. All Phase 2 matrices stay single-community, so no matrix change; only the analysis grouping key is future-proofed. |
+
 ---
 
 ## 12. Risks and honesty rules
@@ -522,4 +532,6 @@ Select-String -Path src/controllers/llm_agent.py -Pattern "while repairs < REPAI
 Select-String -Path src/schemas/scenario.py -Pattern 'valid = \{'
 ```
 
-*Document version: 1.0 — Research Engineer, 2026-10-30.*
+*Document version: 1.1 — Research Engineer, 2026-10-30. v1.1 adds the UI and
+per-step attribution dependencies (§11.1) from Backend B's dispatch-events
+scoping.*
