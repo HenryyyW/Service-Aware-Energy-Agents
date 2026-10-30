@@ -1,7 +1,7 @@
 """LLM agent controllers for the verified-vs-unverified ablation.
 
 Implements the two **asymmetric** arms from ``experiments/ABLATION_DESIGN.md``
-and ``docs/phase2_experiment_plan.md`` (P0-3):
+and ``docs/phase2_experiment_plan.md`` (P0-2/P0-3):
 
 - ``LLMAgentController`` (``llm_agent``, unverified): single-pass LLM dispatch.
   Parsed proposals are applied **as proposed** — no repair, no re-prompt. The
@@ -10,14 +10,13 @@ and ``docs/phase2_experiment_plan.md`` (P0-3):
   out-of-bounds values it let through as ``llm_unrepaired_violations``.
 - ``LLMVerifiedController`` (``llm_agent_verified``): the same proposal path
   plus per-step verification (asset shape + device power bounds). A failed
-  check triggers **one** corrective re-prompt (a second backend call, with the
-  violation text passed in ``context["repair_violations"]``); if the corrected
-  proposal is still invalid (or unusable), the whole step is **replaced** with
-  the deterministic rule-based dispatch — replacement, not silent clamping.
-  Repair work per step is capped at ``REPAIR_BUDGET`` (2): one re-prompt + one
-  deterministic replacement. Service feasibility (EV and flexible-load
-  deadlines) is enforced through the replacement path, because the rule-based
-  dispatch meets deadlines by construction.
+  check triggers **one** corrective re-prompt carrying the violation text; if
+  the corrected proposal is still invalid (or unusable), the whole step is
+  **replaced** with the deterministic rule-based dispatch — replacement, not
+  silent clamping. Repair work per step is capped at ``REPAIR_BUDGET`` (2):
+  one re-prompt + one deterministic replacement. Service feasibility (EV and
+  flexible-load deadlines) is enforced through the replacement path, because
+  the rule-based dispatch meets deadlines by construction.
 
 The arms are therefore behaviourally distinct by construction whenever the
 proposer emits an out-of-bounds value: the unverified arm executes the clamped
@@ -26,10 +25,26 @@ fallback mode both variants run the deterministic proposer and stay identical;
 those runs are labelled ``agent_backend: "fallback"`` and are never mixed with
 LLM numbers.
 
+Backends. Two shapes are supported:
+
+- a synchronous ``Callable[[str], str]`` (the plan's interface): the
+  controller owns the versioned dispatch prompt, calls the backend with it,
+  and classifies the raw response itself via ``parse_llm_actions``
+  (``clean`` / ``fenced`` / ``invalid``). The production backend for the
+  paper's ``ollama-local`` arm is ``ollama_prompt_callable`` from
+  ``src/agents/backend/local.py``, built from ``AGENT_BACKEND=ollama:<model>``
+  (or ``--llm-backend ollama:<model>``) in ``_backend_from_env()`` with a hard
+  per-call timeout and a token budget.
+- an ``AgentBackend`` object (async ``generate_actions``, PR #43 interface):
+  used by tests (mocks) and remote providers. Backend-provided actions are
+  applied as-is; when the backend returns no actions, its raw output is
+  classified with the same ``parse_llm_actions``.
+
 Reproducibility contract (required for the paper's artifact table): every run
-records ``agent_backend``, the proposal and repair prompt template hashes, and
-the sampling temperature/seed, both in ``result.json`` (via the controller
-config) and ``manifest.json`` (via the runner).
+records ``agent_backend`` (``ollama-local`` / ``llm`` / ``fallback``),
+``agent_model`` and the Ollama model digest, the proposal and repair prompt
+template hashes, and the sampling temperature/seed, both in ``result.json``
+(via the controller config) and ``manifest.json`` (via the runner).
 """
 import asyncio
 import concurrent.futures
@@ -44,9 +59,11 @@ from src.schemas.action import Action, ActionType, RequestedActions
 from src.schemas.scenario import ScenarioConfig
 from src.agents.backend import AgentBackend, BackendResponse, CostBudget, FallbackBackend
 from src.agents.backend.config import LLMConfig
+from src.agents.backend.local import ollama_prompt_callable
 
 # Versioned dispatch prompt. The hash of this template goes into the manifest;
-# bump the version string whenever the prompt changes.
+# bump the version string whenever the prompt changes. The prompt is fixed for
+# the whole matrix: any edit invalidates the arm.
 LLM_PROMPT_TEMPLATE = """You are the dispatch agent for a renewable energy community.
 Current step: {timestep}. Observations (JSON): {observations}
 Assets (JSON): {assets}
@@ -71,6 +88,73 @@ Prompt version: llm_dispatch_v1_repair
 PROMPT_VERSION = "llm_dispatch_v1"
 REPAIR_PROMPT_VERSION = "llm_dispatch_v1_repair"
 REPAIR_BUDGET = 2
+
+# Default ollama-local arm settings (phase 2 gate decision: local Ollama only).
+OLLAMA_DEFAULT_MODEL = "qwen2.5-coder:7b"
+
+
+def parse_llm_actions(
+    raw: str, timestep: int = 0
+) -> Tuple[Optional[List[Action]], str]:
+    """Parse a raw LLM response into actions.
+
+    Returns ``(actions, status)`` with ``status in {"clean", "fenced",
+    "invalid"}``:
+
+    - ``clean``: the payload parsed as-is;
+    - ``fenced``: the payload was wrapped in a single markdown code fence —
+      a recorded formatting violation (``llm_fenced_outputs``), never hidden;
+    - ``invalid``: not usable (bad JSON, not a list, wrong item shape).
+
+    Only ONE leading/trailing fence is stripped; a malformed fence (e.g. a
+    missing closing fence) is ``invalid``, not ``fenced``.
+    """
+    text = raw.strip() if isinstance(raw, str) else ""
+    status = "clean"
+    if text.startswith("```"):
+        stripped = text[3:]
+        if stripped[:4].lower() == "json":
+            stripped = stripped[4:]
+        if stripped.endswith("```"):
+            stripped = stripped[:-3]
+        else:
+            return None, "invalid"  # unclosed fence
+        text = stripped.strip()
+        status = "fenced"
+    try:
+        payload = json.loads(text)
+        if not isinstance(payload, list):
+            return None, "invalid"
+        actions: List[Action] = []
+        for item in payload:
+            if (
+                not isinstance(item, dict)
+                or "asset_id" not in item
+                or "value_kw" not in item
+            ):
+                return None, "invalid"
+            actions.append(
+                Action(
+                    asset_id=str(item["asset_id"]),
+                    action_type=ActionType.BATTERY_CHARGE,  # refined by asset id downstream
+                    value_kw=float(item["value_kw"]),
+                    timestep=timestep,
+                )
+            )
+        return actions, status
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None, "invalid"
+
+
+def _percentile(sorted_samples: List[float], fraction: float) -> Optional[float]:
+    """Nearest-rank percentile over a pre-sorted sample list."""
+    if not sorted_samples:
+        return None
+    index = min(
+        len(sorted_samples) - 1,
+        max(0, int(round(fraction * (len(sorted_samples) - 1)))),
+    )
+    return sorted_samples[index]
 
 
 class LLMAgentController(BaseController):
@@ -100,25 +184,36 @@ class LLMAgentController(BaseController):
             llm_config = LLMConfig()
         self.llm_config = llm_config
 
-        # Backend injection (tests) or environment configuration. Without one,
-        # the LLMConfig path decides (FallbackBackend => fallback mode).
-        if backend is None:
-            backend = llm_config.create_backend()
-        self._backend: Optional[AgentBackend] = backend
-        self.agent_backend = "fallback" if isinstance(self._backend, FallbackBackend) else "llm"
-        self.prompt_version = PROMPT_VERSION
-        self.prompt_hash = hashlib.sha256(LLM_PROMPT_TEMPLATE.encode("utf-8")).hexdigest()
-        self.repair_prompt_version = REPAIR_PROMPT_VERSION
-        self.repair_prompt_hash = hashlib.sha256(
-            LLM_REPAIR_PROMPT_TEMPLATE.encode("utf-8")
-        ).hexdigest()
+        # Sampling parameters (needed by the env backend wiring below).
         self.sampling_temperature = float(
             os.environ.get("SAEA_LLM_TEMPERATURE", sampling_temperature if sampling_temperature is not None else 0.0)
         )
         self.sampling_seed = int(
             sampling_seed if sampling_seed is not None else scenario_config.random_seed
         )
-        # Agent-execution accounting (paper metrics)
+
+        # Backend resolution: explicit injection (tests) > environment wiring
+        # (ollama-local / echo debug) > the PR #43 LLMConfig path.
+        self._env_backend_label: Optional[str] = None
+        self._env_agent_model: Optional[str] = None
+        if backend is None:
+            backend = self._backend_from_env()
+        if backend is None:
+            backend = llm_config.create_backend()
+        self._backend = backend
+        if self._env_backend_label is not None:
+            self.agent_backend = self._env_backend_label
+        else:
+            self.agent_backend = (
+                "fallback" if isinstance(self._backend, FallbackBackend) else "llm"
+            )
+        self.prompt_version = PROMPT_VERSION
+        self.prompt_hash = hashlib.sha256(LLM_PROMPT_TEMPLATE.encode("utf-8")).hexdigest()
+        self.repair_prompt_version = REPAIR_PROMPT_VERSION
+        self.repair_prompt_hash = hashlib.sha256(
+            LLM_REPAIR_PROMPT_TEMPLATE.encode("utf-8")
+        ).hexdigest()
+        # Agent-execution accounting (paper metrics, phase 2 section 8 field set)
         self.total_steps = 0
         self.first_attempt_valid = 0
         self.repair_iterations = 0
@@ -129,6 +224,15 @@ class LLMAgentController(BaseController):
         # instead of the LLM (both arms).
         self.unrepaired_violations = 0
         self.fallback_steps = 0
+        # LLM call accounting: every backend invocation (proposal + verified
+        # re-prompt), parse/format outcomes, call failures, latency, tokens.
+        self.llm_calls = 0
+        self.llm_raw_parse_failures = 0
+        self.llm_fenced_outputs = 0
+        self.llm_backend_errors = 0
+        self._latency_samples_ms: List[float] = []
+        self.llm_prompt_tokens = 0
+        self.llm_completion_tokens = 0
         # Deferred import: the controllers package imports this module, so the
         # rule-based fallback is resolved lazily to avoid a circular import.
         from src.controllers import RuleBasedController
@@ -138,6 +242,74 @@ class LLMAgentController(BaseController):
     # ------------------------------------------------------------------
     # Backend plumbing
     # ------------------------------------------------------------------
+
+    def _backend_from_env(self) -> Optional[Any]:
+        """Resolve an LLM backend from the environment / LLM config, if any.
+
+        ``AGENT_BACKEND=ollama:<model>`` (or ``LLMConfig._backend_raw``, which
+        the runner sets from ``--llm-backend``) builds the synchronous
+        ``ollama_prompt_callable`` and labels the arm ``ollama-local`` with
+        ``agent_model`` set. ``SAEA_LLM_BACKEND=echo`` builds the debug echo
+        backend. Anything else defers to the LLMConfig path.
+        """
+        raw = ""
+        if self.llm_config is not None and getattr(self.llm_config, "_backend_raw", None):
+            raw = str(self.llm_config._backend_raw).strip()
+        if not raw:
+            raw = os.environ.get("AGENT_BACKEND", "").strip()
+        raw = raw.lower()
+
+        if raw == "ollama" or raw.startswith("ollama:"):
+            model = raw.split(":", 1)[1].strip() if raw.startswith("ollama:") else ""
+            if not model:
+                model = (
+                    (self.llm_config.local_model if self.llm_config else None)
+                    or os.environ.get("LLM_LOCAL_MODEL")
+                    or OLLAMA_DEFAULT_MODEL
+                )
+            endpoint = (
+                (self.llm_config.local_endpoint if self.llm_config else None)
+                or os.environ.get("LLM_LOCAL_ENDPOINT")
+                or "http://localhost:11434"
+            )
+            self._env_backend_label = "ollama-local"
+            self._env_agent_model = model
+            return ollama_prompt_callable(
+                model=model,
+                endpoint=endpoint,
+                temperature=float(
+                    os.environ.get("SAEA_LLM_TEMPERATURE", self.sampling_temperature)
+                ),
+                seed=self.sampling_seed,
+                timeout_s=float(os.environ.get("SAEA_LLM_TIMEOUT_S", "120")),
+                num_predict=int(os.environ.get("SAEA_LLM_NUM_PREDICT", "512")),
+            )
+
+        if os.environ.get("SAEA_LLM_BACKEND", "").strip().lower() == "echo":
+            self._env_backend_label = "llm"
+
+            def echo_backend(prompt: str) -> str:
+                # Debug backend: returns the fallback proposal embedded in the
+                # prompt as invalid JSON so the fallback path is exercised.
+                return "not-json"
+
+            return echo_backend
+        return None
+
+    @property
+    def _is_prompt_callable(self) -> bool:
+        """True when the backend is a plain ``prompt -> text`` callable."""
+        return callable(self._backend) and not hasattr(self._backend, "generate_actions")
+
+    def agent_model(self) -> Optional[str]:
+        """The model name for the run manifest, when one is configured."""
+        if self._env_agent_model is not None:
+            return self._env_agent_model
+        return getattr(self._backend, "model", None)
+
+    def agent_model_digest(self) -> Optional[str]:
+        """The Ollama model digest (sha256), when the backend exposes one."""
+        return getattr(self._backend, "model_digest", None)
 
     def _build_prompt_context(self, observations: Dict[str, Any], timestep: int) -> Dict[str, Any]:
         """Build context for prompt template."""
@@ -174,6 +346,36 @@ class LLMAgentController(BaseController):
             })
         return assets
 
+    def _build_text_prompt(
+        self,
+        observations: Dict[str, Any],
+        timestep: int,
+        repair_violations: Optional[List[str]] = None,
+    ) -> str:
+        """The controller-owned prompt sent to text backends."""
+        if repair_violations:
+            return LLM_REPAIR_PROMPT_TEMPLATE.format(
+                violations="\n".join(f"- {text}" for text in repair_violations),
+                timestep=timestep,
+                observations=self._observations_json(observations),
+                assets=json.dumps(self._build_asset_list(), default=str),
+            )
+        return LLM_PROMPT_TEMPLATE.format(
+            timestep=timestep,
+            observations=self._observations_json(observations),
+            assets=json.dumps(self._build_asset_list(), default=str),
+        )
+
+    def _record_call_latency(self, latency_ms: float) -> None:
+        if latency_ms is not None and latency_ms >= 0:
+            self._latency_samples_ms.append(float(latency_ms))
+
+    def _record_tokens(self, usage: Optional[Dict[str, Any]]) -> None:
+        if not usage:
+            return
+        self.llm_prompt_tokens += int(usage.get("prompt") or 0)
+        self.llm_completion_tokens += int(usage.get("completion") or 0)
+
     def _call_backend(
         self,
         observations: Dict[str, Any],
@@ -182,12 +384,48 @@ class LLMAgentController(BaseController):
     ) -> Optional[BackendResponse]:
         """Invoke the backend once; None means the call itself failed.
 
+        Text callables get the controller-owned dispatch/repair prompt.
         ``repair_violations`` carries the verified arm's violation text so a
-        text backend can re-prompt with it (passed as ``context`` for
+        text backend re-prompts with it (passed as ``context`` for
         AgentBackend-style backends).
         """
         if self._backend is None:
             return None
+        self.llm_calls += 1
+
+        if self._is_prompt_callable:
+            prompt = self._build_text_prompt(observations, timestep, repair_violations)
+            callable_backend = self._backend
+            calls_before = getattr(callable_backend, "call_count", None)
+            prompt_tokens_before = getattr(callable_backend, "prompt_tokens", 0)
+            completion_tokens_before = getattr(callable_backend, "completion_tokens", 0)
+            try:
+                raw = callable_backend(prompt)
+            except Exception:
+                self.llm_backend_errors += 1
+                return None
+            self._record_tokens({
+                "prompt": getattr(callable_backend, "prompt_tokens", 0) - prompt_tokens_before,
+                "completion": getattr(callable_backend, "completion_tokens", 0) - completion_tokens_before,
+            })
+            if (
+                calls_before is not None
+                and callable_backend.latency_samples_ms
+                and len(callable_backend.latency_samples_ms) > calls_before
+            ):
+                self._record_call_latency(callable_backend.latency_samples_ms[-1])
+            # Wrap the text response in a BackendResponse-like record so both
+            # paths share one downstream contract.
+            return BackendResponse(
+                actions=[],
+                raw_output=raw,
+                prompt_hash=self.prompt_hash,
+                token_usage={},
+                latency_ms=0.0,
+                cost_usd=0.0,
+                metadata={"transport": "prompt_callable"},
+            )
+
         context: Dict[str, Any] = {
             "grid_diagnostics": getattr(self, 'last_grid_diagnostics', None),
         }
@@ -215,31 +453,50 @@ class LLMAgentController(BaseController):
                             budget=budget,
                         ),
                     )
-                    return future.result()
-            return asyncio.run(
-                self._backend.generate_actions(
-                    scenario=self.scenario_config,
-                    observations=observations,
-                    timestep=timestep,
-                    context=context,
-                    budget=budget,
+                    response = future.result()
+            else:
+                response = asyncio.run(
+                    self._backend.generate_actions(
+                        scenario=self.scenario_config,
+                        observations=observations,
+                        timestep=timestep,
+                        context=context,
+                        budget=budget,
+                    )
                 )
-            )
         except Exception:
+            self.llm_backend_errors += 1
             return None
+        self._record_call_latency(getattr(response, "latency_ms", None))
+        self._record_tokens(getattr(response, "token_usage", None))
+        return response
 
     def _propose_via_llm(
         self,
         observations: Dict[str, Any],
         timestep: int,
         repair_violations: Optional[List[str]] = None,
-    ) -> Optional[List[Action]]:
-        """Ask the backend for actions; None means unusable output."""
+    ) -> Tuple[Optional[List[Action]], str]:
+        """Ask the backend for a proposal; returns (actions, parse status).
+
+        ``actions`` is None when the call failed or the response did not
+        parse; ``status`` is ``clean`` / ``fenced`` / ``invalid`` (fence
+        stripping is recorded as a formatting violation, never hidden).
+        """
         response = self._call_backend(observations, timestep, repair_violations)
-        if not response or not response.actions:
-            return None
-        # The backend returns actions directly, no need to parse JSON
-        return response.actions
+        if response is None:
+            return None, "invalid"
+        if response.actions:
+            # Backend-parsed actions (AgentBackend contract); raw output is
+            # not classifiable here, so treat as clean.
+            return list(response.actions), "clean"
+        # One parsing authority: classify the raw text ourselves.
+        actions, status = parse_llm_actions(response.raw_output, timestep)
+        if status == "fenced":
+            self.llm_fenced_outputs += 1
+        elif status == "invalid":
+            self.llm_raw_parse_failures += 1
+        return actions, status
 
     # ------------------------------------------------------------------
     # Decision path
@@ -254,7 +511,7 @@ class LLMAgentController(BaseController):
         use_llm = self._backend is not None and not isinstance(self._backend, FallbackBackend)
 
         if use_llm:
-            proposed = self._propose_via_llm(observations, timestep)
+            proposed, _status = self._propose_via_llm(observations, timestep)
             if proposed is None:
                 self.unparseable_outputs += 1
                 self.verification_failures["unparseable_output"] += 1
@@ -325,8 +582,11 @@ class LLMAgentController(BaseController):
 
     def agent_stats(self) -> Dict[str, Any]:
         """Runtime accounting for result.json / manifest.json."""
+        samples = sorted(self._latency_samples_ms)
         return {
             "agent_backend": self.agent_backend,
+            "agent_model": self.agent_model(),
+            "agent_model_digest": self.agent_model_digest(),
             "prompt_version": self.prompt_version,
             "prompt_hash": self.prompt_hash,
             "repair_prompt_version": self.repair_prompt_version,
@@ -338,6 +598,14 @@ class LLMAgentController(BaseController):
                 self.first_attempt_valid / self.total_steps if self.total_steps else 0.0
             ),
             "repair_iterations": self.repair_iterations,
+            "llm_calls": self.llm_calls,
+            "llm_raw_parse_failures": self.llm_raw_parse_failures,
+            "llm_fenced_outputs": self.llm_fenced_outputs,
+            "llm_backend_errors": self.llm_backend_errors,
+            "llm_latency_p50_ms": _percentile(samples, 0.50),
+            "llm_latency_p95_ms": _percentile(samples, 0.95),
+            "llm_prompt_tokens": self.llm_prompt_tokens,
+            "llm_completion_tokens": self.llm_completion_tokens,
             "llm_unrepaired_violations": self.unrepaired_violations,
             "llm_fallback_steps": self.fallback_steps,
             "llm_fallback_step_share": (
@@ -352,15 +620,16 @@ class LLMVerifiedController(LLMAgentController):
     """LLM dispatch with per-step verification and a bounded repair loop
     (the ``llm_agent_verified`` arm).
 
-    On a shape/bounds violation the controller re-prompts **once** (a second
-    backend call carrying the violation text in ``context``); if the corrected
-    proposal is still invalid (or unusable), the step is replaced with the
-    deterministic rule-based dispatch. The repair cap is ``REPAIR_BUDGET`` = 2
-    (one re-prompt + one replacement); clamping is never used on the LLM path —
-    that is the unverified arm's behaviour and what made the arms identical by
-    construction (P0-3). In fallback mode the deterministic proposer already
-    satisfies every check, so the arms coincide and the accounting stays
-    comparable.
+    On a shape/bounds violation the controller re-prompts **once** with the
+    violation text (a second backend call; text backends receive the versioned
+    repair prompt, AgentBackend backends receive it in ``context``); if the
+    corrected proposal is still invalid (or unusable), the step is replaced
+    with the deterministic rule-based dispatch. The repair cap is
+    ``REPAIR_BUDGET`` = 2 (one re-prompt + one replacement); clamping is never
+    used on the LLM path — that is the unverified arm's behaviour and what
+    made the arms identical by construction (P0-3). In fallback mode the
+    deterministic proposer already satisfies every check, so the arms coincide
+    and the accounting stays comparable.
     """
 
     def get_actions(self, observations: Dict[str, Any], timestep: int) -> RequestedActions:
@@ -384,7 +653,7 @@ class LLMVerifiedController(LLMAgentController):
         """Verified backend path: verify -> one re-prompt -> deterministic replacement."""
         self.timestep = timestep
         self.total_steps += 1
-        proposed = self._propose_via_llm(observations, timestep)
+        proposed, _status = self._propose_via_llm(observations, timestep)
         if proposed is None:
             self.unparseable_outputs += 1
             self.verification_failures["unparseable_output"] += 1
@@ -400,8 +669,8 @@ class LLMVerifiedController(LLMAgentController):
         for category in {category for category, _ in issues}:
             self.verification_failures[category] += 1
         # Repair 1 of REPAIR_BUDGET: one corrective re-prompt with the exact
-        # violation text (carried in the backend call's context).
-        reprompted = self._propose_via_llm(
+        # violation text.
+        reprompted, _status = self._propose_via_llm(
             observations, timestep, repair_violations=[text for _, text in issues]
         )
         self.repair_iterations += 1
