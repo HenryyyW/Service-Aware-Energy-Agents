@@ -16,15 +16,19 @@ controller config) and ``manifest.json`` (via the runner). Without a configured
 backend both variants run the deterministic fallback and are labelled
 ``fallback`` so those numbers are never mixed with LLM numbers.
 """
+import concurrent.futures
 import hashlib
 import json
 import os
+import asyncio
 from collections import Counter
 from typing import Any, Callable, Dict, List, Optional
 
 from src.controllers import BaseController
 from src.schemas.action import Action, ActionType, RequestedActions
 from src.schemas.scenario import ScenarioConfig
+from src.agents.backend import AgentBackend, BackendResponse, CostBudget, FallbackBackend
+from src.agents.backend.config import LLMConfig
 
 # Versioned dispatch prompt. The hash of this template goes into the manifest;
 # bump the version string whenever the prompt changes.
@@ -48,16 +52,25 @@ class LLMAgentController(BaseController):
         self,
         scenario_config: ScenarioConfig,
         device_metadata: Optional[Dict[str, Dict[str, Any]]] = None,
-        backend: Optional[Callable[[str], str]] = None,
+        backend: Optional[AgentBackend] = None,
+        llm_config: Optional[LLMConfig] = None,
         sampling_temperature: Optional[float] = None,
         sampling_seed: Optional[int] = None,
     ):
         super().__init__(scenario_config)
         self.device_metadata = device_metadata or {}
-        # Backend injection (tests) or environment configuration. Without one,
-        # the controller runs and is labelled as deterministic fallback.
-        self._backend = backend or self._backend_from_env()
-        self.agent_backend = "llm" if self._backend is not None else "fallback"
+        
+        # Create LLM config from environment if not provided
+        if llm_config is None:
+            llm_config = LLMConfig()
+        
+        # Create backend from config if not provided
+        if backend is None:
+            backend = llm_config.create_backend()
+        
+        self._backend: Optional[AgentBackend] = backend
+        self.llm_config = llm_config
+        self.agent_backend = "fallback" if isinstance(self._backend, FallbackBackend) else "llm"
         self.prompt_version = PROMPT_VERSION
         self.prompt_hash = hashlib.sha256(LLM_PROMPT_TEMPLATE.encode("utf-8")).hexdigest()
         self.sampling_temperature = float(
@@ -82,23 +95,103 @@ class LLMAgentController(BaseController):
     # Backend plumbing
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _backend_from_env() -> Optional[Callable[[str], str]]:
-        """Resolve an LLM backend from the environment, if one is configured.
+    def _create_backend_from_env(self) -> Optional["AgentBackend"]:
+        """Create an LLM backend from environment configuration."""
+        llm_config = LLMConfig()
+        # Validate config
+        errors = llm_config.validate()
+        if errors:
+            return None
+        # Create backend
+        return llm_config.create_backend()
 
-        Only an explicit ``SAEA_LLM_BACKEND=echo`` debug backend is built in;
-        real providers (OpenAI-compatible endpoints) are injected by the runner
-        once credentials/config exist. Everything else means fallback mode.
-        """
-        if os.environ.get("SAEA_LLM_BACKEND", "").strip().lower() == "echo":
-            def echo_backend(prompt: str) -> str:
-                # Debug backend: returns the fallback proposal embedded in the
-                # prompt as invalid JSON so the fallback path is exercised.
-                return "not-json"
-            return echo_backend
-        return None
+    def _build_prompt_context(self, observations: Dict[str, Any], timestep: int) -> Dict[str, Any]:
+        """Build context for prompt template."""
+        assets = self._build_asset_list()
+        
+        # Grid diagnostics if available
+        grid_diag = None
+        if hasattr(self, 'last_grid_diagnostics') and self.last_grid_diagnostics:
+            grid_diag = self.last_grid_diagnostics
+        
+        return {
+            "scenario_id": self.scenario_config.scenario_id,
+            "timestep": timestep,
+            "buildings": assets,
+            "grid_diagnostics": grid_diag,
+            "community_import_limit_kw": self.scenario_config.community_import_limit_kw,
+            "community_export_limit_kw": self.scenario_config.community_export_limit_kw,
+        }
 
-    def _build_prompt(self, observations: Dict[str, Any], timestep: int) -> str:
+    def _propose_via_llm(self, observations: Dict[str, Any], timestep: int) -> Optional[List[Action]]:
+        """Ask the backend for actions; None means unusable output."""
+        if self._backend is None:
+            return None
+        
+        # Build prompt context
+        context = self._build_prompt_context(observations, timestep)
+        prompt = LLM_PROMPT_TEMPLATE.format(
+            timestep=timestep,
+            observations=json.dumps(
+                {k: v for k, v in list(observations.items())[:40]}, default=str
+            ),
+            assets=json.dumps(self._build_asset_list(), default=str),
+        )
+        
+        # Create budget for this step
+        budget = self.llm_config.create_cost_budget() if self.llm_config else CostBudget()
+        
+        try:
+            # Build scenario context for backend
+            context = {
+                "grid_diagnostics": getattr(self, 'last_grid_diagnostics', None),
+            }
+            
+            # Run async backend call, handling existing event loops
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            
+            if loop and loop.is_running():
+                # If there's already a running loop, we can't use asyncio.run
+                # Create a new thread with its own event loop
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self._backend.generate_actions(
+                        scenario=self.scenario_config,
+                        observations=observations,
+                        timestep=timestep,
+                        context={
+                            "grid_diagnostics": getattr(self, 'last_grid_diagnostics', None),
+                        },
+                        budget=self.llm_config.create_cost_budget() if self.llm_config else CostBudget(),
+                    ))
+                    response = future.result()
+            else:
+                response = asyncio.run(
+                    self._backend.generate_actions(
+                        scenario=self.scenario_config,
+                        observations=observations,
+                        timestep=timestep,
+                        context={
+                            "grid_diagnostics": getattr(self, 'last_grid_diagnostics', None),
+                        },
+                        budget=self.llm_config.create_cost_budget() if self.llm_config else CostBudget(),
+                    )
+                )
+            
+            if not response or not response.actions:
+                return None
+            
+            # The backend returns actions directly, no need to parse JSON
+            return response.actions
+            
+        except Exception as e:
+            return None
+    
+    def _build_asset_list(self) -> List[Dict[str, Any]]:
+        """Build asset list for prompt."""
         assets = []
         for bid, meta in self.device_metadata.items():
             assets.append({
@@ -107,40 +200,7 @@ class LLMAgentController(BaseController):
                 "chargers": [c.get("max_charge_kw") for c in meta.get("chargers", [])],
                 "deferrable": [d.get("power_kw") for d in meta.get("deferrable", [])],
             })
-        return LLM_PROMPT_TEMPLATE.format(
-            timestep=timestep,
-            observations=json.dumps(
-                {k: v for k, v in list(observations.items())[:40]}, default=str
-            ),
-            assets=json.dumps(assets, default=str),
-        )
-
-    def _propose_via_llm(self, observations: Dict[str, Any], timestep: int) -> Optional[List[Action]]:
-        """Ask the backend for actions; None means unusable output."""
-        prompt = self._build_prompt(observations, timestep)
-        try:
-            raw = self._backend(prompt)  # type: ignore[misc]
-        except Exception:
-            return None
-        try:
-            payload = json.loads(raw)
-            if not isinstance(payload, list):
-                return None
-            actions: List[Action] = []
-            for item in payload:
-                if not isinstance(item, dict) or "asset_id" not in item or "value_kw" not in item:
-                    return None
-                actions.append(
-                    Action(
-                        asset_id=str(item["asset_id"]),
-                        action_type=ActionType.BATTERY_CHARGE,  # refined by asset id downstream
-                        value_kw=float(item["value_kw"]),
-                        timestep=timestep,
-                    )
-                )
-            return actions
-        except (json.JSONDecodeError, TypeError, ValueError):
-            return None
+        return assets
 
     # ------------------------------------------------------------------
     # Decision path
@@ -150,7 +210,11 @@ class LLMAgentController(BaseController):
         self.timestep = timestep
         self.total_steps += 1
         actions: List[Action]
-        if self._backend is not None:
+        
+        # Check if we have a real LLM backend (not fallback)
+        use_llm = self._backend is not None and not isinstance(self._backend, FallbackBackend)
+        
+        if use_llm:
             proposed = self._propose_via_llm(observations, timestep)
             if proposed is None:
                 self.unparseable_outputs += 1
@@ -168,8 +232,10 @@ class LLMAgentController(BaseController):
                 else:
                     self.first_attempt_valid += 1
         else:
+            # Using FallbackBackend or no backend - use fallback actions
             actions = self._fallback_actions(observations, timestep)
             self.first_attempt_valid += 1
+        
         return self._create_requested_actions(actions)
 
     def _fallback_actions(self, observations: Dict[str, Any], timestep: int) -> List[Action]:
