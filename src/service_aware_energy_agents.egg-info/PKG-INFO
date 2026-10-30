@@ -15,11 +15,11 @@ Requires-Dist: pyyaml>=6.0.0
 Requires-Dist: pytest>=7.4.0
 Requires-Dist: scipy>=1.11.0
 Requires-Dist: tqdm>=4.66.0
+Requires-Dist: aiohttp>=3.9.0
 Provides-Extra: api
 Requires-Dist: fastapi>=0.115.0; extra == "api"
 Requires-Dist: uvicorn>=0.30.0; extra == "api"
 Requires-Dist: httpx2>=2.14.0; extra == "api"
-Requires-Dist: aiohttp>=3.9.0; extra == "api"
 Provides-Extra: dev
 Requires-Dist: black>=23.0.0; extra == "dev"
 Requires-Dist: ruff>=0.1.0; extra == "dev"
