@@ -53,6 +53,9 @@ class CityLearnAdapter:
         self.episode_step = 0
         self.observation_history: List[Dict[str, Any]] = []
         self.action_history: List[SimulationStepResult] = []
+        # LMP pricing state (set by coupling module when dynamic pricing enabled)
+        self._current_building_lmps: Optional[Dict[str, float]] = None
+        self._dynamic_pricing_enabled: bool = False
         
         self._setup_environment()
     
@@ -673,7 +676,7 @@ class CityLearnAdapter:
         # Convert observations to dict if it's a list (one per building)
         observations = self._convert_observations_to_dict(observations)
         observations = self._enrich_electric_vehicle_observations(observations)
-        observations = self._apply_tariff_pricing(observations)
+        observations = self._apply_tariff_pricing(observations, self._current_building_lmps, self._dynamic_pricing_enabled)
 
         # Get limited and applied actions from info
         limited_actions = self._extract_limited_actions(info, requested_actions)
@@ -711,6 +714,14 @@ class CityLearnAdapter:
         self.episode_step += 1
         
         return observations, step_result
+    
+    def update_lmp_prices(self, building_lmps: Dict[str, float], dynamic_pricing_enabled: bool):
+        """Update LMP prices for the next step's observations.
+        
+        Called by the coupling module when dynamic pricing is enabled.
+        """
+        self._current_building_lmps = building_lmps
+        self._dynamic_pricing_enabled = dynamic_pricing_enabled
     
     def _actions_to_citylearn(self, requested: RequestedActions) -> List[List[float]]:
         """Convert RequestedActions to CityLearn action format.
@@ -925,19 +936,31 @@ class CityLearnAdapter:
             return None
         return float(prices.get(self._tariff_period(hour), 0.0))
 
-    def _apply_tariff_pricing(self, observations: Dict[str, Any]) -> Dict[str, Any]:
+    def _apply_tariff_pricing(self, observations: Dict[str, Any], building_lmps: Optional[Dict[str, float]] = None, 
+                               dynamic_pricing_enabled: bool = False) -> Dict[str, Any]:
         """Publish the scenario tariff as the price observation.
 
         CityLearn datasets ship their own ``pricing.csv``; the scenario YAML
         tariff is what the cost metrics and settlement use. Without this
         override, controllers optimise a price that the evaluation does not
         charge (the two differ by roughly 2x on scenario A).
+        
+        When dynamic pricing (LMP) is enabled, override with building LMP prices
+        so controllers optimize the price they are actually billed at.
         """
-        for building in self.scenario_config.buildings:
-            hour = int(observations.get(f"{building.building_id}_hour", 0)) % 24
-            price = self._tariff_price(building, hour, is_import=True)
-            if price is not None:
-                observations[f"{building.building_id}_electricity_pricing"] = price
+        # Use LMP prices if dynamic pricing is enabled and LMPs are available
+        if dynamic_pricing_enabled and building_lmps:
+            for building in self.scenario_config.buildings:
+                bid = building.building_id
+                if bid in building_lmps:
+                    observations[f"{bid}_electricity_pricing"] = building_lmps[bid]
+        else:
+            # Fall back to tariff pricing
+            for building in self.scenario_config.buildings:
+                hour = int(observations.get(f"{building.building_id}_hour", 0)) % 24
+                price = self._tariff_price(building, hour, is_import=True)
+                if price is not None:
+                    observations[f"{building.building_id}_electricity_pricing"] = price
         return observations
 
     def _extract_limited_actions(self, info: Dict, requested: RequestedActions) -> LimitedActions:

@@ -32,6 +32,10 @@ class BuildingSettlement:
     baseline_grid_export_revenue: float = 0.0
     total_community_import_cost: float = 0.0
     total_community_export_revenue: float = 0.0
+    # LMP-specific fields
+    cost_basis: str = "tariff"  # "tariff" or "lmp"
+    lmp_cost_usd: float = 0.0  # Total cost billed at building LMP
+    lmp_revenue_usd: float = 0.0  # Total revenue at building LMP
     interval_settlements: Dict[int, float] = field(default_factory=dict)  # interval_idx -> settlement
     clearing_prices: List[float] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -178,6 +182,24 @@ class SettlementEngine:
             settlement.baseline_grid_export_revenue += baseline_export_kwh * export_price
             settlement.total_grid_import_cost += actual_import_kwh * import_price
             settlement.total_grid_export_revenue += actual_export_kwh * export_price
+            
+            # Determine cost basis and billing price
+            is_lmp_regime = (self.config.market_type == "lmp" and 
+                            self.config.dynamic_pricing is not None and 
+                            self.config.dynamic_pricing.enabled)
+            
+            if is_lmp_regime and state and state.lmp_price is not None:
+                # Bill at building's LMP price
+                settlement.cost_basis = "lmp"
+                lmp_price = state.lmp_price
+                # Grid import/export billed at LMP
+                settlement.total_grid_import_cost = actual_import_kwh * lmp_price
+                settlement.total_grid_export_revenue = actual_export_kwh * lmp_price
+                # Track LMP-specific costs
+                settlement.lmp_cost_usd += actual_import_kwh * lmp_price
+                settlement.lmp_revenue_usd += actual_export_kwh * lmp_price
+            else:
+                settlement.cost_basis = "tariff"
             
             # Settlement (community trades)
             settlement_amount = market_result.settlements.get(bid, 0.0)
@@ -349,6 +371,19 @@ class SettlementEngine:
             for s in self.building_settlements.values()
         )
         
+        # LMP-specific metrics
+        lmp_costs = [s.lmp_cost_usd for s in self.building_settlements.values() if s.cost_basis == "lmp"]
+        lmp_prices = []
+        for s in self.building_settlements.values():
+            if s.cost_basis == "lmp" and s.total_grid_import_kwh > 0:
+                lmp_prices.append(s.lmp_cost_usd / s.total_grid_import_kwh)
+            elif s.cost_basis == "lmp" and s.total_grid_export_kwh > 0:
+                lmp_prices.append(s.lmp_revenue_usd / s.total_grid_export_kwh)
+        
+        lmp_price_mean = float(np.mean(lmp_prices)) if lmp_prices else 0.0
+        lmp_price_spread = float(np.max(lmp_prices) - np.min(lmp_prices)) if lmp_prices else 0.0
+        lmp_price_spread_pct = (lmp_price_spread / lmp_price_mean * 100) if lmp_price_mean > 0 else 0.0
+        
         return {
             "total_grid_import_kwh": total_import,
             "total_grid_export_kwh": total_export,
@@ -363,6 +398,12 @@ class SettlementEngine:
                 s for s in self.building_settlements.values() 
                 for s in s.clearing_prices if s > 0
             ]) if any(s.clearing_prices for s in self.building_settlements.values()) else 0.0,
+            # LMP metrics
+            "lmp_price_mean": lmp_price_mean,
+            "lmp_price_spread": lmp_price_spread,
+            "lmp_price_spread_pct": lmp_price_spread_pct,
+            "lmp_total_cost_usd": sum(lmp_costs),
+            "lmp_regime_buildings": len(lmp_costs),
         }
 
 
