@@ -158,6 +158,7 @@ class PandapowerAdapter:
         self.convergence_history: List[bool] = []
         self.voltage_history: List[Dict[int, float]] = []
         self.loading_history: List[Dict[str, Dict[int, float]]] = []
+        self.lmp_opf_fallback_steps = 0  # Counter for LMP OPF fallback steps
         
         self._create_network()
         self._assign_geographic_coordinates()
@@ -1316,7 +1317,8 @@ class PandapowerAdapter:
         Uses pandapower's OPF to compute bus marginal prices (lambda).
         Returns dict mapping bus_idx -> LMP price ($/kWh).
         
-        Falls back to base_energy_price if OPF fails.
+        Falls back to base_energy_price if OPF fails, and increments
+        lmp_opf_fallback_steps counter for metrics.
         """
         lmp_prices = {}
         
@@ -1324,6 +1326,7 @@ class PandapowerAdapter:
             # Power flow not converged, return base price for all buses
             for bus_idx in self.net.bus.index:
                 lmp_prices[bus_idx] = base_energy_price
+            self.lmp_opf_fallback_steps += 1
             return lmp_prices
         
         try:
@@ -1346,6 +1349,7 @@ class PandapowerAdapter:
                     # Convert $/MWh to $/kWh
                     lmp_prices[bus_idx] = float(lmp) / 1000.0
             else:
+                # OPF ran but no lambda column - this is a fallback condition
                 # Fallback: use voltage sensitivities to approximate LMP
                 # LMP ≈ base_price * (1 + loss_factor * (1 - V))
                 # This is a very rough approximation
@@ -1359,11 +1363,17 @@ class PandapowerAdapter:
                 else:
                     for bus_idx in self.net.bus.index:
                         lmp_prices[bus_idx] = base_energy_price
+                self.lmp_opf_fallback_steps += 1
                         
         except Exception as e:
-            # OPF failed, fall back to base price
+            # OPF failed (e.g., KeyError for missing cost data), fall back to base price
+            # Log the error for debugging
+            import logging
+            logging.warning(f"LMP OPF failed ({type(e).__name__}: {e}), falling back to base price. "
+                          f"Fallback steps: {self.lmp_opf_fallback_steps + 1}")
             for bus_idx in self.net.bus.index:
                 lmp_prices[bus_idx] = base_energy_price
+            self.lmp_opf_fallback_steps += 1
         
         return lmp_prices
 
