@@ -1,0 +1,329 @@
+# M1 P2P regime - SCHEDULE-LATER (PM order 2026-10-31): P2PClearing engine exists (#46) but T6 metric wiring and paired-baseline validation are unverified. Drafted for argument-surface dry-run only; DO NOT schedule without PM confirmation.
+# Derived from configs/scenario_c.yaml (regime overlay only; buildings/pandapower unchanged).
+# Matrix: docs/phase2_experiment_plan.md 4.1-4.2. Supervisor: scripts/run_benchmark_supervisor.py
+# Run id: {scenario_id}_{controller}_{seed} (supervisor RunSpec); one --output-dir per regime keeps regimes separate.
+scenario_id: scenario_c
+name: PV Export and Grid Constraints
+description: Baseline scenario with increased PV capacity (150% of baseline) and stricter
+  export limits to test grid constraints.
+random_seed: 42
+timestep_minutes: 15
+community_import_limit_kw: 200
+community_export_limit_kw: 50
+carbon_intensity_file: null
+buildings:
+- building_id: building_0
+  building_type: residential
+  location:
+    lat: 40.0
+    lon: -105.0
+    timezone: America/Denver
+  simulation_start: '2023-07-01'
+  simulation_end: '2023-07-08'
+  weather_file: weather.csv
+  pv:
+    capacity_kw: 12.0
+    azimuth: 180
+    tilt: 30
+    efficiency: 0.2
+    inverter_efficiency: 0.96
+  battery:
+    capacity_kwh: 13.5
+    power_kw: 5.0
+    efficiency_charge: 0.95
+    efficiency_discharge: 0.95
+    soc_min: 0.1
+    soc_max: 0.9
+    initial_soc: 0.5
+  evs:
+  - capacity_kwh: 60.0
+    max_charge_kw: 11.0
+    efficiency: 0.9
+    arrival_time: '18:00'
+    departure_time: 07:00
+    target_soc: 0.8
+    initial_soc: 0.3
+    connected_days:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+  flexible_loads:
+  - power_kw: 3.0
+    energy_kwh: 6.0
+    earliest_start: '20:00'
+    latest_end: 06:00
+    duration_hours: 2.0
+  tariff:
+    type: time_of_use
+    import_prices:
+      off_peak: 0.08
+      mid_peak: 0.12
+      on_peak: 0.2
+    export_prices:
+      off_peak: 0.03
+      mid_peak: 0.05
+      on_peak: 0.08
+    demand_charge: 5.0
+- building_id: building_1
+  building_type: residential
+  location:
+    lat: 40.0007
+    lon: -105.0007
+    timezone: America/Denver
+  simulation_start: '2023-07-01'
+  simulation_end: '2023-07-08'
+  weather_file: weather.csv
+  pv:
+    capacity_kw: 9.0
+    azimuth: 200
+    tilt: 30
+    efficiency: 0.2
+    inverter_efficiency: 0.96
+  battery:
+    capacity_kwh: 10.0
+    power_kw: 4.0
+    efficiency_charge: 0.95
+    efficiency_discharge: 0.95
+    soc_min: 0.1
+    soc_max: 0.9
+    initial_soc: 0.5
+  evs:
+  - capacity_kwh: 75.0
+    max_charge_kw: 11.0
+    efficiency: 0.9
+    arrival_time: '19:00'
+    departure_time: 08:00
+    target_soc: 0.8
+    initial_soc: 0.4
+    connected_days:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+  flexible_loads:
+  - power_kw: 2.5
+    energy_kwh: 5.0
+    earliest_start: '22:00'
+    latest_end: 06:00
+    duration_hours: 2.0
+  tariff:
+    type: time_of_use
+    import_prices:
+      off_peak: 0.08
+      mid_peak: 0.12
+      on_peak: 0.2
+    export_prices:
+      off_peak: 0.03
+      mid_peak: 0.05
+      on_peak: 0.08
+    demand_charge: 5.0
+- building_id: building_2
+  building_type: residential
+  location:
+    lat: 40.0007
+    lon: -104.9993
+    timezone: America/Denver
+  simulation_start: '2023-07-01'
+  simulation_end: '2023-07-08'
+  weather_file: weather.csv
+  pv:
+    capacity_kw: 15.0
+    azimuth: 160
+    tilt: 30
+    efficiency: 0.2
+    inverter_efficiency: 0.96
+  battery:
+    capacity_kwh: 15.0
+    power_kw: 7.0
+    efficiency_charge: 0.95
+    efficiency_discharge: 0.95
+    soc_min: 0.1
+    soc_max: 0.9
+    initial_soc: 0.5
+  evs:
+  - capacity_kwh: 50.0
+    max_charge_kw: 7.0
+    efficiency: 0.9
+    arrival_time: '17:00'
+    departure_time: 07:00
+    target_soc: 0.8
+    initial_soc: 0.2
+    connected_days:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+  flexible_loads:
+  - power_kw: 4.0
+    energy_kwh: 8.0
+    earliest_start: '20:00'
+    latest_end: 06:00
+    duration_hours: 2.0
+  tariff:
+    type: time_of_use
+    import_prices:
+      off_peak: 0.08
+      mid_peak: 0.12
+      on_peak: 0.2
+    export_prices:
+      off_peak: 0.03
+      mid_peak: 0.05
+      on_peak: 0.08
+    demand_charge: 5.0
+- building_id: building_3
+  building_type: residential
+  location:
+    lat: 39.9993
+    lon: -105.0007
+    timezone: America/Denver
+  simulation_start: '2023-07-01'
+  simulation_end: '2023-07-08'
+  weather_file: weather.csv
+  pv:
+    capacity_kw: 7.5
+    azimuth: 180
+    tilt: 25
+    efficiency: 0.19
+    inverter_efficiency: 0.96
+  battery:
+    capacity_kwh: 8.0
+    power_kw: 3.0
+    efficiency_charge: 0.95
+    efficiency_discharge: 0.95
+    soc_min: 0.1
+    soc_max: 0.9
+    initial_soc: 0.5
+  evs:
+  - capacity_kwh: 60.0
+    max_charge_kw: 11.0
+    efficiency: 0.9
+    arrival_time: '20:00'
+    departure_time: 08:00
+    target_soc: 0.8
+    initial_soc: 0.35
+    connected_days:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+  flexible_loads:
+  - power_kw: 2.0
+    energy_kwh: 4.0
+    earliest_start: '23:00'
+    latest_end: 07:00
+    duration_hours: 2.0
+  tariff:
+    type: time_of_use
+    import_prices:
+      off_peak: 0.08
+      mid_peak: 0.12
+      on_peak: 0.2
+    export_prices:
+      off_peak: 0.03
+      mid_peak: 0.05
+      on_peak: 0.08
+    demand_charge: 5.0
+- building_id: building_4
+  building_type: residential
+  location:
+    lat: 39.9993
+    lon: -104.9993
+    timezone: America/Denver
+  simulation_start: '2023-07-01'
+  simulation_end: '2023-07-08'
+  weather_file: weather.csv
+  pv:
+    capacity_kw: 10.5
+    azimuth: 190
+    tilt: 35
+    efficiency: 0.2
+    inverter_efficiency: 0.96
+  battery:
+    capacity_kwh: 12.0
+    power_kw: 5.0
+    efficiency_charge: 0.95
+    efficiency_discharge: 0.95
+    soc_min: 0.1
+    soc_max: 0.9
+    initial_soc: 0.5
+  evs:
+  - capacity_kwh: 80.0
+    max_charge_kw: 11.0
+    efficiency: 0.9
+    arrival_time: '18:30'
+    departure_time: 07:30
+    target_soc: 0.8
+    initial_soc: 0.25
+    connected_days:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+  flexible_loads:
+  - power_kw: 3.5
+    energy_kwh: 7.0
+    earliest_start: '21:00'
+    latest_end: 05:00
+    duration_hours: 2.0
+  tariff:
+    type: time_of_use
+    import_prices:
+      off_peak: 0.08
+      mid_peak: 0.12
+      on_peak: 0.2
+    export_prices:
+      off_peak: 0.03
+      mid_peak: 0.05
+      on_peak: 0.08
+    demand_charge: 5.0
+pandapower:
+  network_type: ieee_34
+  bus_mappings:
+  - building_id: building_0
+    bus_idx: 1
+    phase: all
+    voltage_level: LV
+  - building_id: building_1
+    bus_idx: 3
+    phase: all
+    voltage_level: LV
+  - building_id: building_2
+    bus_idx: 5
+    phase: all
+    voltage_level: LV
+  - building_id: building_3
+    bus_idx: 7
+    phase: all
+    voltage_level: LV
+  - building_id: building_4
+    bus_idx: 9
+    phase: all
+    voltage_level: LV
+  slack_bus: 0
+  voltage_limits:
+    min: 0.95
+    max: 1.05
+  line_loading_limit: 1.0
+  transformer_loading_limit: 1.0
+  run_power_flow_every: 1
+energy_sharing:
+  enabled: true
+  market_type: p2p
+  settlement_interval: 15min
+failures: []
