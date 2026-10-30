@@ -8,6 +8,10 @@ from pandapower.timeseries import run_timeseries
 from pandapower.timeseries import DFData
 from pandapower.control import ConstControl
 
+from dataclasses import dataclass
+from typing import Optional, List, Dict, Any, Tuple
+from enum import Enum
+
 from src.schemas.scenario import (
     PandapowerConfig, GridBusMapping, ScenarioConfig, BuildingConfig
 )
@@ -17,6 +21,22 @@ from src.schemas.diagnostics import (
     TransformerLoadingDiagnostic, GridLimitDiagnostic
 )
 from src.schemas.action import SimulationStepResult
+
+
+class LmpStatus(str, Enum):
+    """LMP computation status."""
+    SUCCESS = "success"
+    FALLBACK = "fallback"
+    ERROR = "error"
+
+
+@dataclass
+class LmpResult:
+    """Structured result of LMP computation."""
+    prices: Dict[int, float]  # bus_idx -> LMP price ($/kWh)
+    status: LmpStatus
+    reason: str
+    cap_hits: int = 0  # number of buses where price cap was applied
 
 
 def _create_geographic_coordinates_from_buildings(
@@ -722,6 +742,56 @@ class PandapowerAdapter:
                 )
                 self.storage_indices[mapping.building_id] = storage_idx
     
+    def _setup_opf_parameters(self, price_cap_per_kwh: Optional[float] = None):
+        """Set up OPF parameters for DC OPF to return bus duals (LMPs).
+        
+        Sets min_p_mw/max_p_mw on sgen and ext_grid, controllable flags,
+        and a cost curve for the slack bus.
+        """
+        # Set cost curve for slack bus (ext_grid) - required for dual variables
+        if len(self.net.ext_grid) > 0:
+            for idx in self.net.ext_grid.index:
+                # Create cost polynomial for slack: c0 + c1*P + c2*P^2
+                # Use a small quadratic cost so the dual is well-defined
+                pp.create_poly_cost(self.net, idx, 'ext_grid', 
+                                   cp1_eur_per_mw=1.0,  # linear cost coefficient
+                                   cp2_eur_per_mw2=0.01)  # small quadratic for convexity
+        
+        # Set min/max power for controllable sgen (PV)
+        for building_id, sgen_idx in self.sgen_indices.items():
+            if sgen_idx in self.net.sgen.index:
+                # PV can generate from 0 to installed capacity
+                # We don't know installed capacity here, so set reasonable bounds
+                # The actual PV output is updated each timestep via update_building_loads
+                self.net.sgen.at[sgen_idx, 'controllable'] = True
+                self.net.sgen.at[sgen_idx, 'min_p_mw'] = 0.0
+                # Max will be set based on installed capacity; default to 10 MW
+                self.net.sgen.at[sgen_idx, 'max_p_mw'] = 10.0
+                
+                # Add cost curve for PV (zero marginal cost)
+                pp.create_poly_cost(self.net, sgen_idx, 'sgen',
+                                   cp1_eur_per_mw=0.0,
+                                   cp2_eur_per_mw2=0.0)
+        
+        # Set min/max power for storage (batteries)
+        for building_id, storage_idx in self.storage_indices.items():
+            if storage_idx in self.net.storage.index:
+                self.net.storage.at[storage_idx, 'controllable'] = True
+                # min_p_mw and max_p_mw already set during creation
+                # Add cost curve for battery (small cost for cycling)
+                pp.create_poly_cost(self.net, storage_idx, 'storage',
+                                   cp1_eur_per_mw=0.01,
+                                   cp2_eur_per_mw2=0.001)
+        
+        # Set min/max for loads (they are not controllable in OPF, but we can set bounds)
+        for building_id, load_idx in self.load_indices.items():
+            if load_idx in self.net.load.index:
+                self.net.load.at[load_idx, 'controllable'] = False
+                # Loads are fixed in OPF (not dispatchable)
+        
+        # Apply price cap if provided - this will be enforced in compute_lmp_prices
+        self._price_cap_per_kwh = price_cap_per_kwh
+    
     def update_building_loads(self, building_powers: Dict[str, float], building_pvs: Dict[str, float], building_battery_powers: Dict[str, float] = None):
         """Update building loads, PV generation, and battery power in the network.
         
@@ -1310,24 +1380,35 @@ class PandapowerAdapter:
             'bounds': bounds
         }
 
-    def compute_lmp_prices(self, base_energy_price: float = 0.1) -> Dict[int, float]:
+    def compute_lmp_prices(self, base_energy_price: float = 0.1, price_cap_per_kwh: Optional[float] = None) -> LmpResult:
         """
         Compute Locational Marginal Prices (LMP) using DC OPF approximation.
         
         Uses pandapower's OPF to compute bus marginal prices (lambda).
-        Returns dict mapping bus_idx -> LMP price ($/kWh).
+        Returns LmpResult with prices, status, reason, and cap_hits.
         
         Falls back to base_energy_price if OPF fails, and increments
         lmp_opf_fallback_steps counter for metrics.
         """
+        # Ensure OPF parameters are set up
+        if not hasattr(self, '_opf_params_set') or not self._opf_params_set:
+            self._setup_opf_parameters(price_cap_per_kwh)
+            self._opf_params_set = True
+        
         lmp_prices = {}
+        cap_hits = 0
         
         if not self.net.converged:
             # Power flow not converged, return base price for all buses
             for bus_idx in self.net.bus.index:
                 lmp_prices[bus_idx] = base_energy_price
             self.lmp_opf_fallback_steps += 1
-            return lmp_prices
+            return LmpResult(
+                prices=lmp_prices,
+                status=LmpStatus.FALLBACK,
+                reason="power_flow_not_converged",
+                cap_hits=0
+            )
         
         try:
             # Run DC OPF to get locational marginal prices
@@ -1347,51 +1428,73 @@ class PandapowerAdapter:
                 for bus_idx in self.net.res_bus.index:
                     lmp = self.net.res_bus.at[bus_idx, 'lambda']
                     # Convert $/MWh to $/kWh
-                    lmp_prices[bus_idx] = float(lmp) / 1000.0
+                    price = float(lmp) / 1000.0
+                    # Apply price cap if configured
+                    if price_cap_per_kwh is not None and price > price_cap_per_kwh:
+                        price = price_cap_per_kwh
+                        cap_hits += 1
+                    lmp_prices[bus_idx] = price
+                return LmpResult(
+                    prices=lmp_prices,
+                    status=LmpStatus.SUCCESS,
+                    reason="opf_solved",
+                    cap_hits=cap_hits
+                )
             else:
                 # OPF ran but no lambda column - this is a fallback condition
-                # Fallback: use voltage sensitivities to approximate LMP
-                # LMP ≈ base_price * (1 + loss_factor * (1 - V))
-                # This is a very rough approximation
+                import logging
+                logging.warning("LMP OPF ran but no lambda column in res_bus, falling back to voltage approximation")
                 if hasattr(self.net, 'res_bus') and 'vm_pu' in self.net.res_bus.columns:
                     avg_voltage = self.net.res_bus.vm_pu.mean()
                     for bus_idx in self.net.res_bus.index:
                         v = self.net.res_bus.at[bus_idx, 'vm_pu']
-                        # Simple approximation: higher voltage = lower losses = slightly lower LMP
                         loss_factor = 0.1
-                        lmp_prices[bus_idx] = base_energy_price * (1 + loss_factor * (1 - v / avg_voltage))
+                        price = base_energy_price * (1 + loss_factor * (1 - v / avg_voltage))
+                        if price_cap_per_kwh is not None and price > price_cap_per_kwh:
+                            price = price_cap_per_kwh
+                            cap_hits += 1
+                        lmp_prices[bus_idx] = price
                 else:
                     for bus_idx in self.net.bus.index:
                         lmp_prices[bus_idx] = base_energy_price
                 self.lmp_opf_fallback_steps += 1
-                        
+                return LmpResult(
+                    prices=lmp_prices,
+                    status=LmpStatus.FALLBACK,
+                    reason="no_lambda_column",
+                    cap_hits=cap_hits
+                )
+                    
         except Exception as e:
             # OPF failed (e.g., KeyError for missing cost data), fall back to base price
-            # Log the error for debugging
             import logging
             logging.warning(f"LMP OPF failed ({type(e).__name__}: {e}), falling back to base price. "
                           f"Fallback steps: {self.lmp_opf_fallback_steps + 1}")
             for bus_idx in self.net.bus.index:
                 lmp_prices[bus_idx] = base_energy_price
             self.lmp_opf_fallback_steps += 1
-        
-        return lmp_prices
+            return LmpResult(
+                prices=lmp_prices,
+                status=LmpStatus.FALLBACK,
+                reason=f"opf_error: {type(e).__name__}",
+                cap_hits=0
+            )
 
-    def get_lmp_prices_for_buildings(self, base_energy_price: float = 0.1) -> Dict[str, float]:
+    def get_lmp_prices_for_buildings(self, base_energy_price: float = 0.1, price_cap_per_kwh: Optional[float] = None) -> Tuple[Dict[str, float], LmpResult]:
         """
         Get LMP prices for each building based on their bus mapping.
-        Returns dict mapping building_id -> LMP price ($/kWh).
+        Returns tuple of (dict mapping building_id -> LMP price ($/kWh), LmpResult).
         """
-        bus_lmps = self.compute_lmp_prices(base_energy_price)
+        bus_result = self.compute_lmp_prices(base_energy_price, price_cap_per_kwh)
         building_lmps = {}
         
         for building_id, bus_idx in self.bus_mapping.items():
-            if bus_idx in bus_lmps:
-                building_lmps[building_id] = bus_lmps[bus_idx]
+            if bus_idx in bus_result.prices:
+                building_lmps[building_id] = bus_result.prices[bus_idx]
             else:
                 building_lmps[building_id] = base_energy_price
         
-        return building_lmps
+        return building_lmps, bus_result
 
 
 def create_grid_from_scenario(scenario: ScenarioConfig) -> PandapowerAdapter:

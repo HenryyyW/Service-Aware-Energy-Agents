@@ -166,6 +166,7 @@ class SimulationCoupler:
         settlement_snapshot = None
         grid_imports = {}
         grid_exports = {}
+        lmp_result = None
         
         if self.energy_sharing_enabled and self.settlement_engine:
             # Check if dynamic/LMP pricing is enabled
@@ -174,8 +175,21 @@ class SimulationCoupler:
                 self.scenario_config.energy_sharing.dynamic_pricing.enabled
             )
             
+            # Validate lmp_update_interval_minutes if dynamic pricing is enabled
+            if dynamic_pricing_enabled:
+                dp_config = self.scenario_config.energy_sharing.dynamic_pricing
+                if dp_config.lmp_update_interval_minutes != self.scenario_config.timestep_minutes:
+                    raise ValueError(
+                        f"lmp_update_interval_minutes ({dp_config.lmp_update_interval_minutes}) "
+                        f"must equal simulation timestep_minutes ({self.scenario_config.timestep_minutes}). "
+                        f"Interpolation is not supported."
+                    )
+            
             # Compute LMP prices if dynamic pricing enabled
             building_lmps = {}
+            lmp_cap_hits = 0
+            lmp_status = "success"
+            lmp_reason = "opf_solved"
             if dynamic_pricing_enabled:
                 base_price = 0.1  # $/kWh fallback
                 # Try to get base price from first building's tariff
@@ -187,7 +201,17 @@ class SimulationCoupler:
                             base_price = sum(prices) / len(prices)
                             break
                 
-                building_lmps = self.pandapower.get_lmp_prices_for_buildings(base_price)
+                price_cap = dp_config.price_cap_per_kwh if dp_config.price_cap_per_kwh is not None else None
+                building_lmps, lmp_result = self.pandapower.get_lmp_prices_for_buildings(base_price, price_cap)
+                lmp_cap_hits = lmp_result.cap_hits
+                lmp_status = lmp_result.status.value
+                lmp_reason = lmp_result.reason
+                
+                # Update CityLearn adapter with LMP prices for next step's observations
+                self.citylearn.update_lmp_prices(building_lmps, True)
+            else:
+                # Ensure CityLearn adapter knows dynamic pricing is disabled
+                self.citylearn.update_lmp_prices({}, False)
             
             # Build building states for market clearing
             building_states = self._build_building_states(
@@ -298,6 +322,17 @@ class SimulationCoupler:
             grid_diag_dict["building_contributions"] = grid_diagnostics.building_contributions
         if hasattr(grid_diagnostics, 'losses'):
             grid_diag_dict["losses"] = grid_diagnostics.losses
+        
+        # Add LMP data if available
+        if dynamic_pricing_enabled and lmp_result:
+            grid_diag_dict["lmp_result"] = {
+                "building_lmps": building_lmps,
+                "status": lmp_status,
+                "reason": lmp_reason,
+                "cap_hits": lmp_cap_hits,
+                "base_price": base_price,
+                "price_cap_per_kwh": price_cap,
+            }
         
         # Add market and settlement data if available
         if market_result:
@@ -580,6 +615,9 @@ class SimulationCoupler:
         
         # Get enhanced grid KPIs from pandapower adapter
         grid_kpis = self.pandapower.get_enhanced_kpis()
+        
+        # Add LMP OPF fallback counter
+        grid_kpis["lmp_opf_fallback_steps"] = self.pandapower.lmp_opf_fallback_steps
         
         # Add energy sharing KPIs if enabled
         sharing_kpis = {}
