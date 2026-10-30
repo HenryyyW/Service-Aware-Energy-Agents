@@ -83,7 +83,7 @@ class TestP2PMatchingEngine:
         assert result.trades[0].buyer_id == "b0"
         assert result.trades[0].seller_id == "b1"
         assert result.trades[0].quantity_kwh == 10.0
-        assert result.clearing_price == 0.15  # Midpoint
+        assert abs(result.clearing_price - 0.15) < 1e-9  # Midpoint
     
     def test_partial_fill(self):
         """Test partial fill when quantities don't match."""
@@ -248,6 +248,7 @@ class TestP2PMarketType:
         return ScenarioConfig(
             scenario_id="test_p2p",
             name="P2P Test",
+            description="P2P Test",
             random_seed=42,
             timestep_minutes=60,
             buildings=[

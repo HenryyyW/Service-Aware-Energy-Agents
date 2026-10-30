@@ -177,10 +177,7 @@ class SimulationCoupler:
         grid_imports = {}
         grid_exports = {}
         lmp_result = None
-<<<<<<< HEAD
         dynamic_pricing_enabled = False
-=======
->>>>>>> bae8083 (P0-4 P2P prep: add market_type 'p2p', P2POrder/P2PTrade schemas, P2PMatchingEngine with invariant tests)
         
         if self.energy_sharing_enabled and self.settlement_engine:
             # Check if dynamic/LMP pricing is enabled
@@ -204,10 +201,7 @@ class SimulationCoupler:
             lmp_cap_hits = 0
             lmp_status = "success"
             lmp_reason = "opf_solved"
-<<<<<<< HEAD
             dp_config = None
-=======
->>>>>>> bae8083 (P0-4 P2P prep: add market_type 'p2p', P2POrder/P2PTrade schemas, P2PMatchingEngine with invariant tests)
             if dynamic_pricing_enabled:
                 dp_config = self.scenario_config.energy_sharing.dynamic_pricing
                 base_price = 0.1  # $/kWh fallback

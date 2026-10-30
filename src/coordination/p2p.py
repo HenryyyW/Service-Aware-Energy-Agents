@@ -248,8 +248,8 @@ class P2PMatchingEngine:
         # Add trades to history
         self.trades.extend(trades)
         
-        # Collect unmatched pending orders
-        unmatched = [o for o in self.buy_orders + self.sell_orders if o.status == P2POrderStatus.PENDING]
+        # Collect unmatched orders (PENDING or PARTIAL - both have remaining quantity)
+        unmatched = [o for o in self.buy_orders + self.sell_orders if o.status in (P2POrderStatus.PENDING, P2POrderStatus.PARTIAL)]
         
         return P2PMatchingResult(
             trades=trades,

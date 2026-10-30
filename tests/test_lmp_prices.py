@@ -29,7 +29,7 @@ class TestLmpPrices:
         return ScenarioConfig(
             scenario_id="test_unconstrained",
             name="Unconstrained Network",
-            description="Simple lossless network for uniform LMP test", (P0-4 P2P prep: add market_type 'p2p', P2POrder/P2PTrade schemas, P2PMatchingEngine with invariant tests)
+            description="Simple lossless network for uniform LMP test",
             random_seed=42,
             timestep_minutes=60,
             buildings=[
@@ -58,7 +58,7 @@ class TestLmpPrices:
                 network_type="cigre_lv",  # Simple LV network
                 bus_mappings=[
                     GridBusMapping(building_id="building_0", bus_idx=1),
-                    GridBusMapping(building_id="building_1", bus_idx=1),  # Same bus for lossless (P0-4 P2P prep: add market_type 'p2p', P2POrder/P2PTrade schemas, P2PMatchingEngine with invariant tests)
+                    GridBusMapping(building_id="building_1", bus_idx=1),  # Same bus for lossless
                 ]
             ),
             energy_sharing=EnergySharingConfig(
@@ -183,7 +183,7 @@ class TestLmpPrices:
         
         # Also verify all buses have the same LMP (uniform)
         for p in prices:
-            assert abs(p - prices[0]) < 1e-9, f"LMPs not uniform: {prices}" (P0-4 P2P prep: add market_type 'p2p', P2POrder/P2PTrade schemas, P2PMatchingEngine with invariant tests)
+            assert abs(p - prices[0]) < 1e-9, f"LMPs not uniform: {prices}"
 
     def test_congested_network_price_spread(self, scenario_config_congested):
         """Test 2: Congested network (forced line loading > 0.9 pu) → spread >= 1% and congested bus has highest price."""
@@ -462,10 +462,7 @@ class TestLmpUpdateIntervalValidation:
         config = ScenarioConfig(
             scenario_id="test_mismatch",
             name="Mismatch Test",
-<<<<<<< HEAD
             description="Mismatch test",
-=======
->>>>>>> bae8083 (P0-4 P2P prep: add market_type 'p2p', P2POrder/P2PTrade schemas, P2PMatchingEngine with invariant tests)
             random_seed=42,
             timestep_minutes=60,
             buildings=[
