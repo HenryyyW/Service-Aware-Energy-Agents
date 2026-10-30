@@ -35,6 +35,12 @@ const metricGroups: Array<{ label: string; metrics: MetricConfig[] }> = [
       { key: 'pv_curtailment', label: 'PV Curtailment', unit: 'kWh', format: (v: number) => `${v.toLocaleString()} kWh`, better: 'lower' },
       { key: 'battery_throughput_kwh', label: 'Battery Throughput', unit: 'kWh', format: (v: number) => `${v.toLocaleString()} kWh`, better: 'neutral' },
       { key: 'carbon_emissions_kg', label: 'CO₂ Emissions', unit: 'kg', format: (v: number) => `${v.toLocaleString()} kg`, better: 'lower' },
+      // LMP pricing metrics (Phase 2)
+      { key: 'lmp_cost_usd', label: 'LMP Cost', unit: '$', format: (v: number) => `$${v.toLocaleString()}`, better: 'lower' },
+      { key: 'lmp_price_mean', label: 'LMP Mean Price', unit: '$/kWh', format: (v: number) => `$${v.toFixed(3)}/kWh`, better: 'neutral' },
+      { key: 'lmp_price_spread', label: 'LMP Price Spread', unit: '$/kWh', format: (v: number) => `$${v.toFixed(3)}/kWh`, better: 'lower' },
+      { key: 'lmp_price_spread_pct', label: 'LMP Spread %', unit: '%', format: (v: number) => `${v.toFixed(1)}%`, better: 'lower' },
+      { key: 'lmp_opf_fallback_steps', label: 'OPF Fallback Steps', unit: '', format: (v: number) => `${v}`, better: 'lower' },
     ],
   },
   {
@@ -356,6 +362,10 @@ function SelectedScenarioCard({ run, label, color }: {
   label: string;
   color: string;
 }) {
+  const pricingRegime = run.pricing_regime || run.energy_metrics?.pricing_regime;
+  const costBasis = run.cost_basis || run.energy_metrics?.cost_basis;
+  const lmpSpreadPct = run.energy_metrics?.lmp_price_spread_pct;
+
   return (
     <div className="glass-card p-4">
       <div className="flex items-center justify-between mb-3">
@@ -366,6 +376,14 @@ function SelectedScenarioCard({ run, label, color }: {
         <div className="p-3 bg-surface/50 rounded-lg">
           <p className="font-body font-medium text-body text-text">{run.run_id}</p>
           <p className="text-caption text-text-muted">{run.scenario_id} · {run.controller_type}</p>
+          {/* Pricing regime badge (Phase 2) */}
+          {pricingRegime && (
+            <div className="flex items-center gap-2 mt-2">
+              <span className="badge badge-sun">{pricingRegime}</span>
+              {costBasis && <span className="badge badge-energy">{costBasis}</span>}
+              {lmpSpreadPct !== undefined && <span className="badge badge-ev">{lmpSpreadPct.toFixed(1)}% spread</span>}
+            </div>
+          )}
         </div>
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="p-2 bg-surface/50 rounded">
@@ -387,6 +405,29 @@ function SelectedScenarioCard({ run, label, color }: {
             <p className="text-caption text-text-muted">EV Ready</p>
           </div>
         </div>
+        {/* LMP metrics row (Phase 2) */}
+        {(run.energy_metrics?.lmp_cost_usd !== undefined || run.energy_metrics?.lmp_price_spread_pct !== undefined) && (
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="p-2 bg-surface/50 rounded">
+              <p className="font-mono text-data text-ev">
+                {run.energy_metrics?.lmp_cost_usd !== undefined ? `$${run.energy_metrics.lmp_cost_usd.toLocaleString()}` : '—'}
+              </p>
+              <p className="text-caption text-text-muted">LMP Cost</p>
+            </div>
+            <div className="p-2 bg-surface/50 rounded">
+              <p className="font-mono text-data text-ev">
+                {run.energy_metrics?.lmp_price_mean !== undefined ? `$${run.energy_metrics.lmp_price_mean.toFixed(3)}/kWh` : '—'}
+              </p>
+              <p className="text-caption text-text-muted">LMP Mean</p>
+            </div>
+            <div className="p-2 bg-surface/50 rounded">
+              <p className="font-mono text-data text-violation">
+                {run.energy_metrics?.lmp_opf_fallback_steps !== undefined ? `${run.energy_metrics.lmp_opf_fallback_steps}` : '—'}
+              </p>
+              <p className="text-caption text-text-muted">OPF Fallback</p>
+            </div>
+          </div>
+        )}
         <Button variant="ghost" size="sm" className="w-full" onClick={() => {
           // Would open selector modal
         }}>

@@ -8,6 +8,20 @@ import { ScenarioComparison } from '../components/scenario/ScenarioComparison';
 import { ToastProvider, useToast } from '../components/ui/Toast';
 import { Tabs, TabList, Tab, TabPanel } from '../components/ui/Tabs';
 
+function getPricingRegimeLabel(scenario: any): { label: string; color: 'sun' | 'energy' | 'ev' | 'violation' } | null {
+  if (!scenario?.energy_sharing) return null;
+  if (scenario.energy_sharing.enabled && scenario.energy_sharing.market_type === 'lmp' && scenario.energy_sharing.dynamic_pricing?.enabled) {
+    return { label: 'LMP', color: 'sun' };
+  }
+  if (scenario.energy_sharing.enabled && scenario.energy_sharing.market_type === 'uniform_price') {
+    return { label: 'Pool TOU', color: 'energy' };
+  }
+  if (!scenario.energy_sharing.enabled) {
+    return { label: 'TOU Solo', color: 'ev' };
+  }
+  return null;
+}
+
 function materializeScenario(source: any, editor: any, scenarioId: string) {
   const buildingCount = Math.max(1, Math.min(source.buildings.length, Math.trunc(editor.community?.buildings || source.buildings.length)));
   const buildings = source.buildings.slice(0, buildingCount).map((building: any) => structuredClone(building));
@@ -79,7 +93,7 @@ function materializeScenario(source: any, editor: any, scenarioId: string) {
 }
 
 function ScenarioStudioPageContent() {
-  const { scenarios } = useScenarioStore();
+  const { scenarios, currentScenario } = useScenarioStore();
   const { addToast } = useToast();
   const navigate = useNavigate();
   const { addRun, setCurrentRun, setTrajectories, updateRun } = useSimulationStore();
@@ -164,6 +178,13 @@ function ScenarioStudioPageContent() {
             {scenarios.length > 0 && (
               <span className="badge badge-sun">{scenarios.length} saved</span>
             )}
+            {currentScenario && (() => {
+              const regime = getPricingRegimeLabel(currentScenario);
+              if (regime) {
+                return <span className={`badge badge-${regime.color}`}>{regime.label}</span>;
+              }
+              return null;
+            })()}
           </div>
         </div>
       </div>

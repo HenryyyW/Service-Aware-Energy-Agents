@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { clsx } from 'clsx';
-import { Eye, EyeOff, ChevronRight, ChevronDown, Sun, Zap, Battery, Car, LineChart, Cpu, AlertTriangle, ArrowUpDown, Thermometer } from 'lucide-react';
+import { Eye, EyeOff, ChevronRight, ChevronDown, Sun, Zap, Battery, Car, LineChart, Cpu, AlertTriangle, ArrowUpDown, Thermometer, DollarSign } from 'lucide-react';
 import type { LayerVisibility } from '../../api/types';
 
 interface LayerTreeProps {
@@ -36,6 +36,7 @@ const layerGroups = [
       { key: 'flows', label: 'Energy Flows', icon: ArrowUpDown },
       { key: 'voltage_heatmap', label: 'Voltage Heatmap', icon: Sun },
       { key: 'loading_heatmap', label: 'Loading Heatmap', icon: Battery },
+      { key: 'lmp_prices', label: 'LMP Prices', icon: DollarSign },
     ] as const,
   },
 ];
