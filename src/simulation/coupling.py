@@ -708,6 +708,12 @@ class SimulationCoupler:
         for h in self.co_sim_history:
             for d in h.grid_diagnostics.diagnostics:
                 grid_diags.append(d.model_dump())
+            # Also export LMP result if available
+            if h.citylearn_result.grid_diagnostics and "lmp_result" in h.citylearn_result.grid_diagnostics:
+                grid_diags.append({
+                    "lmp_result": h.citylearn_result.grid_diagnostics["lmp_result"],
+                    "timestep": h.timestep
+                })
         
         with open(os.path.join(output_dir, "grid_diagnostics.jsonl"), "w") as f:
             for d in grid_diags:
@@ -757,6 +763,9 @@ class SimulationCoupler:
                             "total_community_export_revenue": s.total_community_export_revenue,
                             "total_community_import_kwh": s.total_community_import_kwh,
                             "total_community_export_kwh": s.total_community_export_kwh,
+                            "cost_basis": s.cost_basis,
+                            "lmp_cost_usd": s.lmp_cost_usd,
+                            "lmp_revenue_usd": s.lmp_revenue_usd,
                             "interval_settlements": s.interval_settlements,
                             "metadata": s.metadata,
                         }
