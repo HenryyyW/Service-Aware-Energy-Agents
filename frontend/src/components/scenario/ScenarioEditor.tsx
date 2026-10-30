@@ -41,7 +41,7 @@ export function ScenarioEditor({ onSave, onRun, readOnly = false }: ScenarioEdit
     setCurrentScenario,
   } = useScenarioStore();
 
-  const [expandedSections, setExpandedSections] = useState<string[]>(['community', 'assets', 'grid', 'control']);
+  const [expandedSections, setExpandedSections] = useState<string[]>(['community', 'assets', 'grid', 'control', 'pricing']);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [yamlText, setYamlText] = useState('');
@@ -427,6 +427,152 @@ export function ScenarioEditor({ onSave, onRun, readOnly = false }: ScenarioEdit
                 ))}
               </div>
             </div>
+          </div>
+        </ScenarioSection>
+
+        {/* Pricing Regime Section (Phase 2) */}
+        <ScenarioSection
+          title="Pricing Regime"
+          icon="💰"
+          expanded={expandedSections.includes('pricing')}
+          onToggle={() => toggleSection('pricing')}
+        >
+          <div className="space-y-4">
+            <div className="glass-card p-4">
+              <h4 className="font-body font-medium text-body text-text mb-3">Pricing Regime Selector</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Select
+                  label="Pricing Regime"
+                  value={currentScenario.energy_sharing?.enabled && currentScenario.energy_sharing.market_type === 'lmp' && currentScenario.energy_sharing.dynamic_pricing?.enabled ? 'lmp' :
+                        currentScenario.energy_sharing?.enabled && currentScenario.energy_sharing.market_type === 'uniform_price' ? 'pool_tou' :
+                        'tou_solo'}
+                  onChange={(e) => {
+                    const regime = e.target.value;
+                    if (regime === 'lmp') {
+                      updateScenarioField('energy_sharing', {
+                        enabled: true,
+                        market_type: 'lmp',
+                        settlement_interval: '1h',
+                        dynamic_pricing: {
+                          enabled: true,
+                          pricing_type: 'lmp',
+                          lmp_update_interval_minutes: 60,
+                          congestion_cost_method: 'dc_approx',
+                          loss_factor: 1.0,
+                          price_cap_per_kwh: 1.0,
+                          fallback_to_tariff: true,
+                        },
+                      });
+                    } else if (regime === 'pool_tou') {
+                      updateScenarioField('energy_sharing', {
+                        enabled: true,
+                        market_type: 'uniform_price',
+                        settlement_interval: '1h',
+                        dynamic_pricing: undefined,
+                      });
+                    } else {
+                      updateScenarioField('energy_sharing', {
+                        enabled: false,
+                        market_type: 'uniform_price',
+                        settlement_interval: '1h',
+                        dynamic_pricing: undefined,
+                      });
+                    }
+                  }}
+                  options={[
+                    { value: 'tou_solo', label: 'TOU Solo (no sharing, static TOU)' },
+                    { value: 'pool_tou', label: 'Pool TOU (community pool, uniform price)' },
+                    { value: 'lmp', label: 'LMP (community pool, locational marginal pricing)' },
+                  ]}
+                />
+                <Select
+                  label="Cost Basis"
+                  value={currentScenario.energy_sharing?.dynamic_pricing?.enabled ? 'lmp' : 'tariff'}
+                  onChange={(e) => {
+                    const basis = e.target.value;
+                    if (basis === 'lmp') {
+                      updateScenarioField('energy_sharing', {
+                        ...currentScenario.energy_sharing,
+                        dynamic_pricing: {
+                          ...currentScenario.energy_sharing?.dynamic_pricing,
+                          enabled: true,
+                          pricing_type: 'lmp',
+                        },
+                      });
+                    } else {
+                      updateScenarioField('energy_sharing', {
+                        ...currentScenario.energy_sharing,
+                        dynamic_pricing: {
+                          ...currentScenario.energy_sharing?.dynamic_pricing,
+                          enabled: false,
+                        },
+                      });
+                    }
+                  }}
+                  options={[
+                    { value: 'tariff', label: 'Tariff (static rates)' },
+                    { value: 'lmp', label: 'LMP (locational marginal pricing)' },
+                  ]}
+                />
+              </div>
+              <div className="mt-3 p-3 bg-surface/50 rounded-lg text-caption text-text-muted">
+                <p><strong>Regime Definitions:</strong></p>
+                <ul className="list-disc list-inside mt-1 space-y-1">
+                  <li><strong>tou_solo:</strong> No community pool, static TOU tariff per building</li>
+                  <li><strong>pool_tou:</strong> Community pool enabled, uniform price clearing (Phase 1)</li>
+                  <li><strong>lmp:</strong> Community pool with locational marginal pricing, dynamic per-building prices</li>
+                </ul>
+              </div>
+            </div>
+
+            {currentScenario.energy_sharing?.enabled && currentScenario.energy_sharing.market_type === 'lmp' && (
+              <div className="glass-card p-4">
+                <h4 className="font-body font-medium text-body text-text mb-3">LMP Dynamic Pricing Configuration</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    label="Price Cap ($/kWh)"
+                    type="number"
+                    step="0.01"
+                    value={currentScenario.energy_sharing.dynamic_pricing?.price_cap_per_kwh ?? 1.0}
+                    onChange={(e) => updateScenarioField('energy_sharing.dynamic_pricing.price_cap_per_kwh', parseFloat(e.target.value) || 0)}
+                    min={0}
+                    max={5}
+                  />
+                  <Input
+                    label="LMP Update Interval (min)"
+                    type="number"
+                    value={currentScenario.energy_sharing.dynamic_pricing?.lmp_update_interval_minutes ?? 60}
+                    onChange={(e) => updateScenarioField('energy_sharing.dynamic_pricing.lmp_update_interval_minutes', parseInt(e.target.value) || 60)}
+                    min={15}
+                    max={1440}
+                  />
+                  <Input
+                    label="Congestion Cost Method"
+                    value={currentScenario.energy_sharing.dynamic_pricing?.congestion_cost_method ?? 'dc_approx'}
+                    onChange={(e) => updateScenarioField('energy_sharing.dynamic_pricing.congestion_cost_method', e.target.value)}
+                    placeholder="dc_approx"
+                  />
+                  <Input
+                    label="Loss Factor"
+                    type="number"
+                    step="0.01"
+                    value={currentScenario.energy_sharing.dynamic_pricing?.loss_factor ?? 1.0}
+                    onChange={(e) => updateScenarioField('energy_sharing.dynamic_pricing.loss_factor', parseFloat(e.target.value) || 1.0)}
+                    min={0.5}
+                    max={2.0}
+                  />
+                  <Select
+                    label="Fallback to Tariff on OPF Failure"
+                    value={String(currentScenario.energy_sharing.dynamic_pricing?.fallback_to_tariff ?? true)}
+                    onChange={(e) => updateScenarioField('energy_sharing.dynamic_pricing.fallback_to_tariff', e.target.value === 'true')}
+                    options={[
+                      { value: 'true', label: 'Yes (safe fallback)' },
+                      { value: 'false', label: 'No (fail hard)' },
+                    ]}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </ScenarioSection>
 

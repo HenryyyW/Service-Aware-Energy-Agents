@@ -6,3 +6,4 @@ export { createFeederLayer } from './FeederLayer';
 export { createTransformerLayer } from './TransformerLayer';
 export { createViolationLayer, createVoltageHeatmapLayer, createLoadingHeatmapLayer } from './ViolationLayer';
 export { createFlowLayer } from './FlowLayer';
+export { createLMPLayer, getLMPColorScale } from './LMPLayer';

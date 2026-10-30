@@ -147,6 +147,37 @@ function SettlementView({ settlement, run }: { settlement: any; run: any }) {
               <p className="font-mono text-body capitalize">{run.status}</p>
             </div>
           </div>
+          {/* Pricing Regime Info (Phase 2) */}
+          {(run.pricing_regime || run.energy_metrics?.pricing_regime || run.energy_metrics?.cost_basis || run.energy_metrics?.lmp_price_spread_pct) && (
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-border/30">
+              <div>
+                <p className="text-caption text-text-muted">Pricing Regime</p>
+                <p className="font-mono text-body text-sun">
+                  {run.pricing_regime || run.energy_metrics?.pricing_regime || '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-caption text-text-muted">Cost Basis</p>
+                <p className="font-mono text-body text-energy">
+                  {run.cost_basis || run.energy_metrics?.cost_basis || '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-caption text-text-muted">LMP Spread %</p>
+                <p className="font-mono text-body text-ev">
+                  {run.energy_metrics?.lmp_price_spread_pct !== undefined
+                    ? `${run.energy_metrics.lmp_price_spread_pct.toFixed(1)}%`
+                    : '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-caption text-text-muted">OPF Fallback Steps</p>
+                <p className="font-mono text-body text-violation">
+                  {run.energy_metrics?.lmp_opf_fallback_steps ?? '—'}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
