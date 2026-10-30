@@ -15,6 +15,7 @@ class MarketType(str, Enum):
     CARBON_AWARE = "carbon_aware"
     FAIRNESS_AWARE = "fairness_aware"
     LMP = "lmp"
+    P2P = "p2p"
 
 
 @dataclass
@@ -827,6 +828,96 @@ class LmpClearing(UniformPriceClearing):
         )
 
 
+class P2PClearing(MarketClearingEngine):
+    """P2P-based market clearing - bilateral peer-to-peer trading.
+    
+    Uses batch double auction with uniform price per batch.
+    Residual energy after P2P trades clears in the community pool.
+    """
+    
+    def __init__(self, scenario_config: ScenarioConfig, energy_sharing_config: EnergySharingConfig):
+        super().__init__(scenario_config, energy_sharing_config)
+        # Import here to avoid circular dependency
+        from src.coordination.p2p import P2PMatchingEngine, P2POrderSide
+        self.p2p_engine = P2PMatchingEngine()
+        self.P2POrderSide = P2POrderSide
+    
+    def clear_market(
+        self, 
+        building_states: Dict[str, BuildingEnergyState],
+        timestep: int,
+        carbon_intensity: Optional[float] = None
+    ) -> MarketClearingResult:
+        # Submit P2P orders from building states
+        for bid, state in building_states.items():
+            if state.net_demand_kw > 1e-3:  # Net buyer
+                # Buyer's max price = their LMP or tariff
+                max_price = state.lmp_price if state.lmp_price is not None else \
+                    (state.tariff_config.import_prices.get("on_peak", 0.30) if state.tariff_config else 0.30)
+                max_qty = min(state.net_demand_kw, state.max_import_kw, self.import_limit)
+                if max_qty > 0:
+                    self.p2p_engine.add_order(
+                        building_id=bid,
+                        side=self.P2POrderSide.BUY,
+                        price_per_kwh=max_price,
+                        quantity_kwh=max_qty * (self.scenario_config.timestep_minutes / 60.0),
+                        timestamp=timestep,
+                    )
+            elif state.net_demand_kw < -1e-3:  # Net seller
+                # Seller's min price = their LMP or export tariff
+                min_price = state.lmp_price if state.lmp_price is not None else \
+                    (state.tariff_config.export_prices.get("default", 0.05) if state.tariff_config else 0.05)
+                max_qty = min(-state.net_demand_kw, state.max_export_kw, self.export_limit)
+                if max_qty > 0:
+                    self.p2p_engine.add_order(
+                        building_id=bid,
+                        side=self.P2POrderSide.SELL,
+                        price_per_kwh=min_price,
+                        quantity_kwh=max_qty * (self.scenario_config.timestep_minutes / 60.0),
+                        timestamp=timestep,
+                    )
+        
+        # Clear P2P batch
+        p2p_result = self.p2p_engine.clear_batch(timestep)
+        
+        # Convert trades to market clearing format
+        trades = {b: 0.0 for b in building_states}
+        timestep_hours = self.scenario_config.timestep_minutes / 60.0
+        
+        for trade in p2p_result.trades:
+            # Positive = buying, Negative = selling (in kW)
+            trade_kw = trade.quantity_kwh / timestep_hours
+            trades[trade.buyer_id] = trades.get(trade.buyer_id, 0.0) + trade_kw
+            trades[trade.seller_id] = trades.get(trade.seller_id, 0.0) - trade_kw
+        
+        # Calculate settlements
+        settlements = {}
+        if p2p_result.clearing_price is not None:
+            for trade in p2p_result.trades:
+                trade_kwh = trade.quantity_kwh
+                settlements[trade.buyer_id] = settlements.get(trade.buyer_id, 0.0) - trade_kwh * p2p_result.clearing_price
+                settlements[trade.seller_id] = settlements.get(trade.seller_id, 0.0) + trade_kwh * p2p_result.clearing_price
+        
+        # Residual clearing (community pool for unmatched energy)
+        # For now, just use P2P clearing price as community price
+        clearing_price = p2p_result.clearing_price or 0.0
+        
+        return MarketClearingResult(
+            clearing_price=clearing_price,
+            trades=trades,
+            settlements=settlements,
+            total_volume_kwh=p2p_result.total_volume_kwh,
+            market_type=MarketType.P2P,
+            metadata={
+                "p2p_trades": len(p2p_result.trades),
+                "p2p_volume_kwh": p2p_result.total_volume_kwh,
+                "p2p_clearing_price": p2p_result.clearing_price,
+                "unmatched_buy_orders": len([o for o in p2p_result.unmatched_orders if o.side == self.P2POrderSide.BUY]),
+                "unmatched_sell_orders": len([o for o in p2p_result.unmatched_orders if o.side == self.P2POrderSide.SELL]),
+            }
+        )
+
+
 def create_market_engine(
     scenario_config: ScenarioConfig, 
     energy_sharing_config: EnergySharingConfig
@@ -840,6 +931,7 @@ def create_market_engine(
         MarketType.CARBON_AWARE: CarbonAwareClearing,
         MarketType.FAIRNESS_AWARE: FairnessAwareClearing,
         MarketType.LMP: LmpClearing,
+        MarketType.P2P: P2PClearing,
     }
     
     engine_class = engines.get(market_type, UniformPriceClearing)

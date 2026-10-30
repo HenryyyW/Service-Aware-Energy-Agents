@@ -186,6 +186,16 @@ class SimulationCoupler:
                 self.scenario_config.energy_sharing.dynamic_pricing.enabled
             )
             
+            # Validate lmp_update_interval_minutes if dynamic pricing is enabled
+            if dynamic_pricing_enabled:
+                dp_config = self.scenario_config.energy_sharing.dynamic_pricing
+                if dp_config.lmp_update_interval_minutes != self.scenario_config.timestep_minutes:
+                    raise ValueError(
+                        f"lmp_update_interval_minutes ({dp_config.lmp_update_interval_minutes}) "
+                        f"must equal simulation timestep_minutes ({self.scenario_config.timestep_minutes}). "
+                        f"Interpolation is not supported."
+                    )
+            
             # Compute LMP prices if dynamic pricing enabled
             building_lmps = {}
             lmp_cap_hits = 0

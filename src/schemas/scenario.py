@@ -129,7 +129,7 @@ class EnergySharingConfig(BaseModel):
     @field_validator("market_type")
     @classmethod
     def validate_market_type(cls, v: str) -> str:
-        valid = {"uniform_price", "weighted", "carbon_aware", "fairness_aware", "lmp"}
+        valid = {"uniform_price", "weighted", "carbon_aware", "fairness_aware", "lmp", "p2p"}
         if v not in valid:
             raise ValueError(f"market_type must be one of {valid}")
         return v
