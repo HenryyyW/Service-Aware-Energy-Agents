@@ -81,6 +81,16 @@ class SimulationCoupler:
     
     def reset(self, random_seed: Optional[int] = None) -> Dict[str, Any]:
         """Reset both simulators."""
+        # Validate lmp_update_interval_minutes if dynamic pricing is enabled
+        if self.energy_sharing_enabled and self.scenario_config.energy_sharing.dynamic_pricing:
+            dp = self.scenario_config.energy_sharing.dynamic_pricing
+            if dp.enabled:
+                if dp.lmp_update_interval_minutes != self.scenario_config.timestep_minutes:
+                    raise ValueError(
+                        f"lmp_update_interval_minutes ({dp.lmp_update_interval_minutes}) "
+                        f"must equal simulation timestep_minutes ({self.scenario_config.timestep_minutes}). "
+                        f"Interpolation is not supported."
+                    )
         seed = random_seed or self.scenario_config.random_seed
         observations = self.citylearn.reset(seed)
         self.pandapower.reset()
@@ -167,6 +177,7 @@ class SimulationCoupler:
         grid_imports = {}
         grid_exports = {}
         lmp_result = None
+        dynamic_pricing_enabled = False
         
         if self.energy_sharing_enabled and self.settlement_engine:
             # Check if dynamic/LMP pricing is enabled
@@ -174,16 +185,6 @@ class SimulationCoupler:
                 self.scenario_config.energy_sharing.dynamic_pricing is not None and
                 self.scenario_config.energy_sharing.dynamic_pricing.enabled
             )
-            
-            # Validate lmp_update_interval_minutes if dynamic pricing is enabled
-            if dynamic_pricing_enabled:
-                dp_config = self.scenario_config.energy_sharing.dynamic_pricing
-                if dp_config.lmp_update_interval_minutes != self.scenario_config.timestep_minutes:
-                    raise ValueError(
-                        f"lmp_update_interval_minutes ({dp_config.lmp_update_interval_minutes}) "
-                        f"must equal simulation timestep_minutes ({self.scenario_config.timestep_minutes}). "
-                        f"Interpolation is not supported."
-                    )
             
             # Compute LMP prices if dynamic pricing enabled
             building_lmps = {}

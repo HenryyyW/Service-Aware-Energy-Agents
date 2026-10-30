@@ -455,6 +455,7 @@ class TestLmpUpdateIntervalValidation:
         config = ScenarioConfig(
             scenario_id="test_mismatch",
             name="Mismatch Test",
+            description="Mismatch test",
             random_seed=42,
             timestep_minutes=60,
             buildings=[

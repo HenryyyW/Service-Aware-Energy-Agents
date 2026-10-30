@@ -751,6 +751,10 @@ class PandapowerAdapter:
         # Set cost curve for slack bus (ext_grid) - required for dual variables
         if len(self.net.ext_grid) > 0:
             for idx in self.net.ext_grid.index:
+                # Set wide bounds for slack bus
+                self.net.ext_grid.at[idx, 'min_p_mw'] = -1000.0
+                self.net.ext_grid.at[idx, 'max_p_mw'] = 1000.0
+                self.net.ext_grid.at[idx, 'controllable'] = True
                 # Create cost polynomial for slack: c0 + c1*P + c2*P^2
                 # Use a small quadratic cost so the dual is well-defined
                 pp.create_poly_cost(self.net, idx, 'ext_grid', 
