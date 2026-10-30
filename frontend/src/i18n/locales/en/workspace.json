@@ -1,9 +1,18 @@
 {
   "header": {
+    "title": "Agent Workspace",
     "runName": "Run Name",
     "scenario": "Scenario",
     "controller": "Controller",
     "runId": "Run ID"
+  },
+  "tabs": {
+    "agent": "Agent",
+    "simulation": "Simulation"
+  },
+  "simulation": {
+    "selectRun": "Select a run",
+    "noRuns": "No runs available for this scenario"
   },
   "timeline": {
     "title": "Dispatch Timeline",
@@ -12,7 +21,14 @@
     "reason": "Reason",
     "change": "Change",
     "groupedByTimestep": "Grouped by timestep",
-    "noDispatches": "No dispatches yet — waiting for run"
+    "noDispatches": "No dispatches yet — waiting for run",
+    "dispatches": "Dispatches",
+    "selectTimestep": "Select a timestep",
+    "actions": "actions",
+    "value": "Value",
+    "requested": "Requested",
+    "limitedValue": "Limited",
+    "limited": "Limited"
   },
   "kpi": {
     "violationsFixed": "Violations Fixed",
@@ -26,6 +42,13 @@
     "timestamp": "Timestamp"
   },
   "empty": {
-    "noRunSelected": "Select a run to view workspace"
+    "noRunSelected": "Select a run to view workspace",
+    "noActiveTask": "No active agent task",
+    "submitTask": "Submit a task from the panel to start the workflow",
+    "noDispatches": "No dispatches yet — waiting for run",
+    "waitingForRun": "Run a simulation to see dispatch data"
+  },
+  "history": {
+    "recentTasks": "Recent Tasks"
   }
 }
