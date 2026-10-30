@@ -36,6 +36,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[api]"
 
+      - name: Check OpenAPI schema drift
+        run: python scripts/check_openapi_drift.py
+
       - name: Run test suite
         run: pytest -q tests --junitxml=reports/pytest.xml
 
