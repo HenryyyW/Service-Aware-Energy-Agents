@@ -10,22 +10,24 @@ Implements the two variants from ``experiments/ABLATION_DESIGN.md``:
   trigger deterministic repair, budget 2 repairs per step, then fallback.
 
 Reproducibility contract (required for the paper's artifact table): every run
-records ``agent_backend`` (``"llm"`` or ``"fallback``), the prompt template
+records ``agent_backend`` (``"llm"`` or ``"fallback"``), the prompt template
 hash, and the sampling temperature/seed, both in ``result.json`` (via the
 controller config) and ``manifest.json`` (via the runner). Without a configured
 backend both variants run the deterministic fallback and are labelled
 ``fallback`` so those numbers are never mixed with LLM numbers.
 """
+import concurrent.futures
 import hashlib
 import json
 import os
+import asyncio
 from collections import Counter
 from typing import Any, Callable, Dict, List, Optional
 
 from src.controllers import BaseController
 from src.schemas.action import Action, ActionType, RequestedActions
 from src.schemas.scenario import ScenarioConfig
-from src.agents.backend import AgentBackend, BackendResponse, CostBudget
+from src.agents.backend import AgentBackend, BackendResponse, CostBudget, FallbackBackend
 from src.agents.backend.config import LLMConfig
 
 # Versioned dispatch prompt. The hash of this template goes into the manifest;
@@ -68,7 +70,7 @@ class LLMAgentController(BaseController):
         
         self._backend: Optional[AgentBackend] = backend
         self.llm_config = llm_config
-        self.agent_backend = "llm" if self._backend is not None else "fallback"
+        self.agent_backend = "fallback" if isinstance(self._backend, FallbackBackend) else "llm"
         self.prompt_version = PROMPT_VERSION
         self.prompt_hash = hashlib.sha256(LLM_PROMPT_TEMPLATE.encode("utf-8")).hexdigest()
         self.sampling_temperature = float(
@@ -145,13 +147,39 @@ class LLMAgentController(BaseController):
                 "grid_diagnostics": getattr(self, 'last_grid_diagnostics', None),
             }
             
-            response = self._backend.generate_actions(
-                scenario=self.scenario_config,
-                observations=observations,
-                timestep=timestep,
-                context=context,
-                budget=self.llm_config.create_cost_budget() if self.llm_config else CostBudget(),
-            )
+            # Run async backend call, handling existing event loops
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            
+            if loop and loop.is_running():
+                # If there's already a running loop, we can't use asyncio.run
+                # Create a new thread with its own event loop
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self._backend.generate_actions(
+                        scenario=self.scenario_config,
+                        observations=observations,
+                        timestep=timestep,
+                        context={
+                            "grid_diagnostics": getattr(self, 'last_grid_diagnostics', None),
+                        },
+                        budget=self.llm_config.create_cost_budget() if self.llm_config else CostBudget(),
+                    ))
+                    response = future.result()
+            else:
+                response = asyncio.run(
+                    self._backend.generate_actions(
+                        scenario=self.scenario_config,
+                        observations=observations,
+                        timestep=timestep,
+                        context={
+                            "grid_diagnostics": getattr(self, 'last_grid_diagnostics', None),
+                        },
+                        budget=self.llm_config.create_cost_budget() if self.llm_config else CostBudget(),
+                    )
+                )
             
             if not response or not response.actions:
                 return None
@@ -182,7 +210,11 @@ class LLMAgentController(BaseController):
         self.timestep = timestep
         self.total_steps += 1
         actions: List[Action]
-        if self._backend is not None:
+        
+        # Check if we have a real LLM backend (not fallback)
+        use_llm = self._backend is not None and not isinstance(self._backend, FallbackBackend)
+        
+        if use_llm:
             proposed = self._propose_via_llm(observations, timestep)
             if proposed is None:
                 self.unparseable_outputs += 1
@@ -200,8 +232,10 @@ class LLMAgentController(BaseController):
                 else:
                     self.first_attempt_valid += 1
         else:
+            # Using FallbackBackend or no backend - use fallback actions
             actions = self._fallback_actions(observations, timestep)
             self.first_attempt_valid += 1
+        
         return self._create_requested_actions(actions)
 
     def _fallback_actions(self, observations: Dict[str, Any], timestep: int) -> List[Action]:
