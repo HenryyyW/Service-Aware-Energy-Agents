@@ -20,7 +20,8 @@ import {
   createViolationLayer,
   createVoltageHeatmapLayer,
   createLoadingHeatmapLayer,
-  createFlowLayer
+  createFlowLayer,
+  createLMPLayer
 } from './MapLayers';
 import { TimePlayer } from './TimePlayer';
 import { Panel } from '../panels/Panel';
@@ -142,6 +143,20 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
       data[action.asset_id][field] = action.value_kw;
     });
     return data;
+  }, [currentStepData]);
+
+  // Extract LMP prices from current step data (Phase 2)
+  // Backend returns LMP prices in observations as {building_id}_electricity_pricing
+  const lmpPrices = useMemo((): Record<string, number> => {
+    if (!currentStepData?.observations) return {};
+    const prices: Record<string, number> = {};
+    Object.entries(currentStepData.observations).forEach(([key, value]) => {
+      const match = key.match(/^(building_\d+)_electricity_pricing$/);
+      if (match && typeof value === 'number') {
+        prices[match[1]] = value;
+      }
+    });
+    return prices;
   }, [currentStepData]);
 
   // Map building IDs to their corresponding bus indices from the scenario config
@@ -554,6 +569,18 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
       }
     }
 
+    // LMP Prices layer (Phase 2)
+    if (layerVisibility.lmp_prices && buildings.length > 0 && Object.keys(lmpPrices).length > 0) {
+      const lmpLayer = createLMPLayer({
+        buildings,
+        lmpPrices,
+        timestepData,
+        selectedBuildingId: selectedAsset?.type === 'building' ? selectedAsset.id : null,
+        onSelect: (id: string) => selectAsset({ type: 'building', id, data: buildings.find(b => b.building_id === id) }),
+      });
+      if (lmpLayer) layers.push(lmpLayer);
+    }
+
     return layers.filter(Boolean) as Layer[];
   }, [
     layerVisibility,
@@ -572,6 +599,7 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
     timePlayer.playing,
     timePlayer.speed,
     networkGeometry,
+    lmpPrices,
   ]);
 
   return (

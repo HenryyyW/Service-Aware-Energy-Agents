@@ -61,6 +61,7 @@ const DEFAULT_LAYERS: LayerVisibility = {
   flows: true,
   voltage_heatmap: false,
   loading_heatmap: false,
+  lmp_prices: false,
 };
 
 export const useCanvasStore = create<CanvasState>()(

@@ -320,7 +320,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--scenarios", nargs="+", required=True,
                         help="Scenario YAML paths")
     parser.add_argument("--controllers", nargs="+", required=True,
-                        choices=["rule_based", "multi_agent", "centralized"])
+                        choices=["rule_based", "multi_agent", "centralized", "mpc"])
+
     parser.add_argument("--seeds", nargs="+", type=int, required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--max-steps", type=int, default=None,

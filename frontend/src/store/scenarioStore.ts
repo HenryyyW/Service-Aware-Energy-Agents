@@ -70,6 +70,20 @@ const DEFAULT_SCENARIO: ScenarioConfig = {
       'preserve_comfort',
     ],
   },
+  energy_sharing: {
+    enabled: false,
+    market_type: 'uniform_price',
+    settlement_interval: '1h',
+    dynamic_pricing: {
+      enabled: false,
+      pricing_type: 'lmp',
+      lmp_update_interval_minutes: 60,
+      congestion_cost_method: 'dc_approx',
+      loss_factor: 1.0,
+      price_cap_per_kwh: 1.0,
+      fallback_to_tariff: true,
+    },
+  },
 };
 
 function setNestedValue(obj: any, path: string, value: any) {

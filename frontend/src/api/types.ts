@@ -100,6 +100,8 @@ export interface TimeStepData {
   applied_actions: AppliedAction[];
   costs: Record<string, number>;
   grid_diagnostics?: GridDiagnostics;
+  // LMP pricing per building per timestep (Phase 2)
+  lmp_prices?: Record<string, number>;
 }
 
 export interface AppliedAction {
@@ -161,6 +163,20 @@ export interface ScenarioConfig {
     strategy: string;
     objective: string[];
   };
+  energy_sharing?: {
+    enabled: boolean;
+    market_type: 'uniform_price' | 'weighted' | 'carbon_aware' | 'fairness_aware' | 'lmp' | 'p2p';
+    settlement_interval: string;
+    dynamic_pricing?: {
+      enabled: boolean;
+      pricing_type: 'lmp' | 'tou';
+      lmp_update_interval_minutes: number;
+      congestion_cost_method: string;
+      loss_factor: number;
+      price_cap_per_kwh: number;
+      fallback_to_tariff: boolean;
+    };
+  };
   pandapower?: PandapowerConfig;
   scenario_id?: string;
   name?: string;
@@ -208,6 +224,9 @@ export interface SimulationRun {
   stage?: string;
   eta_seconds?: number;
   progress?: number;
+  // Pricing regime fields (Phase 2)
+  pricing_regime?: 'tou_solo' | 'pool_tou' | 'lmp' | 'p2p';
+  cost_basis?: 'tariff' | 'lmp';
 }
 
 export interface EnergyMetrics {
@@ -220,6 +239,15 @@ export interface EnergyMetrics {
   pv_curtailment: number;
   battery_throughput_kwh: number;
   carbon_emissions_kg: number;
+  // LMP pricing fields (Phase 2)
+  lmp_cost_usd?: number;
+  lmp_price_mean?: number;
+  lmp_price_spread?: number;
+  lmp_price_spread_pct?: number;
+  lmp_at_cap_steps?: number;
+  lmp_opf_fallback_steps?: number;
+  cost_basis?: 'tariff' | 'lmp';
+  pricing_regime?: 'tou_solo' | 'pool_tou' | 'lmp' | 'p2p';
 }
 
 export interface ServiceMetrics {
@@ -381,6 +409,7 @@ export interface LayerVisibility {
   flows: boolean;
   voltage_heatmap: boolean;
   loading_heatmap: boolean;
+  lmp_prices: boolean;
 }
 
 export interface PVAssetMetadata {
