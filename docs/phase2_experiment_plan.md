@@ -259,16 +259,33 @@ fixtures, not generated output, and follow the existing `git add -f` convention.
 
 | Arm | Backend | Treatment |
 |---|---|---|
-| `llm_agent` | `ollama-local` (`qwen2.5-coder:7b`) | single-pass proposal, applied as-is (adapter clamps) |
+| `llm_agent` | `api-hosted` — `AGENT_BACKEND=api:poolside/laguna-xs-2.1` | single-pass proposal, applied as-is (adapter clamps) |
 | `llm_agent_verified` | same | verify → re-prompt once → deterministic fallback; 2-repair cap |
 | `multi_agent` | none | deterministic reference, paired by scenario/seed |
 
 Same scenario configs and regime as Phase 1 (`tou_solo`, plus D's `pool_tou`)
 so the agent effect is not confounded with pricing.
 
+**Backend decision (2026-10-31, PM per user order).** P0-2 runs on the hosted
+OpenAI-compatible API, not Ollama: `LLM_BASE_URL=https://integrate.api.nvidia.com/v1`
+(NVIDIA NIM), Bearer key from the `LLM_API_KEY` environment variable (never in
+the repo), transport `src/agents/backend/api.py::ApiPromptCallable` (PR #54).
+Authoritative model: **`poolside/laguna-xs-2.1`** — measured on the full-week
+168-step exit run `p02_fullweek_laguna_s42` (scenario A, `pool_tou`, seed 42):
+`llm_fallback_step_share` 0.0 (< 0.25), first-attempt validity 1.0, 0 parse
+failures, p50 4.2 s / p95 8.6 s per call, 209,841 prompt + 58,652 completion
+tokens, wall ~21 min. `z-ai/glm-5.3-flash` is REJECTED on this account
+(persistent HTTP 429; reasoning starves the JSON output — 2-step probe showed
+fallback_share 1.0 at ~127 s/call); `gpt-4o-mini` is only the library's
+default when `AGENT_BACKEND=api` carries no model suffix, not the project
+model. The model is runtime config, so it appears in run artifacts
+(`manifest.json:agent_model`), not in code or YAML.
+
 ### 5.2 Two-stage sizing (measured, not guessed)
 
-A call is ~8 s warm and produces ~327 tokens; a full week is 169 steps.
+Measured on `poolside/laguna-xs-2.1` (full-week exit run, 168 steps): ~1,250
+prompt + ~350 completion tokens per call, p50 4.2 s / p95 8.6 s warm; a full
+week is 168–169 steps ≈ 21 min wall per LLM run.
 
 | Stage | Design | Runs | Projected wall |
 |---|---|---|---|
