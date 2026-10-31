@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any, List
 
 import numpy as np
 
-from src.schemas.scenario import ScenarioConfig
+from src.schemas.scenario import ScenarioConfig, EnergySharingConfig, DynamicPricingConfig
 from src.schemas.action import RequestedActions, Action, ActionType
 from src.schemas.report import (
     ExperimentResult, ExperimentStatus, ControllerType, KPIResult,
@@ -25,11 +25,77 @@ from src.controllers import (
 )
 from src.evaluation import compute_all_metrics, generate_report_plots, compute_per_member_metrics
 
+# ---------------------------------------------------------------------------
+# Phase 2 pricing regimes (docs/phase2_experiment_plan.md section 4.1).
+#
+# A regime is an override layer on top of a base scenario config so the same
+# base config runs under all three regimes; ``scenario_id`` stays clean so
+# paired analysis keys on (scenario, controller, seed). ``pricing_regime`` and
+# ``cost_basis`` are recorded in result.json + manifest.json whenever a regime
+# is applied (plan section 8: fields written by the runner, no post-processing).
+#
+# p2p is wireable but SCHEDULE-LATER (plan section 6, M3): the clearing engine
+# and matching engine exist, but the invariant suite + settlement-ledger gate
+# have not gated a p2p matrix, so no p2p runs are scheduled this phase.
+# ---------------------------------------------------------------------------
+REGIMES = ("tou_solo", "pool_tou", "lmp", "p2p")
+REGIME_COST_BASIS = {
+    "tou_solo": "tariff",   # no community pool, static TOU
+    "pool_tou": "tariff",   # pool clearing at TOU
+    "lmp": "lmp",           # pool clearing at locational prices, billed at LMP
+    "p2p": "tariff",        # bilateral trades clear first; residual pool at TOU
+}
+
+
+def apply_pricing_regime(scenario_config: ScenarioConfig, regime: str) -> ScenarioConfig:
+    """Apply a pricing regime's energy_sharing/dynamic_pricing overrides in place.
+
+    - ``tou_solo``: no community pool, static TOU (sharing disabled);
+    - ``pool_tou``: pool clearing at TOU (``uniform_price``, dynamic pricing off);
+    - ``lmp``: pool clearing at locational prices (``lmp`` + dynamic pricing on,
+      ``lmp_update_interval_minutes`` forced to the simulation timestep as the
+      coupler's validator requires);
+    - ``p2p``: bilateral P2P matching, residual clears in the pool
+      (SCHEDULE-LATER — see REGIMES above).
+
+    The manifest's ``scenario_config_sha256`` hashes the in-memory config, so
+    the overrides are automatically reflected in the run's config hash.
+    """
+    es = scenario_config.energy_sharing
+    if es is None:
+        es = EnergySharingConfig()
+        scenario_config.energy_sharing = es
+
+    if regime == "tou_solo":
+        es.enabled = False
+        if es.dynamic_pricing is not None:
+            es.dynamic_pricing.enabled = False
+    elif regime == "pool_tou":
+        es.enabled = True
+        es.market_type = "uniform_price"
+        if es.dynamic_pricing is not None:
+            es.dynamic_pricing.enabled = False
+    elif regime == "lmp":
+        es.enabled = True
+        es.market_type = "lmp"
+        dp = es.dynamic_pricing if es.dynamic_pricing is not None else DynamicPricingConfig()
+        dp.enabled = True
+        dp.pricing_type = "lmp"
+        dp.lmp_update_interval_minutes = scenario_config.timestep_minutes
+        es.dynamic_pricing = dp
+    elif regime == "p2p":
+        es.enabled = True
+        es.market_type = "p2p"
+    else:  # defensive: argparse choices already restrict this
+        raise ValueError(f"Unknown pricing regime: {regime}")
+    return scenario_config
+
 
 class ExperimentRunner:
     """Runs experiments with given scenario and controller."""
     
-    def __init__(self, scenario_config: ScenarioConfig, output_dir: str = "experiments/results", run_id: Optional[str] = None):
+    def __init__(self, scenario_config: ScenarioConfig, output_dir: str = "experiments/results", run_id: Optional[str] = None,
+                 pricing_regime: Optional[str] = None, cost_basis: Optional[str] = None):
         self.scenario_config = scenario_config
         self.output_dir = Path(output_dir) / scenario_config.scenario_id
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -40,7 +106,11 @@ class ExperimentRunner:
             self.run_id = run_id
         self.run_dir = self.output_dir / self.run_id
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        
+        # Phase 2 pricing regime bookkeeping (recorded in result.json +
+        # manifest.json when a regime is applied; None for phase 1 runs).
+        self.pricing_regime = pricing_regime
+        self.cost_basis = cost_basis
+
         self.coupler: Optional[SimulationCoupler] = None
         self.controller: Optional[BaseController] = None
         self.history: List = []
@@ -224,6 +294,25 @@ class ExperimentRunner:
         per_member = compute_per_member_metrics(cl_history, self.scenario_config)
         energy_sharing = None
         settlement_result = self.coupler.get_settlement_result() if self.coupler else None
+        
+        # Populate LMP fields in EnergyMetrics from settlement layer
+        if settlement_result:
+            # Get LMP metrics from settlement
+            lmp_costs = [s.lmp_cost_usd for s in settlement_result.building_settlements.values() if s.cost_basis == "lmp"]
+            lmp_prices = []
+            for s in settlement_result.building_settlements.values():
+                if s.cost_basis == "lmp" and s.total_grid_import_kwh > 0:
+                    lmp_prices.append(s.lmp_cost_usd / s.total_grid_import_kwh)
+                elif s.cost_basis == "lmp" and s.total_grid_export_kwh > 0:
+                    lmp_prices.append(s.lmp_revenue_usd / s.total_grid_export_kwh)
+            
+            energy.cost_basis = "lmp" if lmp_costs else "tariff"
+            energy.lmp_cost_usd = sum(lmp_costs)
+            if lmp_prices:
+                energy.lmp_price_mean = float(np.mean(lmp_prices))
+                energy.lmp_price_spread = float(np.max(lmp_prices) - np.min(lmp_prices))
+                energy.lmp_price_spread_pct = (energy.lmp_price_spread / energy.lmp_price_mean * 100) if energy.lmp_price_mean > 0 else 0.0
+            energy.lmp_total_cost_usd = sum(lmp_costs)
         if settlement_result:
             settlement_members = {}
             settlement_savings = {}
@@ -283,6 +372,14 @@ class ExperimentRunner:
                 ('community_savings', 'Community Savings', '$', energy_sharing.total_savings_vs_baseline, 'maximize'),
                 ('community_settlement_volume', 'Community Settlement Volume', 'kWh', energy_sharing.total_community_volume_kwh, 'maximize'),
                 ('community_actual_bill', 'Community Actual Bill', '$', energy_sharing.actual_total_bill, 'minimize'),
+            ])
+        # LMP KPIs
+        if energy.cost_basis == "lmp":
+            kpi_defs.extend([
+                ('lmp_price_mean', 'LMP Price Mean', '$/kWh', energy.lmp_price_mean, 'none'),
+                ('lmp_price_spread', 'LMP Price Spread', '$/kWh', energy.lmp_price_spread, 'minimize'),
+                ('lmp_price_spread_pct', 'LMP Price Spread %', '%', energy.lmp_price_spread_pct, 'minimize'),
+                ('lmp_total_cost_usd', 'LMP Total Cost', '$', energy.lmp_total_cost_usd, 'minimize'),
             ])
         
         for kpi_id, name, unit, value, direction in kpi_defs:
@@ -397,6 +494,11 @@ class ExperimentRunner:
             "timestep_minutes": self.scenario_config.timestep_minutes,
             "history_steps": len(self.history),
         }
+        # Pricing regime bookkeeping (phase 2 M1): recorded whenever a regime
+        # is applied; phase 1 runs (no --regime) keep their manifest shape.
+        if self.pricing_regime is not None:
+            manifest["pricing_regime"] = self.pricing_regime
+            manifest["cost_basis"] = self.cost_basis
         with open(self.run_dir / "manifest.json", "w") as f:
             json.dump(manifest, f, indent=2, default=str)
 
@@ -419,6 +521,10 @@ class ExperimentRunner:
         # Convert datetime to string
         result_dict['start_time'] = result.start_time.isoformat()
         result_dict['end_time'] = result.end_time.isoformat()
+        # Pricing regime bookkeeping (phase 2 M1); absent for phase 1 runs.
+        if self.pricing_regime is not None:
+            result_dict["pricing_regime"] = self.pricing_regime
+            result_dict["cost_basis"] = self.cost_basis
         
         with open(self.run_dir / "result.json", "w") as f:
             json.dump(result_dict, f, indent=2, default=str)
@@ -472,6 +578,12 @@ def main():
     parser.add_argument("--output-dir", type=str, default="experiments/results", help="Output directory")
     parser.add_argument("--seed", type=int, default=None, help="Random seed (overrides scenario config)")
     parser.add_argument("--run-id", type=str, default=None, help="Custom run ID (optional)")
+    parser.add_argument("--regime", type=str, default=None, choices=REGIMES,
+                       help="Phase 2 pricing regime applied as energy_sharing/dynamic_pricing "
+                            "overrides on the base config (docs/phase2_experiment_plan.md 4.1): "
+                            "tou_solo | pool_tou | lmp | p2p (p2p is SCHEDULE-LATER: engine "
+                            "exists, but no p2p matrix is gated or scheduled this phase). "
+                            "Records pricing_regime + cost_basis in result.json and manifest.json.")
     
     # LLM arguments
     parser.add_argument("--llm-backend", type=str, default=None,
@@ -497,9 +609,16 @@ def main():
     # Override seed if provided
     if args.seed is not None:
         scenario.random_seed = args.seed
-    
+
+    # Apply the pricing regime overrides (phase 2 M1); scenario_id stays clean.
+    pricing_regime = args.regime
+    cost_basis = REGIME_COST_BASIS.get(args.regime) if args.regime else None
+    if args.regime:
+        scenario = apply_pricing_regime(scenario, args.regime)
+
     # Run experiment
-    runner = ExperimentRunner(scenario, args.output_dir, run_id=args.run_id)
+    runner = ExperimentRunner(scenario, args.output_dir, run_id=args.run_id,
+                              pricing_regime=pricing_regime, cost_basis=cost_basis)
     runner.setup(args.controller, rl_policy=args.rl_policy,
                  llm_backend=args.llm_backend, llm_model=args.llm_model,
                  llm_prompt_template=args.llm_prompt_template,
@@ -534,6 +653,8 @@ def main():
     
     print(f"\nExperiment Summary:")
     print(f"  Run ID: {result.run_id}")
+    if runner.pricing_regime is not None:
+        print(f"  Pricing Regime: {runner.pricing_regime} (cost basis: {runner.cost_basis})")
     print(f"  Total Cost: ${result.energy.total_cost:.2f}")
     print(f"  Grid Import: {result.energy.grid_import_kwh:.1f} kWh")
     print(f"  Peak Demand: {result.energy.peak_demand_kw:.1f} kW")

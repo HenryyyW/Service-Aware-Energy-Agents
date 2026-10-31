@@ -1,5 +1,0 @@
-agents
-controllers
-evaluation
-schemas
-simulation

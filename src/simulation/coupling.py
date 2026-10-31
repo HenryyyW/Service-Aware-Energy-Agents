@@ -81,6 +81,16 @@ class SimulationCoupler:
     
     def reset(self, random_seed: Optional[int] = None) -> Dict[str, Any]:
         """Reset both simulators."""
+        # Validate lmp_update_interval_minutes if dynamic pricing is enabled
+        if self.energy_sharing_enabled and self.scenario_config.energy_sharing.dynamic_pricing:
+            dp = self.scenario_config.energy_sharing.dynamic_pricing
+            if dp.enabled:
+                if dp.lmp_update_interval_minutes != self.scenario_config.timestep_minutes:
+                    raise ValueError(
+                        f"lmp_update_interval_minutes ({dp.lmp_update_interval_minutes}) "
+                        f"must equal simulation timestep_minutes ({self.scenario_config.timestep_minutes}). "
+                        f"Interpolation is not supported."
+                    )
         seed = random_seed or self.scenario_config.random_seed
         observations = self.citylearn.reset(seed)
         self.pandapower.reset()
@@ -166,6 +176,8 @@ class SimulationCoupler:
         settlement_snapshot = None
         grid_imports = {}
         grid_exports = {}
+        lmp_result = None
+        dynamic_pricing_enabled = False
         
         if self.energy_sharing_enabled and self.settlement_engine:
             # Check if dynamic/LMP pricing is enabled
@@ -174,9 +186,24 @@ class SimulationCoupler:
                 self.scenario_config.energy_sharing.dynamic_pricing.enabled
             )
             
+            # Validate lmp_update_interval_minutes if dynamic pricing is enabled
+            if dynamic_pricing_enabled:
+                dp_config = self.scenario_config.energy_sharing.dynamic_pricing
+                if dp_config.lmp_update_interval_minutes != self.scenario_config.timestep_minutes:
+                    raise ValueError(
+                        f"lmp_update_interval_minutes ({dp_config.lmp_update_interval_minutes}) "
+                        f"must equal simulation timestep_minutes ({self.scenario_config.timestep_minutes}). "
+                        f"Interpolation is not supported."
+                    )
+            
             # Compute LMP prices if dynamic pricing enabled
             building_lmps = {}
+            lmp_cap_hits = 0
+            lmp_status = "success"
+            lmp_reason = "opf_solved"
+            dp_config = None
             if dynamic_pricing_enabled:
+                dp_config = self.scenario_config.energy_sharing.dynamic_pricing
                 base_price = 0.1  # $/kWh fallback
                 # Try to get base price from first building's tariff
                 for building in self.scenario_config.buildings:
@@ -187,7 +214,17 @@ class SimulationCoupler:
                             base_price = sum(prices) / len(prices)
                             break
                 
-                building_lmps = self.pandapower.get_lmp_prices_for_buildings(base_price)
+                price_cap = dp_config.price_cap_per_kwh if dp_config.price_cap_per_kwh is not None else None
+                building_lmps, lmp_result = self.pandapower.get_lmp_prices_for_buildings(base_price, price_cap)
+                lmp_cap_hits = lmp_result.cap_hits
+                lmp_status = lmp_result.status.value
+                lmp_reason = lmp_result.reason
+                
+                # Update CityLearn adapter with LMP prices for next step's observations
+                self.citylearn.update_lmp_prices(building_lmps, True)
+            else:
+                # Ensure CityLearn adapter knows dynamic pricing is disabled
+                self.citylearn.update_lmp_prices({}, False)
             
             # Build building states for market clearing
             building_states = self._build_building_states(
@@ -298,6 +335,17 @@ class SimulationCoupler:
             grid_diag_dict["building_contributions"] = grid_diagnostics.building_contributions
         if hasattr(grid_diagnostics, 'losses'):
             grid_diag_dict["losses"] = grid_diagnostics.losses
+        
+        # Add LMP data if available
+        if dynamic_pricing_enabled and lmp_result:
+            grid_diag_dict["lmp_result"] = {
+                "building_lmps": building_lmps,
+                "status": lmp_status,
+                "reason": lmp_reason,
+                "cap_hits": lmp_cap_hits,
+                "base_price": base_price,
+                "price_cap_per_kwh": price_cap,
+            }
         
         # Add market and settlement data if available
         if market_result:
@@ -581,6 +629,9 @@ class SimulationCoupler:
         # Get enhanced grid KPIs from pandapower adapter
         grid_kpis = self.pandapower.get_enhanced_kpis()
         
+        # Add LMP OPF fallback counter
+        grid_kpis["lmp_opf_fallback_steps"] = self.pandapower.lmp_opf_fallback_steps
+        
         # Add energy sharing KPIs if enabled
         sharing_kpis = {}
         if self.settlement_engine:
@@ -657,6 +708,12 @@ class SimulationCoupler:
         for h in self.co_sim_history:
             for d in h.grid_diagnostics.diagnostics:
                 grid_diags.append(d.model_dump())
+            # Also export LMP result if available
+            if h.citylearn_result.grid_diagnostics and "lmp_result" in h.citylearn_result.grid_diagnostics:
+                grid_diags.append({
+                    "lmp_result": h.citylearn_result.grid_diagnostics["lmp_result"],
+                    "timestep": h.timestep
+                })
         
         with open(os.path.join(output_dir, "grid_diagnostics.jsonl"), "w") as f:
             for d in grid_diags:
@@ -706,6 +763,9 @@ class SimulationCoupler:
                             "total_community_export_revenue": s.total_community_export_revenue,
                             "total_community_import_kwh": s.total_community_import_kwh,
                             "total_community_export_kwh": s.total_community_export_kwh,
+                            "cost_basis": s.cost_basis,
+                            "lmp_cost_usd": s.lmp_cost_usd,
+                            "lmp_revenue_usd": s.lmp_revenue_usd,
                             "interval_settlements": s.interval_settlements,
                             "metadata": s.metadata,
                         }

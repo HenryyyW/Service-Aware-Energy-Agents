@@ -146,9 +146,17 @@ export function CommunityCanvas({}: CommunityCanvasProps) {
   }, [currentStepData]);
 
   // Extract LMP prices from current step data (Phase 2)
+  // Backend returns LMP prices in observations as {building_id}_electricity_pricing
   const lmpPrices = useMemo((): Record<string, number> => {
-    if (!currentStepData?.lmp_prices) return {};
-    return currentStepData.lmp_prices;
+    if (!currentStepData?.observations) return {};
+    const prices: Record<string, number> = {};
+    Object.entries(currentStepData.observations).forEach(([key, value]) => {
+      const match = key.match(/^(building_\d+)_electricity_pricing$/);
+      if (match && typeof value === 'number') {
+        prices[match[1]] = value;
+      }
+    });
+    return prices;
   }, [currentStepData]);
 
   // Map building IDs to their corresponding bus indices from the scenario config

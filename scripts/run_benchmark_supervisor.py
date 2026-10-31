@@ -44,7 +44,9 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -119,6 +121,8 @@ def build_command(
     max_steps: Optional[int],
     python: str,
     module: str,
+    rl_policy: Optional[str] = None,
+    regime: Optional[str] = None,
 ) -> list[str]:
     cmd = [
         python,
@@ -137,7 +141,27 @@ def build_command(
     ]
     if max_steps is not None:
         cmd.extend(["--max-steps", str(max_steps)])
+    if spec.controller == "rl" and rl_policy:
+        cmd.extend(["--rl-policy", rl_policy])
+    if regime:
+        cmd.extend(["--regime", regime])
     return cmd
+
+
+def rl_policy_path(
+    policy_dir: Optional[str], prefix: str, scenario_id: str
+) -> Optional[str]:
+    """Resolve the per-scenario RL policy JSON, if one exists.
+
+    Mirrors ``experiments.run_benchmark.rl_policy_path`` so a missing policy
+    skips the run (with a recorded reason) instead of launching
+    ``run_experiment --controller rl`` without ``--rl-policy``, which dies in
+    ``QLearningController`` setup.
+    """
+    if not policy_dir:
+        return None
+    candidate = Path(policy_dir) / f"{prefix}{scenario_id}.json"
+    return str(candidate) if candidate.is_file() else None
 
 
 def write_json_atomic(path: Path, payload: object) -> None:
@@ -206,8 +230,21 @@ def run_matrix(args: argparse.Namespace) -> int:
     started_at = utc_now()
     status_file = output_dir / "status.json"
 
+    rl_dir = getattr(args, "rl_policy_dir", None)
+    rl_prefix = getattr(args, "rl_policy_prefix", "")
+    rl_policies: dict[str, str] = {}
     pending: list[RunSpec] = []
     for spec in plan:
+        if spec.controller == "rl":
+            policy = rl_policy_path(rl_dir, rl_prefix, spec.scenario_id)
+            if policy is None:
+                states[spec.run_id].state = "skipped"
+                states[spec.run_id].error = (
+                    f"no RL policy at {rl_dir}/{rl_prefix}{spec.scenario_id}.json "
+                    "(train with: python -m experiments.train_rl --config <yaml> --out <policy>)"
+                )
+                continue
+            rl_policies[spec.run_id] = policy
         if not args.force and is_complete(output_dir, spec, require_manifest=not args.no_manifest_check):
             states[spec.run_id].state = "skipped"
             states[spec.run_id].error = "already complete"
@@ -224,26 +261,36 @@ def run_matrix(args: argparse.Namespace) -> int:
             print(f"[supervisor] would run {spec.run_id} ({spec.config})")
         return 0
 
+    regime = getattr(args, "regime", None)
+    workers = max(1, int(getattr(args, "workers", 1) or 1))
+    lock = threading.Lock()
+    stop = threading.Event()
     failures = 0
-    for index, spec in enumerate(pending, start=1):
+
+    def execute_run(spec: RunSpec, index: int, total: int) -> None:
+        """Run one (scenario, controller, seed) cell, with retries. Thread-safe."""
+        nonlocal failures
         state = states[spec.run_id]
         log_path = logs_dir / f"{spec.run_id}.log"
-        state.log = str(log_path)
+        with lock:
+            state.log = str(log_path)
         cmd = build_command(
-            spec, output_dir, args.max_steps, args.python, args.experiment_module
+            spec, output_dir, args.max_steps, args.python, args.experiment_module,
+            rl_policy=rl_policies.get(spec.run_id), regime=regime,
         )
-        print(f"[supervisor] ({index}/{len(pending)}) {spec.run_id}")
+        print(f"[supervisor] ({index}/{total}) {spec.run_id}")
 
         for attempt in range(1, args.retries + 2):
-            state.state = "running"
-            state.attempts = attempt
-            state.started_at = utc_now()
-            state.heartbeat = state.started_at
-            state.finished_at = None
-            state.duration_seconds = None
-            state.exit_code = None
-            state.error = None
-            write_json_atomic(status_file, snapshot(plan, states, output_dir, started_at))
+            with lock:
+                state.state = "running"
+                state.attempts = attempt
+                state.started_at = utc_now()
+                state.heartbeat = state.started_at
+                state.finished_at = None
+                state.duration_seconds = None
+                state.exit_code = None
+                state.error = None
+                write_json_atomic(status_file, snapshot(plan, states, output_dir, started_at))
 
             start = time.monotonic()
             with log_path.open("a", encoding="utf-8") as log:
@@ -264,40 +311,59 @@ def run_matrix(args: argparse.Namespace) -> int:
                     exit_code = 127
                     log.write(f"\n=== launch error: {exc} ===\n")
 
-            state.exit_code = exit_code
-            state.finished_at = utc_now()
-            state.duration_seconds = round(time.monotonic() - start, 2)
-            state.heartbeat = state.finished_at
+            with lock:
+                state.exit_code = exit_code
+                state.finished_at = utc_now()
+                state.duration_seconds = round(time.monotonic() - start, 2)
+                state.heartbeat = state.finished_at
 
-            if exit_code == 0 and is_complete(
-                output_dir, spec, require_manifest=not args.no_manifest_check
-            ):
-                state.state = "completed"
-                state.metrics = read_metrics(output_dir, spec)
+                if exit_code == 0 and is_complete(
+                    output_dir, spec, require_manifest=not args.no_manifest_check
+                ):
+                    state.state = "completed"
+                    state.metrics = read_metrics(output_dir, spec)
+                    write_json_atomic(status_file, snapshot(plan, states, output_dir, started_at))
+                    return
+
+                state.state = "failed"
+                state.error = f"exit code {exit_code}"
                 write_json_atomic(status_file, snapshot(plan, states, output_dir, started_at))
-                break
 
-            state.state = "failed"
-            state.error = f"exit code {exit_code}"
-            write_json_atomic(status_file, snapshot(plan, states, output_dir, started_at))
             if attempt <= args.retries:
                 print(f"[supervisor]   retrying after exit {exit_code}")
             else:
-                failures += 1
+                with lock:
+                    failures += 1
                 print(f"[supervisor]   failed after {attempt} attempt(s); see {log_path}")
                 if args.fail_fast:
-                    write_json_atomic(
-                        status_file,
-                        snapshot(plan, states, output_dir, started_at, finished=True),
-                    )
-                    write_json_atomic(
-                        output_dir / "summary.json",
-                        snapshot(plan, states, output_dir, started_at, finished=True),
-                    )
-                    return 1
+                    stop.set()
+                    return
 
-        if args.fail_fast and state.state == "failed":
-            break
+    total = len(pending)
+    if workers == 1:
+        for index, spec in enumerate(pending, start=1):
+            execute_run(spec, index, total)
+            if stop.is_set():
+                break
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [
+                pool.submit(execute_run, spec, index, total)
+                for index, spec in enumerate(pending, start=1)
+            ]
+            for future in as_completed(futures):
+                future.result()  # surface unexpected worker errors
+                if stop.is_set():
+                    break
+            for future in futures:
+                future.cancel()  # no-op for running/finished runs
+        for spec in pending:
+            state = states[spec.run_id]
+            with lock:
+                if state.state == "pending":
+                    state.state = "skipped"
+                    state.error = "fail-fast: cancelled before start"
+                    write_json_atomic(status_file, snapshot(plan, states, output_dir, started_at))
 
     final = snapshot(plan, states, output_dir, started_at, finished=True)
     final["failed_runs"] = [s.run_id for s in plan if states[s.run_id].state == "failed"]
@@ -320,7 +386,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--scenarios", nargs="+", required=True,
                         help="Scenario YAML paths")
     parser.add_argument("--controllers", nargs="+", required=True,
-                        choices=["rule_based", "multi_agent", "centralized"])
+                        choices=["rule_based", "multi_agent", "centralized", "mpc", "rl"])
+
     parser.add_argument("--seeds", nargs="+", type=int, required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--max-steps", type=int, default=None,
@@ -337,6 +404,23 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Re-run combinations even if a result exists")
     parser.add_argument("--no-manifest-check", action="store_true",
                         help="Treat result.json alone as completion (legacy runs)")
+    parser.add_argument("--rl-policy-dir", type=str, default=None,
+                        help="Directory with per-scenario RL policy JSONs "
+                             "(<prefix><scenario_id>.json); rl runs without a "
+                             "policy are skipped with a recorded reason")
+    parser.add_argument("--rl-policy-prefix", type=str, default="",
+                        help="Filename prefix for RL policies, e.g. 'lmp_' for "
+                             "the LMP-regime policies (plan 4.3)")
+    parser.add_argument("--regime", type=str, default=None,
+                        choices=["tou_solo", "pool_tou", "lmp", "p2p"],
+                        help="Phase 2 pricing regime, passed to run_experiment "
+                             "--regime (applies pricing overrides and records "
+                             "pricing_regime/cost_basis in result.json; p2p is "
+                             "SCHEDULE-LATER)")
+    parser.add_argument("--workers", type=int, default=1,
+                        help="Parallel run_experiment processes (default 1 = serial). "
+                             "Runs are per-directory isolated, so parallel workers "
+                             "cannot collide")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--python", default=sys.executable)
     parser.add_argument("--experiment-module", default=DEFAULT_EXPERIMENT_MODULE)
