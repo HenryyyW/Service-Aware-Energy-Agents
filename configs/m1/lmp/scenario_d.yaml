@@ -7,7 +7,7 @@ name: Local Energy Sharing and Settlement
 description: 'Baseline scenario with local energy sharing enabled. Tests different
   settlement rules: uniform price, weighted, carbon-aware, and fairness-aware.'
 random_seed: 42
-timestep_minutes: 15
+timestep_minutes: 60  # dataset-native resolution; apply_pricing_regime forces lmp_update_interval to this value
 community_import_limit_kw: 200
 community_export_limit_kw: 150
 carbon_intensity_file: null
@@ -329,7 +329,7 @@ energy_sharing:
   dynamic_pricing:
     enabled: true
     pricing_type: lmp
-    lmp_update_interval_minutes: 15
+    lmp_update_interval_minutes: 60
     congestion_cost_method: dc_approx
     loss_factor: 1.0
     price_cap_per_kwh: 1.0
