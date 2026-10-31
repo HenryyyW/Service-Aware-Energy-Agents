@@ -158,10 +158,15 @@ class ExperimentRunner:
         elif controller_type in ("rl", "rl_single"):
             if not rl_policy:
                 raise ValueError("--rl-policy is required for the rl controller")
+            # The LMP regime uses the 138-state LMP encoder; everything else uses
+            # the base 126-state encoder. The controller also resolves the encoder
+            # from policy metadata, so an LMP policy self-identifies.
+            encoder = "lmp" if self.pricing_regime == "lmp" else "base"
             self.controller = QLearningController(
                 self.scenario_config,
                 policy_path=rl_policy,
                 device_metadata=self.coupler.citylearn.get_device_metadata(),
+                encoder=encoder,
             )
         elif controller_type in ("llm_agent", "llm_agent_verified"):
             controller_cls = LLMVerifiedController if controller_type == "llm_agent_verified" else LLMAgentController

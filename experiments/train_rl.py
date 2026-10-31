@@ -2,6 +2,31 @@
 
 Training runs against the CityLearn adapter only (no pandapower) to keep the
 policy-learning cost bounded. Evaluation uses the full co-simulation.
+
+Regen recipe (plan 4.3: per-LMP-scenario policies, 60 episodes, seed 0)::
+
+    # base encoder (126-state) policies
+    python -m experiments.train_rl --config configs/scenario_a.yaml \
+        --out experiments/reference/rl_policy/scenario_a.json --encoder base --episodes 60 --seed 0
+    # ... repeat for scenarios b-e
+
+    # LMP encoder (138-state) policies
+    python -m experiments.train_rl --config configs/scenario_a.yaml \
+        --out experiments/reference/rl_policy/lmp_scenario_a.json --encoder lmp --episodes 60 --seed 0
+    python -m experiments.train_rl --config configs/scenario_b.yaml \
+        --out experiments/reference/rl_policy/lmp_scenario_b.json --encoder lmp --episodes 60 --seed 0
+    python -m experiments.train_rl --config configs/scenario_c.yaml \
+        --out experiments/reference/rl_policy/lmp_scenario_c.json --encoder lmp --episodes 60 --seed 0
+    python -m experiments.train_rl --config configs/scenario_d.yaml \
+        --out experiments/reference/rl_policy/lmp_scenario_d.json --encoder lmp --episodes 60 --seed 0
+    python -m experiments.train_rl --config configs/scenario_e.yaml \
+        --out experiments/reference/rl_policy/lmp_scenario_e.json --encoder lmp --episodes 60 --seed 0
+
+Each policy takes roughly 10 minutes. The LMP encoder appends a 12-bucket LMP
+price field to the base state key (see ``src/controllers/rl.encode_state_lmp``).
+The trained policy's metadata records ``encoder``, ``episodes``, ``seed`` and
+``n_states``; ``QLearningController`` resolves the encoder from policy metadata
+so an LMP policy is always decoded with the LMP encoder.
 """
 
 from __future__ import annotations
@@ -24,6 +49,7 @@ from src.controllers.rl import (
     N_ACTIONS,
     decode_action,
     encode_state,
+    encode_state_lmp,
 )
 from src.schemas.action import Action, ActionType, RequestedActions
 from src.schemas.scenario import ScenarioConfig
@@ -100,6 +126,7 @@ def train(
     epsilon_start: float = 0.9,
     epsilon_end: float = 0.05,
     seed: int = 0,
+    encoder: str = "base",
 ) -> Dict[str, Any]:
     random.seed(seed)
     np.random.seed(seed)
@@ -111,6 +138,8 @@ def train(
     building_ids = list(metadata.keys())
     dt = float(metadata[building_ids[0]]["hours_per_step"]) if building_ids else 1.0
 
+    encode = encode_state_lmp if encoder == "lmp" else encode_state
+
     q_table: Dict[str, List[float]] = {}
     episode_returns: List[float] = []
 
@@ -121,7 +150,7 @@ def train(
         terminated = False
         step = 0
         while not terminated:
-            state = encode_state(observations, building_ids)
+            state = encode(observations, building_ids)
             values = q_table.setdefault(state, [0.0] * N_ACTIONS)
             if random.random() < epsilon:
                 action_index = random.randrange(N_ACTIONS)
@@ -133,7 +162,7 @@ def train(
             reward = _reward(next_observations, building_ids, dt)
             total_reward += reward
 
-            next_state = encode_state(next_observations, building_ids)
+            next_state = encode(next_observations, building_ids)
             next_values = q_table.setdefault(next_state, [0.0] * N_ACTIONS)
             target = reward + (0.0 if result.terminated else gamma * max(next_values))
             values[action_index] += alpha * (target - values[action_index])
@@ -160,6 +189,7 @@ def train(
             "epsilon_start": epsilon_start,
             "epsilon_end": epsilon_end,
             "seed": seed,
+            "encoder": encoder,
             "battery_levels": list(BATTERY_LEVELS),
             "ev_levels": list(EV_LEVELS),
             "n_states": len(q_table),
@@ -177,13 +207,27 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--alpha", type=float, default=0.2)
     parser.add_argument("--gamma", type=float, default=0.95)
+    parser.add_argument(
+        "--encoder",
+        type=str,
+        default="base",
+        choices=["base", "lmp"],
+        help="State encoder: 'base' (5-band) or 'lmp' (base + 12 LMP price buckets).",
+    )
     args = parser.parse_args()
 
     with open(args.config) as handle:
         scenario = ScenarioConfig(**yaml.safe_load(handle))
 
     started = time.time()
-    payload = train(scenario, episodes=args.episodes, alpha=args.alpha, gamma=args.gamma, seed=args.seed)
+    payload = train(
+        scenario,
+        episodes=args.episodes,
+        alpha=args.alpha,
+        gamma=args.gamma,
+        seed=args.seed,
+        encoder=args.encoder,
+    )
     payload["metadata"]["wall_clock_seconds"] = round(time.time() - started, 1)
 
     output = Path(args.out)
