@@ -203,9 +203,22 @@ def test_smoke_lmp_run_bills_at_lmp_and_differs_in_config_hash(tmp_path, scenari
     assert result_data["pricing_regime"] == "lmp"
     assert result_data["cost_basis"] == "lmp"
 
-    # The LMP regime's market data must show the lmp market type in the
-    # per-step grid diagnostics (B's lmp-report-wiring moves these KPIs into
-    # result.json EnergyMetrics when it merges).
+    # Per-step market clearing lands in market_results.jsonl (coupling.py
+    # export_results): the LMP regime must clear with market_type == "lmp".
+    market_file = run_dir / "market_results.jsonl"
+    assert market_file.exists(), "market results must be exported"
+    market_rows = [
+        json.loads(line)
+        for line in market_file.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert market_rows, "market clearing must produce per-step rows"
+    assert all(
+        row.get("market_type") == "lmp" for row in market_rows
+    ), "every cleared step must report the lmp market type"
+
+    # grid_diagnostics.jsonl carries the per-step lmp_result (building prices,
+    # OPF status, cap hits) as exported by coupling.py export_results.
     diag = run_dir / "grid_diagnostics.jsonl"
     assert diag.exists(), "grid diagnostics must be exported"
     lmp_rows = [
@@ -213,9 +226,9 @@ def test_smoke_lmp_run_bills_at_lmp_and_differs_in_config_hash(tmp_path, scenari
         for line in diag.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    assert any(
-        row.get("market_result", {}).get("market_type") == "lmp" for row in lmp_rows
-    ), "lmp market type must reach the diagnostics"
+    assert any("lmp_result" in row for row in lmp_rows), (
+        "per-step lmp_result (building prices, status, cap hits) must reach grid_diagnostics.jsonl"
+    )
 
 
 def test_no_regime_flag_keeps_phase1_artifact_shape(tmp_path, scenario):
