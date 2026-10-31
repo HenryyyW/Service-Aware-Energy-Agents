@@ -46,6 +46,22 @@ def encode_state(
     Components: hour of day, price band, community net-load band, mean battery
     SOC band, and EV urgency band.
     """
+    return _encode_state_core(observations, building_ids, lmp_bucket=None)
+
+
+# LMP price buckets (plan 4.3: 12 LMP price buckets added to the 126-state
+# base encoder). Thresholds are $/kWh import price; the final bucket catches
+# everything above the last threshold.
+LMP_PRICE_BUCKETS = (0.05, 0.08, 0.10, 0.12, 0.14, 0.16, 0.18, 0.20, 0.23, 0.26, 0.30)
+N_LMP_BUCKETS = len(LMP_PRICE_BUCKETS) + 1  # 12
+
+
+def _encode_state_core(
+    observations: Dict[str, Any],
+    building_ids: List[str],
+    lmp_bucket: Optional[int],
+) -> str:
+    """Shared state core; appends ``|<lmp_bucket>`` when ``lmp_bucket`` is set."""
     hour = int(observations.get(f"{building_ids[0]}_hour", 0)) % 24
     hour_bin = hour // 6
 
@@ -86,7 +102,30 @@ def encode_state(
         else:
             ev_bin = max(ev_bin, 2)
 
-    return f"{hour_bin}|{price_bin}|{net_bin}|{soc_bin}|{ev_bin}"
+    key = f"{hour_bin}|{price_bin}|{net_bin}|{soc_bin}|{ev_bin}"
+    if lmp_bucket is not None:
+        key = f"{key}|{lmp_bucket}"
+    return key
+
+
+def encode_state_lmp(
+    observations: Dict[str, Any],
+    building_ids: List[str],
+) -> str:
+    """Discretize the community state with an added LMP price bucket.
+
+    Mirrors :func:`encode_state` and appends a sixth component, the LMP price
+    bucket (12 buckets over import price in $/kWh), so the LMP arm can
+    differentiate states that the base encoder collapses on price.
+    """
+    prices = [
+        float(observations.get(f"{bid}_electricity_pricing", 0.0) or 0.0)
+        for bid in building_ids
+        if f"{bid}_electricity_pricing" in observations
+    ]
+    price = float(np.mean(prices)) if prices else 0.15
+    lmp_bucket = _bin(price, LMP_PRICE_BUCKETS)
+    return _encode_state_core(observations, building_ids, lmp_bucket=lmp_bucket)
 
 
 class QLearningController(BaseController):
@@ -97,6 +136,7 @@ class QLearningController(BaseController):
         scenario_config: ScenarioConfig,
         policy_path: str,
         device_metadata: Optional[Dict[str, Dict[str, Any]]] = None,
+        encoder: str = "base",
     ):
         super().__init__(scenario_config)
         self.device_metadata = device_metadata or {}
@@ -113,6 +153,14 @@ class QLearningController(BaseController):
         self._known_states = set(self.q_table)
         self.unseen_states = 0
         self.timestep = 0
+        # The encoder used at training time is recorded in policy metadata; fall
+        # back to the explicit argument (default ``base``) so an LMP policy is
+        # always decoded with the LMP encoder.
+        resolved_encoder = encoder
+        if encoder == "base" and self.metadata.get("encoder") == "lmp":
+            resolved_encoder = "lmp"
+        self.encoder = resolved_encoder
+        self._encode = encode_state_lmp if resolved_encoder == "lmp" else encode_state
 
     def reset(self) -> None:
         super().reset()
@@ -122,7 +170,7 @@ class QLearningController(BaseController):
     def get_actions(self, observations: Dict[str, Any], timestep: int) -> RequestedActions:
         self.timestep = timestep
         buildings = [b for b in self.building_ids if b in self.device_metadata] or list(self.building_ids)
-        state = encode_state(observations, buildings)
+        state = self._encode(observations, buildings)
 
         if state in self.q_table:
             action_index = int(np.argmax(self.q_table[state]))
