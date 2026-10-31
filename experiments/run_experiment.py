@@ -587,8 +587,9 @@ def main():
     
     # LLM arguments
     parser.add_argument("--llm-backend", type=str, default=None,
-                       choices=["fallback", "ollama", "openai_gpt4", "anthropic_claude"],
-                       help="LLM backend to use for llm_agent/llm_agent_verified controllers")
+                       help="LLM backend for llm_agent/llm_agent_verified: "
+                            "fallback | ollama[:<model>] (e.g. ollama:qwen2.5-coder:7b) | "
+                            "openai_gpt4 | anthropic_claude")
     parser.add_argument("--llm-model", type=str, default=None,
                        help="Model name (e.g., qwen2.5-coder:7b for ollama, gpt-4-turbo for openai)")
     parser.add_argument("--llm-prompt-template", type=str, default=None,

@@ -5,6 +5,7 @@ with the model specified by LLM_LOCAL_MODEL. Supports backend selection via AGEN
 """
 
 import asyncio
+import urllib.request
 import json
 import os
 import time
@@ -193,3 +194,110 @@ class OllamaBackend(AgentBackend):
     def estimate_cost(self, prompt_tokens: int, max_completion_tokens: int) -> float:
         """Local inference has zero marginal cost."""
         return 0.0
+
+class OllamaPromptCallable:
+    """Synchronous ``prompt -> text`` adapter over Ollama's ``/api/generate``.
+
+    The ablation controllers take a ``Callable[[str], str]]``: the controller
+    owns the versioned dispatch prompt, this callable only ferries text, and
+    ``parse_llm_actions`` in the controller classifies the raw response
+    (clean/fenced/invalid). The class satisfies the callable contract while
+    exposing per-call telemetry as cumulative attributes (``call_count``,
+    ``latency_samples_ms``, ``prompt_tokens``, ``completion_tokens``,
+    ``model_digest``) that ``agent_stats()`` aggregates into the paper metrics
+    (llm_calls, llm_latency_p50/p95_ms, llm_prompt_tokens,
+    llm_completion_tokens, model digest).
+
+    The call has a hard per-call socket timeout (``timeout_s``) and a token
+    budget (``num_predict``) so a hung or runaway generation can never block a
+    simulation step indefinitely; a timed-out call raises like any other
+    backend failure.
+    """
+
+    def __init__(
+        self,
+        model: str,
+        endpoint: str = "http://localhost:11434",
+        temperature: float = 0.0,
+        seed: int = 42,
+        timeout_s: float = 120.0,
+        num_predict: int = 512,
+    ):
+        self.model = model
+        self.endpoint = endpoint.rstrip("/")
+        self.temperature = temperature
+        self.seed = seed
+        self.timeout_s = timeout_s
+        self.num_predict = num_predict
+        # Cumulative per-call telemetry (deltas are taken by the caller).
+        self.call_count = 0
+        self.latency_samples_ms: List[float] = []
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self.last_error: Optional[str] = None
+        self.model_digest: Optional[str] = self._fetch_model_digest()
+
+    def _fetch_model_digest(self) -> Optional[str]:
+        """Resolve the model digest from ``/api/tags``; None if unreachable."""
+        try:
+            with urllib.request.urlopen(
+                f"{self.endpoint}/api/tags", timeout=min(self.timeout_s, 10.0)
+            ) as response:
+                tags = json.loads(response.read().decode("utf-8"))
+            for entry in tags.get("models", []):
+                if entry.get("name") == self.model:
+                    return str(entry.get("digest")) or None
+        except Exception:
+            return None
+        return None
+
+    def __call__(self, prompt: str) -> str:
+        payload = json.dumps({
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": self.temperature,
+                "seed": self.seed,
+                "num_predict": self.num_predict,
+            },
+        }).encode("utf-8")
+        request = urllib.request.Request(
+            f"{self.endpoint}/api/generate",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        start = time.perf_counter()
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout_s) as response:
+                body = json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            self.last_error = str(exc)
+            raise
+        finally:
+            self.call_count += 1
+            self.latency_samples_ms.append((time.perf_counter() - start) * 1000.0)
+        # Real token counts from Ollama (fall back to 0 when absent).
+        self.prompt_tokens += int(body.get("prompt_eval_count") or 0)
+        self.completion_tokens += int(body.get("eval_count") or 0)
+        return str(body.get("response") or "")
+
+
+def ollama_prompt_callable(
+    model: str,
+    endpoint: str = "http://localhost:11434",
+    temperature: float = 0.0,
+    seed: int = 42,
+    timeout_s: float = 120.0,
+    num_predict: int = 512,
+) -> OllamaPromptCallable:
+    """Build the synchronous prompt -> text adapter the controllers consume."""
+    return OllamaPromptCallable(
+        model=model,
+        endpoint=endpoint,
+        temperature=temperature,
+        seed=seed,
+        timeout_s=timeout_s,
+        num_predict=num_predict,
+    )

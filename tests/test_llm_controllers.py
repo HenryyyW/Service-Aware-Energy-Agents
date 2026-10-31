@@ -8,7 +8,16 @@ violations are counted), the verified arm re-prompts once with the violation
 text and then replaces the step with the deterministic rule-based dispatch —
 the two arms must produce different action streams on an out-of-bounds
 proposal.
+
+Covers the P0-2 controller-side contract: AGENT_BACKEND=ollama:<model> wires
+the ollama-local arm, parse_llm_actions classifies raw responses as
+clean/fenced/invalid (a fence is a recorded formatting violation), and the
+full phase 2 metric set (llm_calls, parse failures, fenced outputs, latency
+p50/p95, token counts, fallback steps/share, model digest) reaches
+result.json and manifest.json.
 """
+import json
+import os
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
@@ -452,6 +461,245 @@ def test_verified_fallback_mode_records_comparable_accounting(scenario):
     assert stats["total_steps"] == 3
     assert stats["first_attempt_validity"] == 1.0
     assert stats["agent_backend"] == "fallback"
+
+
+class FakeTextBackend:
+    """Prompt-callable with OllamaPromptCallable-like telemetry attributes."""
+
+    def __init__(self, responses, digest="dae161e27b0e90dd"):
+        self._responses = list(responses)
+        self.prompts: List[str] = []
+        self.call_count = 0
+        self.latency_samples_ms: List[float] = []
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self.model_digest = digest
+
+    def __call__(self, prompt: str) -> str:
+        self.prompts.append(prompt)
+        self.call_count += 1
+        self.latency_samples_ms.append(100.0 * self.call_count)
+        self.prompt_tokens += 639
+        self.completion_tokens += 327
+        return self._responses.pop(0)
+
+
+def _payload(value_kw: float) -> str:
+    return json.dumps([{"asset_id": "ab_battery", "value_kw": value_kw}])
+
+
+def test_parse_llm_actions_clean_fenced_invalid():
+    from src.controllers.llm_agent import parse_llm_actions
+
+    actions, status = parse_llm_actions('[{"asset_id": "ab_battery", "value_kw": 2.0}]', 3)
+    assert status == "clean"
+    assert [a.value_kw for a in actions] == [2.0]
+    assert [a.timestep for a in actions] == [3]
+
+    for fenced in (
+        '```json\n[{"asset_id": "ab_battery", "value_kw": 2.0}]\n```',
+        '```\n[{"asset_id": "ab_battery", "value_kw": 2.0}]\n```',
+    ):
+        actions, status = parse_llm_actions(fenced)
+        assert status == "fenced", fenced
+        assert [a.value_kw for a in actions] == [2.0]
+
+    for raw in ("not-json", '{"a": 1}', '[{"asset": "x"}]', '["nope"]', "```json\n[oops", ""):
+        actions, status = parse_llm_actions(raw)
+        assert status == "invalid", raw
+        assert actions is None, raw
+
+
+def test_backend_from_env_builds_ollama_local_callable(scenario, monkeypatch):
+    from src.agents.backend.config import LLMConfig
+
+    monkeypatch.setenv("AGENT_BACKEND", "ollama:qwen2.5-coder:7b")
+    llm = LLMAgentController(scenario, device_metadata=_metadata())
+    assert llm.agent_backend == "ollama-local"
+    assert llm.agent_model() == "qwen2.5-coder:7b"
+    assert llm._is_prompt_callable
+    assert isinstance(llm.agent_model_digest(), (str, type(None)))
+    stats = llm.agent_stats()
+    assert stats["agent_backend"] == "ollama-local"
+    assert stats["agent_model"] == "qwen2.5-coder:7b"
+
+
+def test_backend_from_env_bare_ollama_uses_default_model(scenario, monkeypatch):
+    monkeypatch.setenv("AGENT_BACKEND", "ollama")
+    llm = LLMAgentController(scenario, device_metadata=_metadata())
+    assert llm.agent_backend == "ollama-local"
+    assert llm.agent_model() == "qwen2.5-coder:7b"
+
+
+def test_fenced_output_is_recorded_and_still_applied(scenario):
+    backend = FakeTextBackend([f"```json\n{_payload(2.0)}\n```"])
+    llm = LLMAgentController(scenario, device_metadata=_metadata(), backend=backend)
+    actions = llm.get_actions(_observations(), 0).actions
+    assert [a.value_kw for a in actions] == [2.0]
+    stats = llm.agent_stats()
+    assert stats["llm_fenced_outputs"] == 1
+    assert stats["llm_raw_parse_failures"] == 0
+    assert stats["llm_calls"] == 1
+    assert stats["first_attempt_validity"] == 1.0
+
+
+def test_invalid_response_counts_parse_failure_and_falls_back(scenario):
+    backend = FakeTextBackend(["not-json"])
+    llm = LLMAgentController(scenario, device_metadata=_metadata(), backend=backend)
+    actions = llm.get_actions(_observations(), 0).actions
+    assert actions, "fallback must produce actions for the step"
+    stats = llm.agent_stats()
+    assert stats["llm_raw_parse_failures"] == 1
+    assert stats["unparseable_outputs"] == 1
+    assert stats["llm_fallback_steps"] == 1
+    assert stats["llm_fallback_step_share"] == 1.0
+
+
+def test_agent_stats_carries_full_phase2_metric_set(scenario):
+    backend = FakeTextBackend([_payload(2.0)])
+    llm = LLMAgentController(scenario, device_metadata=_metadata(), backend=backend)
+    llm.get_actions(_observations(), 0)
+    stats = llm.agent_stats()
+    for key in (
+        "agent_backend",
+        "agent_model",
+        "agent_model_digest",
+        "prompt_version",
+        "prompt_hash",
+        "repair_prompt_version",
+        "repair_prompt_hash",
+        "llm_calls",
+        "llm_raw_parse_failures",
+        "llm_fenced_outputs",
+        "llm_backend_errors",
+        "llm_latency_p50_ms",
+        "llm_latency_p95_ms",
+        "llm_prompt_tokens",
+        "llm_completion_tokens",
+        "llm_unrepaired_violations",
+        "llm_fallback_steps",
+        "llm_fallback_step_share",
+    ):
+        assert key in stats, key
+    assert stats["agent_backend"] == "llm"
+    assert stats["llm_prompt_tokens"] == 639
+    assert stats["llm_completion_tokens"] == 327
+    assert stats["llm_latency_p50_ms"] == 100.0
+    assert stats["llm_latency_p95_ms"] == 100.0
+
+
+def test_verified_reprompt_sends_violation_text_to_text_backend(scenario):
+    backend = FakeTextBackend([_payload(50.0), _payload(4.0)])
+    verified = LLMVerifiedController(
+        scenario, device_metadata=_metadata(), backend=backend
+    )
+    actions = verified.get_actions(_observations(), 0).actions
+    assert actions[0].value_kw == 4.0
+    assert backend.call_count == 2
+    assert "violated these constraints" in backend.prompts[1]
+    assert "exceeds" in backend.prompts[1]  # the bound-violation text
+    assert "dispatch agent for a renewable energy community" in backend.prompts[0]
+    stats = verified.agent_stats()
+    assert stats["repair_iterations"] == 1
+    assert stats["llm_calls"] == 2
+    assert stats["llm_fallback_steps"] == 0
+
+
+def test_ollama_callable_talks_to_localhost_endpoint(monkeypatch):
+    """The callable hits /api/generate with the right payload and telemetry."""
+    import urllib.request
+    from src.agents.backend.local import ollama_prompt_callable
+
+    captured = {}
+
+    class _FakeResponse:
+        def __init__(self, body):
+            self._body = body
+
+        def read(self):
+            return self._body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+    def fake_urlopen(request, timeout=None):
+        captured["url"] = request.full_url
+        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        captured["timeout"] = timeout
+        body = json.dumps({
+            "response": "```json\n[{\"asset_id\": \"b0_battery\", \"value_kw\": 3.0}]\n```",
+            "prompt_eval_count": 639,
+            "eval_count": 327,
+        }).encode("utf-8")
+        return _FakeResponse(body)
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    # /api/tags digest lookup fails silently offline (fake_urlopen returns a
+    # generate-shaped body without "models"); the generate call must still work.
+    backend = ollama_prompt_callable(
+        model="qwen2.5-coder:7b", endpoint="http://localhost:11434",
+        temperature=0.0, seed=42, timeout_s=60, num_predict=512,
+    )
+    text = backend("dispatch prompt")
+    assert "qwen2.5-coder" in json.dumps(captured["payload"])
+    assert captured["payload"]["stream"] is False
+    assert captured["payload"]["options"]["seed"] == 42
+    assert captured["payload"]["options"]["num_predict"] == 512
+    assert captured["timeout"] == 60
+    assert "```json" in text  # raw text returned; fence handling is the controller's job
+    assert backend.call_count == 1
+    assert backend.prompt_tokens == 639
+    assert backend.completion_tokens == 327
+    assert len(backend.latency_samples_ms) == 1
+
+
+def test_run_manifest_records_ollama_local_agent_fields(scenario, tmp_path, monkeypatch):
+    """End-to-end: AGENT_BACKEND=ollama:<model> reaches manifest.json.
+
+    The endpoint is pointed at a dead port so every call fails fast; the run
+    must still complete, be labelled ollama-local, and show a 100% fallback
+    share with the real backend errors accounted.
+    """
+    import subprocess
+    import sys
+    import yaml
+
+    config_path = tmp_path / "scenario.yaml"
+    config_path.write_text(yaml.safe_dump(json.loads(scenario.model_dump_json())))
+    out_dir = tmp_path / "runs"
+    env = dict(os.environ)
+    env["AGENT_BACKEND"] = "ollama:qwen2.5-coder:7b"
+    env["LLM_LOCAL_ENDPOINT"] = "http://localhost:9"
+    env.pop("SAEA_LLM_BACKEND", None)
+    result = subprocess.run(
+        [
+            sys.executable, "-m", "experiments.run_experiment",
+            "--config", str(config_path),
+            "--controller", "llm_agent",
+            "--seed", "42",
+            "--max-steps", "4",
+            "--output-dir", str(out_dir),
+            "--run-id", "llm_ollama_manifest_check",
+        ],
+        capture_output=True, text=True, timeout=600, env=env,
+    )
+    assert result.returncode == 0, result.stdout[-2000:] + result.stderr[-2000:]
+    run_dir = out_dir / "llm_ablation_test" / "llm_ollama_manifest_check"
+    with open(run_dir / "manifest.json", encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    agent = manifest["agent"]
+    assert agent["agent_backend"] == "ollama-local"
+    assert agent["agent_model"] == "qwen2.5-coder:7b"
+    assert agent["llm_fallback_step_share"] == 1.0
+    assert agent["llm_backend_errors"] == agent["llm_calls"] == 4
+    assert agent["prompt_hash"]
+    with open(run_dir / "result.json", encoding="utf-8") as handle:
+        result_data = json.load(handle)
+    assert result_data["controller_config"]["type"] == "llm_agent"
+    assert result_data["controller_config"]["agent_backend"] == "ollama-local"
 
 
 if __name__ == "__main__":
