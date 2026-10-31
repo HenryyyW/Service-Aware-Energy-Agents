@@ -173,6 +173,91 @@ async def websocket_simulation(websocket: WebSocket, run_id: str):
         manager.disconnect(websocket, run_id)
 
 
+@app.websocket("/ws/p2p/{run_id}")
+async def websocket_p2p(websocket: WebSocket, run_id: str):
+    """WebSocket endpoint for real-time P2P orderbook and trade updates."""
+    await manager.connect(websocket, run_id)
+    
+    # Send initial connection message
+    await websocket.send_json(_create_ws_message(
+        "connected",
+        {"run_id": run_id, "message": "P2P WebSocket connected"},
+        run_id,
+        {"stage": "connected", "market_type": "p2p"}
+    ))
+    
+    try:
+        while True:
+            await asyncio.sleep(0.5)  # Faster updates for P2P real-time data
+            
+            # Check if run exists and get P2P engine
+            if run_id not in simulations._couplers:
+                # Run not started yet, wait
+                await websocket.send_json(_create_ws_message(
+                    "p2p_waiting",
+                    {"run_id": run_id, "message": "Waiting for simulation to start"},
+                    run_id,
+                    {"stage": "waiting", "reconnecting": False}
+                ))
+                continue
+            
+            coupler = simulations._couplers[run_id]
+            
+            # Access P2P engine through settlement engine
+            p2p_engine = None
+            if coupler.settlement_engine and hasattr(coupler.settlement_engine, 'market_engine'):
+                market_engine = coupler.settlement_engine.market_engine
+                if hasattr(market_engine, 'p2p_engine'):
+                    p2p_engine = market_engine.p2p_engine
+            
+            if p2p_engine is None:
+                # Not a P2P market or not initialized yet
+                await websocket.send_json(_create_ws_message(
+                    "p2p_unavailable",
+                    {"run_id": run_id, "message": "P2P market not active for this run"},
+                    run_id,
+                    {"stage": "unavailable", "reconnecting": False}
+                ))
+                continue
+            
+            # Get order book snapshot
+            order_book = p2p_engine.get_order_book_snapshot()
+            
+            # Get recent trades (last 10)
+            trade_history = p2p_engine.get_trade_history()[-10:]
+            
+            # Build payload
+            payload = {
+                "run_id": run_id,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "order_book": order_book,
+                "recent_trades": trade_history,
+                "stats": {
+                    "total_buy_orders": len(order_book["buy_orders"]),
+                    "total_sell_orders": len(order_book["sell_orders"]),
+                    "total_trades": len(p2p_engine.trades),
+                    "total_volume_kwh": sum(t.quantity_kwh for t in p2p_engine.trades),
+                    "total_value_usd": sum(t.buyer_payment_usd for t in p2p_engine.trades),
+                }
+            }
+            
+            meta = {
+                "stage": "active",
+                "stale": False,
+                "reconnecting": False,
+            }
+            
+            await websocket.send_json(_create_ws_message(
+                "p2p_update",
+                payload,
+                run_id,
+                meta
+            ))
+            
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, run_id)
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
