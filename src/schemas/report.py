@@ -49,6 +49,13 @@ class EnergyMetrics(BaseModel):
     battery_cycles: float = 0.0
     carbon_emissions_kg: float = 0.0
     carbon_intensity_weighted_kg: float = 0.0
+    # LMP pricing fields
+    cost_basis: str = "tariff"  # "tariff" or "lmp"
+    lmp_cost_usd: float = 0.0
+    lmp_price_mean: float = 0.0
+    lmp_price_spread: float = 0.0
+    lmp_price_spread_pct: float = 0.0
+    lmp_total_cost_usd: float = 0.0
     # Scenario E failure convention: an injected sensor failure returns NaN for
     # the affected building's readings. Those building-steps cannot contribute a
     # cost, so the totals cover valid data only and this ratio reports how much
