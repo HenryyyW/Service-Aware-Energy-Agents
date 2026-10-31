@@ -30,21 +30,24 @@ Backends. Two shapes are supported:
 - a synchronous ``Callable[[str], str]`` (the plan's interface): the
   controller owns the versioned dispatch prompt, calls the backend with it,
   and classifies the raw response itself via ``parse_llm_actions``
-  (``clean`` / ``fenced`` / ``invalid``). The production backend for the
-  paper's ``ollama-local`` arm is ``ollama_prompt_callable`` from
-  ``src/agents/backend/local.py``, built from ``AGENT_BACKEND=ollama:<model>``
-  (or ``--llm-backend ollama:<model>``) in ``_backend_from_env()`` with a hard
-  per-call timeout and a token budget.
+  (``clean`` / ``fenced`` / ``invalid``). Production backends are
+  ``api_prompt_callable`` from ``src/agents/backend/api.py`` (hosted
+  OpenAI-compatible API, built from ``AGENT_BACKEND=api:<model>``) and
+  ``ollama_prompt_callable`` from ``src/agents/backend/local.py`` (local
+  Ollama, built from ``AGENT_BACKEND=ollama:<model>``), both from
+  ``_backend_from_env()`` (or the runner's ``--llm-backend`` freeform value)
+  with a hard per-call timeout and a token budget.
 - an ``AgentBackend`` object (async ``generate_actions``, PR #43 interface):
   used by tests (mocks) and remote providers. Backend-provided actions are
   applied as-is; when the backend returns no actions, its raw output is
   classified with the same ``parse_llm_actions``.
 
 Reproducibility contract (required for the paper's artifact table): every run
-records ``agent_backend`` (``ollama-local`` / ``llm`` / ``fallback``),
-``agent_model`` and the Ollama model digest, the proposal and repair prompt
-template hashes, and the sampling temperature/seed, both in ``result.json``
-(via the controller config) and ``manifest.json`` (via the runner).
+records ``agent_backend`` (``api`` / ``ollama-local`` / ``llm`` / ``fallback``),
+``agent_model`` and the backend model id (API) or Ollama sha256 digest, the
+proposal and repair prompt template hashes, and the sampling temperature/seed,
+both in ``result.json`` (via the controller config) and ``manifest.json`` (via
+the runner).
 """
 import asyncio
 import concurrent.futures
@@ -60,6 +63,7 @@ from src.schemas.scenario import ScenarioConfig
 from src.agents.backend import AgentBackend, BackendResponse, CostBudget, FallbackBackend
 from src.agents.backend.config import LLMConfig
 from src.agents.backend.local import ollama_prompt_callable
+from src.agents.backend.api import api_prompt_callable, DEFAULT_API_MODEL
 
 # Versioned dispatch prompt. The hash of this template goes into the manifest;
 # bump the version string whenever the prompt changes. The prompt is fixed for
@@ -249,11 +253,15 @@ class LLMAgentController(BaseController):
     def _backend_from_env(self) -> Optional[Any]:
         """Resolve an LLM backend from the environment / LLM config, if any.
 
-        ``AGENT_BACKEND=ollama:<model>`` (or ``LLMConfig._backend_raw``, which
+        ``AGENT_BACKEND=api:<model>`` (or ``LLMConfig._backend_raw``, which
         the runner sets from ``--llm-backend``) builds the synchronous
-        ``ollama_prompt_callable`` and labels the arm ``ollama-local`` with
-        ``agent_model`` set. ``SAEA_LLM_BACKEND=echo`` builds the debug echo
-        backend. Anything else defers to the LLMConfig path.
+        ``api_prompt_callable`` (hosted OpenAI-compatible API; key from
+        ``LLM_API_KEY``, endpoint from ``LLM_BASE_URL``) and labels the arm
+        ``api`` with ``agent_model`` set. ``AGENT_BACKEND=ollama:<model>``
+        builds the ``ollama_prompt_callable`` and labels the arm
+        ``ollama-local`` (no local server is ever started from here).
+        ``SAEA_LLM_BACKEND=echo`` builds the debug echo backend. Anything else
+        defers to the LLMConfig path.
         """
         raw = ""
         if self.llm_config is not None and getattr(self.llm_config, "_backend_raw", None):
@@ -286,6 +294,27 @@ class LLMAgentController(BaseController):
                 seed=self.sampling_seed,
                 timeout_s=float(os.environ.get("SAEA_LLM_TIMEOUT_S", "120")),
                 num_predict=int(os.environ.get("SAEA_LLM_NUM_PREDICT", "512")),
+            )
+
+        if raw == "api" or raw.startswith("api:"):
+            model = raw.split(":", 1)[1].strip() if raw.startswith("api:") else ""
+            if not model:
+                model = (
+                    os.environ.get("LLM_API_MODEL")
+                    or (self.llm_config.model if self.llm_config else None)
+                    or DEFAULT_API_MODEL
+                )
+            self._env_backend_label = "api"
+            self._env_agent_model = model
+            return api_prompt_callable(
+                model=model,
+                base_url=os.environ.get("LLM_BASE_URL"),
+                temperature=float(
+                    os.environ.get("SAEA_LLM_TEMPERATURE", self.sampling_temperature)
+                ),
+                seed=self.sampling_seed,
+                timeout_s=float(os.environ.get("SAEA_LLM_TIMEOUT_S", "120")),
+                max_tokens=int(os.environ.get("SAEA_LLM_NUM_PREDICT", "512")),
             )
 
         if os.environ.get("SAEA_LLM_BACKEND", "").strip().lower() == "echo":
