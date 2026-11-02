@@ -15,61 +15,14 @@ from typing import Optional
 from prometheus_client import Counter, Histogram, Gauge, generate_latest
 from fastapi.responses import Response
 
-try:
-    import redis
-    from rq import Queue, Worker
-    from rq.job import Job
-    REDIS_AVAILABLE = True
-except ImportError:
-    REDIS_AVAILABLE = False
+from app.state import (
+    REDIS_AVAILABLE,
+    TASK_DURATION, TASKS_TOTAL, TASK_QUEUE_SIZE, 
+    LLM_TOKENS_TOTAL, LLM_COST_TOTAL, TASK_RETRIES,
+    get_redis_client, get_task_queue, get_job
+)
 
 from app.routers import scenarios, simulations, agent, reports, compare, network
-
-# Prometheus metrics
-TASK_DURATION = Histogram('agent_task_duration_seconds', 'Agent task duration in seconds', ['status'])
-TASKS_TOTAL = Counter('agent_tasks_total', 'Total agent tasks', ['status'])
-TASK_QUEUE_SIZE = Gauge('agent_task_queue_size', 'Number of tasks in queue')
-LLM_TOKENS_TOTAL = Counter('llm_tokens_total', 'Total LLM tokens used', ['model', 'type'])
-LLM_COST_TOTAL = Counter('llm_cost_usd_total', 'Total LLM cost in USD', ['model'])
-TASK_RETRIES = Counter('agent_task_retries_total', 'Total task retries', ['task_id'])
-
-
-# Redis/RQ setup
-redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-redis_client: Optional[redis.Redis] = None
-task_queue: Optional[Queue] = None
-
-def get_redis_client() -> Optional[redis.Redis]:
-    global redis_client
-    if redis_client is None and REDIS_AVAILABLE:
-        try:
-            redis_client = redis.from_url(redis_url, decode_responses=True, socket_connect_timeout=1, socket_timeout=1)
-            redis_client.ping()
-        except Exception:
-            redis_client = None
-    return redis_client
-
-def get_task_queue() -> Optional[Queue]:
-    global task_queue
-    if task_queue is None and REDIS_AVAILABLE:
-        try:
-            client = get_redis_client()
-            if client:
-                from rq import Queue
-                task_queue = Queue('agent_tasks', connection=redis_client)
-        except Exception:
-            return None
-    return task_queue
-
-def get_job(task_id: str) -> Optional[Job]:
-    client = get_redis_client()
-    if client:
-        try:
-            return Job.fetch(task_id, connection=redis_client)
-        except Exception:
-            return None
-    return None
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

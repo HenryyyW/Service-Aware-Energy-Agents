@@ -6,6 +6,7 @@ from uuid import uuid4
 from datetime import datetime, timezone
 import asyncio
 import hashlib
+import time
 
 from src.agents.multi_agent_loop import run_multi_agent_repair
 from src.schemas.report import ExperimentResult, ExperimentStatus, ControllerType
@@ -14,7 +15,10 @@ from src.schemas.scenario import ScenarioConfig
 from src.agents.backend.config import load_llm_config
 from src.agents.backend.registry import create_backend_from_config
 from src.simulation import SimulationCoupler
-from app.main import get_task_queue, get_redis_client, TASK_DURATION, TASKS_TOTAL, TASK_RETRIES
+from app.state import (
+    get_task_queue, get_redis_client, 
+    TASK_DURATION, TASKS_TOTAL, TASK_RETRIES
+)
 
 router = APIRouter()
 
@@ -203,6 +207,7 @@ async def _run_agent_task(task_id: str, description: str, scenario_id: Optional[
         _tasks[task_id]["execution_log"].append(f"Error: {str(e)}")
         import traceback
         _tasks[task_id]["execution_log"].append(traceback.format_exc())
+        _, _, TASK_DURATION, TASKS_TOTAL, _ = _metrics()
         TASK_DURATION.labels(status="error").observe(time.time() - start_time)
         TASKS_TOTAL.labels(status="error").inc()
 
@@ -254,6 +259,7 @@ async def create_agent_task(
     task_data["timeout_seconds"] = 30 * 60  # 30 minutes
     
     # Start background agent workflow
+    get_task_queue, _, _, _, _ = _metrics()
     queue = get_task_queue()
     if queue:
         # Use RQ for production queue
@@ -312,6 +318,7 @@ async def retry_agent_task(task_id: str, background_tasks: BackgroundTasks):
     
     # Increment retry counter
     _task_retries[task_id] = retry_count + 1
+    _, _, _, _, TASK_RETRIES = _metrics()
     TASK_RETRIES.labels(task_id=task_id).inc()
     
     # Reset task for retry
@@ -327,6 +334,7 @@ async def retry_agent_task(task_id: str, background_tasks: BackgroundTasks):
     task["started_at"] = datetime.now(timezone.utc).isoformat()
     
     # Start background agent workflow
+    get_task_queue, _, _, _, _ = _metrics()
     queue = get_task_queue()
     if queue:
         queue.enqueue(
