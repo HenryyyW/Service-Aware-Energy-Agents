@@ -7,7 +7,9 @@ import shutil
 import json
 import time
 import ast
-from typing import Optional, Dict, Any, List
+import resource
+import signal
+from typing import Optional, Dict, Any, List, Set
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -22,21 +24,70 @@ class SandboxResult:
     execution_time: float = 0.0
     tests_passed: bool = False
     test_output: str = ""
+    memory_used_mb: float = 0.0
+    timed_out: bool = False
 
 
 class Sandbox:
-    """Sandbox for safely testing code changes."""
+    """Sandbox for safely testing code changes.
+    
+    Features:
+    - Subprocess execution with configurable timeout (default 60s)
+    - Memory limit enforcement (default 512MB)
+    - Restricted imports (no network, no filesystem access)
+    - Syntax validation
+    - Test execution
+    """
+    
+    # Restricted modules - no network, no filesystem, no dangerous operations
+    RESTRICTED_IMPORTS: Set[str] = frozenset({
+        # Network
+        'socket', 'urllib', 'urllib2', 'urllib3', 'requests', 'http', 'http.client',
+        'httplib', 'ftplib', 'telnetlib', 'poplib', 'imaplib', 'smtplib',
+        'xmlrpc', 'xmlrpc.client', 'http.server', 'http.cookies', 'http.cookiejar',
+        # Filesystem
+        'os', 'os.path', 'shutil', 'pathlib', 'glob', 'fnmatch', 'tempfile',
+        'fileinput', 'stat', 'filecmp', 'dircache', 'statvfs',
+        # Process/System
+        'subprocess', 'multiprocessing', 'threading', 'thread', '_thread',
+        'subprocess', 'commands', 'popen2', 'asyncio', 'concurrent.futures',
+        # Dangerous builtins
+        'importlib', 'importlib.util', 'importlib.machinery', 'pkgutil',
+        'runpy', 'code', 'codeop', 'exec', 'eval', 'compile',
+        # Other dangerous
+        'ctypes', 'ctypes.util', 'ctypes.wintypes', '_ctypes',
+        'sys', 'sysconfig', 'site', 'distutils', 'pip', 'setuptools',
+        'wheel', 'pkg_resources', 'importlib.metadata',
+    })
+    
+    # Allowed modules (explicitly permitted)
+    ALLOWED_IMPORTS: Set[str] = frozenset({
+        'math', 'random', 'statistics', 'decimal', 'fractions', 'itertools',
+        'functools', 'operator', 'collections', 'collections.abc',
+        'typing', 'dataclasses', 'enum', 'datetime', 'time', 'calendar',
+        'json', 'csv', 're', 'string', 'textwrap', 'unicodedata',
+        'hashlib', 'hmac', 'secrets', 'uuid', 'base64', 'binascii',
+        'copy', 'pprint', 'reprlib', 'numbers', 'decimal', 'fractions',
+        'numpy', 'pandas', 'scipy', 'sklearn', 'torch', 'tensorflow',
+    })
     
     def __init__(
         self,
         project_root: str = None,
         timeout: int = 60,
-        test_command: str = "python -m pytest tests/ -v --tb=short"
+        memory_limit_mb: int = 512,
+        test_command: str = "python -m pytest tests/ -v --tb=short",
+        enable_network: bool = False,
+        enable_filesystem: bool = False,
     ):
         self.project_root = project_root or os.getcwd()
         self.timeout = timeout
+        self.memory_limit_mb = memory_limit_mb
         self.test_command = test_command
+        self.enable_network = enable_network
+        self.enable_filesystem = enable_filesystem
         self.temp_dir: Optional[str] = None
+        self._process: Optional[subprocess.Popen] = None
     
     def create_sandbox(self) -> str:
         """Create a temporary sandbox directory with project copy."""
@@ -349,16 +400,12 @@ class Sandbox:
         if test_filter:
             cmd += f" -k {test_filter}"
         
+        # Convert shell command to list
+        cmd_list = cmd.split()
+        
         start_time = time.time()
         try:
-            result = subprocess.run(
-                cmd,
-                shell=True,
-                cwd=self.temp_dir,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout
-            )
+            result = self._run_with_limits(cmd_list, self.temp_dir)
             execution_time = time.time() - start_time
             
             return SandboxResult(
@@ -373,7 +420,8 @@ class Sandbox:
             return SandboxResult(
                 success=False,
                 error=f"Tests timed out after {self.timeout}s",
-                execution_time=self.timeout
+                execution_time=self.timeout,
+                timed_out=True
             )
         except Exception as e:
             return SandboxResult(
@@ -395,24 +443,17 @@ class Sandbox:
                 error="Sandbox not created"
             )
         
-        cmd = (
-            f"python -m experiments.run_experiment "
-            f"--config {scenario_config} "
-            f"--controller {controller_file} "
-            f"--max-steps {max_steps} "
-            f"--output /tmp/sandbox_results"
-        )
+        cmd = [
+            "python", "-m", "experiments.run_experiment",
+            "--config", scenario_config,
+            "--controller", controller_file,
+            "--max-steps", str(max_steps),
+            "--output", "/tmp/sandbox_results"
+        ]
         
         start_time = time.time()
         try:
-            result = subprocess.run(
-                cmd,
-                shell=True,
-                cwd=self.temp_dir,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout * 2
-            )
+            result = self._run_with_limits(cmd, self.temp_dir, timeout=self.timeout * 2)
             execution_time = time.time() - start_time
             
             return SandboxResult(
@@ -427,7 +468,8 @@ class Sandbox:
             return SandboxResult(
                 success=False,
                 error=f"Experiment timed out after {self.timeout * 2}s",
-                execution_time=self.timeout * 2
+                execution_time=self.timeout * 2,
+                timed_out=True
             )
         except Exception as e:
             return SandboxResult(
@@ -457,6 +499,92 @@ class Sandbox:
                 success=False,
                 error=str(e)
             )
+    
+    def _set_memory_limit(self):
+        """Set memory limit for the current process."""
+        try:
+            limit_bytes = self.memory_limit_mb * 1024 * 1024
+            resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
+        except (ValueError, resource.error):
+            # May fail on some platforms or if limit too low
+            pass
+    
+    def _preexec_fn(self):
+        """Pre-execution function to set resource limits."""
+        self._set_memory_limit()
+    
+    def _validate_imports(self, code: str) -> SandboxResult:
+        """Validate that code doesn't use restricted imports."""
+        try:
+            tree = ast.parse(code)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if self._is_restricted_import(alias.name):
+                            return SandboxResult(
+                                success=False,
+                                error=f"Restricted import detected: {alias.name}"
+                            )
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module and self._is_restricted_import(node.module):
+                        return SandboxResult(
+                            success=False,
+                            error=f"Restricted import from: {node.module}"
+                        )
+            return SandboxResult(success=True)
+        except SyntaxError as e:
+            return SandboxResult(success=False, error=f"Syntax error: {e}")
+        except Exception as e:
+            return SandboxResult(success=False, error=str(e))
+    
+    def _is_restricted_import(self, module_name: str) -> bool:
+        """Check if a module is restricted."""
+        # Check explicit allow list first
+        if module_name in self.ALLOWED_IMPORTS:
+            return False
+        if any(module_name.startswith(allowed + '.') for allowed in self.ALLOWED_IMPORTS):
+            return False
+            
+        # Special case: os.path is always allowed
+        if module_name == 'os.path':
+            return False
+            
+        # Check restricted list
+        if module_name in self.RESTRICTED_IMPORTS:
+            return True
+        if any(module_name.startswith(restricted + '.') for restricted in self.RESTRICTED_IMPORTS):
+            return True
+            
+        # Network modules
+        if not self.enable_network:
+            network_prefixes = ('socket', 'urllib', 'http', 'requests', 'ftp', 'telnet', 
+                              'poplib', 'imaplib', 'smtplib', 'xmlrpc')
+            if any(module_name.startswith(p) for p in network_prefixes):
+                return True
+                
+        # Filesystem modules
+        if not self.enable_filesystem:
+            fs_prefixes = ('os', 'shutil', 'pathlib', 'glob', 'tempfile', 'fileinput',
+                          'stat', 'filecmp', 'dircache', 'fnmatch')
+            if any(module_name.startswith(p) for p in fs_prefixes):
+                # Allow os.path but not os
+                if module_name == 'os.path':
+                    return False
+                return True
+                
+        return False
+    
+    def _run_with_limits(self, cmd: List[str], cwd: str, input_data: str = None, timeout: Optional[int] = None) -> subprocess.CompletedProcess:
+        """Run command with memory and time limits."""
+        return subprocess.run(
+            cmd,
+            cwd=cwd,
+            input=input_data,
+            capture_output=True,
+            text=True,
+            timeout=timeout or self.timeout,
+            preexec_fn=self._preexec_fn if hasattr(os, 'fork') else None,
+        )
     
     def __enter__(self):
         self.create_sandbox()
@@ -493,6 +621,11 @@ def validate_controller_in_sandbox(
         os.makedirs(os.path.dirname(controller_path), exist_ok=True)
         with open(controller_path, 'w') as f:
             f.write(controller_code)
+        
+        # Validate imports (restricted imports check)
+        import_result = sandbox._validate_imports(controller_code)
+        if not import_result.success:
+            return import_result
         
         # Validate syntax
         syntax_result = sandbox.validate_syntax(controller_file)
