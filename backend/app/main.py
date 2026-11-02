@@ -1,20 +1,90 @@
 """FastAPI application entry point."""
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 import json
 import asyncio
 import uuid
+import os
+import time
 from datetime import datetime
+from typing import Optional
+from prometheus_client import Counter, Histogram, Gauge, generate_latest
+from fastapi.responses import Response
+
+try:
+    import redis
+    from rq import Queue, Worker
+    from rq.job import Job
+    REDIS_AVAILABLE = True
+except ImportError:
+    REDIS_AVAILABLE = False
 
 from app.routers import scenarios, simulations, agent, reports, compare, network
+
+# Prometheus metrics
+TASK_DURATION = Histogram('agent_task_duration_seconds', 'Agent task duration in seconds', ['status'])
+TASKS_TOTAL = Counter('agent_tasks_total', 'Total agent tasks', ['status'])
+TASK_QUEUE_SIZE = Gauge('agent_task_queue_size', 'Number of tasks in queue')
+LLM_TOKENS_TOTAL = Counter('llm_tokens_total', 'Total LLM tokens used', ['model', 'type'])
+LLM_COST_TOTAL = Counter('llm_cost_usd_total', 'Total LLM cost in USD', ['model'])
+TASK_RETRIES = Counter('agent_task_retries_total', 'Total task retries', ['task_id'])
+
+
+# Redis/RQ setup
+redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+redis_client: Optional[redis.Redis] = None
+task_queue: Optional[Queue] = None
+
+def get_redis_client() -> Optional[redis.Redis]:
+    global redis_client
+    if redis_client is None and REDIS_AVAILABLE:
+        try:
+            redis_client = redis.from_url(redis_url, decode_responses=True, socket_connect_timeout=1, socket_timeout=1)
+            redis_client.ping()
+        except Exception:
+            redis_client = None
+    return redis_client
+
+def get_task_queue() -> Optional[Queue]:
+    global task_queue
+    if task_queue is None and REDIS_AVAILABLE:
+        try:
+            client = get_redis_client()
+            if client:
+                from rq import Queue
+                task_queue = Queue('agent_tasks', connection=redis_client)
+        except Exception:
+            return None
+    return task_queue
+
+def get_job(task_id: str) -> Optional[Job]:
+    client = get_redis_client()
+    if client:
+        try:
+            return Job.fetch(task_id, connection=redis_client)
+        except Exception:
+            return None
+    return None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    if REDIS_AVAILABLE:
+        client = get_redis_client()
+        if client:
+            print(f"Connected to Redis at {redis_url}")
+        else:
+            print("Warning: Redis not available, using in-memory queue")
+    else:
+        print("Warning: Redis/RQ not available, using in-memory queue")
     yield
     # Shutdown
+    pass
 
 
 app = FastAPI(
@@ -23,6 +93,42 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Exception handlers for RFC 7807 structured errors
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "type": "https://tools.ietf.org/html/rfc7807#section-3.2",
+            "title": "Validation Error",
+            "status": 422,
+            "detail": "Request validation failed",
+            "instance": str(request.url),
+            "errors": exc.errors(),
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={
+            "type": "https://tools.ietf.org/html/rfc7807#section-3.2",
+            "title": "Internal Server Error",
+            "status": 500,
+            "detail": str(exc),
+            "instance": str(request.url),
+        },
+    )
+
+
+# Metrics endpoint
+@app.get("/metrics")
+async def metrics():
+    return Response(content=generate_latest(), media_type="text/plain")
+
 
 # CORS configuration for frontend
 app.add_middleware(
@@ -256,6 +362,98 @@ async def websocket_p2p(websocket: WebSocket, run_id: str):
             
     except WebSocketDisconnect:
         manager.disconnect(websocket, run_id)
+
+
+@app.websocket("/ws/agent/{task_id}")
+async def websocket_agent_task(websocket: WebSocket, task_id: str):
+    """WebSocket endpoint for real-time agent task status updates."""
+    await manager.connect(websocket, task_id)
+    
+    # Send initial connection message
+    await websocket.send_json(_create_ws_message(
+        "connected",
+        {"task_id": task_id, "message": "Agent task WebSocket connected"},
+        task_id,
+        {"stage": "connected"}
+    ))
+    
+    try:
+        from app.routers import agent as agent_router
+        while True:
+            await asyncio.sleep(1)
+            
+            # Check if task exists
+            if task_id not in agent_router._tasks:
+                await websocket.send_json(_create_ws_message(
+                    "task_not_found",
+                    {"task_id": task_id, "message": "Task not found"},
+                    task_id,
+                    {"stage": "not_found"}
+                ))
+                break
+            
+            task = agent_router._tasks[task_id]
+            
+            # Send current status
+            meta = {
+                "stage": task.get("status", "unknown"),
+                "stale": False,
+                "reconnecting": False,
+            }
+            
+            payload = {
+                "task_id": task_id,
+                "status": task.get("status", "unknown"),
+                "progress": _calculate_progress(task),
+                "current_stage": task.get("status", "unknown"),
+                "execution_log": task.get("execution_log", [])[-5:],  # Last 5 log entries
+                "verification": task.get("verification"),
+                "repairs_count": len(task.get("repairs", [])),
+            }
+            
+            await websocket.send_json(_create_ws_message(
+                "task_update",
+                payload,
+                task_id,
+                meta
+            ))
+            
+            # Close if task is complete
+            if task.get("status") in ["completed", "failed"]:
+                final_payload = {
+                    "task_id": task_id,
+                    "status": task.get("status"),
+                    "verification": task.get("verification"),
+                    "repairs": task.get("repairs", []),
+                    "report": task.get("report"),
+                    "total_time": task.get("plan", {}).get("total_time", 0) if task.get("plan") else 0,
+                }
+                await websocket.send_json(_create_ws_message(
+                    "task_complete" if task.get("status") == "completed" else "task_failed",
+                    final_payload,
+                    task_id,
+                    {"stage": task.get("status"), "final": True}
+                ))
+                break
+                
+            await asyncio.sleep(2)
+            
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, task_id)
+
+
+def _calculate_progress(task: dict) -> float:
+    """Calculate task progress based on status."""
+    status_progress = {
+        "planning": 0.1,
+        "coding": 0.2,
+        "executing": 0.4,
+        "verifying": 0.6,
+        "reporting": 0.8,
+        "completed": 1.0,
+        "failed": 1.0,
+    }
+    return status_progress.get(task.get("status", "planning"), 0.0)
 
 
 @app.get("/health")

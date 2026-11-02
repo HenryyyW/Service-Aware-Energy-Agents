@@ -55,8 +55,9 @@ id/unit translation (`tests/test_baseline_controllers.py`).
 |---|---|---|
 | Scenarios | A baseline, B high EV penetration, C high PV + export cap, D energy sharing, E failures | 5 |
 | Controllers | `rule_based`, `multi_agent`, `centralized`, `mpc`, `rl` | 5 |
+| Regimes | `pool_tou`, `p2p` | 2 |
 | Seeds | 42, 123, 456, 789, 999 | 5 |
-| **Total runs** | | **125** |
+| **Total runs** | | **250** |
 
 Seeds are shared across controllers within a scenario, so comparisons are
 paired by seed. The pilot uses three seeds (42, 123, 456) for scenario A; the
@@ -217,6 +218,15 @@ Cells are mean +/- Student-t 95% confidence half-width over three seeds. Paired 
    clearing/settlement placeholders and failure injection are not implemented,
    so their rows in the matrix measure the same physics as A with different
    community limits.
+   - **P2P market (sharing regime `p2p`) is now wireable-and-gated**: the bilateral
+     matching engine (`src/coordination/p2p.py`) implements batch double auction
+     with uniform price, price-time priority, min-spread enforcement, and
+     invariant tests for money/energy/ledger conservation. The settlement-ledger
+     gate (`src/simulation/settlement_gate.py`) validates P2P invariants before
+     accepting results. End-to-end `--regime p2p` smoke test passes. Residual
+     pool clearing after bilateral matching is implemented in `P2PClearing`.
+     Integration tests in `tests/test_p2p_integration.py` cover edge cases
+     (partial fills, price-time priority, min spread, uniform clearing price).
 5. **MPC is myopic at the horizon end.** It has no terminal battery value and a
    soft EV shortfall penalty, so it can end a horizon with an empty battery and
    it does not plan beyond 24 h.

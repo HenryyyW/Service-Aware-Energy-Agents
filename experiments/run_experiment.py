@@ -47,9 +47,21 @@ class ExperimentRunner:
         self.start_time: Optional[float] = None
         self.end_time: Optional[float] = None
     
-    def setup(self, controller_type: str = "rule_based", rl_policy: Optional[str] = None):
+    def setup(self, controller_type: str = "rule_based", rl_policy: Optional[str] = None, regime: Optional[str] = None):
         """Setup simulator and controller."""
         # Create coupler
+        self.coupler = SimulationCoupler(self.scenario_config, data_dir="data")
+        
+        # Apply regime override if specified
+        if regime == "p2p":
+            if self.scenario_config.energy_sharing:
+                self.scenario_config.energy_sharing.market_type = "p2p"
+                self.scenario_config.energy_sharing.enabled = True
+                print(f"Regime override: forcing P2P market type")
+            else:
+                print("Warning: --regime p2p specified but energy_sharing not configured")
+        
+        # Create coupler (re-create with updated config if regime changed)
         self.coupler = SimulationCoupler(self.scenario_config, data_dir="data")
         
         # Create controller
@@ -471,6 +483,9 @@ def main():
                        choices=["rule_based", "multi_agent", "centralized", "mpc", "rl", "rl_single",
                                 "llm_agent", "llm_agent_verified"],
                        help="Controller type")
+    parser.add_argument("--regime", type=str, default=None,
+                       choices=["pool_tou", "p2p"],
+                       help="Market regime: pool_tou (default from config) or p2p (forces P2P market)")
     parser.add_argument("--rl-policy", type=str, default=None,
                        help="Path to a trained RL policy JSON (required for --controller rl)")
     parser.add_argument("--max-steps", type=int, default=None, help="Maximum steps to run")
@@ -489,7 +504,7 @@ def main():
     
     # Run experiment
     runner = ExperimentRunner(scenario, args.output_dir, run_id=args.run_id)
-    runner.setup(args.controller, rl_policy=args.rl_policy)
+    runner.setup(args.controller, rl_policy=args.rl_policy, regime=args.regime)
     result = runner.run(args.max_steps)
     
     # Verify result matches command line

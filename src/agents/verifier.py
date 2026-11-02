@@ -31,12 +31,15 @@ class VerifierAgent:
             VerifierOutput with verification results
         """
         if not state.sandbox_result or not state.sandbox_result.success:
-            return VerifierOutput(
+            output = VerifierOutput(
                 violations_resolved=False,
                 remaining_violations=[{"issue": "execution_failed", "details": executor_output.get("error", "Unknown error")}],
                 confidence=0.0,
                 recommendation="retry"
             )
+            state.verification_result = output.model_dump()
+            state.add_message(AgentRole.VERIFIER, f"Verification: FAILED (execution failed: {executor_output.get('error', 'Unknown error')})", output.model_dump())
+            return output
         
         # Parse experiment results from executor output
         # In practice, would run full experiment and get metrics

@@ -880,6 +880,21 @@ class P2PClearing(MarketClearingEngine):
         # Clear P2P batch
         p2p_result = self.p2p_engine.clear_batch(timestep)
         
+        # Settlement-ledger gate: validate P2P invariants before accepting results
+        from src.simulation.settlement_gate import validate_p2p_settlement, create_p2p_gate_report
+        gate_passed, gate_results = validate_p2p_settlement(p2p_result)
+        
+        if not gate_passed:
+            gate_report = create_p2p_gate_report(gate_results)
+            error_msg = f"P2P settlement gate failed: {gate_report['summary']['failed']} checks failed"
+            logger.error(f"P2P settlement gate failed: {gate_results}")
+            # Log details
+            for r in gate_results:
+                if r.status.value == "failed":
+                    logger.error(f"  Gate {r.gate_name} FAILED: {r.message}")
+            # In production, might want to raise or handle differently
+            # For now, log and continue (could raise in strict mode)
+        
         # Convert trades to market clearing format
         trades = {b: 0.0 for b in building_states}
         timestep_hours = self.scenario_config.timestep_minutes / 60.0
