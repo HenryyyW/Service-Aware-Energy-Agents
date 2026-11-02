@@ -1,0 +1,148 @@
+{
+  "dashboard": {
+    "uid": "sea-overview",
+    "title": "SEA - Service Overview",
+    "tags": ["sea", "production"],
+    "timezone": "utc",
+    "refresh": "15s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "API Request Rate",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[1m])) by (method, path)",
+            "legendFormat": "{{method}} {{path}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "API Latency (p50, p95, p99)",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[1m])) by (le))",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[1m])) by (le))",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[1m])) by (le))",
+            "legendFormat": "p99"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Error Rate (5xx)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{status=~\"5..\"}[1m])) / sum(rate(http_requests_total[1m]))",
+            "legendFormat": "5xx Error Rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.005},
+                {"color": "red", "value": 0.01}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Active Simulations",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 8, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "simulation_running_total",
+            "legendFormat": "Running"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Queue Depth",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 8, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "agent_task_queue_depth",
+            "legendFormat": "Queue Depth"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Memory Usage",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "container_memory_usage_bytes{container=~\"sea-.*\"} / container_spec_memory_limit_bytes",
+            "legendFormat": "{{container}}"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "CPU Usage",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(container_cpu_usage_seconds_total{container=~\"sea-.*\"}[1m]) / container_spec_cpu_quota / container_spec_cpu_period",
+            "legendFormat": "{{container}}"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Simulation Completion Rate",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(simulation_completed_total[5m])",
+            "legendFormat": "Completed/min"
+          },
+          {
+            "expr": "rate(simulation_failed_total[5m])",
+            "legendFormat": "Failed/min"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "HTTP Status Codes (5m)",
+        "type": "piechart",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[5m])) by (status)",
+            "legendFormat": "{{status}}"
+          }
+        ]
+      }
+    ]
+  },
+  "overwrite": true
+}

@@ -11,7 +11,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-scripts:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
     healthcheck:
@@ -23,7 +22,7 @@ services:
       - saea-network
     restart: unless-stopped
 
-  # Redis for caching and rate limiting
+  # Redis for queue, caching and rate limiting
   redis:
     image: redis:7-alpine
     container_name: saea-redis
@@ -41,25 +40,35 @@ services:
       - saea-network
     restart: unless-stopped
 
-  # Backend API
+  # Backend API (FastAPI, backend/app entry point)
   api:
     build:
       context: .
       dockerfile: Dockerfile
+    image: sea-backend:${IMAGE_TAG:-latest}
     container_name: saea-api
     environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONHASHSEED=0
       - DATABASE_URL=postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/saea
       - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
       - DEBUG=false
       - ENVIRONMENT=production
       - LOG_LEVEL=INFO
       - LOG_FORMAT=json
+      - ALLOWED_ORIGINS=http://localhost:3000,http://frontend:3000
       - CORS_ORIGINS=http://localhost:3000,http://frontend:3000
       - RATE_LIMIT_REQUESTS=100
       - RATE_LIMIT_WINDOW_SECONDS=60
     ports:
       - "8000:8000"
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./data:/app/data:ro
+      - ./experiments:/app/experiments:ro
     depends_on:
       db:
         condition: service_healthy
@@ -83,11 +92,12 @@ services:
           cpus: '0.5'
           memory: 512M
 
-  # Frontend (React/Vite)
+  # Frontend (React/Vite via nginx)
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    image: sea-frontend:${IMAGE_TAG:-latest}
     container_name: saea-frontend
     environment:
       - VITE_API_URL=http://api:8000
@@ -106,8 +116,16 @@ services:
     networks:
       - saea-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
-  # Celery worker for background tasks (optional)
+  # Celery worker for background agent tasks
   worker:
     build:
       context: .
@@ -133,7 +151,7 @@ services:
           cpus: '1'
           memory: 1G
 
-  # Celery beat scheduler (optional)
+  # Celery beat scheduler
   scheduler:
     build:
       context: .
@@ -154,11 +172,81 @@ services:
       - saea-network
     restart: unless-stopped
 
+  # Prometheus metrics
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: saea-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    networks:
+      - saea-network
+    restart: unless-stopped
+
+  # Grafana dashboards (port 3001 — 3000 is the frontend)
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: saea-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - saea-network
+    restart: unless-stopped
+
+  # Log aggregation with Loki
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: saea-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - saea-network
+    restart: unless-stopped
+
+  # Promtail for log collection
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: saea-promtail
+    volumes:
+      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - saea-network
+    restart: unless-stopped
+
 volumes:
   postgres_data:
     driver: local
   redis_data:
     driver: local
+  prometheus_data:
+  grafana_data:
+  loki_data:
 
 networks:
   saea-network:

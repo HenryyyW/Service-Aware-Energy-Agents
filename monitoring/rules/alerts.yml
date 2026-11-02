@@ -1,0 +1,109 @@
+groups:
+  - name: sea-api
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) 
+          / sum(rate(http_requests_total[5m])) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+          service: sea-backend
+        annotations:
+          summary: "High 5xx error rate on sea-backend"
+          description: "5xx error rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: sea-backend
+        annotations:
+          summary: "High API latency (p95 > 2s)"
+          description: "95th percentile latency is {{ $value }}s"
+
+      - alert: BackendDown
+        expr: up{job="backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: sea-backend
+        annotations:
+          summary: "Backend service is down"
+          description: "sea-backend has been down for more than 1 minute"
+
+  - name: sea-infrastructure
+    interval: 30s
+    rules:
+      - alert: HighMemoryUsage
+        expr: |
+          (container_memory_usage_bytes / container_spec_memory_limit_bytes) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.container }}"
+          description: "Memory usage is {{ $value | humanizePercentage }} of limit"
+
+      - alert: HighCPUUsage
+        expr: |
+          (rate(container_cpu_usage_seconds_total[5m]) / container_spec_cpu_quota / container_spec_cpu_period) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.container }}"
+          description: "CPU usage is {{ $value | humanizePercentage }} of quota"
+
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk space is {{ $value | humanizePercentage }} free"
+
+  - name: sea-queue
+    interval: 30s
+    rules:
+      - alert: AgentTaskQueueBacklog
+        expr: |
+          agent_task_queue_depth > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: sea-backend
+        annotations:
+          summary: "Agent task queue backlog > 100"
+          description: "Task queue has {{ $value }} pending tasks"
+
+      - alert: SimulationQueueStalled
+        expr: |
+          rate(simulation_completed_total[10m]) == 0
+          and simulation_pending_total > 0
+        for: 10m
+        labels:
+          severity: critical
+          service: sea-backend
+        annotations:
+          summary: "Simulation queue stalled"
+          description: "No simulations completed in 10 minutes but {{ $value }} pending"
+
+  - name: sea-ci
+    interval: 60s
+    rules:
+      - alert: BuildFailure
+        expr: |
+          github_workflow_run_conclusion{workflow="CI", conclusion="failure"} == 1
+        for: 1m
+        labels:
+          severity: critical
+          service: ci
+        annotations:
+          summary: "CI build failed"
+          description: "Workflow {{ $labels.workflow }} failed on branch {{ $labels.branch }}"
