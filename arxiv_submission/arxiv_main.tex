@@ -51,7 +51,7 @@
 \maketitle
 
 \begin{abstract}
-We present a service-aware multi-agent framework for renewable energy community optimization that integrates pricing regime selection, component failure injection, and a verified LLM-based code-agent repair loop. Our framework couples CityLearn building-level simulation with pandapower grid validation across five scenarios (A--E) covering coordination baselines, battery/PV assets, deferrable loads, comfort bounds, and mid-run component failures. We evaluate five controllers (rule-based, multi-agent, centralized, MPC, RL) across 125 paired-seed runs under TOU and LMP pricing regimes, plus a 50-run ablation of verified vs. unverified LLM agents. The multi-agent controller achieves cost- and peak-minimal operation in every scenario (mean cost reduction $-$17.68 to $-$41.37 USD vs. rule-based, $p_{\mathrm{Holm}} < 0.0001$) with a measurable EV completion trade-off ($-$0.11). Under aggressive failure injection (95\% grid limit reduction), all controllers show zero resolution rate on structural voltage violations, confirming correct violation detection. The LLM ablation runs in fallback mode show null divergence between verified and unverified arms (first-attempt validity 1.000, 0 repairs/step), establishing that verification machinery is a no-op under a perfect proposer. All 175 runs complete with \texttt{git\_dirty: false}, seed-pair reproducibility confirmed, and zero failed runs.
+We present a service-aware multi-agent framework for renewable energy community optimization that integrates pricing regime selection, component failure injection, and a verified LLM-based code-agent repair loop. Our framework couples CityLearn building-level simulation with pandapower grid validation across five scenarios (A--E) covering coordination baselines, battery/PV assets, deferrable loads, comfort bounds, and mid-run component failures. We evaluate five controllers (rule-based, multi-agent, centralized, MPC, RL) across 125 paired-seed runs under TOU and LMP pricing regimes, plus a 50-run fallback-mode ablation and a 45-run real-LLM screen of verified vs. unverified LLM agents. The multi-agent controller achieves cost- and peak-minimal operation in every scenario (mean cost reduction $-$17.68 to $-$41.37 USD vs. rule-based, $p_{\mathrm{Holm}} < 0.0001$) with a measurable EV completion trade-off ($-$0.11). Under aggressive failure injection (95\% grid limit reduction), all controllers show zero resolution rate on structural voltage violations, confirming correct violation detection. The LLM ablation shows null divergence between verified and unverified arms in both fallback mode (first-attempt validity 1.000, 0 repairs/step) and a 45-run real-LLM screen on a hosted NIM model (first-attempt validity $\geq 0.994$, 0 unrepaired violations, 0 repairs), establishing that the verification machinery is a no-op under an in-bounds proposer. All 175 runs complete with \texttt{git\_dirty: false}, seed-pair reproducibility confirmed, and zero failed runs.
 \end{abstract}
 
 \keywords{Multi-agent systems, renewable energy communities, LLM code agents, power system simulation, failure injection, pricing regimes}
@@ -65,14 +65,14 @@ We address three gaps:
 \begin{enumerate}
     \item \textbf{Pricing regime diversity}: Most benchmarks fix a single tariff structure. We evaluate the full controller matrix under \texttt{tou\_solo}, \texttt{pool\_tou}, and \texttt{lmp} regimes (P2P wireable but scheduled later).
     \item \textbf{Failure injection}: Scenario E injects sensor, PV inverter, battery, and EV charger failures at severity 1.0 mid-run, with aggressive 95\% grid limit reduction.
-    \item \textbf{Verified LLM code agents}: A multi-agent repair loop (Planner$\rightarrow$Coder$\rightarrow$Executor$\rightarrow$Verifier$\rightarrow$Reporter) proposes and validates controller patches. We ablate verified vs. unverified arms in fallback mode to isolate verification machinery from proposer quality.
+    \item \textbf{Verified LLM code agents}: A multi-agent repair loop (Planner$\rightarrow$Coder$\rightarrow$Executor$\rightarrow$Verifier$\rightarrow$Reporter) proposes and validates controller patches. We ablate verified vs. unverified arms in fallback mode and in a real-LLM screen to isolate verification machinery from proposer quality.
 \end{enumerate}
 
 Related work includes CityLearn for DER simulation \cite{citylearn2021}, pandapower for grid validation \cite{pandapower2018}, multi-agent RL for energy management \cite{energynet2021}, MPC for receding-horizon control \cite{mpc2020}, and LLM-based program repair \cite{ast2020}. The Holm correction for multiple comparisons follows \cite{holm1979}.
 \begin{enumerate}
     \item \textbf{Pricing regime diversity}: Most benchmarks fix a single tariff structure. We evaluate the full controller matrix under \texttt{tou\_solo}, \texttt{pool\_tou}, and \texttt{lmp} regimes (P2P wireable but scheduled later).
     \item \textbf{Failure injection}: Scenario E injects sensor, PV inverter, battery, and EV charger failures at severity 1.0 mid-run, with aggressive 95\% grid limit reduction.
-    \item \textbf{Verified LLM code agents}: A multi-agent repair loop (Planner$\rightarrow$Coder$\rightarrow$Executor$\rightarrow$Verifier$\rightarrow$Reporter) proposes and validates controller patches. We ablate verified vs. unverified arms in fallback mode to isolate verification machinery from proposer quality.
+    \item \textbf{Verified LLM code agents}: A multi-agent repair loop (Planner$\rightarrow$Coder$\rightarrow$Executor$\rightarrow$Verifier$\rightarrow$Reporter) proposes and validates controller patches. We ablate verified vs. unverified arms in fallback mode and in a real-LLM screen to isolate verification machinery from proposer quality.
 \end{enumerate}
 
 \section{System and Method}
@@ -103,7 +103,7 @@ The loop runs for max 3 iterations or until \texttt{violations\_resolved=true}.
 
 The ablation compares \agent{llm\_agent} (single-pass, execute-as-proposed) vs. \agent{llm\_agent\_verified} (per-step verification, re-prompt once, fallback to rule-based on failure, repair cap 2). Both run in \texttt{fallback} mode (deterministic rule-based proposer) to isolate verification machinery.
 
-The real-LLM ablation uses NVIDIA NIM \texttt{deepseek-coder-6.7b} \cite{nim2024,deepseek2024}.
+The real-LLM screen (M2a) uses the hosted NVIDIA NIM API \cite{nim2024} with model \texttt{poolside/laguna-xs-2.1} (temperature 0, 120\,s per-call timeout, prompts \texttt{llm\_dispatch\_v2} / \texttt{llm\_dispatch\_v1\_repair}): 45 24-step runs (5 scenarios $\times$ 2 LLM arms $\times$ 3 seeds 42/123/456) plus 15 \agent{multi\_agent} 24-step reference runs; every LLM-arm manifest records \texttt{agent\_backend=api}.
 
 \section{Experimental Setup}
 \label{sec:setup}
@@ -228,7 +228,52 @@ All 50 ablation runs in \texttt{fallback} mode (\texttt{agent\_backend: fallback
     \item Wall time: 16--33 s/run (median 20.8 s), no arm separation
 \end{itemize}
 
-The null result has two causes: (1) fallback proposer emits in-bounds proposals, so verification loop never triggers; (2) arms shared clamp-repair loop in earlier implementation. The P0-3 fix makes arms asymmetric (\agent{llm\_agent} applies proposals as proposed; \agent{llm\_agent\_verified} re-prompts once then falls back). Whether verification buys anything requires a real-LLM backend (Phase 2 follow-up).
+The null result has two causes: (1) fallback proposer emits in-bounds proposals, so verification loop never triggers; (2) arms shared clamp-repair loop in earlier implementation. The P0-3 fix makes arms asymmetric (\agent{llm\_agent} applies proposals as proposed; \agent{llm\_agent\_verified} re-prompts once then falls back). Section~\ref{sec:m2a} reports the real-LLM screen: with the hosted proposer the same null result holds on the pre-registered safety gate.
+
+\subsection{Real-LLM Screen: M2a (Null Result)}
+\label{sec:m2a}
+
+The M2a screen replaces the deterministic fallback proposer with the hosted NIM model \texttt{poolside/laguna-xs-2.1} on the same 24-step horizon. All 30 LLM-arm runs completed on the API; per-arm agent-execution aggregates (15 runs per arm):
+
+\begin{table}[htbp]
+\centering
+\caption{M2a real-LLM screen, per-arm agent-execution aggregates (15 runs per arm).}
+\label{tab:m2a-exec}
+\begin{tabular}{lcc}
+\toprule
+Metric & \agent{llm\_agent} & \agent{llm\_agent\_verified} \\
+\midrule
+Fallback share (mean; runs $>0$) & 0.006 (2/15) & 0.000 (0/15) \\
+First-attempt validity (mean) & 0.994 & 1.000 \\
+Unrepaired violations $>0$ (runs) & 0/15 & 0/15 \\
+Repair iterations $>0$ (runs) & 0/15 & 0/15 \\
+Parse failures / backend errors (total) & 1\,/\,1 & 0\,/\,0 \\
+LLM latency p50 / p95 (s) & 5.4\,/\,12.2 & 5.9\,/\,14.9 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Paired against the 15 \agent{multi\_agent} 24-step reference runs (per-(scenario, seed) pairing):
+
+\begin{table}[htbp]
+\centering
+\caption{M2a KPI deltas vs.\ the \agent{multi\_agent} reference (15 paired runs per arm).}
+\label{tab:m2a-kpi}
+\begin{tabular}{lccc}
+\toprule
+Arm & $\Delta$ cost (USD) & $\Delta$ peak (kW) & KPI-identical runs \\
+\midrule
+\agent{llm\_agent} & $+1.37$ ($0.00$ to $+4.80$) & $+10.0$ (max $+50.3$) & 6/15 \\
+\agent{llm\_agent\_verified} & $+0.10$ ($0.00$ to $+1.06$) & $+0.2$ (max $+2.4$) & 13/15 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The two nonzero fallback events in the unverified arm trace to single transient backend/parse failures (one per run), not to invalid proposals. $\Delta$ EV completion is $0.000$ for both arms.
+
+\textbf{Gate verdict.} The pre-registered M2b gate (proceed to a full-week 169-step confirmation only if the arms differ by $\geq 10$\,pp on \texttt{llm\_unrepaired\_violations} or \texttt{llm\_fallback\_step\_share}, or KPI CIs exclude zero) is \emph{not met}: unrepaired violations and repair iterations are zero in both arms, and the fallback-share difference is $0.6$\,pp. M2b is therefore not warranted, and no verification-benefit claim is made on the safety metrics. The validity gate is passed (fallback share $0.006 \ll 0.25$): the absence of safety divergence is due to proposer competence, not proposer silence. The residual KPI differences are suboptimality, not violations: the unverified arm introduces cost/peak regressions (up to $+4.80$ USD, $+50.3$ kW) that per-step verification does not target, while the verified arm tracks the reference within $+1.06$ USD. This null result is specific to the model--prompt--horizon combination; a harsher proposer or longer horizon remains untested (Section~\ref{sec:limitations}).
+
+Per-run manifests (\texttt{agent\_backend=api}, prompt version/hash, temperature/seed) are the provenance artifacts; the committed summary is \texttt{docs/m2a\_screen\_summary.md} and the raw 45-run dataset ships as a checksummed release artifact.
 
 \subsection{Reproducibility}
 \label{sec:repro}
@@ -242,10 +287,11 @@ All 175 runs (125 matrix + 50 ablation) on commit \texttt{035a52f} with \texttt{
 Adversary has full visibility of observations/actions; may inject sensor faults, grid-limit reductions, component failures. Attacks limited to failure-injection surface; cannot modify scenario YAML, controller code, or simulator internals.
 
 \subsection{Limitations}
+\label{sec:limitations}
 \begin{enumerate}
     \item \textbf{Synthetic traces}: Load/PV profiles depend only on (seed, filename); scenario effects are device-mix effects.
     \item \textbf{Controller scope}: RL excluded from LMP matrix (no tracked LMP policies); 138-state policies available for follow-up.
-    \item \textbf{LLM proposer}: Real-LLM ablation uses single model (NVIDIA NIM \texttt{deepseek-coder-6.7b}) at temperature 0 on 24-step horizon; null result specific to this combination.
+    \item \textbf{LLM proposer}: Real-LLM screen uses a single hosted model (NVIDIA NIM \texttt{poolside/laguna-xs-2.1}) at temperature 0 on a 24-step horizon; the null result is specific to this model--prompt--horizon combination.
     \item \textbf{Aggressive config}: 95\% grid limit does not produce import curtailment; tests violation detection, not curtailment path.
     \item \textbf{Seed count}: Five seeds give narrow CIs; significance assessed on paired deltas with Holm correction.
 \end{enumerate}
@@ -256,7 +302,7 @@ Adversary has full visibility of observations/actions; may inject sensor faults,
     \item EV-completion artifact (missing EV definitions in schema, fixed).
     \item Metric-collection defects on pre-fix base (NaN cost, empty per-member costs).
     \item Scenario fidelity (synthetic traces depend on seed/filename only).
-    \item Fallback-mode ablation (no claims about LLM proposal quality).
+    \item LLM ablations in fallback and real-LLM (M2a screen) modes: no verification-benefit or capability claims; single model, 24-step horizon.
     \item Seed count (narrow CIs; paired deltas with Holm).
     \item Runtime tail (retired for fixed matrix).
 \end{enumerate}
@@ -264,9 +310,9 @@ Adversary has full visibility of observations/actions; may inject sensor faults,
 \section{Conclusion}
 \label{sec:conclusion}
 
-We present a service-aware energy agent framework spanning pricing regimes, failure injection, and verified LLM code-agent repair. The multi-agent controller achieves consistent cost/peak reduction across all scenarios and pricing regimes with a measurable EV service trade-off. Aggressive failure injection confirms correct violation detection (zero resolution on structural violations is correct behavior). The fallback-mode LLM ablation shows null divergence between verified/unverified arms, isolating verification machinery as a no-op under a perfect proposer. All artifacts are reproducible: 175 runs on a clean commit with full manifests, zero failures, and seed-pair checks passing.
+We present a service-aware energy agent framework spanning pricing regimes, failure injection, and verified LLM code-agent repair. The multi-agent controller achieves consistent cost/peak reduction across all scenarios and pricing regimes with a measurable EV service trade-off. Aggressive failure injection confirms correct violation detection (zero resolution on structural violations is correct behavior). The LLM ablations show null divergence between verified/unverified arms on the safety gate in both fallback mode and the real-LLM M2a screen, isolating the verification machinery as a no-op under an in-bounds proposer; the unverified arm alone shows cost/peak regressions that verification does not target. All artifacts are reproducible: 175 runs on a clean commit with full manifests, zero failures, and seed-pair checks passing.
 
-Future work: real-LLM ablation (Phase 2), LMP RL policies, P2P market clearing, and extended horizon stress tests.
+Future work: longer-horizon M2b confirmation with a harsher LLM proposer, LMP RL policies, P2P market clearing, and extended horizon stress tests.
 
 \bibliographystyle{plainnat}
 \bibliography{references}

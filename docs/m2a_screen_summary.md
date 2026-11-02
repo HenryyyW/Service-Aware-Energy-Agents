@@ -6,7 +6,8 @@ A-E x 3 arms x 3 seeds {42, 123, 456}). LLM arms ran on the hosted NVIDIA NIM AP
 temperature 0.0, 24 steps, prompt `llm_dispatch_v2`, repair prompt
 `llm_dispatch_v1_repair`). Every LLM-arm run manifest records `agent_backend=api`.
 Raw run outputs are gitignored; this file is the committed summary.
-Paper: `acm_submission/paper_draft.md` sections 5.6-5.9.
+Paper: `arxiv_submission/arxiv_main.tex`, subsection "Real-LLM Screen: M2a
+(Null Result)" (`sec:m2a`).
 
 ## Per-arm aggregates
 
@@ -14,10 +15,10 @@ Paper: `acm_submission/paper_draft.md` sections 5.6-5.9.
 |---|---|---|---|
 | Runs | 15 | 15 | 15 |
 | agent_backend=api | 15 | 15 | 0 |
-| fallback_share mean | 0.000 | 0.000 | n/a |
+| fallback_share mean | 0.006 | 0.000 | n/a |
 | fallback_share max | 0.042 | 0 | 0 |
 | runs with fallback_share > 0 | 2 | 0 | 0 |
-| first_attempt_validity mean | 1.000 | 1.000 | n/a |
+| first_attempt_validity mean | 0.994 | 1.000 | n/a |
 | unrepaired_violations > 0 (runs) | 0 | 0 | 0 |
 | repair_iterations > 0 (runs) | 0 | 0 | 0 |
 | parse failures (total) | 1 | 0 | 0 |
@@ -33,7 +34,22 @@ Paper: `acm_submission/paper_draft.md` sections 5.6-5.9.
 - Verdict: **no arm divergence -> null result.** No separation claim is possible;
   M2b is not warranted. The proposer (`poolside/laguna-xs-2.1`, temp 0) emits
   in-bounds, parseable dispatches on this 24-step horizon, so verification has
-  nothing to catch. Documented in paper sections 5.6-5.9.
+  nothing to catch. Documented in the arXiv paper's M2a subsection (`sec:m2a`).
+
+## KPI deltas vs the 15 multi_agent 24-step reference runs
+
+Paired per (scenario, seed), all 15 runs per arm:
+
+| Arm | d_cost USD (mean; range) | d_peak kW (mean; max) | d_EV completion | KPI-identical runs |
+|---|---|---|---|---|
+| llm_agent | +1.37; 0.00 to +4.80 | +10.0; max +50.3 | 0.000 | 6/15 |
+| llm_agent_verified | +0.10; 0.00 to +1.06 | +0.2; max +2.4 | 0.000 | 13/15 |
+
+The verified arm tracks the multi_agent reference (13/15 runs bit-identical);
+the unverified arm introduces cost/peak regressions (suboptimality, not grid
+violations - unrepaired_violations is 0 in both arms). These KPI differences
+are outside the pre-registered M2b gate metrics, so the gate verdict (null,
+M2b not warranted) stands.
 
 ## Fallback events (all in the unverified arm)
 

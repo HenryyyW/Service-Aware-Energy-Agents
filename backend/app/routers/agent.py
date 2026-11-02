@@ -1,10 +1,11 @@
 """Agent task management API endpoints."""
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Request, Header
 from pydantic import BaseModel, Field
 from uuid import uuid4
 from datetime import datetime, timezone
 import asyncio
+import hashlib
 
 from src.agents.multi_agent_loop import run_multi_agent_repair
 from src.schemas.report import ExperimentResult, ExperimentStatus, ControllerType
@@ -13,11 +14,20 @@ from src.schemas.scenario import ScenarioConfig
 from src.agents.backend.config import load_llm_config
 from src.agents.backend.registry import create_backend_from_config
 from src.simulation import SimulationCoupler
+from app.main import get_task_queue, get_redis_client, TASK_DURATION, TASKS_TOTAL, TASK_RETRIES
 
 router = APIRouter()
 
-# In-memory storage for agent tasks
+# In-memory storage for agent tasks (fallback when Redis not available)
 _tasks: Dict[str, dict] = {}
+
+# Idempotency key storage (in-memory, use Redis in production)
+_idempotency_keys: Dict[str, str] = {}
+
+# Task retry tracking
+_task_retries: Dict[str, int] = {}
+MAX_RETRIES = 3
+TASK_TIMEOUT_SECONDS = 30 * 60  # 30 minutes
 
 
 class AgentTaskCreate(BaseModel):
@@ -46,10 +56,30 @@ async def _run_agent_task(task_id: str, description: str, scenario_id: Optional[
     """Background task to run the real multi-agent repair workflow."""
     PROJECT_ROOT = "/home/box/OpenBot/Shared/Service-Aware-Energy-Agents"
     
+    # Check timeout
+    task_data = _tasks.get(task_id, {})
+    started_at = task_data.get("started_at")
+    timeout_seconds = task_data.get("timeout_seconds", 30 * 60)
+    
+    if started_at:
+        from datetime import datetime
+        start_time = datetime.fromisoformat(started_at.replace('Z', '+00:00'))
+        elapsed = (datetime.now(timezone.utc) - start_time.replace(tzinfo=None)).total_seconds()
+        if elapsed > timeout_seconds:
+            _tasks[task_id]["status"] = "failed"
+            _tasks[task_id]["updated_at"] = datetime.now(timezone.utc).isoformat()
+            _tasks[task_id]["execution_log"].append(f"Task timed out after {timeout_seconds}s")
+            TASK_DURATION.labels(status="timeout").observe(timeout_seconds)
+            TASKS_TOTAL.labels(status="timeout").inc()
+            return
+    
+    import time
+    start_time = time.time()
+    
     try:
         _tasks[task_id]["status"] = "planning"
         _tasks[task_id]["updated_at"] = datetime.now(timezone.utc).isoformat()
-        _tasks[task_id]["execution_log"].append("Starting planning phase...")
+        _tasks[task_id]["execution_log"].append("Starting multi-agent repair workflow...")
         
         # Load scenario
         from src.schemas.scenario import ScenarioConfig
@@ -152,17 +182,51 @@ async def _run_agent_task(task_id: str, description: str, scenario_id: Optional[
         _tasks[task_id]["execution_log"].append(f"Repair {'succeeded' if result.success else 'failed'} after {result.total_iterations} iterations")
         _tasks[task_id]["execution_log"].append(f"Total time: {result.total_time:.1f}s")
         
+        # Record metrics
+        duration = time.time() - start_time
+        TASK_DURATION.labels(status=_tasks[task_id]["status"]).observe(duration)
+        TASKS_TOTAL.labels(status=_tasks[task_id]["status"]).inc()
+        
+        if result.success:
+            _tasks[task_id]["status"] = "completed"
+            _tasks[task_id]["execution_log"].append("Task completed successfully")
+        else:
+            _tasks[task_id]["status"] = "failed"
+            _tasks[task_id]["execution_log"].append("Repair loop did not resolve all violations")
+        
+        _tasks[task_id]["updated_at"] = datetime.now(timezone.utc).isoformat()
+        _tasks[task_id]["completed_at"] = datetime.now(timezone.utc).isoformat()
+        
     except Exception as e:
         _tasks[task_id]["status"] = "failed"
         _tasks[task_id]["updated_at"] = datetime.now(timezone.utc).isoformat()
         _tasks[task_id]["execution_log"].append(f"Error: {str(e)}")
         import traceback
         _tasks[task_id]["execution_log"].append(traceback.format_exc())
+        TASK_DURATION.labels(status="error").observe(time.time() - start_time)
+        TASKS_TOTAL.labels(status="error").inc()
 
 
 @router.post("/agent/tasks", response_model=AgentTask, status_code=201)
-async def create_agent_task(request: AgentTaskCreate, background_tasks: BackgroundTasks):
-    """Create a new agent task."""
+async def create_agent_task(
+    request: AgentTaskCreate, 
+    background_tasks: BackgroundTasks,
+    request_obj: Request,
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
+):
+    """Create a new agent task with idempotency support."""
+    # Check idempotency key
+    if idempotency_key:
+        if idempotency_key in _idempotency_keys:
+            existing_task_id = _idempotency_keys[idempotency_key]
+            if existing_task_id in _tasks:
+                existing_task = _tasks[existing_task_id]
+                existing_task["updated_at"] = datetime.now(timezone.utc).isoformat()
+                return existing_task
+        else:
+            # Store idempotency key (will be linked after task creation)
+            pass
+    
     task_id = f"task_{uuid4().hex[:12]}"
     now = datetime.now(timezone.utc).isoformat()
     
@@ -177,8 +241,34 @@ async def create_agent_task(request: AgentTaskCreate, background_tasks: Backgrou
     
     _tasks[task_id] = task.model_dump()
     
+    # Store idempotency key mapping
+    if idempotency_key:
+        _idempotency_keys[idempotency_key] = task_id
+    
+    # Initialize retry counter
+    _task_retries[task_id] = 0
+    
+    # Add timeout tracking
+    task_data = _tasks[task_id]
+    task_data["started_at"] = datetime.now(timezone.utc).isoformat()
+    task_data["timeout_seconds"] = 30 * 60  # 30 minutes
+    
     # Start background agent workflow
-    background_tasks.add_task(_run_agent_task, task_id, request.description, request.scenario_id, request.run_id)
+    queue = get_task_queue()
+    if queue:
+        # Use RQ for production queue
+        queue.enqueue(
+            _run_agent_task, 
+            task_id, 
+            request.description, 
+            request.scenario_id, 
+            request.run_id,
+            job_timeout=30 * 60,  # 30 minutes
+            job_id=task_id
+        )
+    else:
+        # Fallback to in-memory background tasks
+        background_tasks.add_task(_run_agent_task, task_id, request.description, request.scenario_id, request.run_id)
     
     return task
 
@@ -207,7 +297,7 @@ async def delete_agent_task(task_id: str):
 
 @router.post("/agent/tasks/{task_id}/retry")
 async def retry_agent_task(task_id: str, background_tasks: BackgroundTasks):
-    """Retry a failed agent task."""
+    """Retry a failed agent task with retry tracking."""
     if task_id not in _tasks:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
     
@@ -215,17 +305,40 @@ async def retry_agent_task(task_id: str, background_tasks: BackgroundTasks):
     if task["status"] != "failed":
         raise HTTPException(status_code=400, detail="Can only retry failed tasks")
     
+    # Check retry limit
+    retry_count = _task_retries.get(task_id, 0)
+    if retry_count >= MAX_RETRIES:
+        raise HTTPException(status_code=400, detail=f"Max retries ({MAX_RETRIES}) exceeded")
+    
+    # Increment retry counter
+    _task_retries[task_id] = retry_count + 1
+    TASK_RETRIES.labels(task_id=task_id).inc()
+    
     # Reset task for retry
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     task["status"] = "planning"
     task["updated_at"] = now
-    task["execution_log"] = [f"Retry initiated at {now}"]
+    task["execution_log"] = [f"Retry {retry_count + 1} initiated at {now}"]
     task["plan"] = None
     task["code"] = None
     task["verification"] = None
     task["repairs"] = []
     task["report"] = None
+    task["started_at"] = datetime.now(timezone.utc).isoformat()
     
-    background_tasks.add_task(_run_agent_task, task_id, task["description"], task.get("scenario_id"), task.get("run_id"))
+    # Start background agent workflow
+    queue = get_task_queue()
+    if queue:
+        queue.enqueue(
+            _run_agent_task, 
+            task_id, 
+            task["description"], 
+            task.get("scenario_id"), 
+            task.get("run_id"),
+            job_timeout=30 * 60,
+            job_id=f"{task_id}_retry_{_task_retries[task_id]}"
+        )
+    else:
+        background_tasks.add_task(_run_agent_task, task_id, task["description"], task.get("scenario_id"), task.get("run_id"))
     
     return task
