@@ -1,0 +1,75 @@
+/* ============================================================
+   Phase 2 design-token extensions — LMP / P2P / market metadata / agent
+   Additive only (no existing token is redefined). Wired via one
+   `@import "./styles/tokens.css";` line in ../index.css.
+
+   These are NOT aliases to physics colors. Price, regime, carbon and
+   agent-step states are measured/structural quantities with no good/bad
+   valence (FRONTEND_DESIGN_PLAN.md §Principle 3 "Colors mean physics").
+   Rationale + component specs: docs/phase2-design-review-lmp-p2p-agent.md §3.
+   ============================================================ */
+
+@theme {
+  /* ---- Price: a measured quantity, non-physics, diverging around the
+     community mean (cool steel → neutral → warm clay). Never red/green. ---- */
+  --color-price:            #94A3B8; /* price ink / axis / value text */
+  --color-price-1:          #475569; /* low LMP  */
+  --color-price-2:          #64748B;
+  --color-price-3:          #94A3B8; /* == community-mean anchor */
+  --color-price-4:          #B9A48C;
+  --color-price-5:          #D8BE9E; /* high LMP */
+  --color-price-uniform:    #475569; /* flat state when spread == 0 (never a false heatmap) */
+  --color-price-congestion: #C9A36A; /* congestion overlay accent (feeder stroke) */
+
+  /* Convenience aliases for code that planned low/mid/high names.
+     Values come from the NEUTRAL ramp — NOT green / amber / red. */
+  --color-lmp-low:  var(--color-price-1);
+  --color-lmp-mid:  var(--color-price-3);
+  --color-lmp-high: var(--color-price-5);
+
+  /* ---- Market metadata: regime (how the market clears) vs
+     cost_basis (what the score is billed on). Two tokens, never merged. ---- */
+  --color-regime:      #A5B4FC; /* market-clearing regime chip */
+  --color-cost-basis:  #8AA8C4; /* billing-basis chip */
+  --color-meta:        #8A93A6; /* ids, seeds, units */
+  --color-meta-strong: #B8C0CE;
+  --color-claim-ok:    #8FBFA8; /* claim-grade gate passed (muted sage, NOT --color-energy) */
+  --color-claim-fail:  #C99A6A; /* not claim-grade (muted clay, NOT --color-violation) */
+  --color-caution:     #C99A6A;
+
+  /* ---- Carbon: its own quantity (generation mix × emission factor).
+     Never derive a "carbon intensity" badge from LMP. ---- */
+  --color-carbon:    #A8A29E;
+  --color-carbon-lo: #78716C;
+  --color-carbon-hi: #D6D3D1;
+
+  /* ---- P2P (design now; build behind a flag — regime is SCHEDULE-LATER
+     and there is no /ws/p2p endpoint yet).
+     Buy = import/demand side, Sell = export/supply side, so the colors stay
+     consistent with --color-load / --color-energy. Matching = neutral ink +
+     dashed line (shape carries "matched"), NOT --color-comfort. ---- */
+  --color-p2p-buy:     var(--color-load);       /* rose  — import side */
+  --color-p2p-sell:    var(--color-energy);     /* emerald — export side */
+  --color-p2p-match:   #CBD5E1;                 /* neutral ink for the match connector */
+  --color-p2p-pending: var(--color-meta-strong);/* a state, not a hue; pair with a glyph */
+
+  /* ---- Agent workflow step identity (UI states, NOT physics; no yellow).
+     Step IDENTITY is carried by icon + label + position; color is a subtle
+     accent only. Step STATE (pending / active / done / failed) uses the UI
+     aliases --color-primary / --color-success / --color-danger and always
+     ships a glyph. Values are muted/desaturated, distinct from the saturated
+     physics set, and contain no amber/yellow (IEEE-blue recolor 2026-11-01). ---- */
+  --color-agent-plan:         #E8EBF0;  /* spec / freeform — neutral ink */
+  --color-agent-code:         #7FB3D5;  /* steel blue */
+  --color-agent-execution:    #9DB4A0;  /* muted green */
+  --color-agent-verification: #8FA9C4;  /* slate blue (was sand #C9B88F) */
+  --color-agent-repair:       #B49AC4;  /* muted mauve (was clay #C99A6A) */
+  --color-agent-report:       #C2C9D2;  /* light graphite */
+
+  /* Aliases kept for older code; mirror agent-* so they never drift. */
+  --color-step-plan:   var(--color-agent-plan);
+  --color-step-code:   var(--color-agent-code);
+  --color-step-exec:   var(--color-agent-execution);
+  --color-step-verify: var(--color-agent-verification);
+  --color-step-repair: var(--color-agent-repair);
+}
