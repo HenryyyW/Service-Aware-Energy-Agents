@@ -10,7 +10,6 @@
 *.fls
 *.fdb_latexmk
 *.synctex.gz
-*.pdf
 *.xdv
 *.bcf
 *.run.xml

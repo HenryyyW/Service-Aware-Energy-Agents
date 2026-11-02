@@ -1,4 +1,4 @@
-*.pdf
+# *.pdf
 notes.md
 
 # Local agent skill bundles; keep project-specific design guidance tracked.
