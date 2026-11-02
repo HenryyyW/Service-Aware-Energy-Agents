@@ -74,6 +74,15 @@ class SimulationCoupler:
         # Initialize failure injector for Scenario E
         self.failure_injector = create_failure_injector(scenario_config)
         
+        # Re-dispatch and violation recovery tracking (for M3.4)
+        self.re_dispatch_count = 0
+        self.voltage_violations_detected = 0
+        self.voltage_violations_resolved = 0
+        self.loading_violations_detected = 0
+        self.loading_violations_resolved = 0
+        self.voltage_violation_active = False
+        self.loading_violation_active = False
+        
         # State tracking
         self.current_timestep = 0
         self.co_sim_history: List[CoSimulationStepResult] = []
@@ -100,6 +109,16 @@ class SimulationCoupler:
         
         # Reset failure injector
         self.failure_injector.reset()
+        
+        # Reset re-dispatch and violation tracking
+        self.re_dispatch_count = 0
+        self.voltage_violations_detected = 0
+        self.voltage_violations_resolved = 0
+        self.loading_violations_detected = 0
+        self.loading_violations_resolved = 0
+        self.voltage_violation_active = False
+        self.loading_violation_active = False
+        
         # Set simulation start time for failure scheduling
         for building in self.scenario_config.buildings:
             if building.simulation_start:
@@ -281,6 +300,8 @@ class SimulationCoupler:
                 grid_diagnostics.add_diagnostic(d)
             
             # Check community grid limits (with failure injection)
+            import_exceeded = False
+            export_exceeded = False
             if self.scenario_config.community_import_limit_kw or self.scenario_config.community_export_limit_kw:
                 import_kw = sum(p for p in building_powers.values() if p > 0)
                 export_kw = sum(-p for p in building_powers.values() if p < 0)
@@ -290,6 +311,9 @@ class SimulationCoupler:
                 
                 # Apply grid limit failures
                 import_limit, export_limit = self.failure_injector.apply_grid_limit_failure(import_limit, export_limit)
+                
+                import_exceeded = import_kw > import_limit
+                export_exceeded = export_kw > export_limit
                 
                 grid_limit_diagnostics = self.pandapower.check_grid_limits(
                     import_kw, export_kw, import_limit, export_limit
@@ -368,6 +392,34 @@ class SimulationCoupler:
         combined_violations.extend([str(d) for d in grid_diagnostics.diagnostics 
                                    if d.severity in [Severity.VIOLATION, Severity.CRITICAL]])
         
+        # Track violations and re-dispatch for M3.4 recovery metrics
+        # Check for voltage violations
+        voltage_violation_now = any(d.category == DiagnosticCategory.VOLTAGE 
+                                    for d in grid_diagnostics.diagnostics 
+                                    if d.severity in [Severity.VIOLATION, Severity.CRITICAL])
+        if voltage_violation_now and not self.voltage_violation_active:
+            self.voltage_violations_detected += 1
+            self.voltage_violation_active = True
+        elif not voltage_violation_now and self.voltage_violation_active:
+            self.voltage_violations_resolved += 1
+            self.voltage_violation_active = False
+        
+        # Check for line/transformer loading violations
+        loading_violation_now = any(d.category in [DiagnosticCategory.LINE_LOADING, DiagnosticCategory.TRANSFORMER_LOADING]
+                                    for d in grid_diagnostics.diagnostics 
+                                    if d.severity in [Severity.VIOLATION, Severity.CRITICAL])
+        if loading_violation_now and not self.loading_violation_active:
+            self.loading_violations_detected += 1
+            self.loading_violation_active = True
+        elif not loading_violation_now and self.loading_violation_active:
+            self.loading_violations_resolved += 1
+            self.loading_violation_active = False
+        
+        # Track re-dispatch events (when controller receives grid violations)
+        # This is approximated by counting steps with active grid violations
+        if voltage_violation_now or loading_violation_now:
+            self.re_dispatch_count += 1
+        
         # Create co-simulation result
         cosim_result = CoSimulationStepResult(
             timestep=self.current_timestep,
@@ -386,7 +438,9 @@ class SimulationCoupler:
             "power_flow_converged": power_flow_converged,
             "diagnostics": [d.model_dump() for d in grid_diagnostics.diagnostics],
             "voltage_profile": self.pandapower.get_voltage_profile(),
-            "loading_profile": self.pandapower.get_loading_profile()
+            "loading_profile": self.pandapower.get_loading_profile(),
+            "import_limit_exceeded": import_exceeded,
+            "export_limit_exceeded": export_exceeded,
         }
         
         # Add building contributions and losses if available
@@ -458,6 +512,13 @@ class SimulationCoupler:
             ])
         if failure_events_list:
             grid_diag_dict["failure_events"] = failure_events_list
+        
+        # Add grid observations to CityLearn observations so controllers can see them
+        cl_result.observations = self.citylearn.add_grid_observations(
+            cl_result.observations,
+            grid_diag_dict,
+            self.pandapower.bus_mapping
+        )
         
         cl_result.grid_diagnostics = grid_diag_dict
         
@@ -714,6 +775,20 @@ class SimulationCoupler:
             "grid_trafo_violations": sum(1 for h in self.co_sim_history 
                                         for d in h.grid_diagnostics.diagnostics 
                                         if d.category == DiagnosticCategory.TRANSFORMER_LOADING),
+            # M3.4 re-dispatch recovery metrics
+            "re_dispatch_count": self.re_dispatch_count,
+            "voltage_violations_detected": self.voltage_violations_detected,
+            "voltage_violations_resolved": self.voltage_violations_resolved,
+            "loading_violations_detected": self.loading_violations_detected,
+            "loading_violations_resolved": self.loading_violations_resolved,
+            "resolution_rate": (
+                (self.voltage_violations_resolved + self.loading_violations_resolved) / 
+                max(1, self.voltage_violations_detected + self.loading_violations_detected)
+            ) if (self.voltage_violations_detected + self.loading_violations_detected) > 0 else 1.0,
+            "avg_resolution_steps": (
+                (self.voltage_violations_resolved + self.loading_violations_resolved) / 
+                max(1, self.re_dispatch_count)
+            ) if self.re_dispatch_count > 0 else 0.0,
             "failure_summary": failure_summary,
         }
     

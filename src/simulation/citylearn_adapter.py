@@ -1063,6 +1063,45 @@ class CityLearnAdapter:
         
         return violations
     
+    def add_grid_observations(self, observations: Dict[str, Any], grid_diagnostics: Dict[str, Any], building_bus_mapping: Dict[str, int]) -> Dict[str, Any]:
+        """Add grid observations to the observations dict.
+        
+        Args:
+            observations: Current observations dict
+            grid_diagnostics: Grid diagnostics from pandapower (voltage_profile, loading_profile)
+            building_bus_mapping: Mapping from building_id to bus_idx
+            
+        Returns:
+            Updated observations dict with grid observations added
+        """
+        # Per-building voltage (pu)
+        voltage_profile = grid_diagnostics.get("voltage_profile", {})
+        per_building_voltage = {}
+        for bid, bus_idx in building_bus_mapping.items():
+            if bus_idx in voltage_profile:
+                per_building_voltage[bid] = voltage_profile[bus_idx]
+        if per_building_voltage:
+            observations["voltage_pu"] = per_building_voltage
+        
+        # Per-line loading (%)
+        loading_profile = grid_diagnostics.get("loading_profile", {})
+        line_loading = loading_profile.get("lines", {})
+        trafo_loading = loading_profile.get("trafos", {})
+        if line_loading:
+            observations["line_loading_pct"] = {f"line_{k}": v * 100 for k, v in line_loading.items()}
+        if trafo_loading:
+            observations["trafo_loading_pct"] = {f"trafo_{k}": v * 100 for k, v in trafo_loading.items()}
+        
+        # Community import/export limit exceeded
+        # These will be set by the coupling module based on market clearing
+        # We just pass through any existing flags
+        if "export_limit_exceeded" in grid_diagnostics:
+            observations["export_limit_exceeded"] = grid_diagnostics["export_limit_exceeded"]
+        if "import_limit_exceeded" in grid_diagnostics:
+            observations["import_limit_exceeded"] = grid_diagnostics["import_limit_exceeded"]
+        
+        return observations
+    
     def get_observations(self) -> Dict[str, Any]:
         """Get current observations."""
         return self.observation_history[-1] if self.observation_history else {}
