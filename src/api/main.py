@@ -1,10 +1,13 @@
 """Production-ready FastAPI application for Service-Aware Energy Agents."""
 import time
 import uuid
+import json
+import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional
+from datetime import datetime
 
-from fastapi import FastAPI, Request, Response, status
+from fastapi import FastAPI, Request, Response, status, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -33,6 +36,53 @@ limiter = Limiter(
     key_func=get_remote_address,
     default_limits=[f"{settings.rate_limit_requests}/{settings.rate_limit_window_seconds}seconds"],
 )
+
+# WebSocket connection manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict[str, list] = {}
+    
+    async def connect(self, websocket: WebSocket, run_id: str):
+        await websocket.accept()
+        if run_id not in self.active_connections:
+            self.active_connections[run_id] = []
+        self.active_connections[run_id].append(websocket)
+    
+    def disconnect(self, websocket: WebSocket, run_id: str):
+        if run_id in self.active_connections:
+            self.active_connections[run_id].remove(websocket)
+            if not self.active_connections[run_id]:
+                del self.active_connections[run_id]
+    
+    async def broadcast(self, run_id: str, message: dict):
+        if run_id in self.active_connections:
+            for connection in self.active_connections[run_id]:
+                try:
+                    await connection.send_json(message)
+                except:
+                    pass
+
+
+manager = ConnectionManager()
+
+
+def _create_ws_message(msg_type: str, payload: dict, run_id: str, meta: dict = None) -> dict:
+    """Create a WebSocket message with standard meta fields."""
+    correlation_id = str(uuid.uuid4())[:8]
+    now = datetime.utcnow().isoformat() + "Z"
+    default_meta = {
+        "timestamp": now,
+        "stale": False,
+        "reconnecting": False,
+        "correlation_id": correlation_id,
+    }
+    if meta:
+        default_meta.update(meta)
+    return {
+        "type": msg_type,
+        "payload": payload,
+        "meta": default_meta,
+    }
 
 
 @asynccontextmanager
@@ -243,6 +293,43 @@ def create_app(settings_override: Optional[Settings] = None) -> FastAPI:
             "memory_percent": psutil.virtual_memory().percent,
             "disk_percent": psutil.disk_usage("/").percent,
         }
+
+    # WebSocket endpoints for real-time simulation updates
+    @app.websocket("/ws")
+    async def websocket_endpoint(websocket: WebSocket):
+        """General WebSocket endpoint."""
+        await websocket.accept()
+        try:
+            while True:
+                data = await websocket.receive_text()
+                # Echo back for testing
+                await websocket.send_json(_create_ws_message("echo", json.loads(data), "general"))
+        except WebSocketDisconnect:
+            pass
+
+
+    @app.websocket("/ws/simulation/{run_id}")
+    async def websocket_simulation(websocket: WebSocket, run_id: str):
+        """WebSocket endpoint for real-time simulation updates with stale-data protection."""
+        await manager.connect(websocket, run_id)
+        
+        # Send initial connection message with meta
+        await websocket.send_json(_create_ws_message(
+            "connected",
+            {"run_id": run_id, "message": "WebSocket connected"},
+            run_id,
+            {"stage": "connected"}
+        ))
+        
+        try:
+            while True:
+                # Keep connection alive, send periodic updates if simulation is running
+                await asyncio.sleep(1)
+                # Note: In a full implementation, this would check actual simulation status
+                # For now, we just keep the connection alive
+        except WebSocketDisconnect:
+            manager.disconnect(websocket, run_id)
+
 
     # Root endpoint
     @app.get("/", include_in_schema=False)

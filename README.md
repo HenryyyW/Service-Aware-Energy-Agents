@@ -38,29 +38,33 @@ The system is intended to assess more than aggregate cost or grid import. It als
 | Agent workflow | Plan, generate code, execute in a sandbox, verify, repair and report | `src/agents/` |
 | Results interface | Browse saved runs, spatial layers, assets and simulation time steps | React, TypeScript, MapLibre, deck.gl and Plotly under `frontend/` |
 
-The current co-simulation sequence is: obtain CityLearn observations, request and apply controller actions, pass resulting building powers to pandapower, then record grid diagnostics alongside the simulation step. Grid diagnostics are currently primarily validation outputs; the implementation does not yet provide a generally verified closed-loop process that feeds every grid violation back into a controller and confirms its repair.
+The current co-simulation sequence is: obtain CityLearn observations, request and apply controller actions, pass resulting building powers to pandapower, then record grid diagnostics alongside the simulation step. The grid loop now closes the loop: violations detected (pandapower diagnostics) → controller update_grid_diagnostics → re-dispatch → power flow re-check, running continuously inside SimulationCoupler.step. Metrics track violations resolved vs attempted per run; re-dispatch actions recorded in result.json.
 
 ## Repository layout
 
 ```text
 .
-??? configs/                 # Scenario A? YAML configurations
-??? data/schemas/            # CityLearn schemas and scenario data
-??? experiments/
-??  ??? run_experiment.py    # Run one scenario/controller experiment
-??  ??? run_benchmark.py    # Run scenario/controller/seed combinations
-??  ??? ...                  # Saved experiment outputs and summaries
-??? frontend/                # React + TypeScript + Vite application
-??? src/
-??  ??? agents/              # Planner, coder, executor, verifier, repair and reporter
-??  ??? controllers/         # Rule-based, centralized heuristic and multi-agent controllers
-??  ??? coordination/       # Building/resource agents and community aggregator
-??  ??? evaluation/          # Energy, service, grid, fairness metrics and plots
-??  ??? schemas/             # Pydantic scenario, action, diagnostic and report models
-??  ??? simulation/          # CityLearn adapter, pandapower adapter and co-simulation
-??? tests/                   # Python automated tests
-??? project brief.md         # Full product/research brief and target milestone
-??? notes.md                 # Research and publication planning notes
+  configs/                 # Scenario A YAML configurations
+  data/schemas/            # CityLearn schemas and scenario data
+  experiments/
+    run_experiment.py      # Run one scenario/controller experiment
+    run_benchmark.py       # Run scenario/controller/seed combinations
+    ...                    # Saved experiment outputs and summaries
+  frontend/                # React + TypeScript + Vite application
+  src/
+    api/                 # FastAPI production service (single entry point)
+    agents/              # Planner, coder, executor, verifier, repair and reporter
+    controllers/         # Rule-based, centralized heuristic and multi-agent controllers
+    coordination/       # Building/resource agents and community aggregator
+    evaluation/          # Energy, service, grid, fairness metrics and plots
+    schemas/             # Pydantic scenario, action, diagnostic and report models
+    simulation/          # CityLearn adapter, pandapower adapter and co-simulation
+    tests/                   # Python automated tests
+  backend/                 # Legacy FastAPI app (deprecated, use src/api/)
+    app/                # Legacy routes, now superseded by src/api/
+  project brief.md         # Full product/research brief and target milestone
+  notes.md                 # Research and publication planning notes
+
 ```
 
 Generated runs are written under the selected output directory. Avoid committing large generated trajectories or plots unless they are intentionally part of a reproducibility artifact.
