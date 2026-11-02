@@ -45,11 +45,22 @@ class ExecutorAgent:
             # Create sandbox
             self.sandbox.create_sandbox()
             
-            # Write patched controller to sandbox
+            # Apply code changes using sandbox's AST-based implementation
+            # This applies the actual logic changes, not just comments
+            if state.code_changes:
+                success = self.sandbox.apply_changes(state.code_changes)
+                if not success:
+                    return ExecutorOutput(
+                        success=False,
+                        error="Failed to apply code changes in sandbox",
+                        execution_time=time.time() - start_time
+                    )
+            
+            # Write patched controller to sandbox (get the modified code from sandbox)
             controller_path = os.path.join(self.sandbox.temp_dir, state.controller_file)
-            os.makedirs(os.path.dirname(controller_path), exist_ok=True)
-            with open(controller_path, 'w') as f:
-                f.write(state.patched_code)
+            # Read the modified code from sandbox after changes were applied
+            with open(controller_path, 'r') as f:
+                patched_code = f.read()
             
             # Validate syntax
             syntax_result = self.sandbox.validate_syntax(state.controller_file)
@@ -78,10 +89,18 @@ class ExecutorAgent:
                 )
             
             # Run quick experiment validation
+            # Determine which violation categories to check based on repair plan
+            check_categories = ["voltage", "line_loading", "transformer_loading"]
+            if state.repair_plan and "primary_issue" in state.repair_plan:
+                primary = state.repair_plan["primary_issue"]
+                if primary in ["voltage", "line_loading", "transformer_loading", "ev_deadline", "comfort", "battery_soc", "flexible_load", "grid_import", "grid_export"]:
+                    check_categories = [primary]
+            
             exp_result = self.sandbox.run_experiment(
                 state.scenario_config_path,
                 state.controller_file,
-                self.quick_test_steps
+                self.quick_test_steps,
+                check_categories=check_categories
             )
             
             execution_time = time.time() - start_time
@@ -97,7 +116,10 @@ class ExecutorAgent:
                     "unit_tests_passed": True,
                     "unit_test_time": test_result.execution_time,
                     "experiment_passed": exp_result.success,
-                    "experiment_output": exp_result.stdout[-1000:] if exp_result.stdout else ""
+                    "experiment_output": exp_result.stdout[-1000:] if exp_result.stdout else "",
+                    "violation_counts": exp_result.violation_counts,
+                    "max_violations": exp_result.max_violations,
+                    "check_categories": check_categories
                 }
             )
             

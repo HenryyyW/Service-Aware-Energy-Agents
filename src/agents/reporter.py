@@ -181,12 +181,13 @@ class ReporterAgent:
         final_state: AgentState
     ) -> Dict[str, Any]:
         """Generate final report across all repair iterations."""
+        verification_result = final_state.verification_result or {}
         return {
             "repair_session": {
                 "run_id": final_state.experiment_result.run_id,
                 "scenario_id": final_state.experiment_result.scenario_id,
                 "total_iterations": len(all_iterations),
-                "final_status": "SUCCESS" if final_state.verification_result.get("violations_resolved") else "FAILED",
+                "final_status": "SUCCESS" if verification_result.get("violations_resolved") else "FAILED",
                 "completed_at": datetime.now().isoformat()
             },
             "iteration_history": all_iterations,
@@ -194,7 +195,7 @@ class ReporterAgent:
                 PlannerOutput(**final_state.repair_plan) if final_state.repair_plan else PlannerOutput(
                     primary_issue="unknown", repair_strategy=""
                 ),
-                VerifierOutput(**final_state.verification_result) if final_state.verification_result else VerifierOutput(
+                VerifierOutput(**verification_result) if verification_result else VerifierOutput(
                     violations_resolved=False, confidence=0.0, recommendation="escalate"
                 )
             ),

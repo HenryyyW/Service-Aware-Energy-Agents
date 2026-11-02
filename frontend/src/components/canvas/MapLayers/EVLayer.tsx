@@ -40,7 +40,7 @@ export function createEVLayer({
   }).filter(ev => ev.coordinates[0] !== 0 || ev.coordinates[1] !== 0);
 
   const getFillColor = (d: any): [number, number, number, number] => {
-    if (d.isSelected) return [245, 158, 11, 255];
+    if (d.isSelected) return [0, 192, 239, 255];
 
     if (d.departureRisk) {
       return [239, 68, 68, 220];

@@ -2,6 +2,10 @@
 
 @import "tailwindcss";
 
+/* Phase 2 token extensions (LMP / P2P / market metadata / agent).
+   Additive: defines only new tokens; existing tokens below are unchanged. */
+@import "./styles/tokens.css";
+
 @theme {
   /* ============================================================
      SEMANTIC COLOR TOKENS - Dark Mode First (Energy Domain)
@@ -25,31 +29,38 @@
   --color-text-inverse: #0A0F1A;
   
   /* Semantic energy domain colors - physics-meaningful */
-  --color-sun: #F59E0B;       /* Generation (PV) - amber */
+  --color-sun: #00C0EF;       /* Generation (PV) / primary accent - IEEE SA Main Blue (was amber #F59E0B) */
   --color-energy: #10B981;    /* Storage/flow - emerald */
   --color-load: #F43F5E;      /* Consumption - rose */
   --color-battery: #8B5CF6;   /* Battery - violet */
   --color-ev: #06B6D4;        /* Mobility - cyan */
-  --color-grid: #EAB308;      /* Infrastructure - yellow */
+  --color-grid: #4AC9E3;      /* Infrastructure - IEEE SA Medium Blue (was yellow #EAB308) */
   --color-violation: #EF4444; /* Safety/alert - red */
   --color-comfort: #22D3EE;   /* Comfort - sky */
   
   /* State overlays (8%/12%/16% opacity scale) */
   --color-state-hover: rgba(255,255,255,0.08);
   --color-state-active: rgba(255,255,255,0.12);
-  --color-state-focus: rgba(245, 158, 11, 0.4);
+  --color-state-focus: rgba(0, 192, 239, 0.4);
   --color-state-disabled: rgba(255,255,255,0.04);
   
   /* Semantic aliases for components */
   --color-primary: var(--color-sun);
-  --color-primary-hover: #D97706;
-  --color-primary-active: #B45309;
+  --color-primary-hover: #0099C7;
+  --color-primary-active: #0080A8;
   --color-danger: var(--color-violation);
   --color-danger-hover: #DC2626;
   --color-danger-active: #B91C1C;
   --color-success: var(--color-energy);
   --color-warning: var(--color-grid);
   --color-info: var(--color-ev);
+
+  /* Aliases for design-plan / legacy class names used across components
+     (bg-surface, bg-surface/50, text-space, ...). Without these, Tailwind v4
+     generates no CSS for those utilities and the surfaces render transparent. */
+  --color-surface: var(--color-bg-elevated);
+  --color-surface-hover: var(--color-bg-hover);
+  --color-space: var(--color-bg);
 
   /* Font families */
   --font-display: 'Space Grotesk', sans-serif;
@@ -641,7 +652,7 @@
 
   .slider::-webkit-slider-thumb:hover {
     transform: scale(1.1);
-    box-shadow: 0 20px 40px rgba(245, 158, 11, 0.4);
+    box-shadow: 0 20px 40px rgba(0, 192, 239, 0.4);
   }
 
   .slider::-moz-range-thumb {
@@ -852,4 +863,30 @@
 
 .plotly .modebar-btn:hover {
   color: var(--color-text);
+}
+
+/* ============================================================
+   Accessibility — reduced motion & high contrast
+   (design plan §Motion / §Accessibility; previously absent)
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (prefers-contrast: high) {
+  :root {
+    --color-border: #94A3B8;
+    --color-border-strong: #CBD5E1;
+    --color-text-muted: #CBD5E1;
+    --color-text-subtle: #94A3B8;
+    --color-state-hover: rgba(255, 255, 255, 0.16);
+    --color-state-active: rgba(255, 255, 255, 0.24);
+  }
 }

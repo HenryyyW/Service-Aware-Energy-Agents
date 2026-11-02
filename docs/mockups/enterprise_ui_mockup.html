@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAEA — enterprise industrial direction (Schneider / GE style)</title>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="mark">SAEA</span><span class="sub">Service-Aware Energy Agents</span></div>
+    <nav class="crumbs">Communities <i>/</i> Eco-District A <i>/</i> <b>Run review</b></nav>
+    <div class="topmeta"><span class="chip chip-env">M1 · <b>lmp</b> regime</span><span class="user">RE ▾</span></div>
+  </header>
+
+  <div class="shell">
+    <nav class="rail">
+      <a class="nav active"><span class="ic">▦</span>Canvas</a>
+      <a class="nav"><span class="ic">⌘</span>Scenarios</a>
+      <a class="nav"><span class="ic">✦</span>Agent</a>
+      <a class="nav"><span class="ic">▤</span>Reports</a>
+      <a class="nav"><span class="ic">⇄</span>Compare</a>
+      <a class="nav"><span class="ic">⚙</span>Settings</a>
+    </nav>
+
+    <main>
+      <div class="toolbar">
+        <div class="tabs"><span class="tab active">Canvas</span><span class="tab">Layers</span><span class="tab">Time series</span><span class="tab">Dispatch log</span></div>
+        <div class="tools"><span class="chip">Grid limit 50%</span><span class="chip">5 buildings</span><button class="btn">Export</button><button class="btn btn-primary">Run scenario</button></div>
+      </div>
+
+      <section class="kpis">
+        <div class="kpi"><p class="k-label">Total cost</p><p class="k-val">$1,842<span>.10</span></p><p class="k-delta">−15.3% vs rule-based</p></div>
+        <div class="kpi"><p class="k-label">Peak demand</p><p class="k-val">96<span>.4 kW</span></p><p class="k-delta">−4.1% </p></div>
+        <div class="kpi"><p class="k-label">EV completion</p><p class="k-val">0.96</p><p class="k-delta">+81 pp</p></div>
+        <div class="kpi kpi-warn"><p class="k-label">Grid violations</p><p class="k-val">3</p><p class="k-delta">voltage · building_3</p></div>
+      </section>
+
+      <section class="grid">
+        <div class="panel">
+          <div class="panel-head"><h2>Runs</h2><span class="link">Filter by regime</span></div>
+          <table>
+            <thead><tr><th>Run</th><th>Scenario</th><th>Regime</th><th class="num">Cost</th><th class="num">EV %</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">scenario_c_lmp_multi_agent_42</td><td>C</td><td><span class="tag">LMP</span></td><td class="num">1,842.10</td><td class="num">0.96</td><td><span class="pill ok">Completed</span></td></tr>
+              <tr><td class="mono">scenario_c_pool_tou_multi_agent_42</td><td>C</td><td><span class="tag">POOL·TOU</span></td><td class="num">2,174.55</td><td class="num">0.94</td><td><span class="pill ok">Completed</span></td></tr>
+              <tr><td class="mono">scenario_e_lmp_mpc_123</td><td>E</td><td><span class="tag">LMP</span></td><td class="num">2,905.02</td><td class="num">0.88</td><td><span class="pill warn">Partial data</span></td></tr>
+              <tr class="sel"><td class="mono">scenario_a_lmp_rule_based_456</td><td>A</td><td><span class="tag">LMP</span></td><td class="num">1,103.77</td><td class="num">0.91</td><td><span class="pill ok">Completed</span></td></tr>
+              <tr><td class="mono">scenario_d_lmp_rl_789</td><td>D</td><td><span class="tag">LMP</span></td><td class="num">1,540.31</td><td class="num">0.83</td><td><span class="pill fail">PF fallback</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel map">
+          <div class="panel-head"><h2>Community canvas</h2><span class="link">LMP layer</span></div>
+          <div class="canvas">
+            <svg viewBox="0 0 320 190" role="img" aria-label="Community map: buildings coloured by locational price, feeders as lines">
+              <rect width="320" height="190" fill="#f4f6f6"/>
+              <g stroke="#dfe6e6" stroke-width="1">
+                <path d="M0 48 H320 M0 96 H320 M0 144 H320 M64 0 V190 M128 0 V190 M192 0 V190 M256 0 V190"/>
+              </g>
+              <g class="feeder" stroke="#005e60" stroke-width="2" fill="none" opacity="0.7">
+                <path d="M40 150 L120 150 L120 60 L240 60 M120 150 L200 150"/>
+              </g>
+              <g stroke="#ffffff" stroke-width="1.4">
+                <polygon points="60,110 110,104 118,146 66,150" fill="#0a7d72"/>
+                <polygon points="140,96 186,92 190,132 144,136" fill="#59c3c9"/>
+                <polygon points="150,40 196,38 198,74 152,76" fill="#439297"/>
+                <polygon points="210,110 262,108 264,150 212,152" fill="#c8b48a"/>
+                <polygon points="226,34 268,32 270,68 228,70" fill="#0a7d72"/>
+              </g>
+              <circle cx="120" cy="60" r="3.4" fill="#c8ff08" stroke="#005e60"/>
+              <circle cx="120" cy="150" r="2.6" fill="#212121"/>
+            </svg>
+            <div class="legend">
+              <span><i style="background:#0a7d72"></i>low LMP</span>
+              <span><i style="background:#59c3c9"></i>mid</span>
+              <span><i style="background:#c8b48a"></i>high</span>
+              <span><i style="background:#005e60"></i>feeder</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="statusbar"><span>310 runs · <b>lmp</b> + <b>pool_tou</b></span><span>Last sync 12:41 UTC</span><span class="ok-dot"></span><span>Connected</span></footer>
+</div>
+
+<style>
+  :root{
+    --gev:#005e60; --gev-d:#004a4c; --lime:#c8ff08; --sky:#59c3c9;
+    --ink:#212121; --muted:#696969; --faint:#9a9a9a;
+    --bg:#fafafa; --surface:#ffffff; --line:#e3e3e3; --line-2:#cccccc;
+    --ok:#0a7d72; --warn:#b7791f; --fail:#b3261e;
+    --sans: "Segoe UI", Inter, system-ui, -apple-system, Arial, sans-serif;
+    --mono: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.45}
+  .app{max-width:1100px;margin:0 auto;background:var(--bg);border:1px solid var(--line);border-top:none}
+  .topbar{display:flex;align-items:center;gap:16px;background:var(--gev);color:#fff;padding:10px 16px}
+  .brand{display:flex;align-items:baseline;gap:8px;font-weight:700;letter-spacing:.2px}
+  .brand .mark{font-size:15px}
+  .brand .sub{font-weight:400;font-size:11px;opacity:.8;letter-spacing:.3px}
+  .crumbs{margin-left:8px;font-size:12px;opacity:.85}
+  .crumbs i{opacity:.5;font-style:normal;margin:0 6px}
+  .crumbs b{font-weight:600;opacity:1}
+  .topmeta{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:12px}
+  .chip{display:inline-block;padding:2px 8px;border:1px solid var(--line-2);border-radius:3px;background:#fff;color:var(--muted);font-size:11px}
+  .chip-env{border-color:transparent;background:rgba(255,255,255,.14);color:#fff}
+  .user{opacity:.9}
+  .shell{display:flex;min-height:520px}
+  .rail{width:172px;background:#f2f4f4;border-right:1px solid var(--line);padding:8px 0;display:flex;flex-direction:column;gap:2px}
+  .nav{display:flex;align-items:center;gap:10px;padding:9px 16px;color:var(--ink);text-decoration:none;font-size:13px;border-left:3px solid transparent}
+  .nav .ic{width:16px;text-align:center;color:var(--muted)}
+  .nav.active{background:#fff;border-left-color:var(--gev);font-weight:600}
+  .nav.active .ic{color:var(--gev)}
+  main{flex:1;min-width:0;padding:14px 16px}
+  .toolbar{display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:14px}
+  .tabs{display:flex;gap:16px}
+  .tab{font-size:13px;color:var(--muted);padding-bottom:10px;margin-bottom:-11px}
+  .tab.active{color:var(--ink);font-weight:600;border-bottom:2px solid var(--gev)}
+  .tools{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .btn{border:1px solid var(--line-2);background:#fff;color:var(--ink);padding:6px 12px;border-radius:3px;font-size:12px;font-weight:600;cursor:pointer}
+  .btn-primary{background:var(--gev);border-color:var(--gev);color:#fff}
+  .btn-primary:hover{background:var(--gev-d)}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:12px 14px}
+  .k-label{margin:0;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  .k-val{margin:6px 0 2px;font-family:var(--mono);font-size:24px;font-weight:600;letter-spacing:-.01em}
+  .k-val span{font-size:12px;color:var(--faint);font-weight:500}
+  .k-delta{margin:0;font-size:11px;color:var(--ok)}
+  .kpi-warn .k-val{color:var(--fail)}
+  .kpi-warn .k-delta{color:var(--warn)}
+  .grid{display:grid;grid-template-columns:1.35fr 1fr;gap:12px}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:4px;overflow:hidden}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line)}
+  .panel-head h2{margin:0;font-size:13px;font-weight:600}
+  .link{font-size:12px;color:var(--gev);font-weight:600}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{ text-align:left;font-weight:600;color:var(--muted);background:#f6f8f8;padding:8px 14px;border-bottom:1px solid var(--line);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  td{padding:8px 14px;border-bottom:1px solid #eef1f1}
+  tr.sel td{background:#f0f7f6}
+  .num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .mono{font-family:var(--mono);font-size:11.5px;color:#3a3a3a}
+  .tag{display:inline-block;font-size:10.5px;font-weight:600;letter-spacing:.03em;padding:1px 6px;border:1px solid var(--line-2);border-radius:3px;color:var(--gev);border-color:#bfd8d6;background:#eef7f6}
+  .pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px}
+  .pill.ok{background:#e4f3f1;color:var(--ok)}
+  .pill.warn{background:#fbf1df;color:var(--warn)}
+  .pill.fail{background:#fbe7e5;color:var(--fail)}
+  .map .canvas{padding:10px 14px 14px}
+  .canvas svg{width:100%;height:auto;border:1px solid var(--line);border-radius:3px;display:block}
+  .legend{display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--muted)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  .statusbar{display:flex;align-items:center;gap:14px;background:#f2f4f4;border-top:1px solid var(--line);padding:7px 16px;font-size:11px;color:var(--muted)}
+  .statusbar b{color:var(--ink)}
+  .ok-dot{width:7px;height:7px;border-radius:50%;background:var(--ok);margin-left:auto}
+</style>
+</body>
+</html>

@@ -80,33 +80,61 @@ class VerifierAgent:
         remaining = []
         new_violations = []
         
-        # Parse executor test results
-        test_results = executor_output.get("test_results", {})
-        
-        # Check if the quick validation experiment passed
-        experiment_passed = test_results.get("experiment_passed", False)
-        
-        if experiment_passed:
-            violations_resolved = True
-            # In a full implementation, we would check specific diagnostic improvements
-            # For quick test, we assume that passing the experiment means the primary issue is addressed
+        # Handle both full executor_output dict and test_results dict
+        # If executor_output has "test_results" key, use that; otherwise assume it's test_results directly
+        if "test_results" in executor_output:
+            test_results = executor_output.get("test_results", {})
         else:
-            violations_resolved = False
-            # Add the primary issue as remaining since the fix didn't pass validation
-            remaining.append({
-                "issue": plan.primary_issue,
-                "reason": "Quick experiment validation failed - fix did not resolve issue",
-                "severity": "high",
-                "test_details": test_results.get("error", "Unknown test failure")
-            })
-            
-            # Check if any new issues were introduced
-            if test_results.get("syntax_error", False):
-                new_violations.append({
-                    "issue": "syntax_error",
-                    "reason": "Introduced syntax error in controller code",
-                    "severity": "critical"
+            test_results = executor_output
+        
+        # Check violation counts from sandbox experiment
+        violation_counts = test_results.get("violation_counts", {})
+        check_categories = test_results.get("check_categories", [])
+        
+        # Check if violations in checked categories are resolved
+        primary_issue = plan.primary_issue
+        violations_resolved = True
+        
+        if violation_counts:
+            # Check primary issue violations
+            primary_count = violation_counts.get(primary_issue, 0)
+            if primary_count > 0:
+                violations_resolved = False
+                remaining.append({
+                    "issue": primary_issue,
+                    "count": primary_count,
+                    "reason": f"Quick experiment validation failed - {primary_issue} violations still present",
+                    "severity": "high"
                 })
+            
+            # Check other checked categories
+            for cat in check_categories:
+                if cat != primary_issue and violation_counts.get(cat, 0) > 0:
+                    remaining.append({
+                        "issue": cat,
+                        "count": violation_counts.get(cat, 0),
+                        "reason": f"New {cat} violations detected",
+                        "severity": "medium"
+                    })
+        else:
+            # Fallback to experiment_passed if no violation counts
+            experiment_passed = test_results.get("experiment_passed", False)
+            if not experiment_passed:
+                violations_resolved = False
+                remaining.append({
+                    "issue": primary_issue,
+                    "reason": "Quick experiment validation failed - fix did not resolve issue",
+                    "severity": "high",
+                    "test_details": test_results.get("error", "Unknown test failure")
+                })
+        
+        # Check if any new issues were introduced
+        if test_results.get("syntax_error", False):
+            new_violations.append({
+                "issue": "syntax_error",
+                "reason": "Introduced syntax error in controller code",
+                "severity": "critical"
+            })
         
         return violations_resolved, remaining, new_violations
     

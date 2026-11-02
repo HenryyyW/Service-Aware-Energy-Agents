@@ -48,29 +48,16 @@ export function createLMPLayer({
   });
 
   const getFillColor = (d: any): [number, number, number, number] => {
-    if (d.isSelected) return [245, 158, 11, 255]; // --color-sun
+    if (d.isSelected) return [0, 192, 239, 255]; // --color-sun (IEEE blue)
 
-    // Color scale: blue (low price) -> yellow (mid) -> red (high price)
+    // IEEE-blue sequential ramp (low -> high price): #005d94 -> #00C0EF
     const t = d.normalizedPrice;
-    if (t < 0.5) {
-      // Blue to yellow
-      const intensity = t * 2;
-      return [
-        Math.round(59 * (1 - intensity) + 245 * intensity),   // R: 59 -> 245
-        Math.round(130 * (1 - intensity) + 158 * intensity),  // G: 130 -> 158
-        Math.round(246 * (1 - intensity) + 11 * intensity),   // B: 246 -> 11
-        220,
-      ];
-    } else {
-      // Yellow to red
-      const intensity = (t - 0.5) * 2;
-      return [
-        245,
-        Math.round(158 * (1 - intensity) + 63 * intensity),   // G: 158 -> 63
-        Math.round(11 * (1 - intensity) + 94 * intensity),    // B: 11 -> 94
-        220,
-      ];
-    }
+    return [
+      0,                                     // R
+      Math.round(93 * (1 - t) + 192 * t),    // G
+      Math.round(148 * (1 - t) + 239 * t),   // B
+      220,
+    ];
   };
 
   const getRadius = (d: any): number => {
@@ -103,18 +90,10 @@ export function getLMPColorScale(minPrice: number, maxPrice: number, steps = 5):
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
     const price = minPrice + (maxPrice - minPrice) * t;
-    let r, g, b;
-    if (t < 0.5) {
-      const intensity = t * 2;
-      r = Math.round(59 * (1 - intensity) + 245 * intensity);
-      g = Math.round(130 * (1 - intensity) + 158 * intensity);
-      b = Math.round(246 * (1 - intensity) + 11 * intensity);
-    } else {
-      const intensity = (t - 0.5) * 2;
-      r = 245;
-      g = Math.round(158 * (1 - intensity) + 63 * intensity);
-      b = Math.round(11 * (1 - intensity) + 94 * intensity);
-    }
+    // IEEE-blue sequential ramp: #005d94 -> #00C0EF
+    const r = 0;
+    const g = Math.round(93 * (1 - t) + 192 * t);
+    const b = Math.round(148 * (1 - t) + 239 * t);
     scale.push({
       price,
       color: `rgb(${r}, ${g}, ${b})`,

@@ -36,7 +36,7 @@ export function createBuildingLayer({
   });
 
   const defaultGetFillColor = (d: any): [number, number, number, number] => {
-    if (d.isSelected) return [245, 158, 11, 255];
+    if (d.isSelected) return [0, 192, 239, 255];
 
     const netFlow = d.netFlow;
     if (netFlow > 10) {

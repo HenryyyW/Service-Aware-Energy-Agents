@@ -38,15 +38,15 @@ export function createFlowLayer({ flows, animationSpeed = 1, showParticles = tru
   const getFlowColor = (flow: EnergyFlow): [number, number, number, number] => {
     switch (flow.type) {
       case 'generation':
-        return [245, 158, 11, 200];
+        return [0, 192, 239, 200];
       case 'consumption':
         return [244, 63, 94, 200];
       case 'storage_charge':
         return [16, 185, 129, 200];
       case 'storage_discharge':
-        return [245, 158, 11, 200];
+        return [0, 192, 239, 200];
       case 'grid_import':
-        return [234, 179, 8, 200];
+        return [74, 201, 227, 200];
       case 'grid_export':
         return [16, 185, 129, 200];
       case 'ev_charge':

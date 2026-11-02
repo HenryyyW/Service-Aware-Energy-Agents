@@ -40,12 +40,12 @@ export function createBatteryLayer({
   }).filter(b => b.coordinates[0] !== 0 || b.coordinates[1] !== 0);
 
   const getFillColor = (d: any): [number, number, number, number] => {
-    if (d.isSelected) return [245, 158, 11, 255];
+    if (d.isSelected) return [0, 192, 239, 255];
 
     if (d.isCharging) {
       return [16, 185, 129, 220];
     } else if (d.isDischarging) {
-      return [245, 158, 11, 220];
+      return [0, 192, 239, 220];
     }
     return [139, 92, 246, 180];
   };
@@ -81,7 +81,7 @@ export function createBatteryLayer({
     getRadius: (d) => 12 + (d.soc * 15) + 4,
     getFillColor: [0, 0, 0, 0],
     getLineColor: (d) => {
-      if (d.isSelected) return [245, 158, 11, 255];
+      if (d.isSelected) return [0, 192, 239, 255];
       return [139, 92, 246, 150];
     },
     getLineWidth: 2,

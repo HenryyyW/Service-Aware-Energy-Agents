@@ -31,12 +31,12 @@ export function createTransformerLayer({
   });
 
   const getFillColor = (d: any): [number, number, number, number] => {
-    if (d.isSelected) return [245, 158, 11, 255];
+    if (d.isSelected) return [0, 192, 239, 255];
 
     if (d.isOverloaded) return [239, 68, 68, 220];
-    if (d.loading > 80) return [245, 158, 11, 200];
-    if (d.loading > 60) return [234, 179, 8, 180];
-    return [234, 179, 8, 180];
+    if (d.loading > 80) return [0, 192, 239, 200];
+    if (d.loading > 60) return [74, 201, 227, 180];
+    return [74, 201, 227, 180];
   };
 
   const getRadius = (d: any): number => {

@@ -33,21 +33,21 @@ export function createFeederLayer({
   });
 
   const getColor = (d: any): [number, number, number, number] => {
-    if (d.isSelected) return [245, 158, 11, 255];
+    if (d.isSelected) return [0, 192, 239, 255];
 
     if (showLoading) {
       if (d.isOverloaded) return [239, 68, 68, 220];
-      if (d.loading > 80) return [245, 158, 11, 200];
-      if (d.loading > 60) return [234, 179, 8, 180];
+      if (d.loading > 80) return [0, 192, 239, 200];
+      if (d.loading > 60) return [74, 201, 227, 180];
       return [16, 185, 129, 180];
     }
 
     if (d.powerFlow > 10) {
       return [16, 185, 129, 200];
     } else if (d.powerFlow < -10) {
-      return [234, 179, 8, 200];
+      return [74, 201, 227, 200];
     }
-    return [234, 179, 8, 150];
+    return [74, 201, 227, 150];
   };
 
   const getWidth = (d: any): number => {

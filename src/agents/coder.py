@@ -13,23 +13,27 @@ class CoderAgent:
         self.model = model
         self.temperature = temperature
     
-    def code(self, state: AgentState, plan: PlannerOutput) -> CoderOutput:
+    def code(self, state: AgentState, plan: PlannerOutput, controller_file: str = None) -> CoderOutput:
         """
         Implement code changes based on the repair plan.
         
         Args:
             state: Current agent state with controller code
             plan: Repair plan from Planner
+            controller_file: Path to controller file (for change tracking)
             
         Returns:
             CoderOutput with code changes and patched code
         """
         changes = []
         
+        # Get controller file from state or parameter
+        controller_file = controller_file or state.controller_file or "controllers/rule_based.py"
+        
         # Generate changes for each target function
         for func_name in plan.target_functions:
             func_changes = self._generate_function_changes(
-                func_name, plan.primary_issue, plan.repair_strategy, state.controller_code
+                func_name, plan.primary_issue, plan.repair_strategy, state.controller_code, controller_file
             )
             changes.extend(func_changes)
         
@@ -57,7 +61,8 @@ class CoderAgent:
         func_name: str, 
         primary_issue: str, 
         strategy: str, 
-        controller_code: str
+        controller_code: str,
+        controller_file: str
     ) -> List[Dict[str, Any]]:
         """Generate specific code changes for a function."""
         changes = []
@@ -68,7 +73,7 @@ class CoderAgent:
         if not func_info:
             # Function doesn't exist, suggest adding it
             changes.append({
-                "file": "controllers/rule_based.py",
+                "file": controller_file,
                 "function": func_name,
                 "change": f"Add new function {func_name} for {primary_issue} handling",
                 "type": "addition",
@@ -81,7 +86,7 @@ class CoderAgent:
         
         for detail in change_details:
             changes.append({
-                "file": "controllers/rule_based.py",
+                "file": controller_file,
                 "function": func_name,
                 "change": detail,
                 "type": "modification",

@@ -11,7 +11,7 @@ interface TimeSeriesChartProps {
 
 const metricColors: Record<string, string> = {
   net_electricity_consumption: '#F43F5E',
-  solar_generation: '#F59E0B',
+  solar_generation: '#00C0EF',
   electrical_storage_soc: '#8B5CF6',
   battery_power_kw: '#10B981',
   ev_charge_kw: '#06B6D4',
@@ -19,7 +19,7 @@ const metricColors: Record<string, string> = {
   indoor_temperature: '#22D3EE',
   cooling_demand: '#06B6D4',
   heating_demand: '#F43F5E',
-  capacity_factor: '#F59E0B',
+  capacity_factor: '#00C0EF',
   available_capacity_kwh: '#8B5CF6',
   connected_electric_vehicle_at_charger_soc: '#8B5CF6',
   departure_time: '#06B6D4',

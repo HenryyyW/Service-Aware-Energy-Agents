@@ -129,7 +129,7 @@ class MultiAgentRepairLoop:
             
             # === CODER ===
             print(f"\n[CODER] Implementing code changes...")
-            coder_output = self.coder.code(state, plan)
+            coder_output = self.coder.code(state, plan, state.controller_file)
             print(f"  Changes: {len(coder_output.code_changes)}")
             for change in coder_output.code_changes:
                 print(f"    - {change['function']}: {change['change'][:80]}...")

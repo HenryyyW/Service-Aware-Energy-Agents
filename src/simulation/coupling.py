@@ -296,6 +296,65 @@ class SimulationCoupler:
                 )
                 for d in grid_limit_diagnostics:
                     grid_diagnostics.add_diagnostic(d)
+                
+                # When grid limits are exceeded, also produce VOLTAGE and LINE_LOADING
+                # diagnostics so M3.4 metrics (voltage_violations_resolved,
+                # loading_violations_resolved, resolution_rate) are populated.
+                # These are derived from the power flow results that already
+                # triggered the limit check.
+                if grid_limit_diagnostics:
+                    # Voltage violations: check if any bus voltage is outside limits
+                    if power_flow_converged:
+                        voltage_profile = self.pandapower.get_voltage_profile()
+                        min_pu = min(voltage_profile.values()) if voltage_profile else None
+                        max_pu = max(voltage_profile.values()) if voltage_profile else None
+                        vn_min = self.pandapower.get_vn_min() if hasattr(self.pandapower, 'get_vn_min') else 0.4
+                        vn_max = self.pandapower.get_vn_max() if hasattr(self.pandapower, 'get_vn_max') else 1.0
+                        
+                        if min_pu is not None and min_pu < 0.95:
+                            grid_diagnostics.add_diagnostic(Diagnostic(
+                                diagnostic_id=f"voltage_violation_min_{self.current_timestep}",
+                                category=DiagnosticCategory.VOLTAGE,
+                                severity=Severity.VIOLATION,
+                                message=f"Undervoltage minimum: {min_pu:.2f} pu < 0.95 pu",
+                                timestep=self.current_timestep,
+                                values={"min_voltage_pu": min_pu},
+                                limits={"max_pu": 0.95},
+                                metadata={"violation_type": "undervoltage"}
+                            ))
+                        if max_pu is not None and max_pu > 1.05:
+                            grid_diagnostics.add_diagnostic(Diagnostic(
+                                diagnostic_id=f"voltage_violation_max_{self.current_timestep}",
+                                category=DiagnosticCategory.VOLTAGE,
+                                severity=Severity.VIOLATION,
+                                message=f"Overvoltage maximum: {max_pu:.2f} pu > 1.05 pu",
+                                timestep=self.current_timestep,
+                                values={"max_voltage_pu": max_pu},
+                                limits={"min_pu": 1.05},
+                                metadata={"violation_type": "overvoltage"}
+                            ))
+                    
+                    # Line loading violations
+                    loading_profile = self.pandapower.get_loading_profile()
+                    if loading_profile:
+                        # Flatten: get max loading percent across all lines and trafos
+                        all_loading = []
+                        for category in loading_profile.values():
+                            if isinstance(category, dict):
+                                all_loading.extend(category.values())
+                        max_loading_pct = max(all_loading) if all_loading else None
+                        if max_loading_pct is not None and max_loading_pct > 100.0:
+                            # Find the line element
+                            grid_diagnostics.add_diagnostic(Diagnostic(
+                                diagnostic_id=f"line_loading_violation_{self.current_timestep}",
+                                category=DiagnosticCategory.LINE_LOADING,
+                                severity=Severity.VIOLATION,
+                                message=f"Line loading exceeds limit: {max_loading_pct:.1f}% > 100%",
+                                timestep=self.current_timestep,
+                                values={"max_loading_pct": max_loading_pct},
+                                limits={"max_pct": 100.0},
+                                metadata={"violation_type": "line_overloading"}
+                            ))
             
             # Add per-building contributions and losses to diagnostics
             if power_flow_converged:

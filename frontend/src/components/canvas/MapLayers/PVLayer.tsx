@@ -35,7 +35,7 @@ export function createPVLayer({
   }).filter(Boolean);
 
   const getFillColor = (d: any): [number, number, number, number] => {
-    if (d.isSelected) return [245, 158, 11, 255];
+    if (d.isSelected) return [0, 192, 239, 255];
 
     const ratio = d.outputRatio;
     if (ratio > 0.1) {

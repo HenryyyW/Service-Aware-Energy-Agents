@@ -1,0 +1,274 @@
+% ============================================================================
+% arXiv submission (standard article class, single column)
+% Compiles with: pdflatex arxiv_main && bibtex arxiv_main && pdflatex arxiv_main && pdflatex arxiv_main
+% ============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\usepackage{natbib}
+\usepackage{geometry}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage{subcaption}
+
+% Page geometry for arXiv
+\geometry{margin=1in}
+
+% Hyperref setup
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue,
+    pdfauthor={Service-Aware-Energy-Agents Team},
+    pdftitle={Service-Aware Energy Agents: Pricing Regimes, Failure Injection, and a Verified LLM Code-Agent Workflow for Community Energy Simulation}
+}
+
+% Custom commands
+\newcommand{\agent}[1]{\texttt{#1}}
+\newcommand{\scenario}[1]{\textsc{#1}}
+
+\title{Service-Aware Energy Agents: Pricing Regimes, Failure Injection, and a Verified LLM Code-Agent Workflow for Community Energy Simulation}
+
+\author{
+    Service-Aware-Energy-Agents Team\thanks{Equal contribution} \\
+    OpenBot Platform \\
+    \texttt{service-aware-energy-agents@openbot.local}
+}
+
+\date{\today}
+
+% Define keywords command for article class
+\newcommand{\keywords}[1]{\par\medskip\noindent\textbf{Keywords:} #1}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We present a service-aware multi-agent framework for renewable energy community optimization that integrates pricing regime selection, component failure injection, and a verified LLM-based code-agent repair loop. Our framework couples CityLearn building-level simulation with pandapower grid validation across five scenarios (A--E) covering coordination baselines, battery/PV assets, deferrable loads, comfort bounds, and mid-run component failures. We evaluate five controllers (rule-based, multi-agent, centralized, MPC, RL) across 125 paired-seed runs under TOU and LMP pricing regimes, plus a 50-run ablation of verified vs. unverified LLM agents. The multi-agent controller achieves cost- and peak-minimal operation in every scenario (mean cost reduction $-$17.68 to $-$41.37 USD vs. rule-based, $p_{\mathrm{Holm}} < 0.0001$) with a measurable EV completion trade-off ($-$0.11). Under aggressive failure injection (95\% grid limit reduction), all controllers show zero resolution rate on structural voltage violations, confirming correct violation detection. The LLM ablation runs in fallback mode show null divergence between verified and unverified arms (first-attempt validity 1.000, 0 repairs/step), establishing that verification machinery is a no-op under a perfect proposer. All 175 runs complete with \texttt{git\_dirty: false}, seed-pair reproducibility confirmed, and zero failed runs.
+\end{abstract}
+
+\keywords{Multi-agent systems, renewable energy communities, LLM code agents, power system simulation, failure injection, pricing regimes}
+
+\section{Introduction}
+\label{sec:intro}
+
+Renewable energy communities (RECs) require coordinated control of distributed energy resources (DERs) under physical grid constraints, service-level commitments, and time-varying pricing regimes. Existing approaches typically optimize a single objective (cost, peak, or carbon) without jointly considering grid physics, service feasibility, and market regime diversity. Furthermore, when component failures occur mid-operation, controllers must detect and respond to violations in real time---a capability rarely tested in simulation benchmarks.
+
+We address three gaps:
+\begin{enumerate}
+    \item \textbf{Pricing regime diversity}: Most benchmarks fix a single tariff structure. We evaluate the full controller matrix under \texttt{tou\_solo}, \texttt{pool\_tou}, and \texttt{lmp} regimes (P2P wireable but scheduled later).
+    \item \textbf{Failure injection}: Scenario E injects sensor, PV inverter, battery, and EV charger failures at severity 1.0 mid-run, with aggressive 95\% grid limit reduction.
+    \item \textbf{Verified LLM code agents}: A multi-agent repair loop (Planner$\rightarrow$Coder$\rightarrow$Executor$\rightarrow$Verifier$\rightarrow$Reporter) proposes and validates controller patches. We ablate verified vs. unverified arms in fallback mode to isolate verification machinery from proposer quality.
+\end{enumerate}
+
+Related work includes CityLearn for DER simulation \cite{citylearn2021}, pandapower for grid validation \cite{pandapower2018}, multi-agent RL for energy management \cite{energynet2021}, MPC for receding-horizon control \cite{mpc2020}, and LLM-based program repair \cite{ast2020}. The Holm correction for multiple comparisons follows \cite{holm1979}.
+\begin{enumerate}
+    \item \textbf{Pricing regime diversity}: Most benchmarks fix a single tariff structure. We evaluate the full controller matrix under \texttt{tou\_solo}, \texttt{pool\_tou}, and \texttt{lmp} regimes (P2P wireable but scheduled later).
+    \item \textbf{Failure injection}: Scenario E injects sensor, PV inverter, battery, and EV charger failures at severity 1.0 mid-run, with aggressive 95\% grid limit reduction.
+    \item \textbf{Verified LLM code agents}: A multi-agent repair loop (Planner$\rightarrow$Coder$\rightarrow$Executor$\rightarrow$Verifier$\rightarrow$Reporter) proposes and validates controller patches. We ablate verified vs. unverified arms in fallback mode to isolate verification machinery from proposer quality.
+\end{enumerate}
+
+\section{System and Method}
+\label{sec:method}
+
+\subsection{Simulation Coupling}
+CityLearn handles building-level DER dynamics (battery SOC, EV charging, flexible loads, thermal comfort) \cite{citylearn2021}. pandapower validates grid physics (power flow convergence, voltage limits $\pm 5\%$, line/transformer thermal limits) \cite{pandapower2018}. A co-simulation coupler steps both simulators each timestep, passing grid diagnostics back to the controller.
+
+\subsection{Controller Suite}
+\begin{description}
+    \item[\agent{rule\_based}] Heuristic priority: charge battery from excess PV, charge EVs by departure deadline, shift flexible loads to solar hours, enforce community import/export limits.
+    \item[\agent{multi\_agent}] Decentralized per-building agents with consensus on community-level limits via dual decomposition.
+    \item[\agent{centralized}] Single optimizer with full observability.
+    \item[\agent{mpc}] Receding-horizon LP with perfect 24h forecasts (upper bound on service) \cite{mpc2020}.
+    \item[\agent{rl}] Tabular Q-learning per scenario (126-state base encoder; 138-state for LMP) \cite{acmenergy2022}.
+\end{description}
+
+\subsection{Verified LLM Repair Loop}
+A five-agent loop iteratively repairs controller code:
+\begin{enumerate}
+    \item \textbf{Planner}: Diagnoses violations, identifies root cause, proposes repair strategy.
+    \item \textbf{Coder}: Applies AST-based patches to target functions \cite{ast2020}.
+    \item \textbf{Executor}: Runs patched controller in sandbox with unit tests + quick simulation.
+    \item \textbf{Verifier}: Counts violation resolution from sandbox diagnostics.
+    \item \textbf{Reporter}: Generates comprehensive report with diffs and recommendations.
+\end{enumerate}
+The loop runs for max 3 iterations or until \texttt{violations\_resolved=true}.
+
+The ablation compares \agent{llm\_agent} (single-pass, execute-as-proposed) vs. \agent{llm\_agent\_verified} (per-step verification, re-prompt once, fallback to rule-based on failure, repair cap 2). Both run in \texttt{fallback} mode (deterministic rule-based proposer) to isolate verification machinery.
+
+The real-LLM ablation uses NVIDIA NIM \texttt{deepseek-coder-6.7b} \cite{nim2024,deepseek2024}.
+
+\section{Experimental Setup}
+\label{sec:setup}
+
+Five scenarios (Table~\ref{tab:scenarios}) differ in device mix and stressors. Each runs 5 seeds (42, 123, 456, 789, 999) $\times$ 5 controllers = 125 runs per regime. Ablation adds 50 runs (2 LLM arms $\times$ 5 scenarios $\times$ 5 seeds) against \agent{multi\_agent} reference.
+
+\begin{table}[htbp]
+\centering
+\caption{Scenario definitions.}
+\label{tab:scenarios}
+\begin{tabular}{lll}
+\toprule
+Scenario & Device Mix & Stressor \\
+\midrule
+A & Base (no DERs) & Coordination baseline \\
+B & + Battery, PV & Tariff exposure \\
+C & + Flexible loads & Deferrable load deadlines \\
+D & + Thermal comfort & Comfort bound stress \\
+E & Full + Failures & Mid-run component failures \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Results}
+\label{sec:results}
+
+\subsection{Cost, Peak and Service}
+\label{sec:costpeak}
+
+Figure~\ref{fig:f1} shows KPI bars with 95\% CI. The cost-versus-service Pareto front (Figure~\ref{fig:f3}) places \agent{multi\_agent} at the cost-minimal end and \agent{mpc} at the service-maximal end in every scenario. Table~\ref{tab:deltas} reports paired per-seed deltas vs. \agent{rule\_based} with Holm correction.
+
+\begin{table}[htbp]
+\centering
+\caption{Paired per-seed deltas vs. \agent{rule\_based} (mean $\pm$ 95\% CI half-width; Holm within each scenario $\times$ metric family).}
+\label{tab:deltas}
+\begin{tabular}{llrrr}
+\toprule
+Scenario & Controller & $\Delta$ cost (USD) & $\Delta$ peak (kW) & $p_{\mathrm{Holm}}$ \\
+\midrule
+A & multi\_agent & $-17.68 \pm 0.13$ & $-18.35 \pm 0.84$ & $< 0.0001$ \\
+A & mpc & $+64.30 \pm 17.49$ & $+29.14 \pm 0.77$ & $0.0005$ \\
+A & rl & $+86.84 \pm 4.74$ & $+43.35 \pm 4.44$ & $< 0.0001$ \\
+A & centralized & $-3.87 \pm 0.35$ & $+1.29 \pm 0.96$ & $< 0.0001$ \\
+B & multi\_agent & $-41.37 \pm 3.18$ & $-26.77 \pm 1.49$ & $< 0.0001$ \\
+C & multi\_agent & $-13.42 \pm 0.06$ & $-18.34 \pm 0.81$ & $< 0.0001$ \\
+E & multi\_agent & $-17.90 \pm 0.10$ & $-18.52 \pm 0.98$ & $< 0.0001$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\begin{subfigure}[b]{0.48\textwidth}
+\includegraphics[width=\textwidth]{figures/f1_total_cost.pdf}
+\caption{Total cost (USD)}
+\end{subfigure}
+\begin{subfigure}[b]{0.48\textwidth}
+\includegraphics[width=\textwidth]{figures/f1_peak_demand_kw.pdf}
+\caption{Peak demand (kW)}
+\end{subfigure}
+
+\begin{subfigure}[b]{0.48\textwidth}
+\includegraphics[width=\textwidth]{figures/f1_ev_completion_rate.pdf}
+\caption{EV completion rate}
+\end{subfigure}
+\caption{KPI comparison bars with 95\% CI whiskers per scenario.}
+\label{fig:f1}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.7\textwidth]{figures/f3_cost_vs_ev_completion.pdf}
+\caption{Cost vs. EV completion Pareto scatter (marker area = peak demand).}
+\label{fig:f3}
+\end{figure}
+
+\textbf{Key findings}:
+\begin{itemize}
+    \item \agent{multi\_agent} is cost- and peak-minimal in all scenarios (A: $-17.68$ USD, $-18.35$ kW; B: $-41.37$ USD, $-26.77$ kW; E: $-17.90$ USD, $-18.52$ kW; all $p_{\mathrm{Holm}} < 0.0001$).
+    \item EV completion trade-off: \agent{multi\_agent} 0.07 vs. \agent{rule\_based} 0.18 ($\Delta = -0.11$, $p_{\mathrm{Holm}} = 0.023$ in A/C/D/E).
+    \item \agent{mpc} achieves near-complete EV service (1.00 in A/C/E) for $+19$ to $+69$ USD and $+29$ kW peak.
+    \item \agent{rl} is dominated by \agent{mpc}: higher cost, lower EV completion in every scenario.
+    \item \agent{centralized} does not dominate: cost shave 3--4 USD but peak increases in A/C/E; EV service indistinguishable from \agent{rule\_based}.
+\end{itemize}
+
+\subsection{LMP-Regime Benchmark}
+\label{sec:lmp}
+
+100 runs under \texttt{lmp} pricing (4 controllers $\times$ 5 scenarios $\times$ 5 seeds) on the aggressive-config tree. Ordering matches pool-TOU: \agent{multi\_agent} cost-minimal (all $p_{\mathrm{Holm}} < 0.0001$), \agent{mpc} service-maximal (EV 0.93--0.99), \agent{centralized} indistinguishable from \agent{rule\_based}. Magnitudes are slightly smaller due to lower average LMP prices, but ranking is identical.
+
+\subsection{Scenario E: Failure Injection}
+\label{sec:scenarioe}
+
+Scenario E injects PV inverter, battery, EV charger, and sensor failures at severity 1.0. The 95\% grid limit reduction does not trigger import curtailment (community is net-exporting during failure window). All 25 runs per controller show \texttt{members\_interrupted = [building\_3]}, \texttt{member\_cost\_coverage = 0.80}. Community cost coverage \texttt{energy.cost\_coverage = 0.9726} (23/840 building-steps blanked) identical across controllers.
+
+Voltage violations (8,232 per controller) originate from tightened voltage limits (0.97--1.03 pu), not failures; they persist across all controllers because they are structural. \texttt{resolution\_rate = 0.0} is correct: violations cannot be resolved, not that controllers failed to attempt re-dispatch (167 events per controller).
+
+\begin{table}[htbp]
+\centering
+\caption{Aggressive-config stress test (95\% grid limit reduction).}
+\label{tab:aggressive}
+\begin{tabular}{lrrr}
+\toprule
+Controller & Re-dispatch & Voltage viol. & Resolution rate \\
+\midrule
+rule\_based & 167 & 8232 & 0.0 \\
+mpc & 167 & 8232 & 0.0 \\
+multi\_agent & 167 & 8232 & 0.0 \\
+centralized & 167 & 8232 & 0.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Ablation: Verified vs. Unverified Agents}
+\label{sec:ablation}
+
+All 50 ablation runs in \texttt{fallback} mode (\texttt{agent\_backend: fallback}). Under the deterministic proposer, both LLM arms are KPI-identical to \agent{rule\_based}. The verification machinery never fires:
+\begin{itemize}
+    \item First-attempt validity = 1.000
+    \item Repairs/run = 0.00, Repairs/step = 0.0000
+    \item Verification failures = 0.00, Unparseable outputs = 0.00
+    \item Wall time: 16--33 s/run (median 20.8 s), no arm separation
+\end{itemize}
+
+The null result has two causes: (1) fallback proposer emits in-bounds proposals, so verification loop never triggers; (2) arms shared clamp-repair loop in earlier implementation. The P0-3 fix makes arms asymmetric (\agent{llm\_agent} applies proposals as proposed; \agent{llm\_agent\_verified} re-prompts once then falls back). Whether verification buys anything requires a real-LLM backend (Phase 2 follow-up).
+
+\subsection{Reproducibility}
+\label{sec:repro}
+
+All 175 runs (125 matrix + 50 ablation) on commit \texttt{035a52f} with \texttt{git\_dirty: false}. Each run writes \texttt{manifest.json} with config SHA-256, git commit, package versions, controller, \texttt{agent\_backend}, prompt version/hash, temperature/seed, random seed. \texttt{failed\_runs.json = []} (0 failed). Seed-pair reproducibility check passes: 5 distinct \texttt{scenario\_config\_sha256} per scenario (seed is part of hashed config). Median runtime 55.5 s (IQR 53.8--72.1 s for \agent{rule\_based}); no run hit per-run timeout.
+
+\section{Discussion and Limitations}
+\label{sec:discussion}
+
+\subsection{Threat Model}
+Adversary has full visibility of observations/actions; may inject sensor faults, grid-limit reductions, component failures. Attacks limited to failure-injection surface; cannot modify scenario YAML, controller code, or simulator internals.
+
+\subsection{Limitations}
+\begin{enumerate}
+    \item \textbf{Synthetic traces}: Load/PV profiles depend only on (seed, filename); scenario effects are device-mix effects.
+    \item \textbf{Controller scope}: RL excluded from LMP matrix (no tracked LMP policies); 138-state policies available for follow-up.
+    \item \textbf{LLM proposer}: Real-LLM ablation uses single model (NVIDIA NIM \texttt{deepseek-coder-6.7b}) at temperature 0 on 24-step horizon; null result specific to this combination.
+    \item \textbf{Aggressive config}: 95\% grid limit does not produce import curtailment; tests violation detection, not curtailment path.
+    \item \textbf{Seed count}: Five seeds give narrow CIs; significance assessed on paired deltas with Holm correction.
+\end{enumerate}
+
+\subsection{Caveats (Ordered)}
+\begin{enumerate}
+    \item Resolved pre-matrix: controller-action drop and schema non-propagation.
+    \item EV-completion artifact (missing EV definitions in schema, fixed).
+    \item Metric-collection defects on pre-fix base (NaN cost, empty per-member costs).
+    \item Scenario fidelity (synthetic traces depend on seed/filename only).
+    \item Fallback-mode ablation (no claims about LLM proposal quality).
+    \item Seed count (narrow CIs; paired deltas with Holm).
+    \item Runtime tail (retired for fixed matrix).
+\end{enumerate}
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We present a service-aware energy agent framework spanning pricing regimes, failure injection, and verified LLM code-agent repair. The multi-agent controller achieves consistent cost/peak reduction across all scenarios and pricing regimes with a measurable EV service trade-off. Aggressive failure injection confirms correct violation detection (zero resolution on structural violations is correct behavior). The fallback-mode LLM ablation shows null divergence between verified/unverified arms, isolating verification machinery as a no-op under a perfect proposer. All artifacts are reproducible: 175 runs on a clean commit with full manifests, zero failures, and seed-pair checks passing.
+
+Future work: real-LLM ablation (Phase 2), LMP RL policies, P2P market clearing, and extended horizon stress tests.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

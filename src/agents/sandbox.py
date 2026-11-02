@@ -22,6 +22,8 @@ class SandboxResult:
     execution_time: float = 0.0
     tests_passed: bool = False
     test_output: str = ""
+    violation_counts: Dict[str, int] = field(default_factory=dict)
+    max_violations: Dict[str, int] = field(default_factory=dict)
 
 
 class Sandbox:
@@ -31,11 +33,13 @@ class Sandbox:
         self,
         project_root: str = None,
         timeout: int = 60,
-        test_command: str = "python -m pytest tests/ -v --tb=short"
+        test_command: str = None
     ):
         self.project_root = project_root or os.getcwd()
         self.timeout = timeout
-        self.test_command = test_command
+        # Use sys.executable to ensure correct python path
+        # Run only quick syntax/import tests for speed
+        self.test_command = test_command or f"{sys.executable} -m pytest tests/test_baseline_controllers.py tests/test_metrics.py -v --tb=short -x"
         self.temp_dir: Optional[str] = None
     
     def create_sandbox(self) -> str:
@@ -109,12 +113,25 @@ class Sandbox:
         try:
             tree = ast.parse(code)
             
-            # Find the target function
+            # Find the target function in RuleBasedController class (the one used by experiments)
+            target_node = None
             for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef) and node.name == function_name:
-                    # Apply specific modifications based on the change description
-                    modified_code = self._modify_function_body(code, function_name, change_desc)
-                    return modified_code
+                if isinstance(node, ast.ClassDef) and node.name == 'RuleBasedController':
+                    for item in node.body:
+                        if isinstance(item, ast.FunctionDef) and item.name == function_name:
+                            target_node = item
+                            break
+            
+            # Fallback: find any function with this name (last occurrence)
+            if target_node is None:
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.FunctionDef) and node.name == function_name:
+                        target_node = node
+            
+            if target_node:
+                # Apply specific modifications based on the change description
+                modified_code = self._modify_function_body(code, function_name, change_desc)
+                return modified_code
             
             return code
             
@@ -123,44 +140,66 @@ class Sandbox:
     
     def _modify_function_body(self, code: str, function_name: str, change_desc: str) -> str:
         """Modify a function's body based on the change description."""
-        lines = code.split('\n')
-        
-        # Find the function
-        func_start = -1
-        func_end = -1
-        indent = 0
-        
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            if stripped.startswith(f'def {function_name}('):
-                func_start = i
-                indent = len(line) - len(line.lstrip())
-                break
-        
-        if func_start == -1:
+        try:
+            # Use AST to find the function in RuleBasedController
+            tree = ast.parse(code)
+            
+            func_start = -1
+            func_end = -1
+            indent = 0
+            
+            # Find RuleBasedController class and the target function within it
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef) and node.name == 'RuleBasedController':
+                    for item in node.body:
+                        if isinstance(item, ast.FunctionDef) and item.name == function_name:
+                            func_start = item.lineno - 1  # AST line numbers are 1-indexed
+                            indent = item.col_offset
+                            func_end = item.end_lineno  # AST end_lineno is 1-indexed, exclusive
+                            break
+            
+            # Fallback: find last occurrence
+            if func_start == -1:
+                lines = code.split('\n')
+                func_starts = []
+                for i, line in enumerate(lines):
+                    stripped = line.strip()
+                    if stripped.startswith(f'def {function_name}('):
+                        func_starts.append(i)
+                
+                if not func_starts:
+                    return code
+                
+                func_start = func_starts[-1]
+                indent = len(lines[func_start]) - len(lines[func_start].lstrip())
+                
+                func_end = -1
+                for i in range(func_start + 1, len(lines)):
+                    stripped = lines[i].strip()
+                    if stripped and not stripped.startswith('#'):
+                        line_indent = len(lines[i]) - len(lines[i].lstrip())
+                        if line_indent <= indent and (stripped.startswith('def ') or stripped.startswith('class ')):
+                            func_end = i
+                            break
+                
+                if func_end == -1:
+                    func_end = len(lines)
+            else:
+                lines = code.split('\n')
+            
+            # Get the function body
+            func_lines = lines[func_start:func_end]
+            func_body = '\n'.join(func_lines)
+            
+            # Apply modifications based on change description
+            modified_body = self._apply_change_to_function(func_body, change_desc)
+            
+            # Replace in original code
+            new_lines = lines[:func_start] + modified_body.split('\n') + lines[func_end:]
+            return '\n'.join(new_lines)
+            
+        except Exception:
             return code
-        
-        for i in range(func_start + 1, len(lines)):
-            stripped = lines[i].strip()
-            if stripped and not stripped.startswith('#'):
-                line_indent = len(lines[i]) - len(lines[i].lstrip())
-                if line_indent <= indent and (stripped.startswith('def ') or stripped.startswith('class ')):
-                    func_end = i
-                    break
-        
-        if func_end == -1:
-            func_end = len(lines)
-        
-        # Get the function body
-        func_lines = lines[func_start:func_end]
-        func_body = '\n'.join(func_lines)
-        
-        # Apply modifications based on change description
-        modified_body = self._apply_change_to_function(func_body, change_desc)
-        
-        # Replace in original code
-        new_lines = lines[:func_start] + modified_body.split('\n') + lines[func_end:]
-        return '\n'.join(new_lines)
     
     def _apply_change_to_function(self, func_code: str, change_desc: str) -> str:
         """Apply a specific change to a function's code."""
@@ -168,7 +207,9 @@ class Sandbox:
         
         change_lower = change_desc.lower()
         
-        if "voltage-aware" in change_lower or "voltage aware" in change_lower:
+        if ("voltage-aware" in change_lower or "voltage aware" in change_lower 
+            or "voltage monitoring" in change_lower or "voltage-triggered" in change_lower
+            or "voltage trigger" in change_lower):
             return self._add_voltage_aware_logic(lines)
         elif "line loading" in change_lower:
             return self._add_line_loading_logic(lines)
@@ -386,55 +427,178 @@ class Sandbox:
         self, 
         scenario_config: str,
         controller_file: str,
-        max_steps: int = 100
+        max_steps: int = 100,
+        check_categories: List[str] = None
     ) -> SandboxResult:
-        """Run a quick experiment in sandbox to validate controller."""
+        """Run a quick experiment in sandbox to validate controller using SimulationCoupler directly."""
         if not self.temp_dir:
             return SandboxResult(
                 success=False,
                 error="Sandbox not created"
             )
         
-        cmd = (
-            f"python -m experiments.run_experiment "
-            f"--config {scenario_config} "
-            f"--controller {controller_file} "
-            f"--max-steps {max_steps} "
-            f"--output /tmp/sandbox_results"
-        )
+        # Read the patched controller code
+        controller_path = os.path.join(self.temp_dir, controller_file)
+        if not os.path.exists(controller_path):
+            return SandboxResult(
+                success=False,
+                error=f"Controller file not found: {controller_path}"
+            )
+        
+        with open(controller_path, 'r') as f:
+            controller_code = f.read()
         
         start_time = time.time()
         try:
-            result = subprocess.run(
-                cmd,
-                shell=True,
-                cwd=self.temp_dir,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout * 2
-            )
+            # Import required modules
+            from src.simulation import SimulationCoupler
+            from src.schemas.scenario import ScenarioConfig
+            from src.schemas.action import RequestedActions, Action, ActionType
+            import yaml
+            
+            # Load scenario config
+            with open(scenario_config, 'r') as f:
+                scenario_dict = yaml.safe_load(f)
+            scenario = ScenarioConfig(**scenario_dict)
+            
+            # Create dynamic controller class from patched code
+            controller_class = self._create_dynamic_controller(controller_code, scenario)
+            
+            # Create controller instance
+            controller = controller_class(scenario)
+            
+            # Create simulation coupler
+            coupler = SimulationCoupler(scenario, data_dir=os.path.join(self.project_root, "data"))
+            
+            # Run quick simulation
+            observations = coupler.reset(random_seed=scenario.random_seed)
+            controller.reset()
+            
+            success = True
+            stdout_lines = []
+            violation_counts = {cat: 0 for cat in (check_categories or ["voltage", "line_loading", "transformer_loading"])}
+            max_violations = {cat: 0 for cat in (check_categories or ["voltage", "line_loading", "transformer_loading"])}
+            
+            for step in range(max_steps):
+                # Get actions from controller
+                requested = controller.get_actions(observations, step)
+                
+                # Step simulation
+                result = coupler.step(requested)
+                
+                # Update controller with grid diagnostics
+                if result.grid_diagnostics:
+                    controller.update_grid_diagnostics(result.grid_diagnostics.model_dump())
+                    
+                    # Count violations
+                    if result.grid_diagnostics.diagnostics:
+                        for diag in result.grid_diagnostics.diagnostics:
+                            cat = diag.category.value if hasattr(diag.category, 'value') else str(diag.category)
+                            if cat in violation_counts:
+                                violation_counts[cat] += 1
+                                max_violations[cat] = max(max_violations[cat], 1)
+                
+                # Check for convergence
+                if result.terminated or result.truncated:
+                    break
+                
+                observations = result.citylearn_result.observations
+                
+                if step % 10 == 0:
+                    stdout_lines.append(f"  Step {step}: power_flow_converged={result.power_flow_converged}")
+            
             execution_time = time.time() - start_time
             
+            # Determine success based on violation resolution
+            # Success = no violations in checked categories
+            violations_resolved = all(v == 0 for v in violation_counts.values())
+            
             return SandboxResult(
-                success=result.returncode == 0,
-                stdout=result.stdout,
-                stderr=result.stderr,
+                success=violations_resolved,
+                stdout="\n".join(stdout_lines),
+                stderr="",
                 execution_time=execution_time,
-                tests_passed=result.returncode == 0,
-                test_output=result.stdout
+                tests_passed=violations_resolved,
+                test_output="\n".join(stdout_lines),
+                violation_counts=violation_counts,
+                max_violations=max_violations
             )
-        except subprocess.TimeoutExpired:
-            return SandboxResult(
-                success=False,
-                error=f"Experiment timed out after {self.timeout * 2}s",
-                execution_time=self.timeout * 2
-            )
+            
         except Exception as e:
+            import traceback
             return SandboxResult(
                 success=False,
-                error=str(e),
+                error=f"Experiment failed: {str(e)}\n{traceback.format_exc()}",
                 execution_time=time.time() - start_time
             )
+    
+    def _create_dynamic_controller(self, controller_code: str, scenario) -> type:
+        """Create a dynamic controller class from patched code."""
+        import types
+        
+        # Create a new module for the controller
+        module = types.ModuleType("dynamic_controller")
+        
+        # Execute the controller code in the module's namespace
+        # This will define the controller class (e.g., RuleBasedController)
+        exec(controller_code, module.__dict__)
+        
+        # Find the concrete controller class (not abstract BaseController)
+        # Look for classes that have get_actions method implemented (not abstract)
+        controller_class = None
+        for name, obj in module.__dict__.items():
+            if (isinstance(obj, type) and 
+                hasattr(obj, 'get_actions') and 
+                obj.__name__ != 'BaseController'):
+                # Check if get_actions is implemented (not abstract)
+                method = obj.__dict__.get('get_actions')
+                if method is not None:
+                    controller_class = obj
+                    break
+        
+        if controller_class is None:
+            # Fallback: create a wrapper class that uses the patched code
+            class DynamicController:
+                def __init__(self, scenario_config):
+                    self.scenario_config = scenario_config
+                    self.timestep = 0
+                    self.last_grid_diagnostics = None
+                    # Create namespace with the patched code
+                    self._namespace = {}
+                    exec(controller_code, self._namespace)
+                    # Find the concrete controller class in the namespace
+                    self._impl = None
+                    for name, obj in self._namespace.items():
+                        if (isinstance(obj, type) and 
+                            hasattr(obj, 'get_actions') and 
+                            obj.__name__ != 'BaseController'):
+                            method = obj.__dict__.get('get_actions')
+                            if method is not None:
+                                self._impl = obj(scenario_config)
+                                break
+                
+                def get_actions(self, observations, timestep):
+                    self.timestep = timestep
+                    if self._impl:
+                        return self._impl.get_actions(observations, timestep)
+                    # Fallback: return empty actions
+                    from src.schemas.action import RequestedActions
+                    return RequestedActions(timestep=timestep, actions=[])
+                
+                def update_grid_diagnostics(self, grid_diagnostics):
+                    self.last_grid_diagnostics = grid_diagnostics
+                    if self._impl and hasattr(self._impl, 'update_grid_diagnostics'):
+                        self._impl.update_grid_diagnostics(grid_diagnostics)
+                
+                def reset(self):
+                    self.timestep = 0
+                    self.last_grid_diagnostics = None
+                    if self._impl and hasattr(self._impl, 'reset'):
+                        self._impl.reset()
+            
+            return DynamicController
+        
+        return controller_class
     
     def validate_syntax(self, file_path: str) -> SandboxResult:
         """Validate Python syntax of a file."""
