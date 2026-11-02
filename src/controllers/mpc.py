@@ -88,6 +88,40 @@ class MPCController(BaseController):
             if pv is not None:
                 self._pv_by_hour.setdefault(hour, []).append(float(pv))
 
+    def _get_grid_violation_scale(self, observations: Dict[str, Any]) -> float:
+        """Get scaling factor based on grid violations from previous step.
+        
+        Returns 1.0 if no violations, or a scaling factor < 1.0 for violations.
+        Hard overrides per PM decision.
+        """
+        if not self.last_grid_diagnostics:
+            return 1.0
+        
+        diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
+        voltage_violated = False
+        line_loading_violated = False
+        transformer_loading_violated = False
+        
+        for d in diagnostics:
+            category = d.get("category", "")
+            severity = d.get("severity", "")
+            if severity in ["violation", "critical"]:
+                if category == "voltage":
+                    voltage_violated = True
+                elif category == "line_loading":
+                    line_loading_violated = True
+                elif category == "transformer_loading":
+                    transformer_loading_violated = True
+        
+        if voltage_violated:
+            return 0.85  # Reduce export/charging to raise voltage
+        elif line_loading_violated:
+            return 0.8   # Reduce power to fix line loading
+        elif transformer_loading_violated:
+            return 0.9
+        
+        return 1.0
+
     def _forecast(self, observations: Dict[str, Any], building_id: str, start_hour: int) -> Dict[str, np.ndarray]:
         price = np.empty(self.horizon_steps)
         export = np.empty(self.horizon_steps)
@@ -285,6 +319,30 @@ class MPCController(BaseController):
                     row[flow_idx(i_exp, bidx, k)] = 1.0
                 a_ub_rows.append(row)
                 b_ub.append(float(export_limit))
+        
+        # Grid violation constraints - hard limits on power when violations detected
+        grid_scale = self._get_grid_violation_scale(observations)
+        if grid_scale < 1.0:
+            for bidx, building_id in enumerate(buildings):
+                meta = self.device_metadata[building_id]
+                battery = meta.get("battery") or {}
+                power = float(battery.get("power_kw") or 0.0)
+                
+                # Scale battery charge/discharge
+                if power > 0:
+                    row = np.zeros(n_vars)
+                    row[flow_idx(i_c, bidx, k)] = 1.0
+                    row[flow_idx(i_d, bidx, k)] = 1.0
+                    a_ub_rows.append(row)
+                    b_ub.append(float(power * grid_scale))
+                
+                # Scale EV charging
+                ev_info = self._connected_ev(observations, building_id, 0)
+                if ev_info and ev_info["max_charge_kw"] > 0:
+                    row = np.zeros(n_vars)
+                    row[ev_idx(bidx, k)] = 1.0
+                    a_ub_rows.append(row)
+                    b_ub.append(float(ev_info["max_charge_kw"] * grid_scale))
 
         # EV service constraint: terminal SOC + shortfall >= required.
         for bidx, building_id in enumerate(buildings):

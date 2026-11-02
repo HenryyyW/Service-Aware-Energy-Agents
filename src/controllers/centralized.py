@@ -102,6 +102,9 @@ class CentralizedController(BaseController):
         # Apply community-level grid limits
         actions = self._apply_grid_limits(actions)
         
+        # Apply grid violation re-dispatch based on previous step diagnostics
+        actions = self._apply_grid_violation_redispatch(actions)
+        
         return self._create_requested_actions(actions)
     
     def _compute_community_totals(self, observations: Dict[str, Any]):
@@ -329,6 +332,49 @@ class CentralizedController(BaseController):
             scale = export_limit / total_export
             for a in actions:
                 if a.value_kw < 0:
+                    a.value_kw *= scale
+        
+        return actions
+    
+    def _apply_grid_violation_redispatch(self, actions: List[Action]) -> List[Action]:
+        """Re-dispatch actions based on grid violations from previous step.
+        
+        If voltage or line loading violations were detected, adjust battery/EV/flexible load
+        actions to mitigate the violations. Hard overrides per PM decision.
+        """
+        if not self.last_grid_diagnostics:
+            return actions
+        
+        diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
+        voltage_violated = False
+        line_loading_violated = False
+        transformer_loading_violated = False
+        
+        for d in diagnostics:
+            category = d.get("category", "")
+            severity = d.get("severity", "")
+            if severity in ["violation", "critical"]:
+                if category == "voltage":
+                    voltage_violated = True
+                elif category == "line_loading":
+                    line_loading_violated = True
+                elif category == "transformer_loading":
+                    transformer_loading_violated = True
+        
+        # If violations detected, apply re-dispatch scaling (hard overrides)
+        if voltage_violated or line_loading_violated or transformer_loading_violated:
+            # Determine scaling factor based on violation type
+            if voltage_violated:
+                scale = 0.85  # Reduce export/charging to raise voltage
+            elif line_loading_violated:
+                scale = 0.8   # Reduce power to fix line loading
+            else:  # transformer_loading
+                scale = 0.9
+            
+            # Apply scaling to controllable actions (battery, EV, flexible load)
+            for a in actions:
+                if a.action_type in [ActionType.BATTERY_CHARGE, ActionType.BATTERY_DISCHARGE,
+                                     ActionType.EV_CHARGE, ActionType.FLEXIBLE_LOAD]:
                     a.value_kw *= scale
         
         return actions
