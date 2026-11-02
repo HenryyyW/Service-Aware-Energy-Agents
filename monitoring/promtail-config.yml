@@ -1,0 +1,54 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: system
+          host: ${HOSTNAME}
+          __path__: /var/log/*log
+
+  - job_name: backend
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: sea-backend
+          service: sea-backend
+          __path__: /app/backend/**/*.log
+
+  - job_name: frontend
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: sea-frontend
+          service: sea-frontend
+          __path__: /app/frontend/**/*.log
+
+  - job_name: docker
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: docker
+          __path__: /var/lib/docker/containers/*/*-json.log
+    pipeline_stages:
+      - json:
+          expressions:
+            container: container_name
+            log: log
+      - labels:
+          container:
+      - output:
+          source: log

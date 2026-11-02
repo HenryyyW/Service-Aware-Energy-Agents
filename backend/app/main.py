@@ -177,3 +177,9 @@ async def websocket_simulation(websocket: WebSocket, run_id: str):
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "service-aware-energy-agents"}
+
+
+@app.get("/ready")
+async def ready_check():
+    """Readiness check endpoint."""
+    return {"status": "ready", "service": "service-aware-energy-agents"}

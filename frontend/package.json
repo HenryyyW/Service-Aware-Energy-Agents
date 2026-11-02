@@ -8,7 +8,10 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "i18n:check": "node scripts/check-i18n.mjs"
+    "i18n:check": "node scripts/check-i18n.mjs",
+    "serve": "vite preview --port 4173 --host 0.0.0.0",
+    "lighthouse": "lhci autorun --fail-on-budget",
+    "axe": "axe-core-cli --dir dist --save"
   },
   "dependencies": {
     "@deck.gl/aggregation-layers": "^9.4.0",
@@ -48,6 +51,10 @@
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
     "autoprefixer": "^10.6.1",
+    "axe-core": "^4.9.1",
+    "axe-core-cli": "^3.0.0",
+    "lighthouse": "^12.1.0",
+    "lighthouse-ci": "^0.14.0",
     "oxlint": "^1.81.0",
     "postcss": "^8.5.31",
     "tailwindcss": "^4.3.3",
