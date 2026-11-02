@@ -4,7 +4,7 @@
 
 A research prototype for simulating renewable-energy communities and investigating whether code-generating agents can coordinate buildings, PV, batteries, EVs, and flexible loads while respecting participant service requirements and distribution-grid constraints.
 
-> **Project status:** This repository contains a working Python simulation prototype, experiment tooling, and a React map-based results frontend. It is not yet a complete end-to-end virtual power plant (VPP) product. In particular, the production backend, market settlement, configured failure injection, and behavior-changing agent repair are incomplete. See [Current limitations](#current-limitations) before interpreting results.
+> **Project status:** A working research prototype — Python simulation + experiment tooling, a FastAPI service (`backend/`), and a React map frontend (`frontend/`) with a switchable visual style. Implemented and covered by tests: pricing regimes (pool-TOU / LMP), P2P matching, configured failure injection (scenario E), and a plan → code → execute → verify → repair agent workflow. It is still **not** a production VPP: the API is a local/dev service, the LMP arm is fallback-dominated on congested cases, and P2P runs are not scheduled. See [Current limitations](#current-limitations) before citing any numbers.
 
 ## Contents
 
@@ -63,6 +63,8 @@ The current co-simulation sequence is: obtain CityLearn observations, request an
 ??? notes.md                 # Research and publication planning notes
 ```
 
+Key top-level directories: `backend/` (FastAPI service: `/api/*`, `/ws`), `frontend/` (React + Vite app), `src/` (simulation, controllers, coordination, agents, evaluation), `experiments/` (runners, matrices, paper figures), `configs/`, `data/`, `docs/`, `arxiv_submission/`, `scripts/`, `tests/`.
+
 Generated runs are written under the selected output directory. Avoid committing large generated trajectories or plots unless they are intentionally part of a reproducibility artifact.
 
 ## Scenarios
@@ -91,6 +93,43 @@ The evaluation code defines metrics in these groups:
 > **Pre-fix benchmark numbers are invalid.** Benchmark results generated before the seed-reproducibility fix (PR #1) did not seed every RNG source, so they cannot be reproduced and must not be cited. Re-run any benchmark with the current code before using its numbers; see [`docs/reproducibility.md`](docs/reproducibility.md) for the reproducibility gate.
 
 ## Install and run
+
+### Quickstart (about 10 minutes)
+
+Shortest path to a running UI with one real run:
+
+```bash
+# 1. Python environment + package
+python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\Activate.ps1
+pip install -e .
+
+# 2. One quick experiment (writes results/<scenario>/<run>/)
+python experiments/run_experiment.py \
+  --config configs/scenario_a.yaml --controller rule_based --seed 42 --max-steps 96
+
+# 3. Backend API  (serves /api/* and /ws, default port 8001, matches the Vite proxy)
+pip install -r backend/requirements.txt
+cd backend && uvicorn app.main:app --reload --port 8001
+
+# 4. Frontend  (separate terminal)
+npm --prefix frontend install
+npm --prefix frontend run dev                     # http://127.0.0.1:3000
+```
+
+Open the Vite URL and pick the run you just produced on the Community Canvas. Switch the visual
+style (GE Vernova / Schneider / dark) from the style control in the top bar. If the API is hosted
+elsewhere, set `VITE_API_BASE_URL` / `VITE_WS_BASE_URL` (see `frontend/.env.example`).
+
+### Environment variables
+
+| Variable | Where | Purpose |
+|---|---|---|
+| `VITE_API_BASE_URL`, `VITE_WS_BASE_URL` | `frontend/.env` | Point the frontend at a separate API/WebSocket service |
+| `VITE_MAPBOX_TOKEN` | `frontend/.env` | Optional; Carto basemaps are used by default |
+| `AGENT_BACKEND` | shell / `.env` | Hosted LLM backend, e.g. `api:poolside/laguna-xs-2.1` |
+| `LLM_BASE_URL`, `LLM_API_KEY` | shell / `.env` | Hosted-LLM endpoint and key (key is never committed) |
+
+See `frontend/.env.example` and the root `.env.example` for the full list.
 
 ### Python simulation
 
@@ -165,6 +204,8 @@ The default route is the community canvas. It includes:
 - A time slider with play/pause, step, reset and speed controls.
 - A context-sensitive asset/grid inspector.
 - Routes for Scenario Studio, Agent Workspace, reports and run comparison.
+- **Switchable visual style** — `GE Vernova` (default, light enterprise), `Schneider` (light, green), and `dark` canvas. Switched from the style control in the top bar; implemented with `<html data-theme>` and `frontend/src/config/theme.ts`. Design notes: `docs/frontend_visual_direction.md`.
+- **Colour scheme** — IEEE-blue accent for chrome and focus (`#00C0EF`) with the neutral locational-price ramp on the map; red is reserved for violations. The Agent Workspace uses a horizontal `Plan → Code → Execute → Verify → Repair → Report` rail (design: `docs/phase4_agent_workspace_design.md`).
 
 The current map positions and feeder geometry are schematic. Run data is real when loaded from saved results, but several visual and workflow elements are incomplete: actual grid topology is not mapped, some equipment state is inferred from observations/actions, and scenario/agent/report actions require backend routes that are not yet provided.
 
@@ -179,23 +220,20 @@ The suite covers controller coordination, CityLearn adapter behavior, pandapower
 
 ## Current limitations
 
-- The Vite local-results middleware is not a production API/backend.
-- CityLearn adapter time step convention is now unified and protected by regression tests (integer schema fields, CSV length matching episode steps, float/int seconds_per_time_step handling).
-- Grid violations are recorded, but a complete grid-feedback/re-dispatch control loop is not yet demonstrated.
-- `energy_sharing` and settlement options exist in scenario schemas/configurations, but there is no end-to-end market clearing or settlement path; per-member settlement savings are placeholders.
-- Scenario E declares failures, but configured failure injection and recovery are not implemented end to end.
-- The repair path is not yet trustworthy as a code-repair result: parts of patch application are placeholders, and a passing quick sandbox run is not equivalent to demonstrating that the targeted service/grid violation was repaired.
-- The React map uses illustrative coordinates and does not yet display the actual pandapower network geometry.
-- Time labels in the frontend assume 15-minute steps; this must be reconciled with runs that use a different dataset-native interval.
-- The benchmark currently lacks MPC, RL, unverified-agent and verified-agent comparisons required by the research brief.
+- **Not a production VPP.** The FastAPI service (`backend/`) is a local/dev API (no auth, localhost CORS), and the Vite `results/` middleware is a development convenience only.
+- **LMP arm is fallback-dominated on congested cases.** On the M1 `lmp` runs the OPF falls back (`power_flow_not_converged`) and the per-run price metrics are unusable (zero/negative measured spread), so no valid locational-price dispersal result (figure F8) can be produced from them yet.
+- **P2P is not scheduled.** The matching engine and schemas exist and are tested, but no `p2p` runs are executed and there is no P2P WebSocket endpoint.
+- **Grid feedback loop is partial.** Violations are recorded and re-dispatch exists; a fully verified closed loop across all cases is not yet demonstrated.
+- **Illustrative geometry.** Map positions and feeder geometry are schematic, not the actual pandapower network; frontend time labels assume 15-minute steps.
+- **Benchmark coverage.** The matrix covers the main controllers and pricing regimes; paper-grade MPC/RL and unverified-vs-verified agent comparisons are still being extended.
 
 ## Roadmap
 
-1. ??**DONE** ??Restored clean test baseline; unified timestep/data-unit contract with integer-only schema fields, CSV/episode step alignment, and parametrized 3600/3600.0 regression coverage.
-2. Close the co-simulation loop so grid diagnostics can constrain or trigger a verified re-dispatch.
-3. Make agent patches behavior-changing and verify repairs against full-run service/grid metrics.
-4. Implement energy sharing, settlement and configured failure injection as executable simulation behavior.
-5. Connect the React Scenario Studio, Agent Workspace and reports to a real API; load actual asset/grid metadata and run timestep metadata.
+1. **DONE** — Restored a clean test baseline and unified the timestep/data-unit contract.
+2. **DONE** — Pricing regimes (pool-TOU / LMP), P2P matching + schemas, configured failure injection (scenario E), the plan → code → execute → verify → repair agent workflow, and a FastAPI service with a switchable-style React frontend.
+3. Close the co-simulation loop so grid diagnostics can constrain or trigger a verified re-dispatch.
+4. Make the LMP arm produce valid locational prices on congested cases (fix the OPF fallback) so price-spread results are claim-grade.
+5. Schedule and validate `p2p` runs; add the P2P WebSocket endpoint.
 6. Run the full benchmark matrix with reproducible seeds, appropriate baselines and statistical analysis.
 
 See [`project brief.md`](project%20brief.md) for the full product specification, first-milestone acceptance criteria and paper framing.

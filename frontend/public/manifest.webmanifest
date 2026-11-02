@@ -1,0 +1,14 @@
+{
+  "name": "Service-Aware Energy Agents",
+  "short_name": "SAEA",
+  "description": "Spatio-temporal virtual community simulator for renewable-energy communities.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f6f6",
+  "theme_color": "#005e60",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
