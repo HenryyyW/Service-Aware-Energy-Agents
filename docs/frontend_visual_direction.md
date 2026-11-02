@@ -4,6 +4,14 @@ Owner: Product Design Lead · Date: 2026-11-02
 Request: "make the UI look like Schneider or GE — those electrical-giant products."
 Mockup: `docs/mockups/enterprise_ui_mockup.html`
 
+**Implemented (2026-11-02) — switchable.** `frontend/src/index.css` now has a `:root[data-theme]`
+layer with three styles: **`ge`** (GE Vernova, evergreen — default), **`schneider`** (green), and
+**`dark`** (the original canvas). Components are unchanged — they read the tokens, so only values
+swap. Switch via `frontend/src/config/theme.ts` (`initTheme()` is called in `main.tsx`) and the
+`ThemeSwitch` control in `components/ui/ThemeSwitch.tsx`. Note: in the light themes `--color-sun`
+(the chrome accent, also the PV data colour) is repointed to the brand hue, so PV/accents render in
+brand green; the other physics colours (load, battery, ev, gallery) keep their identities.
+
 ## Subject, audience, job
 
 Community-energy simulator used by **grid operators, energy planners, researchers** to design a

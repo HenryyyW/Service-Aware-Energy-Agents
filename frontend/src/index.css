@@ -61,6 +61,7 @@
   --color-surface: var(--color-bg-elevated);
   --color-surface-hover: var(--color-bg-hover);
   --color-space: var(--color-bg);
+  --color-on-primary: var(--color-bg); /* text on a primary-filled surface */
 
   /* Font families */
   --font-display: 'Space Grotesk', sans-serif;
@@ -549,8 +550,8 @@
 
   .btn-primary {
     @apply btn-base btn-focus;
-    background-color: var(--color-sun);
-    color: var(--color-bg);
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
   }
 
   .btn-primary:hover:not(:disabled) {
@@ -889,4 +890,92 @@
     --color-state-hover: rgba(255, 255, 255, 0.16);
     --color-state-active: rgba(255, 255, 255, 0.24);
   }
+}
+
+/* ============================================================
+   Themeable style layer — switch via <html data-theme="...">
+   Overrides the dark @theme defaults at runtime. Components are
+   unchanged: they read these tokens, so only values swap.
+   Themes: "ge" (GE Vernova), "schneider", "dark" (= @theme default).
+   ============================================================ */
+
+/* Shared light enterprise chrome */
+:root[data-theme="ge"],
+:root[data-theme="schneider"] {
+  --color-bg: #f4f6f6;
+  --color-bg-elevated: #ffffff;
+  --color-bg-hover: #eef2f2;
+  --color-bg-active: #e4ecec;
+  --color-border: #e3e3e3;
+  --color-border-strong: #cccccc;
+  --color-border-subtle: #eef1f1;
+  --color-text: #212121;
+  --color-text-muted: #696969;
+  --color-text-subtle: #9a9a9a;
+  --color-text-inverse: #ffffff;
+  --color-on-primary: #ffffff;
+  --color-state-hover: rgba(0, 0, 0, 0.04);
+  --color-state-active: rgba(0, 0, 0, 0.08);
+  --color-state-disabled: rgba(0, 0, 0, 0.04);
+  --color-grid: #4a6fa5;      /* infrastructure on light */
+  --color-warning: #b7791f;
+  --color-success: #0a7d72;
+  --color-danger: #b3261e;
+  --color-violation: #b3261e;
+  --shadow-xs: 0 1px 2px rgba(16, 24, 24, 0.06);
+  --shadow-sm: 0 1px 3px rgba(16, 24, 24, 0.08);
+  --shadow-card: 0 1px 3px rgba(16, 24, 24, 0.08);
+  --shadow-panel: 0 4px 16px rgba(16, 24, 24, 0.10);
+  --shadow-panel-hover: 0 8px 24px rgba(16, 24, 24, 0.12);
+  --shadow-modal: 0 16px 48px rgba(16, 24, 24, 0.18);
+  --shadow-tooltip: 0 4px 16px rgba(16, 24, 24, 0.12);
+  --blur-panel: 0px;
+  --blur-modal: 0px;
+  --bg-grid-pattern: linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+}
+
+/* GE Vernova — evergreen primary, lime accent */
+:root[data-theme="ge"] {
+  --color-primary: #005e60;
+  --color-primary-hover: #004a4c;
+  --color-primary-active: #003a3c;
+  --color-accent: #c8ff08;
+  --color-state-focus: rgba(0, 94, 96, 0.35);
+  --color-sun: #005e60;   /* chrome accent / PV on light */
+  --color-ev: #59c3c9;    /* mobility (GE sky) */
+}
+
+/* Schneider Electric — Schneider green primary */
+:root[data-theme="schneider"] {
+  --color-bg: #f6f7f6;
+  --color-border: #e2e6e2;
+  --color-border-strong: #c9d2c9;
+  --color-border-subtle: #edf1ed;
+  --color-text-muted: #5f6b5f;
+  --color-text-subtle: #93a093;
+  --color-primary: #2e9e45;   /* Schneider green, darkened for AA on white */
+  --color-primary-hover: #268238;
+  --color-primary-active: #1e6b2e;
+  --color-accent: #3dcd58;
+  --color-state-focus: rgba(61, 205, 88, 0.40);
+  --color-sun: #2e9e45;
+  --color-ev: #1e88a8;
+}
+
+/* Theme switcher control */
+.theme-switch {
+  appearance: none;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.theme-switch:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
