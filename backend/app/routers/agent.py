@@ -78,7 +78,7 @@ async def _run_agent_task(
             TASKS_TOTAL.labels(status="timeout").inc()
             return
 
-    start_time = time.time()
+    start_time_float = time.time()
 
     try:
         _tasks[task_id]["status"] = "planning"
@@ -244,7 +244,7 @@ async def _run_agent_task(
         _tasks[task_id]["execution_log"].append(f"Total time: {result.total_time:.1f}s")
 
         # Record metrics
-        duration = time.time() - start_time
+        duration = time.time() - start_time_float
         TASK_DURATION.labels(status=_tasks[task_id]["status"]).observe(duration)
         TASKS_TOTAL.labels(status=_tasks[task_id]["status"]).inc()
 
@@ -267,7 +267,7 @@ async def _run_agent_task(
         import traceback
 
         _tasks[task_id]["execution_log"].append(traceback.format_exc())
-        TASK_DURATION.labels(status="error").observe(time.time() - start_time)
+        TASK_DURATION.labels(status="error").observe(time.time() - start_time_float)
         TASKS_TOTAL.labels(status="error").inc()
 
 
