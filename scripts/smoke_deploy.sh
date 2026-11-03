@@ -22,7 +22,7 @@ trap cleanup EXIT
 log "Starting docker compose..."
 # Use pre-built tagged images (CI pulls sea-backend:latest / sea-frontend:latest
 # before calling this script). --build would rebuild in-job and blow the timeout.
-docker compose -f "$COMPOSE_FILE" up -d --no-build --pull never
+docker compose -f "$COMPOSE_FILE" up -d --no-build
 
 log "Waiting for backend health endpoint..."
 start=$(date +%s)

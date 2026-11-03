@@ -382,6 +382,8 @@ jobs:
         run: |
           docker pull "${{ needs.build-backend.outputs.image-tag }}"
           docker pull "${{ needs.build-frontend.outputs.image-tag }}"
+          docker pull postgres:16-alpine
+          docker pull redis:7-alpine
 
       - name: Run smoke test
         env:
