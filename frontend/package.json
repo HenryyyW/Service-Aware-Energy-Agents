@@ -8,7 +8,8 @@
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "serve": "vite preview --port 4173 --host 0.0.0.0",
-    "lighthouse": "lhci autorun --fail-on-budget"
+    "lighthouse": "lhci autorun --fail-on-budget",
+    "axe": "axe --dir dist --exit"
   },
   "dependencies": {
     "@deck.gl/core": "^9.4.1",
@@ -47,6 +48,7 @@
     "eslint-plugin-react-refresh": "^0.4.5",
     "lighthouse": "^12.1.0",
     "typescript": "^5.3.3",
-    "vite": "^5.0.8"
+    "vite": "^5.0.8",
+    "@axe-core/cli": "^4.10.2"
   }
 }

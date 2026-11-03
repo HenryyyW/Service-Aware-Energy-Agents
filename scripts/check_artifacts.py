@@ -26,6 +26,7 @@ ALLOWLIST_PREFIXES = (
     "frontend/src/assets/",  # application artwork shipped with the UI
     "frontend/public/",      # static public assets
     "docs/assets/",          # documentation images
+    "arxiv_submission/",     # arXiv paper source + compiled PDF + figures
     "experiments/reference/",  # curated, small reproducibility fixtures
     "results/README.md",     # explains why results/ stays empty in git
     "results/.gitkeep",

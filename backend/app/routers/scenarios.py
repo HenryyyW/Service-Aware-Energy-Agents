@@ -1,4 +1,5 @@
 """Scenario management API endpoints."""
+
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -20,7 +21,7 @@ def _get_scenario_data_dir() -> Path:
     # Try environment variable first
     if "PROJECT_ROOT" in os.environ:
         return Path(os.environ["PROJECT_ROOT"]) / "data" / "schemas"
-    
+
     # Try to find data/schemas by walking up from this file
     current = Path(__file__).parent
     for _ in range(6):
@@ -28,7 +29,7 @@ def _get_scenario_data_dir() -> Path:
         if candidate.exists():
             return candidate
         current = current.parent
-    
+
     # Fallback to relative path from project root
     return Path(__file__).parent.parent.parent.parent.parent / "data" / "schemas"
 
@@ -53,14 +54,16 @@ def _schema_to_scenario_config(schema: dict, scenario_id: str) -> ScenarioConfig
     for bid, bdata in schema.get("buildings", {}).items():
         if not bdata.get("include", True):
             continue
-        buildings.append(BuildingConfig(
-            building_id=bid,
-            building_type=bdata.get("building_type", "residential"),
-            location=bdata.get("location", {}),
-            simulation_start=bdata.get("simulation_start", "2023-01-01"),
-            simulation_end=bdata.get("simulation_end", "2023-01-08"),
-        ))
-    
+        buildings.append(
+            BuildingConfig(
+                building_id=bid,
+                building_type=bdata.get("building_type", "residential"),
+                location=bdata.get("location", {}),
+                simulation_start=bdata.get("simulation_start", "2023-01-01"),
+                simulation_end=bdata.get("simulation_end", "2023-01-08"),
+            )
+        )
+
     pandapower_config = None
     if "pandapower" in schema:
         pp_data = schema["pandapower"]
@@ -75,7 +78,7 @@ def _schema_to_scenario_config(schema: dict, scenario_id: str) -> ScenarioConfig
             transformer_loading_limit=pp_data.get("transformer_loading_limit", 1.0),
             run_power_flow_every=pp_data.get("run_power_flow_every", 1),
         )
-    
+
     return ScenarioConfig(
         scenario_id=scenario_id,
         name=schema.get("name", scenario_id),
@@ -102,11 +105,17 @@ def _scenario_to_dict(scenario: ScenarioConfig) -> dict:
         "assets": {
             "pv": {"penetration": 0.5, "orientation": "south"},
             "batteries": {"community_capacity_kwh": 100, "max_power_kw": 50},
-            "evs": {"number": 10, "charging_power_kw": [11], "departure_soc_requirement": 0.8},
+            "evs": {
+                "number": 10,
+                "charging_power_kw": [11],
+                "departure_soc_requirement": 0.8,
+            },
             "flexible_loads": {"share": 0.3},
         },
         "grid": {
-            "model": scenario.pandapower.network_type if scenario.pandapower else "ieee_34",
+            "model": (
+                scenario.pandapower.network_type if scenario.pandapower else "ieee_34"
+            ),
             "transformer_capacity_kva": 630,
             "voltage_limits_pu": [0.95, 1.05],
             "import_limit_kw": scenario.community_import_limit_kw or 500,
@@ -132,7 +141,7 @@ async def get_scenarios():
                 scenario = _load_scenario_from_disk(scenario_dir.name)
                 if scenario:
                     _scenarios[scenario.scenario_id] = scenario
-    
+
     return [_scenario_to_dict(s) for s in _scenarios.values()]
 
 
@@ -144,8 +153,10 @@ async def get_scenario(scenario_id: str):
         if scenario:
             _scenarios[scenario_id] = scenario
         else:
-            raise HTTPException(status_code=404, detail=f"Scenario {scenario_id} not found")
-    
+            raise HTTPException(
+                status_code=404, detail=f"Scenario {scenario_id} not found"
+            )
+
     return _scenario_to_dict(_scenarios[scenario_id])
 
 
@@ -153,31 +164,35 @@ async def get_scenario(scenario_id: str):
 async def create_scenario(scenario_data: dict):
     """Create a new scenario."""
     scenario_id = scenario_data.get("scenario_id") or f"scenario_{uuid4().hex[:8]}"
-    
+
     # Create ScenarioConfig from the input
     scenario = ScenarioConfig(
         scenario_id=scenario_id,
         name=scenario_data.get("name", scenario_id),
         description=scenario_data.get("description", ""),
         buildings=[BuildingConfig(**b) for b in scenario_data.get("buildings", [])],
-        pandapower=PandapowerConfig(**scenario_data["pandapower"]) if scenario_data.get("pandapower") else None,
+        pandapower=(
+            PandapowerConfig(**scenario_data["pandapower"])
+            if scenario_data.get("pandapower")
+            else None
+        ),
         community_import_limit_kw=scenario_data.get("community_import_limit_kw"),
         community_export_limit_kw=scenario_data.get("community_export_limit_kw"),
         random_seed=scenario_data.get("random_seed", 42),
         timestep_minutes=scenario_data.get("timestep_minutes", 15),
     )
-    
+
     _scenarios[scenario_id] = scenario
-    
+
     # Save to disk
     scenario_dir = SCENARIO_DATA_DIR / scenario_id
     scenario_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Save a minimal schema.json
     schema_data = _scenario_to_dict(scenario)
     with open(scenario_dir / "schema.json", "w") as f:
         json.dump(schema_data, f, indent=2)
-    
+
     return _scenario_to_dict(scenario)
 
 
@@ -186,21 +201,21 @@ async def update_scenario(scenario_id: str, updates: dict):
     """Update an existing scenario."""
     if scenario_id not in _scenarios:
         raise HTTPException(status_code=404, detail=f"Scenario {scenario_id} not found")
-    
+
     scenario = _scenarios[scenario_id]
-    
+
     # Apply updates
     for key, value in updates.items():
         if hasattr(scenario, key):
             setattr(scenario, key, value)
-    
+
     # Save to disk
     scenario_dir = SCENARIO_DATA_DIR / scenario_id
     scenario_dir.mkdir(parents=True, exist_ok=True)
     schema_data = _scenario_to_dict(scenario)
     with open(scenario_dir / "schema.json", "w") as f:
         json.dump(_scenario_to_dict(scenario), f, indent=2)
-    
+
     return _scenario_to_dict(scenario)
 
 
@@ -209,11 +224,12 @@ async def delete_scenario(scenario_id: str):
     """Delete a scenario."""
     if scenario_id not in _scenarios:
         raise HTTPException(status_code=404, detail=f"Scenario {scenario_id} not found")
-    
+
     del _scenarios[scenario_id]
-    
+
     # Also remove from disk
     import shutil
+
     scenario_dir = SCENARIO_DATA_DIR / scenario_id
     if scenario_dir.exists():
         shutil.rmtree(scenario_dir)
@@ -224,23 +240,23 @@ async def validate_scenario(scenario_id: str):
     """Validate a scenario configuration."""
     if scenario_id not in _scenarios:
         raise HTTPException(status_code=404, detail=f"Scenario {scenario_id} not found")
-    
+
     scenario = _scenarios[scenario_id]
     errors = []
     warnings = []
-    
+
     # Validate buildings
     if not scenario.buildings:
         errors.append("No buildings configured")
-    
+
     # Validate grid config
     if not scenario.pandapower:
         warnings.append("No pandapower configuration - grid validation will be skipped")
-    
+
     # Validate timestep
     if scenario.timestep_minutes not in [5, 15, 30, 60]:
         warnings.append(f"Unusual timestep: {scenario.timestep_minutes} minutes")
-    
+
     return {
         "valid": len(errors) == 0,
         "errors": errors,

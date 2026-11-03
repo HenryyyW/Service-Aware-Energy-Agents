@@ -1,4 +1,5 @@
 """FastAPI application entry point."""
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -17,12 +18,19 @@ from fastapi.responses import Response
 
 from app.state import (
     REDIS_AVAILABLE,
-    TASK_DURATION, TASKS_TOTAL, TASK_QUEUE_SIZE, 
-    LLM_TOKENS_TOTAL, LLM_COST_TOTAL, TASK_RETRIES,
-    get_redis_client, get_task_queue, get_job
+    TASK_DURATION,
+    TASKS_TOTAL,
+    TASK_QUEUE_SIZE,
+    LLM_TOKENS_TOTAL,
+    LLM_COST_TOTAL,
+    TASK_RETRIES,
+    get_redis_client,
+    get_task_queue,
+    get_job,
 )
 
 from app.routers import scenarios, simulations, agent, reports, compare, network
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -46,6 +54,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
 
 # Exception handlers for RFC 7807 structured errors
 @app.exception_handler(RequestValidationError)
@@ -112,19 +121,19 @@ async def get_openapi_schema():
 class ConnectionManager:
     def __init__(self):
         self.active_connections: dict[str, list[WebSocket]] = {}
-    
+
     async def connect(self, websocket: WebSocket, run_id: str):
         await websocket.accept()
         if run_id not in self.active_connections:
             self.active_connections[run_id] = []
         self.active_connections[run_id].append(websocket)
-    
+
     def disconnect(self, websocket: WebSocket, run_id: str):
         if run_id in self.active_connections:
             self.active_connections[run_id].remove(websocket)
             if not self.active_connections[run_id]:
                 del self.active_connections[run_id]
-    
+
     async def broadcast(self, run_id: str, message: dict):
         if run_id in self.active_connections:
             for connection in self.active_connections[run_id]:
@@ -137,7 +146,9 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-def _create_ws_message(msg_type: str, payload: dict, run_id: str, meta: dict = None) -> dict:
+def _create_ws_message(
+    msg_type: str, payload: dict, run_id: str, meta: dict = None
+) -> dict:
     """Create a WebSocket message with standard meta fields."""
     correlation_id = str(uuid.uuid4())[:8]
     now = datetime.utcnow().isoformat() + "Z"
@@ -164,7 +175,9 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             data = await websocket.receive_text()
             # Echo back for testing
-            await websocket.send_json(_create_ws_message("echo", json.loads(data), "general"))
+            await websocket.send_json(
+                _create_ws_message("echo", json.loads(data), "general")
+            )
     except WebSocketDisconnect:
         pass
 
@@ -173,15 +186,17 @@ async def websocket_endpoint(websocket: WebSocket):
 async def websocket_simulation(websocket: WebSocket, run_id: str):
     """WebSocket endpoint for real-time simulation updates with stale-data protection."""
     await manager.connect(websocket, run_id)
-    
+
     # Send initial connection message with meta
-    await websocket.send_json(_create_ws_message(
-        "connected",
-        {"run_id": run_id, "message": "WebSocket connected"},
-        run_id,
-        {"stage": "connected"}
-    ))
-    
+    await websocket.send_json(
+        _create_ws_message(
+            "connected",
+            {"run_id": run_id, "message": "WebSocket connected"},
+            run_id,
+            {"stage": "connected"},
+        )
+    )
+
     try:
         while True:
             # Keep connection alive, send periodic updates if simulation is running
@@ -195,20 +210,22 @@ async def websocket_simulation(websocket: WebSocket, run_id: str):
                         "stale": False,
                         "reconnecting": False,
                     }
-                    await websocket.send_json(_create_ws_message(
-                        "simulation_update",
-                        {
-                            "run_id": run_id,
-                            "status": run["status"],
-                            "current_step": run.get("current_step", 0),
-                            "total_steps": run.get("total_steps", 0),
-                            "progress": run.get("progress", 0),
-                            "stage": run.get("stage"),
-                            "eta_seconds": run.get("eta_seconds"),
-                        },
-                        run_id,
-                        meta
-                    ))
+                    await websocket.send_json(
+                        _create_ws_message(
+                            "simulation_update",
+                            {
+                                "run_id": run_id,
+                                "status": run["status"],
+                                "current_step": run.get("current_step", 0),
+                                "total_steps": run.get("total_steps", 0),
+                                "progress": run.get("progress", 0),
+                                "stage": run.get("stage"),
+                                "eta_seconds": run.get("eta_seconds"),
+                            },
+                            run_id,
+                            meta,
+                        )
+                    )
                 elif run["status"] in ["completed", "failed", "cancelled"]:
                     # Send final update then close
                     meta = {
@@ -216,17 +233,23 @@ async def websocket_simulation(websocket: WebSocket, run_id: str):
                         "stale": False,
                         "reconnecting": False,
                     }
-                    await websocket.send_json(_create_ws_message(
-                        "simulation_complete" if run["status"] == "completed" else "simulation_error",
-                        {
-                            "run_id": run_id,
-                            "status": run["status"],
-                            "outcome_sentence": run.get("outcome_sentence"),
-                            "error": run.get("error"),
-                        },
-                        run_id,
-                        meta
-                    ))
+                    await websocket.send_json(
+                        _create_ws_message(
+                            (
+                                "simulation_complete"
+                                if run["status"] == "completed"
+                                else "simulation_error"
+                            ),
+                            {
+                                "run_id": run_id,
+                                "status": run["status"],
+                                "outcome_sentence": run.get("outcome_sentence"),
+                                "error": run.get("error"),
+                            },
+                            run_id,
+                            meta,
+                        )
+                    )
                     break
     except WebSocketDisconnect:
         manager.disconnect(websocket, run_id)
@@ -236,55 +259,69 @@ async def websocket_simulation(websocket: WebSocket, run_id: str):
 async def websocket_p2p(websocket: WebSocket, run_id: str):
     """WebSocket endpoint for real-time P2P orderbook and trade updates."""
     await manager.connect(websocket, run_id)
-    
+
     # Send initial connection message
-    await websocket.send_json(_create_ws_message(
-        "connected",
-        {"run_id": run_id, "message": "P2P WebSocket connected"},
-        run_id,
-        {"stage": "connected", "market_type": "p2p"}
-    ))
-    
+    await websocket.send_json(
+        _create_ws_message(
+            "connected",
+            {"run_id": run_id, "message": "P2P WebSocket connected"},
+            run_id,
+            {"stage": "connected", "market_type": "p2p"},
+        )
+    )
+
     try:
         while True:
             await asyncio.sleep(0.5)  # Faster updates for P2P real-time data
-            
+
             # Check if run exists and get P2P engine
             if run_id not in simulations._couplers:
                 # Run not started yet, wait
-                await websocket.send_json(_create_ws_message(
-                    "p2p_waiting",
-                    {"run_id": run_id, "message": "Waiting for simulation to start"},
-                    run_id,
-                    {"stage": "waiting", "reconnecting": False}
-                ))
+                await websocket.send_json(
+                    _create_ws_message(
+                        "p2p_waiting",
+                        {
+                            "run_id": run_id,
+                            "message": "Waiting for simulation to start",
+                        },
+                        run_id,
+                        {"stage": "waiting", "reconnecting": False},
+                    )
+                )
                 continue
-            
+
             coupler = simulations._couplers[run_id]
-            
+
             # Access P2P engine through settlement engine
             p2p_engine = None
-            if coupler.settlement_engine and hasattr(coupler.settlement_engine, 'market_engine'):
+            if coupler.settlement_engine and hasattr(
+                coupler.settlement_engine, "market_engine"
+            ):
                 market_engine = coupler.settlement_engine.market_engine
-                if hasattr(market_engine, 'p2p_engine'):
+                if hasattr(market_engine, "p2p_engine"):
                     p2p_engine = market_engine.p2p_engine
-            
+
             if p2p_engine is None:
                 # Not a P2P market or not initialized yet
-                await websocket.send_json(_create_ws_message(
-                    "p2p_unavailable",
-                    {"run_id": run_id, "message": "P2P market not active for this run"},
-                    run_id,
-                    {"stage": "unavailable", "reconnecting": False}
-                ))
+                await websocket.send_json(
+                    _create_ws_message(
+                        "p2p_unavailable",
+                        {
+                            "run_id": run_id,
+                            "message": "P2P market not active for this run",
+                        },
+                        run_id,
+                        {"stage": "unavailable", "reconnecting": False},
+                    )
+                )
                 continue
-            
+
             # Get order book snapshot
             order_book = p2p_engine.get_order_book_snapshot()
-            
+
             # Get recent trades (last 10)
             trade_history = p2p_engine.get_trade_history()[-10:]
-            
+
             # Build payload
             payload = {
                 "run_id": run_id,
@@ -296,23 +333,22 @@ async def websocket_p2p(websocket: WebSocket, run_id: str):
                     "total_sell_orders": len(order_book["sell_orders"]),
                     "total_trades": len(p2p_engine.trades),
                     "total_volume_kwh": sum(t.quantity_kwh for t in p2p_engine.trades),
-                    "total_value_usd": sum(t.buyer_payment_usd for t in p2p_engine.trades),
-                }
+                    "total_value_usd": sum(
+                        t.buyer_payment_usd for t in p2p_engine.trades
+                    ),
+                },
             }
-            
+
             meta = {
                 "stage": "active",
                 "stale": False,
                 "reconnecting": False,
             }
-            
-            await websocket.send_json(_create_ws_message(
-                "p2p_update",
-                payload,
-                run_id,
-                meta
-            ))
-            
+
+            await websocket.send_json(
+                _create_ws_message("p2p_update", payload, run_id, meta)
+            )
+
     except WebSocketDisconnect:
         manager.disconnect(websocket, run_id)
 
@@ -321,56 +357,60 @@ async def websocket_p2p(websocket: WebSocket, run_id: str):
 async def websocket_agent_task(websocket: WebSocket, task_id: str):
     """WebSocket endpoint for real-time agent task status updates."""
     await manager.connect(websocket, task_id)
-    
+
     # Send initial connection message
-    await websocket.send_json(_create_ws_message(
-        "connected",
-        {"task_id": task_id, "message": "Agent task WebSocket connected"},
-        task_id,
-        {"stage": "connected"}
-    ))
-    
+    await websocket.send_json(
+        _create_ws_message(
+            "connected",
+            {"task_id": task_id, "message": "Agent task WebSocket connected"},
+            task_id,
+            {"stage": "connected"},
+        )
+    )
+
     try:
         from app.routers import agent as agent_router
+
         while True:
             await asyncio.sleep(1)
-            
+
             # Check if task exists
             if task_id not in agent_router._tasks:
-                await websocket.send_json(_create_ws_message(
-                    "task_not_found",
-                    {"task_id": task_id, "message": "Task not found"},
-                    task_id,
-                    {"stage": "not_found"}
-                ))
+                await websocket.send_json(
+                    _create_ws_message(
+                        "task_not_found",
+                        {"task_id": task_id, "message": "Task not found"},
+                        task_id,
+                        {"stage": "not_found"},
+                    )
+                )
                 break
-            
+
             task = agent_router._tasks[task_id]
-            
+
             # Send current status
             meta = {
                 "stage": task.get("status", "unknown"),
                 "stale": False,
                 "reconnecting": False,
             }
-            
+
             payload = {
                 "task_id": task_id,
                 "status": task.get("status", "unknown"),
                 "progress": _calculate_progress(task),
                 "current_stage": task.get("status", "unknown"),
-                "execution_log": task.get("execution_log", [])[-5:],  # Last 5 log entries
+                "execution_log": task.get("execution_log", [])[
+                    -5:
+                ],  # Last 5 log entries
                 "verification": task.get("verification"),
                 "repairs_count": len(task.get("repairs", [])),
             }
-            
-            await websocket.send_json(_create_ws_message(
-                "task_update",
-                payload,
-                task_id,
-                meta
-            ))
-            
+
+            await websocket.send_json(
+                _create_ws_message("task_update", payload, task_id, meta)
+            )
+
             # Close if task is complete
             if task.get("status") in ["completed", "failed"]:
                 final_payload = {
@@ -379,18 +419,28 @@ async def websocket_agent_task(websocket: WebSocket, task_id: str):
                     "verification": task.get("verification"),
                     "repairs": task.get("repairs", []),
                     "report": task.get("report"),
-                    "total_time": task.get("plan", {}).get("total_time", 0) if task.get("plan") else 0,
+                    "total_time": (
+                        task.get("plan", {}).get("total_time", 0)
+                        if task.get("plan")
+                        else 0
+                    ),
                 }
-                await websocket.send_json(_create_ws_message(
-                    "task_complete" if task.get("status") == "completed" else "task_failed",
-                    final_payload,
-                    task_id,
-                    {"stage": task.get("status"), "final": True}
-                ))
+                await websocket.send_json(
+                    _create_ws_message(
+                        (
+                            "task_complete"
+                            if task.get("status") == "completed"
+                            else "task_failed"
+                        ),
+                        final_payload,
+                        task_id,
+                        {"stage": task.get("status"), "final": True},
+                    )
+                )
                 break
-                
+
             await asyncio.sleep(2)
-            
+
     except WebSocketDisconnect:
         manager.disconnect(websocket, task_id)
 
