@@ -6,7 +6,7 @@ set -euo pipefail
 
 COMPOSE_FILE="${1:-docker-compose.yml}"
 BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
-TIMEOUT="${TIMEOUT:-120}"
+TIMEOUT="${TIMEOUT:-300}"
 POLL_INTERVAL="${POLL_INTERVAL:-5}"
 
 log() { echo "[$(date -u +'%H:%M:%S')] $*"; }
@@ -20,7 +20,9 @@ cleanup() {
 trap cleanup EXIT
 
 log "Starting docker compose..."
-docker compose -f "$COMPOSE_FILE" up -d --build
+# Use pre-built tagged images (CI pulls sea-backend:latest / sea-frontend:latest
+# before calling this script). --build would rebuild in-job and blow the timeout.
+docker compose -f "$COMPOSE_FILE" up -d --no-build --pull never
 
 log "Waiting for backend health endpoint..."
 start=$(date +%s)
