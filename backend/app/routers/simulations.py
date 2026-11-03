@@ -572,5 +572,3 @@ async def get_simulation_status(run_id: str):
         "cancelable": run["status"] == "running",
         "resumable": run["status"] in ["cancelled", "failed"],
     }
-
-

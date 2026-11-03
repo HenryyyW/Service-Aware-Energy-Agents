@@ -65,11 +65,8 @@ async def _run_agent_task(
 
     if started_at:
         from datetime import datetime
-
         start_time = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
-        elapsed = (
-            datetime.now(timezone.utc) - start_time.replace(tzinfo=None)
-        ).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
         if elapsed > timeout_seconds:
             _tasks[task_id]["status"] = "failed"
             _tasks[task_id]["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -79,7 +76,6 @@ async def _run_agent_task(
             TASK_DURATION.labels(status="timeout").observe(timeout_seconds)
             TASKS_TOTAL.labels(status="timeout").inc()
             return
-
 
     start_time = time.time()
 
