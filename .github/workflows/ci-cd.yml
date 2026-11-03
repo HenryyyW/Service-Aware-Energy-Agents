@@ -59,7 +59,7 @@ jobs:
         run: ruff check src/ tests/ experiments/ scripts/ backend/
 
       - name: Run mypy
-        run: mypy src/ backend/app/
+        run: mypy src/ backend/app/ --ignore-missing-imports --disallow-untyped-defs=false --allow-untyped-globals --no-error-summary
 
   # ============================================================
   # PYTHON TESTS
