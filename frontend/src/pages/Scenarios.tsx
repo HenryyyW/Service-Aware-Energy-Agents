@@ -1,4 +1,4 @@
-import { Plus, Search, Filter, Download, Edit, Trash2, Eye } from 'lucide-react'
+import { Search, Filter, Download, Edit, Trash2, Eye } from '../utils/lucide'
 import { useState } from 'react'
 import './Scenarios.css'
 
@@ -12,18 +12,18 @@ interface Scenario {
   createdAt: string
 }
 
-const mockScenarios: Scenario[] = [
+// Dev-only mock data - replaced by real API data in production
+const mockScenarios: Scenario[] = import.meta.env.DEV ? [
   { id: 'scenario_a', name: 'Scenario A', description: 'Base residential community', buildings: 5, timestep: 15, gridLimit: 200, createdAt: '2026-10-15' },
   { id: 'scenario_b', name: 'Scenario B', description: 'Mixed commercial/residential', buildings: 8, timestep: 15, gridLimit: 300, createdAt: '2026-10-18' },
   { id: 'scenario_c', name: 'Scenario C', description: 'High PV penetration', buildings: 6, timestep: 15, gridLimit: 250, createdAt: '2026-10-20' },
   { id: 'scenario_d', name: 'Scenario D', description: 'Energy sharing enabled', buildings: 5, timestep: 15, gridLimit: 200, createdAt: '2026-10-22' },
   { id: 'scenario_e', name: 'Scenario E', description: 'Failure injection test', buildings: 5, timestep: 15, gridLimit: 200, createdAt: '2026-10-25' },
-]
+] : []
 
 export default function Scenarios() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedScenario, setSelectedScenario] = useState<Scenario | null>(null)
-  const [showCreateModal, setShowCreateModal] = useState(false)
 
   const filteredScenarios = mockScenarios.filter(s =>
     s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -37,9 +37,6 @@ export default function Scenarios() {
           <h1>Scenarios</h1>
           <p>Manage simulation scenarios and configurations</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-          <span>+</span> New Scenario
-        </button>
       </div>
 
       <div className="card">

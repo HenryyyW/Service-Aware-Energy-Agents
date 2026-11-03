@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { wsManager, type WebSocketConnectionState } from '../api/client';
+import { devError } from '../utils/devLog';
 
 /**
  * Hook to access WebSocket connection state from wsManager
@@ -78,7 +79,7 @@ export function useSimulationUpdates(runId: string | null) {
     });
 
     const unsubscribeError = wsManager.on('simulation_error', (payload) => {
-      console.error('Simulation error:', payload);
+      devError('Simulation error:', payload);
     });
 
     return () => {

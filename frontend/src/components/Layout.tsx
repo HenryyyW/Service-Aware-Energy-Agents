@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard, FileText, FlaskConical, Zap, Settings, BarChart3 } from 'lucide-react'
+import { LayoutDashboard, FileText, FlaskConical, Zap, Settings } from '../utils/lucide'
 import { useState } from 'react'
 import './Layout.css'
 

@@ -9,6 +9,7 @@ import type {
   AssetMetadata,
   ReportResponse,
 } from './types';
+import { devError, devLog } from '../utils/devLog';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
@@ -28,7 +29,7 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
-        console.error('API Error:', error.response?.data || error.message);
+        devError('API Error:', error.response?.data || error.message);
         return Promise.reject(error);
       }
     );
@@ -184,7 +185,7 @@ export class WebSocketManager {
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
-        console.log('WebSocket connected');
+        devLog('WebSocket connected');
         this.reconnectAttempts = 0;
         this.updateConnectionState({
           isConnected: true,
@@ -205,17 +206,17 @@ export class WebSocketManager {
           });
           this.dispatchMessage(message.type, message.payload, message.meta);
         } catch (error) {
-          console.error('Failed to parse WebSocket message:', error);
+          devError('Failed to parse WebSocket message:', error);
         }
       };
 
       this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        devError('WebSocket error:', error);
         reject(error);
       };
 
       this.ws.onclose = () => {
-        console.log('WebSocket disconnected');
+        devLog('WebSocket disconnected');
         this.updateConnectionState({
           isConnected: false,
         });
@@ -257,7 +258,7 @@ export class WebSocketManager {
         reconnectAttempts: this.reconnectAttempts,
       });
       const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-      console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+      devLog(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
       setTimeout(() => this.connect(runId), delay);
     } else {
       this.updateConnectionState({

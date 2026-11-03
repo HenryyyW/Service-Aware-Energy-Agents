@@ -41,10 +41,10 @@ const IEEE_COLORS = {
 };
 
 const getFillColor = (d: any): [number, number, number, number] => {
-  if (d.isSelected) return IEEE_COLORS.selected.fill;
+  if (d.isSelected) return IEEE_COLORS.selected.fill as [number, number, number, number];
 
-  if (d.severity === 'critical') return IEEE_COLORS.critical.fill;
-  return IEEE_COLORS.warning.fill;
+  if (d.severity === 'critical') return IEEE_COLORS.critical.fill as [number, number, number, number];
+  return IEEE_COLORS.warning.fill as [number, number, number, number];
 };
 
 const getRadius = (d: any): number => {

@@ -1,4 +1,4 @@
-import { Zap, Wifi, Battery, AlertTriangle, CheckCircle, AlertCircle, Minimize2, Maximize2 } from 'lucide-react'
+import { AlertTriangle, AlertCircle, RefreshCw } from '../utils/lucide'
 import { useState } from 'react'
 import './Network.css'
 
@@ -25,24 +25,25 @@ interface Transformer {
   violations: string[]
 }
 
-const mockBuses: Bus[] = [
+// Dev-only mock data - replaced by real API data in production
+const mockBuses: Bus[] = import.meta.env.DEV ? [
   { id: 0, voltage: 1.02, angle: 0, type: 'slack', violations: [] },
   { id: 1, voltage: 1.015, angle: -0.02, type: 'pq', violations: [] },
   { id: 2, voltage: 1.008, angle: -0.04, type: 'pq', violations: [] },
   { id: 3, voltage: 1.002, angle: -0.06, type: 'pq', violations: ['Voltage low: 0.94 pu'] },
   { id: 3, voltage: 0.94, angle: -0.08, type: 'pq', violations: ['Voltage low: 0.94 pu'] },
-]
+] : []
 
-const mockLines: Line[] = [
+const mockLines: Line[] = import.meta.env.DEV ? [
   { from: 0, to: 1, loading: 45, limit: 100, violations: [] },
   { from: 1, to: 2, loading: 67, limit: 100, violations: [] },
   { from: 2, to: 3, loading: 115, limit: 100, violations: ['Line overloaded: 115%'] },
-]
+] : []
 
-const mockTransformers: Transformer[] = [
+const mockTransformers: Transformer[] = import.meta.env.DEV ? [
   { id: 0, loading: 78, limit: 100, violations: [] },
   { id: 1, loading: 92, limit: 100, violations: ['Transformer near limit: 92%'] },
-]
+] : []
 
 export default function Network() {
   const [selectedBus, setSelectedBus] = useState<number | null>(null)
@@ -57,7 +58,7 @@ export default function Network() {
           <p>Real-time grid monitoring and diagnostics</p>
         </div>
         <div className="header-actions">
-          <select value={viewMode} onChange={(e) => setViewMode(e.target as HTMLSelectElement).value} className="filter-select">
+          <select value={viewMode} onChange={(e) => setViewMode(e.target.value as 'overview' | 'detailed')} className="filter-select">
             <option value="overview">Overview</option>
             <option value="detailed">Detailed View</option>
           </select>

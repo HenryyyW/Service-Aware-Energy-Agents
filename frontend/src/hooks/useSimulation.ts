@@ -3,6 +3,7 @@ import { wsManager } from '../api/client';
 import { useSimulationStore } from '../store/simulationStore';
 import { useAgentStore } from '../store/agentStore';
 import type { TimeStepData, WebSocketMessage } from '../api/types';
+import { devError } from '../utils/devLog';
 
 export function useSimulationWebSocket(runId: string | null) {
   const setTrajectories = useSimulationStore((state) => state.setTrajectories);
@@ -83,7 +84,7 @@ export function useSimulationWebSocket(runId: string | null) {
           unsubscribers.forEach(unsub => unsub());
         };
       } catch (error) {
-        console.error('Failed to connect WebSocket:', error);
+        devError('Failed to connect WebSocket:', error);
       }
     };
 
@@ -163,7 +164,7 @@ export function useSimulationPolling(runId: string | null, enabled: boolean = tr
         // In a real implementation, this would fetch from the API
         // For now, we'll rely on WebSocket
       } catch (error) {
-        console.error('Polling error:', error);
+        devError('Polling error:', error);
       }
     }, 5000);
 

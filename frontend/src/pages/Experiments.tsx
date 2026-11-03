@@ -1,4 +1,4 @@
-import { Plus, Search, Filter, Download, Play, Pause, Stop, RefreshCw, Eye, Settings } from 'lucide-react'
+import { Search, Play, Pause, StopCircle, RefreshCw, Eye, Settings } from '../utils/lucide'
 import { useState } from 'react'
 import './Experiments.css'
 
@@ -16,17 +16,18 @@ interface Experiment {
   duration?: string
 }
 
-const mockExperiments: Experiment[] = [
+// Dev-only mock data - replaced by real API data in production
+const mockExperiments: Experiment[] = import.meta.env.DEV ? [
   { id: '1', runId: 'scenario_a_rule_based_42', scenario: 'Scenario A', controller: 'rule_based', regime: 'pool_tou', seed: 42, status: 'completed', cost: 1245.50, progress: 100, startedAt: '2026-10-30T10:00:00', duration: '45 min' },
   { id: '2', runId: 'scenario_a_mpc_42', scenario: 'Scenario A', controller: 'mpc', regime: 'pool_tou', seed: 42, status: 'completed', cost: 1180.30, progress: 100, startedAt: '2026-10-30T11:00:00', duration: '52 min' },
   { id: '3', runId: 'scenario_a_llm_agent_42', scenario: 'Scenario A', controller: 'llm_agent', regime: 'pool_tou', seed: 42, status: 'running', cost: 0, progress: 45, startedAt: '2026-10-30T12:00:00' },
   { id: '4', runId: 'scenario_b_rule_based_42', scenario: 'Scenario B', controller: 'rule_based', regime: 'lmp', seed: 42, status: 'completed', cost: 2150.75, progress: 100, startedAt: '2026-10-29T10:00:00', duration: '38 min' },
   { id: '5', runId: 'scenario_e_multi_agent_42', scenario: 'Scenario E', controller: 'multi_agent', regime: 'p2p', seed: 42, status: 'completed', cost: 980.20, progress: 100, startedAt: '2026-10-28T15:00:00', duration: '67 min' },
-]
+] : []
 
-const controllers = ['rule_based', 'mpc', 'llm_agent', 'llm_agent_verified', 'centralized', 'multi_agent']
-const scenarios = ['Scenario A', 'Scenario B', 'Scenario C', 'Scenario D', 'Scenario E']
-const regimes = ['pool_tou', 'lmp', 'p2p']
+const controllers = import.meta.env.DEV ? ['rule_based', 'mpc', 'llm_agent', 'llm_agent_verified', 'centralized', 'multi_agent'] : []
+const scenarios = import.meta.env.DEV ? ['Scenario A', 'Scenario B', 'Scenario C', 'Scenario D', 'Scenario E'] : []
+const regimes = import.meta.env.DEV ? ['pool_tou', 'lmp', 'p2p'] : []
 
 export default function Experiments() {
   const [searchTerm, setSearchTerm] = useState('')
@@ -34,7 +35,6 @@ export default function Experiments() {
   const [controllerFilter, setControllerFilter] = useState('all')
   const [scenarioFilter, setScenarioFilter] = useState('all')
   const [regimeFilter, setRegimeFilter] = useState('all')
-  const [showCreateModal, setShowCreateModal] = useState(false)
 
   const filteredExperiments = mockExperiments.filter(exp => {
     const matchesSearch = exp.runId.toLowerCase().includes(searchTerm.toLowerCase())
@@ -72,9 +72,6 @@ export default function Experiments() {
           <h1>Experiments</h1>
           <p>Manage and monitor simulation experiments</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-          <Plus size={18} /> New Experiment
-        </button>
       </div>
 
       <div className="card">
@@ -159,7 +156,7 @@ export default function Experiments() {
                         {exp.status === 'running' && (
                           <>
                             <button className="btn-icon" title="Pause"><Pause size={16} /></button>
-                            <button className="btn-icon danger" title="Stop"><Stop size={16} /></button>
+                            <button className="btn-icon danger" title="Stop"><StopCircle size={16} /></button>
                           </>
                         )}
                         {exp.status === 'pending' && (

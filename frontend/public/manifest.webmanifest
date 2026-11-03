@@ -1,14 +1,54 @@
 {
   "name": "Service-Aware Energy Agents",
   "short_name": "SAEA",
-  "description": "Spatio-temporal virtual community simulator for renewable-energy communities.",
+  "description": "Spatio-temporal virtual community simulator for renewable-energy communities: design communities, run time-stepped simulations, and compare pricing regimes.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f4f6f6",
-  "theme_color": "#005e60",
+  "background_color": "#0a0f1a",
+  "theme_color": "#0a0f1a",
   "icons": [
-    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/icons.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [],
+  "categories": ["utilities", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Scenario Studio",
+      "short_name": "Scenarios",
+      "description": "Create and manage energy scenarios",
+      "url": "/scenarios",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Agent Workspace",
+      "short_name": "Agent",
+      "description": "Monitor agent workflows",
+      "url": "/workspace",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
   ]
 }

@@ -4,6 +4,7 @@ import type { MapViewport, LayerVisibility, SelectedAsset, NetworkGeometry, Asse
 import { api } from '../api/client';
 import { useScenarioStore } from './scenarioStore';
 import { WebMercatorViewport } from '@deck.gl/core';
+import { devWarn, devError } from '../utils/devLog';
 
 interface CanvasState {
   // Map viewport
@@ -92,13 +93,13 @@ export const useCanvasStore = create<CanvasState>()(
           // If no scenarioId provided, try to get it from the scenario store
           const scenarioId = scenarioIdParam ?? useScenarioStore.getState().currentScenario?.scenario_id;
           if (!scenarioId) {
-            console.warn('No scenarioId provided for fetchNetworkGeometry');
+            devWarn('No scenarioId provided for fetchNetworkGeometry');
             return;
           }
           const geometry = await api.getNetworkGeometry(scenarioId);
           set({ networkGeometry: geometry });
         } catch (error) {
-          console.error('Failed to fetch network geometry:', error);
+          devError('Failed to fetch network geometry:', error);
         }
       },
       fitToNetworkBounds: () => {
@@ -134,7 +135,7 @@ export const useCanvasStore = create<CanvasState>()(
           const metadata = await api.getAssetMetadata(scenarioId);
           set({ assetMetadata: metadata });
         } catch (error) {
-          console.error('Failed to fetch asset metadata:', error);
+          devError('Failed to fetch asset metadata:', error);
         }
       },
     }),

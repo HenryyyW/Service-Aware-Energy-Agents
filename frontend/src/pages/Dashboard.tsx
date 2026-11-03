@@ -1,5 +1,5 @@
-import { BarChart3, TrendingUp, TrendingDown, DollarSign, Zap, Battery, Car, Home } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { DollarSign, Zap, Home, TrendingUp, TrendingDown } from '../utils/lucide'
+import { useState } from 'react'
 import './Dashboard.css'
 
 interface MetricCardProps {
@@ -7,13 +7,13 @@ interface MetricCardProps {
   value: string | number
   change?: string
   trend?: 'up' | 'down' | 'neutral'
-  icon: React.ReactNode
+  icon: React.ReactElement<{ size?: number }>
   color: string
 }
 
 function MetricCard({ title, value, change, trend, icon, color }: MetricCardProps) {
   return (
-    <div className="metric-card" style={{ '--accent-color': color }}>
+    <div className="metric-card" style={{ '--accent-color': color } as React.CSSProperties}>
       <div className="metric-header">
         <span className="metric-title">{title}</span>
         <div className="metric-icon" style={{ backgroundColor: `${color}20`, borderColor: color }}>
@@ -135,13 +135,13 @@ function RecentExperiments({ experiments }: RecentExperimentsProps) {
 }
 
 export default function Dashboard() {
-  const [metrics, setMetrics] = useState({
+  const [metrics] = useState({
     totalCost: { value: '$12,450', change: '-2.3%', trend: 'down' as const },
     totalEnergy: { value: '1.24 MWh', change: '+1.2%', trend: 'up' as const },
     avgComfort: { value: '0.87', change: '+0.02', trend: 'up' as const },
     gridEvents: { value: '23', change: '-5', trend: 'down' as const },
   })
-  const [gridStatus, setGridStatus] = useState({
+  const [gridStatus] = useState({
     voltage: 1.01,
     lineLoading: 67,
     transformerLoading: 45,
