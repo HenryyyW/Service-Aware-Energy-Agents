@@ -259,7 +259,6 @@ async def create_agent_task(
     task_data["timeout_seconds"] = 30 * 60  # 30 minutes
     
     # Start background agent workflow
-    get_task_queue, _, _, _, _ = _metrics()
     queue = get_task_queue()
     if queue:
         # Use RQ for production queue
@@ -318,7 +317,6 @@ async def retry_agent_task(task_id: str, background_tasks: BackgroundTasks):
     
     # Increment retry counter
     _task_retries[task_id] = retry_count + 1
-    _, _, _, _, TASK_RETRIES = _metrics()
     TASK_RETRIES.labels(task_id=task_id).inc()
     
     # Reset task for retry
@@ -334,7 +332,6 @@ async def retry_agent_task(task_id: str, background_tasks: BackgroundTasks):
     task["started_at"] = datetime.now(timezone.utc).isoformat()
     
     # Start background agent workflow
-    get_task_queue, _, _, _, _ = _metrics()
     queue = get_task_queue()
     if queue:
         queue.enqueue(
