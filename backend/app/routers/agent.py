@@ -65,6 +65,7 @@ async def _run_agent_task(
 
     if started_at:
         from datetime import datetime
+
         start_time = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
         elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
         if elapsed > timeout_seconds:
