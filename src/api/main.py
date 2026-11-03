@@ -3,12 +3,13 @@
 import time
 import uuid
 import json
+import logging
 import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional
 from datetime import datetime
 
-from fastapi import FastAPI, Request, Response, status, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, status, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -20,7 +21,6 @@ from src.api.config import get_settings
 from src.api.config import Settings
 from src.api.database import close_db, init_db
 from src.api.logging_config import (
-    CorrelationIdFilter,
     get_correlation_id,
     set_correlation_id,
     setup_logging,
@@ -101,7 +101,6 @@ async def lifespan(app: FastAPI):
     await init_db()
 
     # Log startup
-    import logging
 
     logger = logging.getLogger(__name__)
     logger.info(

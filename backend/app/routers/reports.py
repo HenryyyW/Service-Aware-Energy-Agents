@@ -1,14 +1,14 @@
 """Report generation API endpoints."""
 
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from datetime import datetime
 import json
 import io
 
-from app.routers.simulations import _runs, _couplers
+from app.routers.simulations import _runs
 
 router = APIRouter()
 
@@ -138,8 +138,8 @@ def _generate_report(run: dict) -> str:
     if em:
         lines.extend(
             [
-                f"| Metric | Value |",
-                f"|--------|-------|",
+                "| Metric | Value |",
+                "|--------|-------|",
                 f"| Total Cost | ${em.get('total_cost', 0):.2f} |",
                 f"| Grid Import | {em.get('grid_import_kwh', 0):.2f} kWh |",
                 f"| Grid Export | {em.get('grid_export_kwh', 0):.2f} kWh |",
@@ -160,8 +160,8 @@ def _generate_report(run: dict) -> str:
     if sm:
         lines.extend(
             [
-                f"| Metric | Value |",
-                f"|--------|-------|",
+                "| Metric | Value |",
+                "|--------|-------|",
                 f"| EV Completion Rate | {sm.get('ev_completion_rate', 0):.2%} |",
                 f"| Avg EV SOC at Departure | {sm.get('avg_ev_soc_at_departure', 0):.2%} |",
                 f"| Comfort Violation (degree-hours) | {sm.get('comfort_violation_degree_hours', 0):.2f} |",
@@ -180,8 +180,8 @@ def _generate_report(run: dict) -> str:
     if gm:
         lines.extend(
             [
-                f"| Metric | Value |",
-                f"|--------|-------|",
+                "| Metric | Value |",
+                "|--------|-------|",
                 f"| Power Flow Convergence Rate | {gm.get('power_flow_convergence_rate', 0):.2%} |",
                 f"| Voltage Violations | {gm.get('voltage_violations_count', 0)} |",
                 f"| Max Voltage | {gm.get('max_voltage_pu', 1.0):.4f} pu |",
@@ -199,8 +199,8 @@ def _generate_report(run: dict) -> str:
         lines.append("")
         lines.extend(
             [
-                f"| Metric | Value |",
-                f"|--------|-------|",
+                "| Metric | Value |",
+                "|--------|-------|",
                 f"| Community Volume | {settlement.get('total_community_volume_kwh', 0):.2f} kWh |",
                 f"| Community Revenue | ${settlement.get('total_community_revenue', 0):.2f} |",
                 "",

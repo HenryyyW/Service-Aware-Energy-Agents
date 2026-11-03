@@ -1,9 +1,8 @@
 """Fairness analysis for multi-member energy communities."""
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Optional
 import math
 import numpy as np
-import pandas as pd
 
 from src.schemas.report import PerMemberMetrics, ServiceMetrics
 from src.schemas.action import SimulationStepResult, ActionType

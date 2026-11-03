@@ -1,6 +1,6 @@
 """Backend registry for managing available LLM backends."""
 
-from typing import Any, Dict, Type, Optional, List
+from typing import Any, Dict, List
 from src.agents.backend.interface import AgentBackend
 from src.agents.backend.fallback import FallbackBackend
 from src.agents.backend.local import OllamaBackend

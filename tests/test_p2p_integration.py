@@ -20,8 +20,6 @@ from src.simulation.settlement_gate import (
 
 def test_p2p_bilateral_matching_then_residual_clearing():
     """Test bilateral P2P matching then residual clears in community pool."""
-    from src.coordination.p2p import P2PMatchingEngine, P2POrderSide
-    from src.simulation.settlement_gate import validate_p2p_settlement
 
     engine = P2PMatchingEngine()
 
@@ -47,8 +45,6 @@ def test_p2p_bilateral_matching_then_residual_clearing():
 
 def test_p2p_partial_fill_edge_case():
     """Test partial fill edge case where buyer quantity != seller quantity."""
-    from src.coordination.p2p import P2PMatchingEngine, P2POrderSide, P2POrderStatus
-    from src.simulation.settlement_gate import validate_p2p_settlement
 
     engine = P2PMatchingEngine()
 
@@ -80,8 +76,6 @@ def test_p2p_partial_fill_edge_case():
 
 def test_p2p_price_time_priority():
     """Test price-time priority: earlier orders at same price get priority."""
-    from src.coordination.p2p import P2PMatchingEngine, P2POrderSide
-    from src.simulation.settlement_gate import validate_p2p_settlement
 
     engine = P2PMatchingEngine(price_time_priority=True)
 
@@ -103,7 +97,6 @@ def test_p2p_price_time_priority():
 
 def test_p2p_min_spread_enforcement():
     """Test minimum spread enforcement prevents bad trades."""
-    from src.coordination.p2p import P2PMatchingEngine, P2POrderSide
 
     engine = P2PMatchingEngine(min_spread=0.01)
 
@@ -118,8 +111,6 @@ def test_p2p_min_spread_enforcement():
     assert len(result.unmatched_orders) == 2
 
     # But if spread is sufficient:
-    from src.coordination.p2p import P2PMatchingEngine, P2POrderSide
-
     engine2 = P2PMatchingEngine(min_spread=0.01)
     engine2.add_order("buyer", "buy", 0.15, 10.0, 0)
     engine2.add_order("seller", "sell", 0.10, 10.0, 0)
@@ -129,8 +120,6 @@ def test_p2p_min_spread_enforcement():
 
 def test_p2p_uniform_clearing_price():
     """Test uniform clearing price within batch."""
-    from src.coordination.p2p import P2PMatchingEngine, P2POrderSide
-    from src.simulation.settlement_gate import validate_p2p_settlement
 
     engine = P2PMatchingEngine(uniform_price_per_batch=True)
 
@@ -156,11 +145,6 @@ def test_p2p_uniform_clearing_price():
 
 def test_p2p_settlement_gate_integration():
     """Test full integration: matching -> settlement gate -> settlement."""
-    from src.coordination.p2p import P2PMatchingEngine, P2POrderSide
-    from src.simulation.settlement_gate import (
-        validate_p2p_settlement,
-        create_p2p_gate_report,
-    )
 
     engine = P2PMatchingEngine()
 
@@ -185,7 +169,6 @@ def test_p2p_settlement_gate_integration():
 
 def test_p2p_invariant_suite():
     """Run full invariant test suite."""
-    from src.coordination.p2p import run_p2p_invariant_tests
 
     results = run_p2p_invariant_tests()
 

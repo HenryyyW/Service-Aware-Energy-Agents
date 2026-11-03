@@ -3,11 +3,12 @@
 Defines how agents request simulations and receive observations from the environment.
 """
 
+import os
+import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Callable
+from typing import Optional, Dict, Any, List
 from enum import Enum
-from pydantic import BaseModel
 
 
 class SimulationStatus(str, Enum):
@@ -120,7 +121,6 @@ class SimulationProvider:
     """Provides simulation execution via sandbox."""
 
     def __init__(self, sandbox_timeout: int = 60, memory_limit_mb: int = 512):
-        from src.agents.sandbox import Sandbox, validate_controller_in_sandbox
 
         self.sandbox_timeout = sandbox_timeout
         self.memory_limit_mb = memory_limit_mb
@@ -134,7 +134,7 @@ class SimulationProvider:
         max_steps: int = 100,
     ) -> SimulationResult:
         """Run a controller in sandbox and return simulation result."""
-        from src.agents.sandbox import Sandbox, validate_controller_in_sandbox
+        from src.agents.sandbox import Sandbox
 
         # Convert scenario config to file path
         import tempfile
@@ -240,7 +240,7 @@ def run_controller_in_sandbox(
     Returns:
         SimulationResult with status and observations
     """
-    from src.agents.sandbox import Sandbox, validate_controller_in_sandbox
+    from src.agents.sandbox import Sandbox
     import tempfile
     import yaml
     import os

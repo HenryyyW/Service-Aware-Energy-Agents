@@ -1,11 +1,11 @@
 """Multi-agent controller for energy community coordination."""
 
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any
 
 from src.controllers import BaseController
 from src.schemas.action import RequestedActions, Action, ActionType
 from src.schemas.scenario import ScenarioConfig
-from src.coordination import MultiAgentCoordinator, create_coordinator
+from src.coordination import create_coordinator
 
 
 class MultiAgentController(BaseController):

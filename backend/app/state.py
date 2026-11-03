@@ -1,7 +1,6 @@
 """Shared application state and utilities for the agent service."""
 
 import os
-from typing import Optional
 from prometheus_client import Counter, Histogram, Gauge
 
 try:

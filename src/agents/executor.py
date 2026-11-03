@@ -1,11 +1,8 @@
 """Executor agent - runs code in sandbox and executes experiments."""
 
-import subprocess
-import tempfile
 import os
-import shutil
 import time
-from typing import Optional, List, Dict, Any
+from typing import Dict, Any
 from src.agents.roles import AgentState, ExecutorOutput, AgentRole
 from src.agents.sandbox import Sandbox, SandboxResult, validate_controller_in_sandbox
 
@@ -67,7 +64,7 @@ class ExecutorAgent:
                 )
 
             # Run unit tests first
-            print(f"  Running unit tests...")
+            print("  Running unit tests...")
             test_result = self.sandbox.run_tests()
             print(
                 f"  Unit tests: {'PASS' if test_result.success else 'FAIL'} ({test_result.execution_time:.1f}s)"

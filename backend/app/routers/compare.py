@@ -1,6 +1,6 @@
 """Scenario comparison API endpoints."""
 
-from typing import List, Optional, Dict, Any
+from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 

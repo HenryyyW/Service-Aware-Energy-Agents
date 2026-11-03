@@ -4,7 +4,7 @@ import time
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 
-from src.agents.roles import AgentState, AgentRole
+from src.agents.roles import AgentState
 from src.agents.planner import PlannerAgent, PlannerOutput
 from src.agents.coder import CoderAgent, CoderOutput
 from src.agents.executor import ExecutorAgent, ExecutorOutput
@@ -104,7 +104,7 @@ class MultiAgentRepairLoop:
         )
 
         print(f"\n{'='*60}")
-        print(f"MULTI-AGENT REPAIR LOOP STARTED")
+        print("MULTI-AGENT REPAIR LOOP STARTED")
         print(f"Run ID: {experiment_result.run_id}")
         print(f"Max Iterations: {self.max_iterations}")
         print(f"{'='*60}")
@@ -118,7 +118,7 @@ class MultiAgentRepairLoop:
             print(f"{'='*60}")
 
             # === PLANNER ===
-            print(f"\n[PLANNER] Analyzing violations and creating repair plan...")
+            print("\n[PLANNER] Analyzing violations and creating repair plan...")
             plan = self.planner.plan(state)
             print(f"  Primary Issue: {plan.primary_issue}")
             print(f"  Secondary Issues: {plan.secondary_issues}")
@@ -131,14 +131,14 @@ class MultiAgentRepairLoop:
                 break
 
             # === CODER ===
-            print(f"\n[CODER] Implementing code changes...")
+            print("\n[CODER] Implementing code changes...")
             coder_output = self.coder.code(state, plan, state.controller_file)
             print(f"  Changes: {len(coder_output.code_changes)}")
             for change in coder_output.code_changes:
                 print(f"    - {change['function']}: {change['change'][:80]}...")
 
             # === EXECUTOR ===
-            print(f"\n[EXECUTOR] Running sandbox validation...")
+            print("\n[EXECUTOR] Running sandbox validation...")
             executor_output = self.executor.execute(state)
             print(f"  Result: {'PASS' if executor_output.success else 'FAIL'}")
             print(f"  Time: {executor_output.execution_time:.1f}s")
@@ -146,7 +146,7 @@ class MultiAgentRepairLoop:
                 print(f"  Error: {executor_output.error}")
 
             # === VERIFIER ===
-            print(f"\n[VERIFIER] Verifying repair effectiveness...")
+            print("\n[VERIFIER] Verifying repair effectiveness...")
             verifier_output = self.verifier.verify(
                 state, plan, executor_output.test_results
             )
@@ -157,7 +157,7 @@ class MultiAgentRepairLoop:
                 print(f"  Remaining: {verifier_output.remaining_violations}")
 
             # === REPORTER ===
-            print(f"\n[REPORTER] Generating iteration report...")
+            print("\n[REPORTER] Generating iteration report...")
             reporter_output = self.reporter.report(
                 state, plan, coder_output, executor_output, verifier_output
             )
@@ -189,7 +189,7 @@ class MultiAgentRepairLoop:
             # Check if should continue
             if verifier_output.recommendation in ["escalate", "retry"]:
                 if iteration == self.max_iterations - 1:
-                    print(f"\n✗ MAX ITERATIONS REACHED - Repair incomplete")
+                    print("\n✗ MAX ITERATIONS REACHED - Repair incomplete")
                     break
                 print(
                     f"\n→ Continuing to next iteration (recommendation: {verifier_output.recommendation})"

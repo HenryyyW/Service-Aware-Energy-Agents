@@ -1,13 +1,11 @@
 """EV coordination agent."""
 
 from typing import Optional, List, Dict, Any
-from dataclasses import dataclass, field
 
 from src.coordination.base import (
     CoordinationAgent,
     CoordinationMessage,
     CoordinationPhase,
-    Proposal,
     EVProposal,
 )
 from src.schemas.scenario import EVConfig

@@ -5,14 +5,11 @@ import tempfile
 import os
 import sys
 import shutil
-import json
 import time
 import ast
 import resource
-import signal
 from typing import Optional, Dict, Any, List, Set
 from dataclasses import dataclass, field
-from pathlib import Path
 
 
 @dataclass
@@ -631,7 +628,6 @@ class Sandbox:
             # Import required modules
             from src.simulation import SimulationCoupler
             from src.schemas.scenario import ScenarioConfig
-            from src.schemas.action import RequestedActions, Action, ActionType
             import yaml
 
             # Load scenario config

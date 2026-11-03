@@ -1,7 +1,5 @@
 """Remote API backend - for OpenAI, Anthropic, and other cloud LLM providers."""
 
-import asyncio
-import json
 import os
 import time
 from typing import Optional, Dict, Any, List
@@ -9,7 +7,6 @@ import aiohttp
 
 from src.agents.backend.interface import AgentBackend, BackendResponse, CostBudget
 from src.schemas.scenario import ScenarioConfig
-from src.schemas.action import Action
 
 
 class RemoteAPIBackend(AgentBackend):

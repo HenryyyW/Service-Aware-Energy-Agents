@@ -2,23 +2,13 @@
 
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request, Header
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from uuid import uuid4
 from datetime import datetime, timezone
-import asyncio
-import hashlib
 import time
 
-from src.agents.multi_agent_loop import run_multi_agent_repair
-from src.schemas.report import ExperimentResult, ExperimentStatus, ControllerType
-from src.schemas.diagnostics import DiagnosticReport
-from src.schemas.scenario import ScenarioConfig
-from src.agents.backend.config import load_llm_config
-from src.agents.backend.registry import create_backend_from_config
-from src.simulation import SimulationCoupler
 from app.state import (
     get_task_queue,
-    get_redis_client,
     TASK_DURATION,
     TASKS_TOTAL,
     TASK_RETRIES,
@@ -90,7 +80,6 @@ async def _run_agent_task(
             TASKS_TOTAL.labels(status="timeout").inc()
             return
 
-    import time
 
     start_time = time.time()
 
@@ -117,9 +106,7 @@ async def _run_agent_task(
 
         # Load or create experiment result (for failed experiment that needs repair)
         from src.schemas.report import (
-            ExperimentResult,
             ExperimentStatus,
-            ControllerType,
             EnergyMetrics,
             ServiceMetrics,
             GridMetrics,
@@ -127,7 +114,6 @@ async def _run_agent_task(
         from src.schemas.diagnostics import DiagnosticReport
 
         # Create a failed experiment result that needs repair
-        from src.schemas.report import EnergyMetrics, ServiceMetrics, GridMetrics
 
         energy = EnergyMetrics(
             total_cost=100.0,
@@ -178,7 +164,6 @@ async def _run_agent_task(
 
         # Create diagnostic reports for the failed experiment
         from src.schemas.diagnostics import (
-            DiagnosticReport,
             Diagnostic,
             DiagnosticCategory,
             Severity,
@@ -285,7 +270,6 @@ async def _run_agent_task(
         import traceback
 
         _tasks[task_id]["execution_log"].append(traceback.format_exc())
-        _, _, TASK_DURATION, TASKS_TOTAL, _ = _metrics()
         TASK_DURATION.labels(status="error").observe(time.time() - start_time)
         TASKS_TOTAL.labels(status="error").inc()
 

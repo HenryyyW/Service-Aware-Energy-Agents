@@ -3,16 +3,13 @@
 from typing import List, Dict, Any, Optional
 import math
 import numpy as np
-import pandas as pd
 
 from src.schemas.action import SimulationStepResult, ActionType
-from src.schemas.diagnostics import Diagnostic, DiagnosticCategory, Severity
 from src.schemas.report import (
     EnergyMetrics,
     ServiceMetrics,
     GridMetrics,
     AgentMetrics,
-    PerMemberMetrics,
 )
 
 

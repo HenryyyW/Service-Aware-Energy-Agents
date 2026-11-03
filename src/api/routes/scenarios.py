@@ -1,7 +1,6 @@
 """Scenario management routes."""
 
 from pathlib import Path
-import json
 import re
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any

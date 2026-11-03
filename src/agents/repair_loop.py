@@ -2,22 +2,18 @@
 
 import os
 import time
-import hashlib
 import shutil
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from src.agents.repair_agent import (
     RepairAgent,
     RepairPatch,
     RepairContext,
-    create_repair_agent_from_config,
 )
 from src.agents.sandbox import Sandbox, SandboxResult, validate_controller_in_sandbox
 from src.schemas.report import ExperimentResult, ExperimentStatus, ControllerType
 from src.schemas.diagnostics import DiagnosticReport
-from src.schemas.task import TaskSpec
 from src.evaluation.verification_harness import (
     VerificationHarness,
     create_harness_for_grid_violation,

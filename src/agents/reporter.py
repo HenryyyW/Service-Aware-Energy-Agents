@@ -1,13 +1,12 @@
 """Reporter agent - generates comprehensive repair reports."""
 
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any
 from datetime import datetime
 from src.agents.roles import AgentState, ReporterOutput, AgentRole
 from src.agents.planner import PlannerOutput
 from src.agents.coder import CoderOutput
 from src.agents.executor import ExecutorOutput
 from src.agents.verifier import VerifierOutput
-from src.schemas.report import ExperimentResult
 
 
 class ReporterAgent:

@@ -15,7 +15,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from experiments.run_experiment import ExperimentRunner, load_scenario
-from src.schemas.report import ControllerType, ExperimentResult
 
 
 def run_one(controller: str, seed: int, max_steps: int = 10):

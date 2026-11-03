@@ -3,30 +3,18 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 import json
 import asyncio
 import uuid
-import os
-import time
 from datetime import datetime
-from typing import Optional
-from prometheus_client import Counter, Histogram, Gauge, generate_latest
+from prometheus_client import generate_latest
 from fastapi.responses import Response
 
 from app.state import (
     REDIS_AVAILABLE,
-    TASK_DURATION,
-    TASKS_TOTAL,
-    TASK_QUEUE_SIZE,
-    LLM_TOKENS_TOTAL,
-    LLM_COST_TOTAL,
-    TASK_RETRIES,
     get_redis_client,
-    get_task_queue,
-    get_job,
 )
 
 from app.routers import scenarios, simulations, agent, reports, compare, network
@@ -38,7 +26,7 @@ async def lifespan(app: FastAPI):
     if REDIS_AVAILABLE:
         client = get_redis_client()
         if client:
-            print(f"Connected to Redis at {redis_url}")
+            print("Connected to Redis")
         else:
             print("Warning: Redis not available, using in-memory queue")
     else:
@@ -139,7 +127,7 @@ class ConnectionManager:
             for connection in self.active_connections[run_id]:
                 try:
                     await connection.send_json(message)
-                except:
+                except Exception:
                     pass
 
 

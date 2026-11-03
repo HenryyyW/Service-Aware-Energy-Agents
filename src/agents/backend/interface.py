@@ -2,9 +2,9 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, AsyncIterator
+from typing import Optional, Dict, Any, List
 from src.schemas.scenario import ScenarioConfig
-from src.schemas.action import RequestedActions, Action
+from src.schemas.action import Action
 
 
 @dataclass

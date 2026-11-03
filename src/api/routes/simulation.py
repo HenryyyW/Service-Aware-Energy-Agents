@@ -4,7 +4,6 @@ from fastapi import APIRouter, HTTPException
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
 
-from src.simulation.coupling import SimulationCoupler
 from src.schemas.action import Action, ActionType
 
 router = APIRouter()
@@ -63,7 +62,7 @@ async def step_simulation(scenario_id: str, request: StepRequest) -> Dict[str, A
     coupler = _couplers[scenario_id]
 
     # Convert actions to RequestedActions format
-    from src.schemas.action import RequestedActions, Action
+    from src.schemas.action import RequestedActions
 
     actions = []
     for a in request.actions:

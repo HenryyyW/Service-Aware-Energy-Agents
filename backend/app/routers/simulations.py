@@ -2,7 +2,7 @@
 
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from uuid import uuid4
 from datetime import datetime
 import asyncio
@@ -10,7 +10,6 @@ import numpy as np
 import hashlib
 import json
 import traceback
-from fastapi.encoders import jsonable_encoder
 
 
 def _convert_numpy(obj):
@@ -52,7 +51,6 @@ def _compute_config_hash(
 
 from src.schemas.scenario import ScenarioConfig
 from src.simulation.coupling import SimulationCoupler
-from src.schemas.action import RequestedActions
 from src.controllers import (
     RuleBasedController,
     CentralizedController,
@@ -151,7 +149,7 @@ async def _run_simulation_background(
         try:
             coupler = SimulationCoupler(scenario, data_dir=data_dir)
             with open(debug_log, "a") as f:
-                f.write(f"DEBUG: Coupler created successfully\n")
+                f.write("DEBUG: Coupler created successfully\n")
         except Exception as e:
             with open(debug_log, "a") as f:
                 f.write(f"DEBUG: Coupler creation failed: {e}\n")
@@ -179,7 +177,6 @@ async def _run_simulation_background(
 
             # Estimate ETA
             if step > 0:
-                import time
 
                 start = datetime.fromisoformat(
                     _runs[run_id]["start_time"].replace("Z", "+00:00")
@@ -333,7 +330,6 @@ async def create_simulation(
 ):
     """Start a new simulation run (idempotent per config_hash + seed)."""
     # Validate scenario exists
-    from app.routers.scenarios import _scenarios, _load_scenario_from_disk
 
     if request.scenario_id not in _scenarios:
         scenario = _load_scenario_from_disk(request.scenario_id)
@@ -497,7 +493,6 @@ async def resume_simulation(run_id: str, background_tasks: BackgroundTasks):
         )
 
     # Validate scenario exists
-    from app.routers.scenarios import _scenarios, _load_scenario_from_disk
 
     scenario_id = run["scenario_id"]
     if scenario_id not in _scenarios:
@@ -551,7 +546,6 @@ async def get_simulation_status(run_id: str):
     # Estimate ETA based on current progress
     eta_seconds = None
     if run["status"] == "running" and current_step > 0 and progress > 0:
-        import time
 
         start = datetime.fromisoformat(run["start_time"].replace("Z", "+00:00"))
         elapsed = (datetime.utcnow() - start).total_seconds()
@@ -580,4 +574,3 @@ async def get_simulation_status(run_id: str):
     }
 
 
-import json  # Add import at top if not present

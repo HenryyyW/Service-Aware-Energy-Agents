@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Any
 from collections import defaultdict
 import numpy as np
 
-from src.schemas.scenario import ScenarioConfig, EnergySharingConfig, TariffConfig
+from src.schemas.scenario import ScenarioConfig, EnergySharingConfig
 from .market import MarketClearingResult, create_market_engine, BuildingEnergyState
 
 

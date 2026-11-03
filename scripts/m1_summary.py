@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Generate M1 pricing-matrix summary for paper table."""
 
-import json, pathlib, statistics
+import json
+import pathlib
+import statistics
 from collections import defaultdict
 
 BASE = pathlib.Path(

@@ -373,7 +373,7 @@ def run_benchmark(
                 summary_stats[key][metric] = compute_statistics(values)
 
     failing_runs = [
-        {"scenario": Path(s).stem, "controller": c, "seed": seed}
+        {"scenario": Path(scenario).stem, "controller": controller, "seed": seed}
         for scenario, controller, seed in tasks
         if not any(
             r["scenario"] == Path(scenario).stem

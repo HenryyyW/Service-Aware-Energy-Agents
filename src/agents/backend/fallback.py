@@ -1,9 +1,8 @@
 """Fallback backend - deterministic rule-based fallback when no LLM available."""
 
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from src.agents.backend.interface import AgentBackend, BackendResponse, CostBudget
 from src.schemas.scenario import ScenarioConfig
-from src.schemas.action import Action, ActionType
 from src.controllers import RuleBasedController
 
 

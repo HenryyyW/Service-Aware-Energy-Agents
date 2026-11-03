@@ -182,7 +182,7 @@ def test_scenario_e_end_to_end_failure_recovery():
         ), "Recovery metrics not present in KPIs"
 
         # Print summary for verification
-        print(f"\n=== Scenario E End-to-End Summary ===")
+        print("\n=== Scenario E End-to-End Summary ===")
         print(f"Failures activated: {len(failure_periods)}")
         for fid, period in failure_periods.items():
             print(f"  {fid}: steps {period['start']}-{period['end']}")
@@ -534,7 +534,7 @@ def test_scenario_e_verification_harness_end_to_end():
         )
 
     # Print M3.4 metrics summary
-    print(f"\nM3.4 Recovery Metrics (Failure Run):")
+    print("\nM3.4 Recovery Metrics (Failure Run):")
     for metric in m34_metrics:
         print(f"  {metric}: {failure_kpis.get(metric, 'N/A')}")
     print(

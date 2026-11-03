@@ -1,14 +1,11 @@
 """Planner agent - analyzes diagnostics and creates repair plan."""
 
-from typing import Optional, List, Dict, Any
-from src.agents.roles import AgentState, PlannerOutput, AgentRole, Message
+from typing import List, Dict, Any
+from src.agents.roles import AgentState, PlannerOutput, AgentRole
 from src.schemas.diagnostics import (
-    DiagnosticReport,
-    Diagnostic,
     DiagnosticCategory,
-    Severity,
 )
-from src.schemas.report import ExperimentResult, GridMetrics, ServiceMetrics
+from src.schemas.report import GridMetrics, ServiceMetrics
 
 
 class PlannerAgent:

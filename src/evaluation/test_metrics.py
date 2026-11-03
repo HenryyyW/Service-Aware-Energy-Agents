@@ -10,10 +10,7 @@ from src.schemas.action import (
     RequestedActions,
     LimitedActions,
     AppliedActions,
-    Action,
-    ActionType,
 )
-from src.schemas.report import EnergyMetrics
 
 
 def create_hand_calculable_history():

@@ -18,14 +18,7 @@ from src.schemas.action import (
     RequestedActions,
     LimitedActions,
     AppliedActions,
-    ControllerOutput,
     SimulationStepResult,
-)
-from src.schemas.diagnostics import (
-    Diagnostic,
-    DiagnosticCategory,
-    Severity,
-    DiagnosticReport,
 )
 
 

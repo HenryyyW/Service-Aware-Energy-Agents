@@ -126,7 +126,6 @@ def get_prompt(template_id: str) -> Optional[PromptTemplate]:
 def load_prompts_from_dir(prompts_dir: str) -> None:
     """Load prompt templates from JSON files in a directory."""
     import json
-    from pathlib import Path
 
     dir_path = Path(prompts_dir)
     if not dir_path.exists():

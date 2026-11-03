@@ -1,7 +1,6 @@
 """Coder agent - implements code changes based on repair plan."""
 
 import ast
-import hashlib
 from typing import Optional, List, Dict, Any
 from src.agents.roles import AgentState, CoderOutput, AgentRole
 from src.agents.planner import PlannerOutput
@@ -210,7 +209,7 @@ class CoderAgent:
             },
             "grid_import": {
                 "_apply_grid_limits": [
-                    f"Enforce community import limit from scenario config",
+                    "Enforce community import limit from scenario config",
                     "Proportional curtailment when limit exceeded",
                     "Prioritize battery discharge over import",
                 ],
@@ -220,7 +219,7 @@ class CoderAgent:
             },
             "grid_export": {
                 "_apply_grid_limits": [
-                    f"Enforce community export limit from scenario config",
+                    "Enforce community export limit from scenario config",
                     "Curtail PV when export limit approached",
                     "Charge batteries to absorb excess generation",
                 ],

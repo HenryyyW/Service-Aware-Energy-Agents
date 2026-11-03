@@ -4,7 +4,7 @@ Defines the contract between agents (Planner, Coder, Executor, Verifier, Reporte
 and the controllers they generate/validate/execute.
 """
 
-from typing import Optional, List, Dict, Any, Literal
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from enum import Enum
 from datetime import datetime
@@ -192,7 +192,6 @@ ReporterOutput.model_rebuild()
 
 if __name__ == "__main__":
     # Quick validation
-    from pydantic import ValidationError
 
     # Test ControllerCode
     cc = ControllerCode(

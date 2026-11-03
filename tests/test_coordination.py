@@ -307,7 +307,6 @@ def test_controller_types_available():
     """Test that all expected controller types are available."""
     from src.controllers import (
         BaseController,
-        RuleBasedController,
         MultiAgentController,
         CentralizedController,
     )

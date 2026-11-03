@@ -1,8 +1,7 @@
 """Scenario management API endpoints."""
 
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException
 from uuid import uuid4
 import json
 import os

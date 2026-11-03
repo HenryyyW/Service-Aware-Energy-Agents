@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 
 from src.schemas.scenario import ScenarioConfig, FailureConfig

@@ -2,7 +2,7 @@
 
 import yaml
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from typing import Dict, Any, Optional
 
 from src.simulation.pandapower_adapter import PandapowerAdapter

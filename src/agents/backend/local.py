@@ -4,7 +4,6 @@ This backend uses a local Ollama server running at LLM_LOCAL_ENDPOINT (default h
 with the model specified by LLM_LOCAL_MODEL. Supports backend selection via AGENT_BACKEND=ollama:<model>.
 """
 
-import asyncio
 import urllib.request
 import json
 import os
@@ -14,7 +13,6 @@ import aiohttp
 
 from src.agents.backend.interface import AgentBackend, BackendResponse, CostBudget
 from src.schemas.scenario import ScenarioConfig
-from src.schemas.action import Action
 
 
 class OllamaBackend(AgentBackend):

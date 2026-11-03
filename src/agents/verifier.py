@@ -1,9 +1,8 @@
 """Verifier agent - verifies that fixes resolve violations."""
 
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any
 from src.agents.roles import AgentState, VerifierOutput, AgentRole
 from src.agents.planner import PlannerOutput
-from src.schemas.diagnostics import DiagnosticCategory, Severity
 from src.schemas.report import ExperimentResult, GridMetrics, ServiceMetrics
 
 

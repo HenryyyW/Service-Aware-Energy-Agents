@@ -1,7 +1,6 @@
 """Community aggregator agent for multi-agent coordination."""
 
 from typing import Optional, List, Dict, Any
-from dataclasses import dataclass, field
 
 from src.coordination.base import (
     CoordinationAgent,

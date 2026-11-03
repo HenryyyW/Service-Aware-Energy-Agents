@@ -5,7 +5,7 @@ are accepted. It enforces invariants for money conservation, energy conservation
 no-arbitrage, ledger conservation, and no double settlement.
 """
 
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Tuple
 from dataclasses import dataclass
 from enum import Enum
 import logging
@@ -13,8 +13,6 @@ import logging
 from src.coordination.p2p import (
     P2PMatchingEngine,
     P2PMatchingResult,
-    P2POrder,
-    P2PTrade,
     run_p2p_invariant_tests,
 )
 

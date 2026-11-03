@@ -6,12 +6,10 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     String,
-    Text,
     DateTime,
     ForeignKey,
     Index,
     Enum as SQLEnum,
-    JSON,
     Text,
     Integer,
     Float,

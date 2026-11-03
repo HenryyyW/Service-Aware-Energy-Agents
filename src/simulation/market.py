@@ -4,9 +4,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
 from enum import Enum
+import logging
 import numpy as np
 
 from src.schemas.scenario import ScenarioConfig, EnergySharingConfig, TariffConfig
+
+logger = logging.getLogger(__name__)
 
 
 class MarketType(str, Enum):

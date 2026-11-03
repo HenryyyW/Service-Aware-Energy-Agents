@@ -1,6 +1,5 @@
 """Experiment runner for service-aware energy agents."""
 
-import os
 import json
 import yaml
 import argparse
@@ -8,7 +7,7 @@ import time
 import hashlib
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, List
 
 import numpy as np
 
@@ -17,16 +16,11 @@ from src.schemas.scenario import (
     EnergySharingConfig,
     DynamicPricingConfig,
 )
-from src.schemas.action import RequestedActions, Action, ActionType
 from src.schemas.report import (
     ExperimentResult,
     ExperimentStatus,
     ControllerType,
     KPIResult,
-    EnergyMetrics,
-    ServiceMetrics,
-    GridMetrics,
-    AgentMetrics,
     EnergySharingMetrics,
     MemberSettlementMetrics,
 )
@@ -938,7 +932,7 @@ def main():
     )
     print(f"Result file: {runner.run_dir / 'result.json'}")
 
-    print(f"\nExperiment Summary:")
+    print("\nExperiment Summary:")
     print(f"  Run ID: {result.run_id}")
     if runner.pricing_regime is not None:
         print(

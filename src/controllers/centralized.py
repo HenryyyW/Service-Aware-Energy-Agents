@@ -6,7 +6,6 @@ from src.controllers import BaseController
 from src.schemas.action import RequestedActions, Action, ActionType
 from src.schemas.scenario import (
     ScenarioConfig,
-    BuildingConfig,
     BatteryConfig,
     EVConfig,
     FlexibleLoadConfig,

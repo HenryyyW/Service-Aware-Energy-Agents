@@ -1,18 +1,16 @@
 """Main multi-agent coordinator for hierarchical coordination."""
 
-from typing import Optional, List, Dict, Any
-from dataclasses import dataclass, field
+from typing import List, Dict, Any
 import time
 
 from src.coordination.base import (
-    CoordinationAgent,
     CoordinationMessage,
     CoordinationPhase,
     BuildingProposal,
     AggregationResult,
     CoordinationResult,
 )
-from src.coordination.building_agent import BuildingAgent, create_building_agents
+from src.coordination.building_agent import create_building_agents
 from src.coordination.aggregator_agent import CommunityAggregator
 from src.schemas.scenario import ScenarioConfig
 

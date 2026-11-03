@@ -1,6 +1,5 @@
 """pandapower adapter for distribution grid power flow analysis."""
 
-import copy
 from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
 import pandapower as pp
@@ -10,18 +9,14 @@ from pandapower.timeseries import DFData
 from pandapower.control import ConstControl
 
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any, Tuple
 from enum import Enum
 
 from src.schemas.scenario import (
     PandapowerConfig,
-    GridBusMapping,
     ScenarioConfig,
-    BuildingConfig,
 )
 from src.schemas.diagnostics import (
     Diagnostic,
-    DiagnosticCategory,
     Severity,
     DiagnosticReport,
     PowerFlowDiagnostic,
@@ -30,7 +25,6 @@ from src.schemas.diagnostics import (
     TransformerLoadingDiagnostic,
     GridLimitDiagnostic,
 )
-from src.schemas.action import SimulationStepResult
 
 
 class LmpStatus(str, Enum):
@@ -256,7 +250,7 @@ class PandapowerAdapter:
         except ImportError:
             # Fallback: create a representative LV network based on SimBench structure
             return self._create_simbench_like_lv_network()
-        except Exception as e:
+        except Exception:
             # If specific code fails, try default
             try:
                 import simbench as sb
@@ -1371,8 +1365,6 @@ class PandapowerAdapter:
             }
 
         # Create data sources for each building
-        from pandapower.timeseries import DFData
-        from pandapower.control import ConstControl
         import pandas as pd
 
         n_steps = len(next(iter(building_power_profiles.values())))
@@ -1443,7 +1435,6 @@ class PandapowerAdapter:
                 )
 
         # Run time series
-        from pandapower.timeseries import run_timeseries
 
         run_timeseries(self.net, time_steps=range(n_steps))
 

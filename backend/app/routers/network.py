@@ -2,10 +2,9 @@
 
 from typing import Dict, List, Optional, Any
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from src.simulation.pandapower_adapter import create_grid_from_scenario
-from src.schemas.scenario import ScenarioConfig
 from app.routers.scenarios import _scenarios, _load_scenario_from_disk
 
 router = APIRouter()

@@ -1,8 +1,11 @@
 """Configuration loading for LLM backends from environment variables."""
 
 import os
-import re
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.agents.backend.interface import CostBudget
 from typing import Optional, Dict, Any, List
 
 

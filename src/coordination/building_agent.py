@@ -1,7 +1,6 @@
 """Building agent for multi-agent coordination."""
 
 from typing import Optional, List, Dict, Any
-from dataclasses import dataclass, field
 
 from src.coordination.base import (
     CoordinationAgent,
@@ -12,8 +11,6 @@ from src.coordination.base import (
 )
 from src.schemas.scenario import (
     BuildingConfig,
-    BatteryConfig,
-    EVConfig,
     FlexibleLoadConfig,
 )
 from src.schemas.action import Action, ActionType
