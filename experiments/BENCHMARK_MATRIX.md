@@ -277,3 +277,36 @@ a deliberate review). Point the runner at them with
 `--rl-policy-dir experiments/reference/rl_policy`. If a policy file is missing,
 the runner skips `rl` runs for that scenario and lists them in
 `failed_runs.json` rather than substituting a different controller.
+
+## 8. Phase 6 expansion (B-axis) — DESIGNED, PENDING APPROVAL
+
+Full design, commands, wall-time estimates and pre-launch checklist:
+**`docs/benchmark_expansion_plan.md`** (authoritative for this section). No
+runs scheduled until the Project Partner approves.
+
+| Expansion | Grid | Runs | Output dir | Est. wall @ `--workers 3` |
+|---|---|---:|---|---:|
+| B1 P2P official matrix | 5 scenarios × 5 controllers × 5 seeds, `--regime p2p` | 125 | `experiments/matrix_p2p/` (new; never mix regimes in one dir) | ~45 min |
+| B2 LMP+RL arm | 5 scenarios × `rl` × 5 seeds, `--regime lmp`, `--rl-policy experiments/reference/rl_policy/lmp_scenario_<s>.json` (tracked 138-state fixtures) | 25 | `experiments/m52_benchmark/` (append; completes LMP to 5×5×5) | ~10 min |
+| B3 Seed expansion 5→10 | +5 seeds {1234, 2024, 3456, 5555, 8888} × (TOU + LMP + P2P matrices, deterministic controllers) | 375 | append to each matrix dir | ~2.2 h |
+
+Protocol additions:
+
+- **P2P pairing:** each p2p run pairs with the pool_tou run at the same
+  (scenario, controller, seed) in `experiments/matrix_full`; RQ3 claims use
+  paired per-seed deltas (p2p − pool) with Student-t 95% CIs, Holm-corrected
+  across the 4 controller comparisons per scenario.
+- **P2P acceptance:** exit 0 AND settlement-gate (`src/simulation/
+  settlement_gate.py`) ledger validation passes per run.
+- **Derived p2p metrics** (`p2p_volume_kwh`, `p2p_value_usd`, `p2p_trades`,
+  `p2p_participation_share`, savings Gini) are computed at analysis time from
+  per-step market history; the runner does not aggregate them.
+- **Seeds:** deterministic-controller matrices move to 10 seeds; LLM ablation
+  arms (fallback + real-LLM) stay at 5 (latency-dominated; null result is not
+  CI-limited). CI half-width factor 1.241 (n=5) → 0.715 (n=10), ≈ 42% tighter.
+- **Runtime basis:** executed history (~310+ runs): per-controller medians
+  53.4–61.8 s (overall ≈ 55.5 s, max 138.7 s); supersedes the §3 ~110 s
+  early estimate. Expansion total: 527 runs ≈ 3 h wall (budget 4 h).
+- **Regime driving:** `run_benchmark.py` cannot pass `--regime`; regime
+  matrices run per-run via `experiments.run_experiment --regime ...` under
+  the QA supervisor loop (same pattern as `experiments/m52_benchmark`).
