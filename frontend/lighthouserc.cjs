@@ -2,7 +2,6 @@ module.exports = {
   ci: {
     collect: {
       numberOfRuns: 3,
-      startServerCommand: 'npm run serve',
       staticDistDir: './dist',
       url: [
         'http://localhost:4173/',
