@@ -272,9 +272,8 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha,prefix=
+            type=sha
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value={{date:YYYYMMDD}}-{{sha}}
 
       - name: Build and push
         id: build
@@ -318,9 +317,8 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha,prefix=
+            type=sha
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value={{date:YYYYMMDD}}-{{sha}}
 
       - name: Build and push
         id: build
