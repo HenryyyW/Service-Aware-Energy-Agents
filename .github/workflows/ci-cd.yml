@@ -26,6 +26,10 @@ env:
   PYTHON_VERSION: "3.11"
   NODE_VERSION: "22"
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   # ============================================================
   # LINT & TYPE CHECK
@@ -174,6 +178,10 @@ jobs:
 
       - name: Run axe-core accessibility checks
         run: |
+          # Install chromedriver
+          npx @puppeteer/browsers install chromedriver@stable --path $HOME/.cache/chromedriver
+          CHROMEDRIVER_PATH=$(find $HOME/.cache/chromedriver -name chromedriver -type f | head -1)
+          echo "Using chromedriver at: $CHROMEDRIVER_PATH"
           # Start preview server in background
           npm run serve &
           PREVIEW_PID=$!
@@ -185,8 +193,8 @@ jobs:
             fi
             sleep 1
           done
-          # Run axe-core
-          npx axe http://localhost:4173 --exit
+          # Run axe-core with chromedriver
+          npx axe http://localhost:4173 --chromedriver-path "$CHROMEDRIVER_PATH" --exit
           # Kill preview server
           kill $PREVIEW_PID 2>/dev/null || true
         working-directory: frontend
