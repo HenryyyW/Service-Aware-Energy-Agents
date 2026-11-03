@@ -126,7 +126,7 @@ def test_device_overrides_reach_the_schema(mixed_scenario, temp_data_dir):
         assert second["electrical_storage"]["attributes"]["capacity"] == 20.0
 
         # PV present with YAML size on one building, absent on the other
-        assert first["pv"]["attributes"]["nominal_power"] == 4.0
+        assert first["pv"]["attributes"]["nominal_power"] == 4000.0
         assert "pv" not in second
 
         # One charger per configured EV, none when the scenario has no EVs

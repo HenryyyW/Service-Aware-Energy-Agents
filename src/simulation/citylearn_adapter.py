@@ -324,11 +324,10 @@ class CityLearnAdapter:
                 "autosize": False,
                 "attributes": {},
             }
-            building_schema["pv"] = pv
-            pv.setdefault("attributes", {})["nominal_power"] = float(
-                building_config.pv.capacity_kw
-            )
-        elif building_config.pv is not None and "pv" in building_schema:
+            building_schema['pv'] = pv
+            # CityLearn expects nominal_power in watts; capacity_kw is in kW
+            pv.setdefault('attributes', {})['nominal_power'] = float(building_config.pv.capacity_kw) * 1000.0
+        elif building_config.pv is not None and 'pv' in building_schema:
             # Explicit zero-capacity PV removes the device.
             del building_schema["pv"]
 
