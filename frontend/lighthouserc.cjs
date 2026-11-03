@@ -4,14 +4,12 @@ module.exports = {
       numberOfRuns: 3,
       staticDistDir: './dist',
       url: [
-        'http://localhost:4173/',
-        'http://localhost:4173/scenario-studio',
-        'http://localhost:4173/report',
-        'http://localhost:4173/comparison'
+        'http://localhost/'
       ],
       settings: {
         headless: true,
-        preset: 'desktop'
+        preset: 'desktop',
+        chromeFlags: '--no-sandbox --disable-gpu --disable-dev-shm-usage'
       }
     },
     assert: {
