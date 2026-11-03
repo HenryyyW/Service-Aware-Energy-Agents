@@ -3,6 +3,7 @@ module.exports = {
     collect: {
       numberOfRuns: 3,
       startServerCommand: 'npm run serve',
+      staticDistDir: './dist',
       url: [
         'http://localhost:4173/',
         'http://localhost:4173/scenario-studio',
@@ -11,8 +12,7 @@ module.exports = {
       ],
       settings: {
         headless: true,
-        preset: 'desktop',
-        staticDistDir: './dist'
+        preset: 'desktop'
       }
     },
     assert: {
@@ -32,10 +32,6 @@ module.exports = {
     },
     upload: {
       target: 'temporary-public-storage'
-    },
-    server: {
-      command: 'npm run serve',
-      port: 4173
     }
   }
 };
