@@ -9,22 +9,23 @@ from pathlib import Path
 @dataclass
 class PromptTemplate:
     """Versioned prompt template with hash-based integrity."""
-    template_id: str           # e.g., "llm_agent_v1", "llm_agent_v2"
+
+    template_id: str  # e.g., "llm_agent_v1", "llm_agent_v2"
     version: int
     system_prompt: str
     user_prompt_template: str
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     @property
     def prompt_hash(self) -> str:
         """SHA256 hash of concatenated prompts + version for integrity checking."""
         content = f"{self.system_prompt}|{self.user_prompt_template}|{self.version}"
         return hashlib.sha256(content.encode()).hexdigest()[:16]
-    
+
     def render(self, **kwargs) -> str:
         """Render user prompt template with provided variables."""
         return self.user_prompt_template.format(**kwargs)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary."""
         return {
@@ -35,7 +36,7 @@ class PromptTemplate:
             "metadata": self.metadata,
             "prompt_hash": self.prompt_hash,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "PromptTemplate":
         """Deserialize from dictionary."""
@@ -101,7 +102,11 @@ COMMUNITY LIMITS:
 - Export limit: {community_export_limit_kw} kW
 
 Generate optimal actions for this timestep. Return only valid JSON.""",
-    metadata={"author": "team", "date": "2026-10-29", "description": "Default LLM agent prompt v1"}
+    metadata={
+        "author": "team",
+        "date": "2026-10-29",
+        "description": "Default LLM agent prompt v1",
+    },
 )
 
 # Register default prompt
@@ -122,14 +127,14 @@ def load_prompts_from_dir(prompts_dir: str) -> None:
     """Load prompt templates from JSON files in a directory."""
     import json
     from pathlib import Path
-    
+
     dir_path = Path(prompts_dir)
     if not dir_path.exists():
         return
-    
+
     for json_file in dir_path.glob("*.json"):
         try:
-            with open(json_file, 'r') as f:
+            with open(json_file, "r") as f:
                 data = json.load(f)
             template = PromptTemplate.from_dict(data)
             register_prompt(template)

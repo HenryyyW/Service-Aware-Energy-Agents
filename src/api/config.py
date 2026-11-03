@@ -1,4 +1,5 @@
 """Application configuration using pydantic-settings."""
+
 from functools import lru_cache
 from typing import List, Optional
 from pydantic import Field

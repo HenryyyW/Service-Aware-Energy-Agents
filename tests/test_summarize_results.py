@@ -1,7 +1,10 @@
 """Tests for the statistical summary helpers in experiments/summarize_results.py."""
+
 import math
 
 from experiments.summarize_results import build_markdown, holm_adjust, paired_t_test
+
+
 def test_paired_t_test_handles_zero_variance_deltas():
     deterministic = paired_t_test([2.0, 2.0, 2.0])
     assert deterministic is not None
@@ -48,7 +51,11 @@ def _row(scenario, controller, seed, cost):
 
 def test_build_markdown_emits_holm_table_for_synthetic_results():
     results = []
-    for seed, (base, delta) in {42: (100.0, 20.0), 123: (102.0, 18.0), 456: (101.0, 22.0)}.items():
+    for seed, (base, delta) in {
+        42: (100.0, 20.0),
+        123: (102.0, 18.0),
+        456: (101.0, 22.0),
+    }.items():
         results.append(_row("scenario_a", "rule_based", seed, base))
         results.append(_row("scenario_a", "mpc", seed, base + delta))
     markdown = build_markdown(results, ["total_cost"], "rule_based")
@@ -70,10 +77,14 @@ def test_missing_scenario_e_covariate_renders_as_dash_not_zero():
     'every member interrupted', the opposite of 'not recorded'."""
     results = [_row("scenario_e", "rule_based", 42, 100.0)]
     markdown = build_markdown(
-        results, ["total_cost", "member_cost_coverage", "members_interrupted_count"], "rule_based"
+        results,
+        ["total_cost", "member_cost_coverage", "members_interrupted_count"],
+        "rule_based",
     )
     assert "member_cost_coverage | members_interrupted_count |" in markdown
-    row = next(line for line in markdown.splitlines() if line.startswith("| scenario_e |"))
+    row = next(
+        line for line in markdown.splitlines() if line.startswith("| scenario_e |")
+    )
     assert "| 100.00 ± 0.00 | — | — |" in row
 
 
@@ -85,5 +96,7 @@ def test_scenario_e_covariate_is_reported_after_the_fix():
     markdown = build_markdown(
         results, ["member_cost_coverage", "members_interrupted_count"], "multi_agent"
     )
-    row = next(line for line in markdown.splitlines() if line.startswith("| scenario_e |"))
+    row = next(
+        line for line in markdown.splitlines() if line.startswith("| scenario_e |")
+    )
     assert "| 0.75 ± 0.00 | 1.00 ± 0.00 |" in row

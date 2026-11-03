@@ -9,7 +9,9 @@ import re
 from typing import List, Dict, Any, Tuple, Literal
 
 
-def parse_llm_actions(raw: str) -> Tuple[List[Dict[str, Any]], Literal["clean", "fenced", "invalid"]]:
+def parse_llm_actions(
+    raw: str,
+) -> Tuple[List[Dict[str, Any]], Literal["clean", "fenced", "invalid"]]:
     """Parse LLM output into action list with status tracking.
 
     Handles markdown code fences that models like qwen2.5-coder wrap JSON in.
@@ -74,7 +76,9 @@ def parse_llm_actions(raw: str) -> Tuple[List[Dict[str, Any]], Literal["clean", 
                 actions = parsed["actions"]
                 if isinstance(actions, list):
                     valid = all(
-                        isinstance(item, dict) and "asset_id" in item and "value_kw" in item
+                        isinstance(item, dict)
+                        and "asset_id" in item
+                        and "value_kw" in item
                         for item in actions
                     )
                     if valid:

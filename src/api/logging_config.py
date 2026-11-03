@@ -1,4 +1,5 @@
 """Structured logging configuration with JSON output and correlation IDs."""
+
 import logging
 import sys
 import uuid
@@ -21,7 +22,12 @@ class CorrelationIdFilter(logging.Filter):
 class CustomJsonFormatter(jsonlogger.JsonFormatter):
     """Custom JSON formatter with additional fields."""
 
-    def add_fields(self, log_record: Dict[str, Any], record: logging.LogRecord, message_dict: Dict[str, Any]) -> None:
+    def add_fields(
+        self,
+        log_record: Dict[str, Any],
+        record: logging.LogRecord,
+        message_dict: Dict[str, Any],
+    ) -> None:
         super().add_fields(log_record, record, message_dict)
         log_record["timestamp"] = self.formatTime(record, self.datefmt)
         log_record["level"] = record.levelname

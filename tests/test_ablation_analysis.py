@@ -3,6 +3,7 @@
 Fixtures mirror the layout written by ``experiments/run_experiment.py``:
 ``<scenario>/<run_id>/result.json`` plus ``manifest.json`` with the agent block.
 """
+
 import json
 
 import pytest
@@ -46,7 +47,11 @@ def _write_run(
         "status": "completed",
         "start_time": "2026-10-29T10:00:00",
         "end_time": "2026-10-29T10:00:30",
-        "energy": {"total_cost": cost, "grid_import_kwh": cost * 10, "peak_demand_kw": cost / 10},
+        "energy": {
+            "total_cost": cost,
+            "grid_import_kwh": cost * 10,
+            "peak_demand_kw": cost / 10,
+        },
         "service": {
             "ev_completion_rate": completion,
             "member_cost_coverage": 1.0,
@@ -125,7 +130,9 @@ def test_load_ablation_rows_skips_missing_and_failed_runs(tmp_path):
 def test_agent_execution_rows_average_per_group(tmp_path):
     _write_run(tmp_path, "scenario_a", "llm_agent", 42, first_attempt=1.0, repairs=0)
     _write_run(tmp_path, "scenario_a", "llm_agent", 123, first_attempt=0.5, repairs=4)
-    _write_run(tmp_path, "scenario_a", "llm_agent_verified", 42, first_attempt=1.0, repairs=2)
+    _write_run(
+        tmp_path, "scenario_a", "llm_agent_verified", 42, first_attempt=1.0, repairs=2
+    )
 
     rows = agent_execution_rows(load_ablation_rows(tmp_path))
     llm = next(row for row in rows if row["controller"] == "llm_agent")
@@ -151,7 +158,12 @@ def test_run_ablation_writes_tables_and_paired_tests(tmp_path):
     for seed, delta in ((42, 5.0), (123, 7.0), (456, 6.0)):
         _write_run(root, "scenario_a", "multi_agent", seed, cost=100.0)
         _write_run(
-            root, "scenario_a", "llm_agent_verified", seed, cost=100.0 + delta, repairs=1
+            root,
+            "scenario_a",
+            "llm_agent_verified",
+            seed,
+            cost=100.0 + delta,
+            repairs=1,
         )
     payload = run_ablation(root, root, reference="multi_agent")
 
@@ -171,7 +183,9 @@ def test_run_ablation_pairs_reference_from_a_second_directory(tmp_path):
     for seed, delta in ((42, 5.0), (123, 7.0), (456, 6.0)):
         _write_run(matrix, "scenario_a", "multi_agent", seed, cost=100.0)
         _write_run(ablation, "scenario_a", "llm_agent", seed, cost=100.0 + delta)
-        _write_run(ablation, "scenario_a", "llm_agent_verified", seed, cost=100.0 + delta)
+        _write_run(
+            ablation, "scenario_a", "llm_agent_verified", seed, cost=100.0 + delta
+        )
 
     payload = run_ablation(
         ablation, ablation, reference="multi_agent", reference_input=matrix

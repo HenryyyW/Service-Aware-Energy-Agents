@@ -11,6 +11,7 @@ Every test here mocks the HTTP layer (monkeypatched ``urllib.request.urlopen``):
 no network, no real key. The key never appears in code or fixtures beyond a
 dummy ``Bearer`` value that the transport is expected to forward.
 """
+
 import io
 import json
 import os
@@ -31,10 +32,13 @@ from src.schemas.scenario import (
     FlexibleLoadConfig,
     TariffConfig,
 )
-from src.controllers import LLMAgentController, LLMVerifiedController, RuleBasedController
+from src.controllers import (
+    LLMAgentController,
+    LLMVerifiedController,
+    RuleBasedController,
+)
 from src.agents.backend.config import LLMConfig
 from src.agents.backend.api import ApiPromptCallable, api_prompt_callable
-
 
 DUMMY_KEY = "dummy-key-for-tests-only"
 MODEL_ID = "gpt-4o-mini-2024-07-18"
@@ -67,7 +71,7 @@ def scenario():
                     efficiency_discharge=0.95,
                     soc_min=0.1,
                     soc_max=0.9,
-                    initial_soc=0.5
+                    initial_soc=0.5,
                 ),
                 evs=[
                     EVConfig(
@@ -78,7 +82,7 @@ def scenario():
                         target_soc=0.8,
                         arrival_time="18:00",
                         departure_time="07:00",
-                        connected_days=[0, 1, 2, 3, 4, 5, 6]
+                        connected_days=[0, 1, 2, 3, 4, 5, 6],
                     )
                 ],
                 flexible_loads=[
@@ -87,14 +91,14 @@ def scenario():
                         energy_kwh=6.0,
                         earliest_start="20:00",
                         latest_end="06:00",
-                        duration_hours=2.0
+                        duration_hours=2.0,
                     )
                 ],
                 tariff=TariffConfig(
                     type="time_of_use",
                     import_prices={"off_peak": 0.08, "mid_peak": 0.12, "on_peak": 0.20},
                     export_prices={"off_peak": 0.03, "mid_peak": 0.05, "on_peak": 0.08},
-                    demand_charge=5.0
+                    demand_charge=5.0,
                 ),
             )
         ],
@@ -144,13 +148,22 @@ def _http_error(status: int, detail: str = "") -> urllib.error.HTTPError:
     )
 
 
-def _chat_body(content: str, prompt_tokens: int = 639, completion_tokens: int = 327) -> bytes:
-    return json.dumps({
-        "id": "chatcmpl-mock",
-        "model": MODEL_ID,
-        "choices": [{"index": 0, "message": {"role": "assistant", "content": content}}],
-        "usage": {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens},
-    }).encode("utf-8")
+def _chat_body(
+    content: str, prompt_tokens: int = 639, completion_tokens: int = 327
+) -> bytes:
+    return json.dumps(
+        {
+            "id": "chatcmpl-mock",
+            "model": MODEL_ID,
+            "choices": [
+                {"index": 0, "message": {"role": "assistant", "content": content}}
+            ],
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+            },
+        }
+    ).encode("utf-8")
 
 
 def _install_fake_urlopen(monkeypatch, script: List[Any]) -> Dict[str, Any]:
@@ -163,12 +176,14 @@ def _install_fake_urlopen(monkeypatch, script: List[Any]) -> Dict[str, Any]:
     queue = list(script)
 
     def fake_urlopen(request, timeout=None):
-        captured["requests"].append({
-            "url": request.full_url,
-            "headers": dict(request.header_items()),
-            "payload": json.loads(request.data.decode("utf-8")),
-            "timeout": timeout,
-        })
+        captured["requests"].append(
+            {
+                "url": request.full_url,
+                "headers": dict(request.header_items()),
+                "payload": json.loads(request.data.decode("utf-8")),
+                "timeout": timeout,
+            }
+        )
         outcome = queue.pop(0) if queue else RuntimeError("no scripted response left")
         if isinstance(outcome, Exception):
             raise outcome
@@ -200,6 +215,7 @@ def _make_callable(**overrides) -> ApiPromptCallable:
 # Transport: happy paths
 # ---------------------------------------------------------------------------
 
+
 def test_api_callable_posts_chat_completions_with_auth(monkeypatch):
     captured = _install_fake_urlopen(monkeypatch, [_chat_body(CLEAN_ACTIONS)])
     backend = _make_callable()
@@ -211,14 +227,18 @@ def test_api_callable_posts_chat_completions_with_auth(monkeypatch):
     auth = next(v for k, v in req["headers"].items() if k.lower() == "authorization")
     assert auth == f"Bearer {DUMMY_KEY}"
     assert req["payload"]["model"] == "gpt-4o-mini"
-    assert req["payload"]["messages"] == [{"role": "user", "content": "dispatch prompt"}]
+    assert req["payload"]["messages"] == [
+        {"role": "user", "content": "dispatch prompt"}
+    ]
     assert req["payload"]["temperature"] == 0.0
     assert req["payload"]["seed"] == 42
     assert req["payload"]["max_tokens"] == 512
     assert req["payload"]["stream"] is False
     assert req["timeout"] == 60
 
-    assert text == CLEAN_ACTIONS  # raw text returned; fence handling is the controller's job
+    assert (
+        text == CLEAN_ACTIONS
+    )  # raw text returned; fence handling is the controller's job
     assert backend.prompt_tokens == 639
     assert backend.completion_tokens == 327
     assert backend.model_digest == MODEL_ID  # the API model id fills the digest field
@@ -252,10 +272,15 @@ def test_api_callable_model_digest_updates_from_each_response(monkeypatch):
 # Transport: retries and failures
 # ---------------------------------------------------------------------------
 
+
 def test_api_callable_retries_429_and_5xx_then_succeeds(monkeypatch):
     captured = _install_fake_urlopen(
         monkeypatch,
-        [_http_error(429, "rate limited"), _http_error(503, "unavailable"), _chat_body(CLEAN_ACTIONS)],
+        [
+            _http_error(429, "rate limited"),
+            _http_error(503, "unavailable"),
+            _chat_body(CLEAN_ACTIONS),
+        ],
     )
     backend = _make_callable(retry_backoff_s=0.5)
     text = backend("prompt")
@@ -313,7 +338,11 @@ def test_api_callable_key_read_from_env_at_call_time(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "env-supplied-key")
     backend = _make_callable(api_key=None)
     backend("prompt")
-    auth = next(v for k, v in captured["requests"][0]["headers"].items() if k.lower() == "authorization")
+    auth = next(
+        v
+        for k, v in captured["requests"][0]["headers"].items()
+        if k.lower() == "authorization"
+    )
     assert auth == "Bearer env-supplied-key"
 
 
@@ -333,14 +362,22 @@ def test_api_callable_reasoning_content_fallback(monkeypatch):
     an empty response.
     """
     fenced = '```json\n[{"asset_id": "ab_battery", "value_kw": 2.0}]\n```'
-    body = json.dumps({
-        "model": MODEL_ID,
-        "choices": [{
-            "index": 0,
-            "message": {"role": "assistant", "content": None, "reasoning_content": fenced},
-        }],
-        "usage": {"prompt_tokens": 900, "completion_tokens": 200},
-    }).encode("utf-8")
+    body = json.dumps(
+        {
+            "model": MODEL_ID,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": None,
+                        "reasoning_content": fenced,
+                    },
+                }
+            ],
+            "usage": {"prompt_tokens": 900, "completion_tokens": 200},
+        }
+    ).encode("utf-8")
     _install_fake_urlopen(monkeypatch, [body])
     backend = _make_callable()
     text = backend("prompt")
@@ -350,25 +387,37 @@ def test_api_callable_reasoning_content_fallback(monkeypatch):
 
 
 def test_api_callable_empty_content_falls_back_to_reasoning(monkeypatch):
-    body = json.dumps({
-        "model": MODEL_ID,
-        "choices": [{
-            "index": 0,
-            "message": {"role": "assistant", "content": "  ", "reasoning_content": CLEAN_ACTIONS},
-        }],
-        "usage": {"prompt_tokens": 10, "completion_tokens": 20},
-    }).encode("utf-8")
+    body = json.dumps(
+        {
+            "model": MODEL_ID,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "  ",
+                        "reasoning_content": CLEAN_ACTIONS,
+                    },
+                }
+            ],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 20},
+        }
+    ).encode("utf-8")
     _install_fake_urlopen(monkeypatch, [body])
     backend = _make_callable()
     assert backend("prompt") == CLEAN_ACTIONS
 
 
 def test_api_callable_no_content_no_reasoning_raises(monkeypatch):
-    body = json.dumps({
-        "model": MODEL_ID,
-        "choices": [{"index": 0, "message": {"role": "assistant", "content": None}}],
-        "usage": {"prompt_tokens": 10, "completion_tokens": 20},
-    }).encode("utf-8")
+    body = json.dumps(
+        {
+            "model": MODEL_ID,
+            "choices": [
+                {"index": 0, "message": {"role": "assistant", "content": None}}
+            ],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 20},
+        }
+    ).encode("utf-8")
     _install_fake_urlopen(monkeypatch, [body])
     backend = _make_callable()
     with pytest.raises(RuntimeError, match="neither content nor reasoning_content"):
@@ -380,7 +429,9 @@ def test_api_callable_default_base_url(monkeypatch):
     captured = _install_fake_urlopen(monkeypatch, [_chat_body(CLEAN_ACTIONS)])
     backend = ApiPromptCallable(model="gpt-4o-mini", api_key=DUMMY_KEY)
     backend("prompt")
-    assert captured["requests"][0]["url"] == "https://api.openai.com/v1/chat/completions"
+    assert (
+        captured["requests"][0]["url"] == "https://api.openai.com/v1/chat/completions"
+    )
 
 
 def test_api_callable_base_url_from_env(monkeypatch):
@@ -388,14 +439,19 @@ def test_api_callable_base_url_from_env(monkeypatch):
     captured = _install_fake_urlopen(monkeypatch, [_chat_body(CLEAN_ACTIONS)])
     backend = ApiPromptCallable(model="gpt-4o-mini", api_key=DUMMY_KEY)
     backend("prompt")
-    assert captured["requests"][0]["url"] == "https://proxy.test/v2/chat/completions"  # trailing slash stripped
+    assert (
+        captured["requests"][0]["url"] == "https://proxy.test/v2/chat/completions"
+    )  # trailing slash stripped
 
 
 # ---------------------------------------------------------------------------
 # Controller wiring: AGENT_BACKEND=api:<model>
 # ---------------------------------------------------------------------------
 
-def _env_api_controller(monkeypatch, scenario, controller_cls=LLMAgentController, **env):
+
+def _env_api_controller(
+    monkeypatch, scenario, controller_cls=LLMAgentController, **env
+):
     monkeypatch.setenv("AGENT_BACKEND", env.pop("agent_backend", "api:gpt-4o-mini"))
     monkeypatch.setenv("LLM_API_KEY", env.pop("llm_api_key", DUMMY_KEY))
     for key, value in env.items():
@@ -453,6 +509,7 @@ def test_backend_from_env_still_parses_ollama(monkeypatch, scenario):
 # Controller integration over the API transport (faked HTTP, real parse path)
 # ---------------------------------------------------------------------------
 
+
 def test_api_backend_clean_json_applied_with_tokens(monkeypatch, scenario):
     captured = _install_fake_urlopen(monkeypatch, [_chat_body(CLEAN_ACTIONS)])
     llm = _env_api_controller(monkeypatch, scenario)
@@ -478,16 +535,22 @@ def test_api_backend_fenced_output_recorded_and_applied(monkeypatch, scenario):
     by_id = {a.asset_id: a.value_kw for a in actions}
     assert by_id["ab_battery"] == 2.0
     stats = llm.agent_stats()
-    assert stats["llm_fenced_outputs"] == 1  # formatting violation recorded, never hidden
+    assert (
+        stats["llm_fenced_outputs"] == 1
+    )  # formatting violation recorded, never hidden
     assert stats["llm_calls"] == 1
     assert stats["llm_backend_errors"] == 0
 
 
-def test_api_backend_invalid_json_counts_parse_failure_and_falls_back(monkeypatch, scenario):
+def test_api_backend_invalid_json_counts_parse_failure_and_falls_back(
+    monkeypatch, scenario
+):
     _install_fake_urlopen(monkeypatch, [_chat_body("not-json")])
     llm = _env_api_controller(monkeypatch, scenario)
     actions = llm.get_actions(_observations(), 0).actions
-    expected = _action_set(RuleBasedController(scenario).get_actions(_observations(), 0).actions)
+    expected = _action_set(
+        RuleBasedController(scenario).get_actions(_observations(), 0).actions
+    )
     assert _action_set(actions) == expected
     stats = llm.agent_stats()
     assert stats["llm_raw_parse_failures"] == 1
@@ -499,7 +562,9 @@ def test_api_backend_401_counts_backend_error_and_falls_back(monkeypatch, scenar
     _install_fake_urlopen(monkeypatch, [_http_error(401, "bad key")])
     llm = _env_api_controller(monkeypatch, scenario)
     actions = llm.get_actions(_observations(), 0).actions
-    expected = _action_set(RuleBasedController(scenario).get_actions(_observations(), 0).actions)
+    expected = _action_set(
+        RuleBasedController(scenario).get_actions(_observations(), 0).actions
+    )
     assert _action_set(actions) == expected
     stats = llm.agent_stats()
     assert stats["llm_backend_errors"] == 1
@@ -517,7 +582,9 @@ def test_api_backend_verified_arm_reprompt_over_api(monkeypatch, scenario):
             _chat_body('[{"asset_id": "ab_battery", "value_kw": 4.0}]'),
         ],
     )
-    llm = _env_api_controller(monkeypatch, scenario, controller_cls=LLMVerifiedController)
+    llm = _env_api_controller(
+        monkeypatch, scenario, controller_cls=LLMVerifiedController
+    )
     actions = llm.get_actions(_observations(), 0).actions
     assert actions[0].value_kw == 4.0
     stats = llm.agent_stats()
@@ -534,6 +601,7 @@ def _action_set(actions: List[Action]) -> set:
 # ---------------------------------------------------------------------------
 # End-to-end manifest wiring (subprocess, dead endpoint: no network, no key use)
 # ---------------------------------------------------------------------------
+
 
 def test_run_manifest_records_api_agent_fields(scenario, tmp_path, monkeypatch):
     """End-to-end: AGENT_BACKEND=api:<model> reaches manifest.json.
@@ -556,15 +624,26 @@ def test_run_manifest_records_api_agent_fields(scenario, tmp_path, monkeypatch):
     env.pop("SAEA_LLM_BACKEND", None)
     result = subprocess.run(
         [
-            sys.executable, "-m", "experiments.run_experiment",
-            "--config", str(config_path),
-            "--controller", "llm_agent",
-            "--seed", "42",
-            "--max-steps", "4",
-            "--output-dir", str(out_dir),
-            "--run-id", "llm_api_manifest_check",
+            sys.executable,
+            "-m",
+            "experiments.run_experiment",
+            "--config",
+            str(config_path),
+            "--controller",
+            "llm_agent",
+            "--seed",
+            "42",
+            "--max-steps",
+            "4",
+            "--output-dir",
+            str(out_dir),
+            "--run-id",
+            "llm_api_manifest_check",
         ],
-        capture_output=True, text=True, timeout=600, env=env,
+        capture_output=True,
+        text=True,
+        timeout=600,
+        env=env,
     )
     assert result.returncode == 0, result.stdout[-2000:] + result.stderr[-2000:]
     run_dir = out_dir / "llm_ablation_test" / "llm_api_manifest_check"

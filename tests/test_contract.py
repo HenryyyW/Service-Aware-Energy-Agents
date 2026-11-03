@@ -1,4 +1,5 @@
 """OpenAPI contract tests - validates that API responses match the OpenAPI schema."""
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -60,7 +61,9 @@ def test_agent_tasks():
 
 def test_comparison_endpoint():
     """Test comparison endpoint."""
-    response = client.get("/api/compare", params={"run_id_a": "test_a", "run_id_b": "test_b"})
+    response = client.get(
+        "/api/compare", params={"run_id_a": "test_a", "run_id_b": "test_b"}
+    )
     # Should return 404 for non-existent runs, not 500
     assert response.status_code in [404, 200]
 

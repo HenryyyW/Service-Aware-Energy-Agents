@@ -245,7 +245,9 @@ def run_matrix(args: argparse.Namespace) -> int:
                 )
                 continue
             rl_policies[spec.run_id] = policy
-        if not args.force and is_complete(output_dir, spec, require_manifest=not args.no_manifest_check):
+        if not args.force and is_complete(
+            output_dir, spec, require_manifest=not args.no_manifest_check
+        ):
             states[spec.run_id].state = "skipped"
             states[spec.run_id].error = "already complete"
         else:
@@ -275,8 +277,13 @@ def run_matrix(args: argparse.Namespace) -> int:
         with lock:
             state.log = str(log_path)
         cmd = build_command(
-            spec, output_dir, args.max_steps, args.python, args.experiment_module,
-            rl_policy=rl_policies.get(spec.run_id), regime=regime,
+            spec,
+            output_dir,
+            args.max_steps,
+            args.python,
+            args.experiment_module,
+            rl_policy=rl_policies.get(spec.run_id),
+            regime=regime,
         )
         print(f"[supervisor] ({index}/{total}) {spec.run_id}")
 
@@ -290,7 +297,9 @@ def run_matrix(args: argparse.Namespace) -> int:
                 state.duration_seconds = None
                 state.exit_code = None
                 state.error = None
-                write_json_atomic(status_file, snapshot(plan, states, output_dir, started_at))
+                write_json_atomic(
+                    status_file, snapshot(plan, states, output_dir, started_at)
+                )
 
             start = time.monotonic()
             with log_path.open("a", encoding="utf-8") as log:
@@ -322,19 +331,25 @@ def run_matrix(args: argparse.Namespace) -> int:
                 ):
                     state.state = "completed"
                     state.metrics = read_metrics(output_dir, spec)
-                    write_json_atomic(status_file, snapshot(plan, states, output_dir, started_at))
+                    write_json_atomic(
+                        status_file, snapshot(plan, states, output_dir, started_at)
+                    )
                     return
 
                 state.state = "failed"
                 state.error = f"exit code {exit_code}"
-                write_json_atomic(status_file, snapshot(plan, states, output_dir, started_at))
+                write_json_atomic(
+                    status_file, snapshot(plan, states, output_dir, started_at)
+                )
 
             if attempt <= args.retries:
                 print(f"[supervisor]   retrying after exit {exit_code}")
             else:
                 with lock:
                     failures += 1
-                print(f"[supervisor]   failed after {attempt} attempt(s); see {log_path}")
+                print(
+                    f"[supervisor]   failed after {attempt} attempt(s); see {log_path}"
+                )
                 if args.fail_fast:
                     stop.set()
                     return
@@ -363,10 +378,14 @@ def run_matrix(args: argparse.Namespace) -> int:
                 if state.state == "pending":
                     state.state = "skipped"
                     state.error = "fail-fast: cancelled before start"
-                    write_json_atomic(status_file, snapshot(plan, states, output_dir, started_at))
+                    write_json_atomic(
+                        status_file, snapshot(plan, states, output_dir, started_at)
+                    )
 
     final = snapshot(plan, states, output_dir, started_at, finished=True)
-    final["failed_runs"] = [s.run_id for s in plan if states[s.run_id].state == "failed"]
+    final["failed_runs"] = [
+        s.run_id for s in plan if states[s.run_id].state == "failed"
+    ]
     write_json_atomic(status_file, final)
     write_json_atomic(output_dir / "summary.json", final)
 
@@ -383,44 +402,86 @@ def run_matrix(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scenarios", nargs="+", required=True,
-                        help="Scenario YAML paths")
-    parser.add_argument("--controllers", nargs="+", required=True,
-                        choices=["rule_based", "multi_agent", "centralized", "mpc", "rl"])
+    parser.add_argument(
+        "--scenarios", nargs="+", required=True, help="Scenario YAML paths"
+    )
+    parser.add_argument(
+        "--controllers",
+        nargs="+",
+        required=True,
+        choices=["rule_based", "multi_agent", "centralized", "mpc", "rl"],
+    )
 
     parser.add_argument("--seeds", nargs="+", type=int, required=True)
     parser.add_argument("--output-dir", required=True)
-    parser.add_argument("--max-steps", type=int, default=None,
-                        help="Cap each episode (omit for a full episode)")
-    parser.add_argument("--retries", type=int, default=1,
-                        help="Retries per run after the first failure (default 1)")
-    parser.add_argument("--timeout", type=int, default=900,
-                        help="Per-attempt timeout in seconds (default 900; 0 = no limit). "
-                             "A timed-out attempt is killed and counted as a failure so a "
-                             "hung run costs one timeout plus retries, not the whole matrix")
-    parser.add_argument("--fail-fast", action="store_true",
-                        help="Stop the matrix at the first exhausted run")
-    parser.add_argument("--force", action="store_true",
-                        help="Re-run combinations even if a result exists")
-    parser.add_argument("--no-manifest-check", action="store_true",
-                        help="Treat result.json alone as completion (legacy runs)")
-    parser.add_argument("--rl-policy-dir", type=str, default=None,
-                        help="Directory with per-scenario RL policy JSONs "
-                             "(<prefix><scenario_id>.json); rl runs without a "
-                             "policy are skipped with a recorded reason")
-    parser.add_argument("--rl-policy-prefix", type=str, default="",
-                        help="Filename prefix for RL policies, e.g. 'lmp_' for "
-                             "the LMP-regime policies (plan 4.3)")
-    parser.add_argument("--regime", type=str, default=None,
-                        choices=["tou_solo", "pool_tou", "lmp", "p2p"],
-                        help="Phase 2 pricing regime, passed to run_experiment "
-                             "--regime (applies pricing overrides and records "
-                             "pricing_regime/cost_basis in result.json; p2p is "
-                             "SCHEDULE-LATER)")
-    parser.add_argument("--workers", type=int, default=1,
-                        help="Parallel run_experiment processes (default 1 = serial). "
-                             "Runs are per-directory isolated, so parallel workers "
-                             "cannot collide")
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=None,
+        help="Cap each episode (omit for a full episode)",
+    )
+    parser.add_argument(
+        "--retries",
+        type=int,
+        default=1,
+        help="Retries per run after the first failure (default 1)",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=900,
+        help="Per-attempt timeout in seconds (default 900; 0 = no limit). "
+        "A timed-out attempt is killed and counted as a failure so a "
+        "hung run costs one timeout plus retries, not the whole matrix",
+    )
+    parser.add_argument(
+        "--fail-fast",
+        action="store_true",
+        help="Stop the matrix at the first exhausted run",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-run combinations even if a result exists",
+    )
+    parser.add_argument(
+        "--no-manifest-check",
+        action="store_true",
+        help="Treat result.json alone as completion (legacy runs)",
+    )
+    parser.add_argument(
+        "--rl-policy-dir",
+        type=str,
+        default=None,
+        help="Directory with per-scenario RL policy JSONs "
+        "(<prefix><scenario_id>.json); rl runs without a "
+        "policy are skipped with a recorded reason",
+    )
+    parser.add_argument(
+        "--rl-policy-prefix",
+        type=str,
+        default="",
+        help="Filename prefix for RL policies, e.g. 'lmp_' for "
+        "the LMP-regime policies (plan 4.3)",
+    )
+    parser.add_argument(
+        "--regime",
+        type=str,
+        default=None,
+        choices=["tou_solo", "pool_tou", "lmp", "p2p"],
+        help="Phase 2 pricing regime, passed to run_experiment "
+        "--regime (applies pricing overrides and records "
+        "pricing_regime/cost_basis in result.json; p2p is "
+        "SCHEDULE-LATER)",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Parallel run_experiment processes (default 1 = serial). "
+        "Runs are per-directory isolated, so parallel workers "
+        "cannot collide",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--python", default=sys.executable)
     parser.add_argument("--experiment-module", default=DEFAULT_EXPERIMENT_MODULE)

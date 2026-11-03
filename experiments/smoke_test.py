@@ -6,6 +6,7 @@ Verifies that:
   • trajectory file exists and contains the same number of steps
   • summary (KPIs) are present and non‑NaN
 """
+
 import json
 import sys
 from pathlib import Path
@@ -38,16 +39,21 @@ def verify(run_dir: Path, expected_controller: str, expected_seed: int):
     with open(result_path) as f:
         data = json.load(f)
 
-    assert data["scenario_id"] == "scenario_a", f"scenario_id mismatch: {data['scenario_id']}"
+    assert (
+        data["scenario_id"] == "scenario_a"
+    ), f"scenario_id mismatch: {data['scenario_id']}"
     # controller_type is stored as enum value string
     expected_enum = {
         "rule_based": "rule_based",
-        "multi_agent": "llm_agent",   # MultiAgentController maps to LLM_AGENT
+        "multi_agent": "llm_agent",  # MultiAgentController maps to LLM_AGENT
         "centralized": "rule_based",
     }[expected_controller]
-    assert data["controller_type"] == expected_enum, \
-        f"controller_type mismatch: {data['controller_type']} vs {expected_enum}"
-    assert data["random_seed"] == expected_seed, f"seed mismatch: {data['random_seed']} vs {expected_seed}"
+    assert (
+        data["controller_type"] == expected_enum
+    ), f"controller_type mismatch: {data['controller_type']} vs {expected_enum}"
+    assert (
+        data["random_seed"] == expected_seed
+    ), f"seed mismatch: {data['random_seed']} vs {expected_seed}"
 
     # 2. trajectories.jsonl (exported by coupler)
     traj_path = run_dir / "trajectories.jsonl"
@@ -60,8 +66,13 @@ def verify(run_dir: Path, expected_controller: str, expected_seed: int):
 
     # 3. KPI sanity – ensure key energy KPIs are present and numeric
     energy = data["energy"]
-    for key in ("total_cost", "grid_import_kwh", "grid_export_kwh",
-                "peak_demand_kw", "pv_generation_kwh"):
+    for key in (
+        "total_cost",
+        "grid_import_kwh",
+        "grid_export_kwh",
+        "peak_demand_kw",
+        "pv_generation_kwh",
+    ):
         val = energy.get(key)
         assert val is not None, f"Missing energy KPI {key}"
         assert isinstance(val, (int, float)), f"Non‑numeric KPI {key}: {val}"

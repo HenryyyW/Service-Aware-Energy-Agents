@@ -46,7 +46,8 @@ def metadata(battery=True, chargers=None):
         "b0": {
             "battery": (
                 {"capacity_kwh": 10.0, "power_kw": 5.0, "efficiency": 0.9}
-                if battery else None
+                if battery
+                else None
             ),
             "chargers": chargers or [],
             "deferrable": [],
@@ -57,7 +58,9 @@ def metadata(battery=True, chargers=None):
 
 
 def test_battery_discharges_when_price_is_high_and_soc_is_full():
-    controller = MPCController(make_scenario(), device_metadata=metadata(), horizon_steps=6)
+    controller = MPCController(
+        make_scenario(), device_metadata=metadata(), horizon_steps=6
+    )
     actions = controller.get_actions(base_observations(price=0.35, soc=1.0), timestep=0)
 
     battery = [a for a in actions.actions if a.asset_id == "b0_electrical_storage"]
@@ -68,7 +71,9 @@ def test_battery_discharges_when_price_is_high_and_soc_is_full():
 
 
 def test_battery_charges_when_future_prices_are_higher():
-    controller = MPCController(make_scenario(), device_metadata=metadata(), horizon_steps=6)
+    controller = MPCController(
+        make_scenario(), device_metadata=metadata(), horizon_steps=6
+    )
     # Learned diurnal profile: every hour is expensive and has evening load
     # except the current (cheap, PV-surplus) one.
     controller._price_by_hour = {hour: 0.40 for hour in range(24)}
@@ -85,18 +90,27 @@ def test_battery_charges_when_future_prices_are_higher():
 
 
 def test_ev_charges_to_meet_departure_requirement():
-    chargers = [{"charger_id": "c0", "max_charge_kw": 11.0, "min_charge_kw": 1.4,
-                 "max_discharge_kw": 7.2, "efficiency": 0.95}]
+    chargers = [
+        {
+            "charger_id": "c0",
+            "max_charge_kw": 11.0,
+            "min_charge_kw": 1.4,
+            "max_discharge_kw": 7.2,
+            "efficiency": 0.95,
+        }
+    ]
     observations = base_observations(price=0.10, load=5.0, pv=0.0, soc=0.2)
-    observations.update({
-        "b0_ev_0_connected": 1.0,
-        "b0_ev_0_soc": 0.2,
-        "b0_ev_0_capacity_kwh": 60.0,
-        "b0_ev_0_required_soc": 1.0,
-        "b0_ev_0_hours_to_departure": 2.0,
-        "b0_ev_0_max_charge_kw": 11.0,
-        "b0_ev_0_min_charge_kw": 1.4,
-    })
+    observations.update(
+        {
+            "b0_ev_0_connected": 1.0,
+            "b0_ev_0_soc": 0.2,
+            "b0_ev_0_capacity_kwh": 60.0,
+            "b0_ev_0_required_soc": 1.0,
+            "b0_ev_0_hours_to_departure": 2.0,
+            "b0_ev_0_max_charge_kw": 11.0,
+            "b0_ev_0_min_charge_kw": 1.4,
+        }
+    )
     controller = MPCController(
         make_scenario(), device_metadata=metadata(chargers=chargers), horizon_steps=4
     )
@@ -109,7 +123,9 @@ def test_ev_charges_to_meet_departure_requirement():
 
 
 def test_actions_respect_device_power_limits():
-    controller = MPCController(make_scenario(), device_metadata=metadata(), horizon_steps=8)
+    controller = MPCController(
+        make_scenario(), device_metadata=metadata(), horizon_steps=8
+    )
     observations = base_observations(price=0.5, load=40.0, soc=1.0)
     actions = controller.get_actions(observations, timestep=3)
 
@@ -127,7 +143,9 @@ def test_falls_back_to_rule_based_without_device_metadata():
 
 
 def test_reset_clears_forecast_state():
-    controller = MPCController(make_scenario(), device_metadata=metadata(), horizon_steps=2)
+    controller = MPCController(
+        make_scenario(), device_metadata=metadata(), horizon_steps=2
+    )
     controller.get_actions(base_observations(), timestep=0)
     controller.reset()
 

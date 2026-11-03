@@ -1,4 +1,5 @@
 """Report schemas for experiment results and final reports."""
+
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from enum import Enum
@@ -25,6 +26,7 @@ class ControllerType(str, Enum):
 
 class KPIResult(BaseModel):
     """Single KPI result."""
+
     kpi_id: str
     name: str
     value: float
@@ -37,6 +39,7 @@ class KPIResult(BaseModel):
 
 class EnergyMetrics(BaseModel):
     """Energy and cost metrics."""
+
     total_cost: float = 0.0
     grid_import_kwh: float = 0.0
     grid_export_kwh: float = 0.0
@@ -66,6 +69,7 @@ class EnergyMetrics(BaseModel):
 
 class ServiceMetrics(BaseModel):
     """Service and fairness metrics."""
+
     ev_completion_rate: float = 0.0
     ev_avg_soc_at_departure: float = 0.0
     ev_worst_soc_at_departure: float = 0.0
@@ -90,6 +94,7 @@ class ServiceMetrics(BaseModel):
 
 class GridMetrics(BaseModel):
     """Grid feasibility metrics."""
+
     power_flow_convergence_rate: float = 0.0
     voltage_violations_count: int = 0
     voltage_violation_duration_hours: float = 0.0
@@ -104,6 +109,7 @@ class GridMetrics(BaseModel):
 
 class AgentMetrics(BaseModel):
     """Code agent performance metrics."""
+
     task_success_rate: float = 0.0
     first_attempt_validity: float = 0.0
     simulation_success_rate: float = 0.0
@@ -117,6 +123,7 @@ class AgentMetrics(BaseModel):
 
 class PerMemberMetrics(BaseModel):
     """Per-member detailed metrics."""
+
     member_id: str
     building_id: str
     total_cost: float = 0.0
@@ -132,6 +139,7 @@ class PerMemberMetrics(BaseModel):
 
 class MemberSettlementMetrics(BaseModel):
     """Member-level grid and community settlement totals."""
+
     baseline_grid_bill: float = 0.0
     actual_grid_bill: float = 0.0
     actual_total_bill: float = 0.0
@@ -150,6 +158,7 @@ class MemberSettlementMetrics(BaseModel):
 
 class EnergySharingMetrics(BaseModel):
     """Community-level settlement summary and member breakdown."""
+
     market_type: str = "uniform_price"
     settlement_interval_timesteps: int = 0
     timestep_minutes: int = 0
@@ -164,6 +173,7 @@ class EnergySharingMetrics(BaseModel):
 
 class ExperimentResult(BaseModel):
     """Complete experiment result."""
+
     run_id: str
     scenario_id: str
     controller_type: ControllerType
@@ -172,7 +182,7 @@ class ExperimentResult(BaseModel):
     start_time: datetime = Field(default_factory=datetime.now)
     end_time: Optional[datetime] = None
     random_seed: int = 42
-    
+
     # Metrics
     energy: EnergyMetrics = Field(default_factory=EnergyMetrics)
     service: ServiceMetrics = Field(default_factory=ServiceMetrics)
@@ -181,23 +191,23 @@ class ExperimentResult(BaseModel):
     energy_sharing: Optional[EnergySharingMetrics] = None
     kpis: List[KPIResult] = Field(default_factory=list)
     per_member: List[PerMemberMetrics] = Field(default_factory=list)
-    
+
     # Diagnostics
     diagnostic_reports: List[Dict[str, Any]] = Field(default_factory=list)
-    
+
     # Code artifacts
     controller_code: Optional[str] = None
     controller_code_hash: Optional[str] = None
     code_diffs: List[Dict[str, str]] = Field(default_factory=list)
-    
+
     # Repair history
     repair_iterations: List[Dict[str, Any]] = Field(default_factory=list)
-    
+
     # File paths
     trajectories_file: Optional[str] = None
     logs_file: Optional[str] = None
     plots_dir: Optional[str] = None
-    
+
     def duration_seconds(self) -> float:
         if self.end_time:
             return (self.end_time - self.start_time).total_seconds()
@@ -206,6 +216,7 @@ class ExperimentResult(BaseModel):
 
 class ComparisonReport(BaseModel):
     """Comparison between multiple experiment runs."""
+
     comparison_id: str
     scenario_id: str
     baseline_run_id: str
@@ -218,6 +229,7 @@ class ComparisonReport(BaseModel):
 
 class FinalReport(BaseModel):
     """Final comprehensive report."""
+
     report_id: str
     title: str
     description: str

@@ -1,4 +1,5 @@
 """Production-ready FastAPI application for Service-Aware Energy Agents."""
+
 import time
 import uuid
 import json
@@ -34,26 +35,29 @@ setup_logging(log_level=settings.log_level, log_format=settings.log_format)
 # Rate limiter
 limiter = Limiter(
     key_func=get_remote_address,
-    default_limits=[f"{settings.rate_limit_requests}/{settings.rate_limit_window_seconds}seconds"],
+    default_limits=[
+        f"{settings.rate_limit_requests}/{settings.rate_limit_window_seconds}seconds"
+    ],
 )
+
 
 # WebSocket connection manager
 class ConnectionManager:
     def __init__(self):
         self.active_connections: dict[str, list] = {}
-    
+
     async def connect(self, websocket: WebSocket, run_id: str):
         await websocket.accept()
         if run_id not in self.active_connections:
             self.active_connections[run_id] = []
         self.active_connections[run_id].append(websocket)
-    
+
     def disconnect(self, websocket: WebSocket, run_id: str):
         if run_id in self.active_connections:
             self.active_connections[run_id].remove(websocket)
             if not self.active_connections[run_id]:
                 del self.active_connections[run_id]
-    
+
     async def broadcast(self, run_id: str, message: dict):
         if run_id in self.active_connections:
             for connection in self.active_connections[run_id]:
@@ -66,7 +70,9 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-def _create_ws_message(msg_type: str, payload: dict, run_id: str, meta: dict = None) -> dict:
+def _create_ws_message(
+    msg_type: str, payload: dict, run_id: str, meta: dict = None
+) -> dict:
     """Create a WebSocket message with standard meta fields."""
     correlation_id = str(uuid.uuid4())[:8]
     now = datetime.utcnow().isoformat() + "Z"
@@ -96,6 +102,7 @@ async def lifespan(app: FastAPI):
 
     # Log startup
     import logging
+
     logger = logging.getLogger(__name__)
     logger.info(
         "Starting Service-Aware Energy Agents API",
@@ -157,16 +164,22 @@ def create_app(settings_override: Optional[Settings] = None) -> FastAPI:
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        response.headers["Permissions-Policy"] = (
+            "geolocation=(), microphone=(), camera=()"
+        )
         if not settings.debug:
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
         return response
 
     # Correlation ID and request timing middleware
     @app.middleware("http")
     async def correlation_id_middleware(request: Request, call_next):
         # Get or generate correlation ID
-        correlation_id = request.headers.get("X-Correlation-ID") or str(uuid.uuid4())[:8]
+        correlation_id = (
+            request.headers.get("X-Correlation-ID") or str(uuid.uuid4())[:8]
+        )
         set_correlation_id(correlation_id)
 
         # Add to request state for access in routes
@@ -274,7 +287,11 @@ def create_app(settings_override: Optional[Settings] = None) -> FastAPI:
         except Exception as e:
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content={"status": "not ready", "database": "disconnected", "error": str(e)},
+                content={
+                    "status": "not ready",
+                    "database": "disconnected",
+                    "error": str(e),
+                },
             )
 
     @app.get("/health/details", tags=["health"], include_in_schema=False)
@@ -303,24 +320,27 @@ def create_app(settings_override: Optional[Settings] = None) -> FastAPI:
             while True:
                 data = await websocket.receive_text()
                 # Echo back for testing
-                await websocket.send_json(_create_ws_message("echo", json.loads(data), "general"))
+                await websocket.send_json(
+                    _create_ws_message("echo", json.loads(data), "general")
+                )
         except WebSocketDisconnect:
             pass
-
 
     @app.websocket("/ws/simulation/{run_id}")
     async def websocket_simulation(websocket: WebSocket, run_id: str):
         """WebSocket endpoint for real-time simulation updates with stale-data protection."""
         await manager.connect(websocket, run_id)
-        
+
         # Send initial connection message with meta
-        await websocket.send_json(_create_ws_message(
-            "connected",
-            {"run_id": run_id, "message": "WebSocket connected"},
-            run_id,
-            {"stage": "connected"}
-        ))
-        
+        await websocket.send_json(
+            _create_ws_message(
+                "connected",
+                {"run_id": run_id, "message": "WebSocket connected"},
+                run_id,
+                {"stage": "connected"},
+            )
+        )
+
         try:
             while True:
                 # Keep connection alive, send periodic updates if simulation is running
@@ -329,7 +349,6 @@ def create_app(settings_override: Optional[Settings] = None) -> FastAPI:
                 # For now, we just keep the connection alive
         except WebSocketDisconnect:
             manager.disconnect(websocket, run_id)
-
 
     # Root endpoint
     @app.get("/", include_in_schema=False)
@@ -347,11 +366,14 @@ def create_app(settings_override: Optional[Settings] = None) -> FastAPI:
     app.include_router(simulation.router, prefix="/api/simulation", tags=["simulation"])
     app.include_router(runs.runs_router, prefix="/api/simulations", tags=["runs"])
     app.include_router(runs.reports_router, prefix="/api/reports", tags=["reports"])
-    app.include_router(runs.comparison_router, prefix="/api/compare", tags=["comparison"])
+    app.include_router(
+        runs.comparison_router, prefix="/api/compare", tags=["comparison"]
+    )
 
     # Agent API routes
     try:
         from src.api.routes import agent
+
         app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
     except ImportError:
         pass  # Agent routes may not exist yet
@@ -364,6 +386,7 @@ app = create_app()
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "src.api.main:app",
         host=settings.host,

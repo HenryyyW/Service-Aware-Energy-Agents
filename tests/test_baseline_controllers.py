@@ -23,9 +23,7 @@ def make_action_adapter(building_actions, device_metadata):
 
 
 def test_actions_are_forwarded_by_asset_id_without_action_type():
-    adapter = make_action_adapter(
-        ["electrical_storage", "deferrable_appliance"], {}
-    )
+    adapter = make_action_adapter(["electrical_storage", "deferrable_appliance"], {})
     requested = RequestedActions(
         timestep=0,
         actions=[
@@ -49,9 +47,15 @@ def _action_adapter():
         {
             "b0": {
                 "battery": {"capacity_kwh": 10.0, "power_kw": 5.0, "efficiency": 0.9},
-                "chargers": [{"charger_id": "c0", "max_charge_kw": 11.0,
-                              "min_charge_kw": 1.4, "max_discharge_kw": 7.2,
-                              "efficiency": 0.95}],
+                "chargers": [
+                    {
+                        "charger_id": "c0",
+                        "max_charge_kw": 11.0,
+                        "min_charge_kw": 1.4,
+                        "max_discharge_kw": 7.2,
+                        "efficiency": 0.95,
+                    }
+                ],
             }
         },
     )
@@ -62,12 +66,24 @@ def test_configured_asset_ids_and_kw_are_normalized_for_citylearn():
     requested = RequestedActions(
         timestep=0,
         actions=[
-            Action(asset_id="b0_battery", action_type=ActionType.BATTERY_CHARGE,
-                   value_kw=2.5, timestep=0),
-            Action(asset_id="b0_ev_0", action_type=ActionType.EV_CHARGE,
-                   value_kw=5.5, timestep=0),
-            Action(asset_id="b0_flex_0", action_type=ActionType.FLEXIBLE_LOAD,
-                   value_kw=2.0, timestep=0),
+            Action(
+                asset_id="b0_battery",
+                action_type=ActionType.BATTERY_CHARGE,
+                value_kw=2.5,
+                timestep=0,
+            ),
+            Action(
+                asset_id="b0_ev_0",
+                action_type=ActionType.EV_CHARGE,
+                value_kw=5.5,
+                timestep=0,
+            ),
+            Action(
+                asset_id="b0_flex_0",
+                action_type=ActionType.FLEXIBLE_LOAD,
+                value_kw=2.0,
+                timestep=0,
+            ),
         ],
     )
 
@@ -81,10 +97,18 @@ def test_grid_charge_and_discharge_are_clamped_and_signed():
     requested = RequestedActions(
         timestep=0,
         actions=[
-            Action(asset_id="b0_battery", action_type=ActionType.BATTERY_CHARGE,
-                   value_kw=500.0, timestep=0),
-            Action(asset_id="b0_ev_0", action_type=ActionType.EV_CHARGE,
-                   value_kw=-7.2, timestep=0),
+            Action(
+                asset_id="b0_battery",
+                action_type=ActionType.BATTERY_CHARGE,
+                value_kw=500.0,
+                timestep=0,
+            ),
+            Action(
+                asset_id="b0_ev_0",
+                action_type=ActionType.EV_CHARGE,
+                value_kw=-7.2,
+                timestep=0,
+            ),
         ],
     )
 
@@ -121,11 +145,15 @@ def test_ev_observations_use_the_right_sources():
     building = SimpleNamespace(
         time_step=0,
         electric_vehicle_chargers=[charger],
-        electrical_storage=SimpleNamespace(capacity=6.4, nominal_power=5.0, efficiency=0.9),
+        electrical_storage=SimpleNamespace(
+            capacity=6.4, nominal_power=5.0, efficiency=0.9
+        ),
         deferrable_appliances=[],
         pv=SimpleNamespace(nominal_power=8.0),
     )
-    adapter = SimpleNamespace(env=SimpleNamespace(buildings=[building]), building_ids=["b0"])
+    adapter = SimpleNamespace(
+        env=SimpleNamespace(buildings=[building]), building_ids=["b0"]
+    )
 
     observations = CityLearnAdapter._enrich_electric_vehicle_observations(adapter, {})
 
@@ -144,7 +172,9 @@ def test_device_metadata_reports_live_ratings():
     building = SimpleNamespace(
         time_step=0,
         electric_vehicle_chargers=[charger],
-        electrical_storage=SimpleNamespace(capacity=6.4, nominal_power=5.0, efficiency=0.9),
+        electrical_storage=SimpleNamespace(
+            capacity=6.4, nominal_power=5.0, efficiency=0.9
+        ),
         deferrable_appliances=[SimpleNamespace(nominal_power=2.0)],
         pv=SimpleNamespace(nominal_power=8.0),
     )

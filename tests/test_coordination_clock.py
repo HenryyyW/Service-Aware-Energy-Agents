@@ -6,6 +6,7 @@ simulation to hourly resolution, so EV connection windows drifted 4x off the
 simulator's actual departures and multi_agent scored ev_completion_rate 0.000
 in every matrix run.
 """
+
 from src.coordination.ev_agent import EVAgent
 from src.schemas.scenario import EVConfig
 
@@ -48,6 +49,6 @@ def test_ev_agent_charges_when_connected_under_hourly_steps():
     message = ev.propose({"observations": {}, "timestep": 9, "hours_per_step": 1.0})
     proposal = message.payload.get("proposal")
     assert proposal is not None
-    assert proposal.requested_power_kw > 0.0, (
-        "a connected, below-target EV must request charging at hourly steps"
-    )
+    assert (
+        proposal.requested_power_kw > 0.0
+    ), "a connected, below-target EV must request charging at hourly steps"

@@ -1,13 +1,27 @@
 """Tests for agent_controller schemas."""
+
 import pytest
 from datetime import datetime
 
 from src.schemas import (
-    AgentRole, ControllerLanguage, ControllerCode, ControllerInterface,
-    ConstraintCheckResult, AgentTaskInput, AgentTaskOutput,
-    PlannerOutput, CoderOutput, ExecutorOutput, VerifierOutput, ReporterOutput,
+    AgentRole,
+    ControllerLanguage,
+    ControllerCode,
+    ControllerInterface,
+    ConstraintCheckResult,
+    AgentTaskInput,
+    AgentTaskOutput,
+    PlannerOutput,
+    CoderOutput,
+    ExecutorOutput,
+    VerifierOutput,
+    ReporterOutput,
     AgentControllerMessage,
-    TaskSpec, TaskType, ExperimentResult, ExperimentStatus, ControllerType,
+    TaskSpec,
+    TaskType,
+    ExperimentResult,
+    ExperimentStatus,
+    ControllerType,
 )
 
 
@@ -18,7 +32,7 @@ class TestAgentControllerSchemas:
         """Test ControllerCode schema."""
         cc = ControllerCode(
             code="class MyController:\n    def get_actions(self, obs, ts): return []",
-            hash="abc123"
+            hash="abc123",
         )
         assert cc.hash == "abc123"
         assert cc.language == ControllerLanguage.PYTHON
@@ -37,7 +51,7 @@ class TestAgentControllerSchemas:
         ts = TaskSpec(
             task_id="task_1",
             task_type=TaskType.SCENARIO_CONSTRUCTION,
-            description="Build scenario"
+            description="Build scenario",
         )
         ati = AgentTaskInput(
             task_id="task_1",
@@ -45,7 +59,7 @@ class TestAgentControllerSchemas:
             task_spec=ts,
             context={"key": "value"},
             constraints=["constraint1", "constraint2"],
-            timeout_seconds=120
+            timeout_seconds=120,
         )
         assert ati.task_id == "task_1"
         assert ati.role == AgentRole.PLANNER
@@ -61,7 +75,7 @@ class TestAgentControllerSchemas:
             artifacts={"diff": "+++ new code"},
             errors=[],
             warnings=["warning1"],
-            metadata={"tokens": 100}
+            metadata={"tokens": 100},
         )
         assert ato.success is True
         assert ato.role == AgentRole.CODER
@@ -73,11 +87,11 @@ class TestAgentControllerSchemas:
             task_id="task_1",
             subtasks=[
                 {"id": "sub1", "type": "coder", "description": "Write controller"},
-                {"id": "sub2", "type": "executor", "description": "Run simulation"}
+                {"id": "sub2", "type": "executor", "description": "Run simulation"},
             ],
             dependencies={"sub2": ["sub1"]},
             estimated_complexity="high",
-            recommended_approach="Write controller first, then test"
+            recommended_approach="Write controller first, then test",
         )
         assert len(po.subtasks) == 2
         assert po.dependencies["sub2"] == ["sub1"]
@@ -94,11 +108,11 @@ class TestAgentControllerSchemas:
                     constraint_id="c1",
                     constraint_type="interface",
                     passed=True,
-                    message="All good"
+                    message="All good",
                 )
             ],
             validation_passed=True,
-            baseline_hash="base123"
+            baseline_hash="base123",
         )
         assert co.validation_passed is True
         assert len(co.constraint_checks) == 1
@@ -110,7 +124,7 @@ class TestAgentControllerSchemas:
             run_id="run_123",
             success=True,
             simulation_logs="Simulation completed",
-            error=None
+            error=None,
         )
         assert eo.success is True
         assert eo.run_id == "run_123"
@@ -124,7 +138,7 @@ class TestAgentControllerSchemas:
             verification_passed=True,
             violation_targets_met={"voltage": True, "loading": True},
             improvement_summary="Fixed voltage violations",
-            repair_iterations=2
+            repair_iterations=2,
         )
         assert vo.verification_passed is True
         assert vo.repair_iterations == 2
@@ -132,16 +146,15 @@ class TestAgentControllerSchemas:
     def test_reporter_output(self):
         """Test ReporterOutput."""
         from src.schemas import FinalReport
+
         fr = FinalReport(
-            report_id="report_1",
-            title="Test Report",
-            description="A test report"
+            report_id="report_1", title="Test Report", description="A test report"
         )
         ro = ReporterOutput(
             task_id="task_1",
             report=fr,
             markdown="# Report\n\nContent",
-            artifacts=["report.json", "report.md"]
+            artifacts=["report.json", "report.md"],
         )
         assert ro.report.title == "Test Report"
         assert len(ro.artifacts) == 2
@@ -154,7 +167,7 @@ class TestAgentControllerSchemas:
             recipient=AgentRole.CODER,
             message_type="task_assignment",
             payload={"task_id": "task_1", "instructions": "Write controller"},
-            correlation_id="corr_123"
+            correlation_id="corr_123",
         )
         assert acm.sender == AgentRole.PLANNER
         assert acm.recipient == AgentRole.CODER
@@ -167,7 +180,7 @@ class TestAgentControllerSchemas:
             constraint_type="voltage_limit",
             passed=False,
             message="Voltage exceeds 1.05 pu",
-            details={"bus": 5, "voltage_pu": 1.06}
+            details={"bus": 5, "voltage_pu": 1.06},
         )
         assert ccr.passed is False
         assert ccr.details["bus"] == 5

@@ -1,4 +1,5 @@
 """Tests for evaluation metrics."""
+
 import math
 
 import pytest
@@ -10,14 +11,30 @@ from src.evaluation.metrics import (
     compute_grid_metrics,
     compute_agent_metrics,
     compute_all_metrics,
-    calculate_gini_coefficient
+    calculate_gini_coefficient,
 )
 from src.evaluation.fairness import FairnessAnalyzer
-from src.schemas.action import SimulationStepResult, RequestedActions, LimitedActions, AppliedActions, Action, ActionType
-from src.schemas.diagnostics import Diagnostic, DiagnosticCategory, Severity, DiagnosticReport
+from src.schemas.action import (
+    SimulationStepResult,
+    RequestedActions,
+    LimitedActions,
+    AppliedActions,
+    Action,
+    ActionType,
+)
+from src.schemas.diagnostics import (
+    Diagnostic,
+    DiagnosticCategory,
+    Severity,
+    DiagnosticReport,
+)
 from src.schemas.scenario import (
-    ScenarioConfig, BuildingConfig, BatteryConfig, EVConfig,
-    FlexibleLoadConfig, TariffConfig
+    ScenarioConfig,
+    BuildingConfig,
+    BatteryConfig,
+    EVConfig,
+    FlexibleLoadConfig,
+    TariffConfig,
 )
 
 
@@ -26,18 +43,54 @@ def sample_history():
     """Create sample simulation history."""
     history = []
     for i in range(10):
-        requested = RequestedActions(timestep=i, actions=[
-            Action(asset_id="b0_battery", action_type=ActionType.BATTERY_CHARGE, value_kw=2.0, timestep=i),
-            Action(asset_id="b0_ev_0", action_type=ActionType.EV_CHARGE, value_kw=5.0, timestep=i),
-            Action(asset_id="grid", action_type=ActionType.GRID_IMPORT, value_kw=10.0, timestep=i),
-        ])
+        requested = RequestedActions(
+            timestep=i,
+            actions=[
+                Action(
+                    asset_id="b0_battery",
+                    action_type=ActionType.BATTERY_CHARGE,
+                    value_kw=2.0,
+                    timestep=i,
+                ),
+                Action(
+                    asset_id="b0_ev_0",
+                    action_type=ActionType.EV_CHARGE,
+                    value_kw=5.0,
+                    timestep=i,
+                ),
+                Action(
+                    asset_id="grid",
+                    action_type=ActionType.GRID_IMPORT,
+                    value_kw=10.0,
+                    timestep=i,
+                ),
+            ],
+        )
         limited = LimitedActions(timestep=i, actions=[])
-        applied = AppliedActions(timestep=i, actions=[
-            Action(asset_id="b0_battery", action_type=ActionType.BATTERY_CHARGE, value_kw=2.0, timestep=i),
-            Action(asset_id="b0_ev_0", action_type=ActionType.EV_CHARGE, value_kw=5.0, timestep=i),
-            Action(asset_id="grid", action_type=ActionType.GRID_IMPORT, value_kw=10.0, timestep=i),
-        ])
-        
+        applied = AppliedActions(
+            timestep=i,
+            actions=[
+                Action(
+                    asset_id="b0_battery",
+                    action_type=ActionType.BATTERY_CHARGE,
+                    value_kw=2.0,
+                    timestep=i,
+                ),
+                Action(
+                    asset_id="b0_ev_0",
+                    action_type=ActionType.EV_CHARGE,
+                    value_kw=5.0,
+                    timestep=i,
+                ),
+                Action(
+                    asset_id="grid",
+                    action_type=ActionType.GRID_IMPORT,
+                    value_kw=10.0,
+                    timestep=i,
+                ),
+            ],
+        )
+
         step = SimulationStepResult(
             timestep=i,
             requested_actions=requested,
@@ -54,8 +107,8 @@ def sample_history():
                 "power_flow_converged": True,
                 "diagnostics": [],
                 "voltage_profile": {0: 1.0, 1: 0.98},
-                "loading_profile": {"lines": {0: 0.5}, "trafos": {0: 0.3}}
-            }
+                "loading_profile": {"lines": {0: 0.5}, "trafos": {0: 0.3}},
+            },
         )
         history.append(step)
     return history
@@ -68,8 +121,11 @@ def sample_scenario_config():
         "timestep_minutes": 15,
         "battery_capacity_kwh": 100,
         "buildings": [
-            {"building_id": "building_0", "evs": [{"target_soc": 0.8, "departure_time": "07:00"}]}
-        ]
+            {
+                "building_id": "building_0",
+                "evs": [{"target_soc": 0.8, "departure_time": "07:00"}],
+            }
+        ],
     }
 
 
@@ -77,11 +133,11 @@ def test_calculate_gini_coefficient():
     """Test Gini coefficient calculation."""
     # Perfect equality
     assert calculate_gini_coefficient([10, 10, 10, 10]) == 0.0
-    
+
     # Perfect inequality (one has everything)
     gini = calculate_gini_coefficient([0, 0, 0, 100])
     assert gini > 0.5
-    
+
     # Empty list
     assert calculate_gini_coefficient([]) == 0.0
     assert calculate_gini_coefficient([100]) == 0.0
@@ -90,7 +146,7 @@ def test_calculate_gini_coefficient():
 def test_compute_energy_metrics(sample_history, sample_scenario_config):
     """Test energy metrics computation."""
     metrics = compute_energy_metrics(sample_history, sample_scenario_config)
-    
+
     assert metrics.total_cost > 0
     assert metrics.grid_import_kwh > 0
     assert metrics.peak_demand_kw > 0
@@ -102,7 +158,7 @@ def test_compute_energy_metrics(sample_history, sample_scenario_config):
 def test_compute_service_metrics(sample_history, sample_scenario_config):
     """Test service metrics computation."""
     metrics = compute_service_metrics(sample_history, sample_scenario_config)
-    
+
     assert 0 <= metrics.ev_completion_rate <= 1
     assert 0 <= metrics.ev_avg_soc_at_departure <= 1
     assert metrics.comfort_violation_degree_hours >= 0
@@ -112,7 +168,7 @@ def test_compute_service_metrics(sample_history, sample_scenario_config):
 def test_compute_grid_metrics(sample_history):
     """Test grid metrics computation."""
     metrics = compute_grid_metrics(sample_history)
-    
+
     assert 0 <= metrics.power_flow_convergence_rate <= 1
     assert metrics.voltage_violations_count >= 0
     assert metrics.max_voltage_pu >= metrics.min_voltage_pu
@@ -121,7 +177,7 @@ def test_compute_grid_metrics(sample_history):
 def test_compute_agent_metrics(sample_history):
     """Test agent metrics computation."""
     metrics = compute_agent_metrics(sample_history, [], 1000, 60.0)
-    
+
     assert 0 <= metrics.task_success_rate <= 1
     assert 0 <= metrics.simulation_success_rate <= 1
     assert metrics.token_consumption == 1000
@@ -135,13 +191,13 @@ def test_compute_all_metrics(sample_history, sample_scenario_config):
         scenario_config=sample_scenario_config,
         repair_history=[],
         token_usage=500,
-        wall_clock_seconds=30.0
+        wall_clock_seconds=30.0,
     )
-    
-    assert 'energy' in all_metrics
-    assert 'service' in all_metrics
-    assert 'grid' in all_metrics
-    assert 'agent' in all_metrics
+
+    assert "energy" in all_metrics
+    assert "service" in all_metrics
+    assert "grid" in all_metrics
+    assert "agent" in all_metrics
 
 
 def test_two_step_reference_case_matches_hand_calculated_metrics():
@@ -164,21 +220,25 @@ def test_two_step_reference_case_matches_hand_calculated_metrics():
                     power_kw=2.0,
                     initial_soc=0.5,
                 ),
-                evs=[EVConfig(
-                    capacity_kwh=20.0,
-                    max_charge_kw=7.0,
-                    arrival_time="00:00",
-                    departure_time="01:00",
-                    initial_soc=0.5,
-                    target_soc=0.8,
-                )],
-                flexible_loads=[FlexibleLoadConfig(
-                    power_kw=1.0,
-                    energy_kwh=2.0,
-                    earliest_start="00:00",
-                    latest_end="02:00",
-                    duration_hours=2.0,
-                )],
+                evs=[
+                    EVConfig(
+                        capacity_kwh=20.0,
+                        max_charge_kw=7.0,
+                        arrival_time="00:00",
+                        departure_time="01:00",
+                        initial_soc=0.5,
+                        target_soc=0.8,
+                    )
+                ],
+                flexible_loads=[
+                    FlexibleLoadConfig(
+                        power_kw=1.0,
+                        energy_kwh=2.0,
+                        earliest_start="00:00",
+                        latest_end="02:00",
+                        duration_hours=2.0,
+                    )
+                ],
             ),
             BuildingConfig(
                 building_id="building_1",
@@ -212,9 +272,24 @@ def test_two_step_reference_case_matches_hand_calculated_metrics():
             },
             {"building_0": 0.20, "building_1": 0.30},
             [
-                Action(asset_id="building_0_battery", action_type=ActionType.BATTERY_CHARGE, value_kw=1.0, timestep=0),
-                Action(asset_id="building_0_ev_0", action_type=ActionType.EV_CHARGE, value_kw=0.3, timestep=0),
-                Action(asset_id="building_0_flex_0", action_type=ActionType.FLEXIBLE_LOAD, value_kw=1.0, timestep=0),
+                Action(
+                    asset_id="building_0_battery",
+                    action_type=ActionType.BATTERY_CHARGE,
+                    value_kw=1.0,
+                    timestep=0,
+                ),
+                Action(
+                    asset_id="building_0_ev_0",
+                    action_type=ActionType.EV_CHARGE,
+                    value_kw=0.3,
+                    timestep=0,
+                ),
+                Action(
+                    asset_id="building_0_flex_0",
+                    action_type=ActionType.FLEXIBLE_LOAD,
+                    value_kw=1.0,
+                    timestep=0,
+                ),
             ],
         ),
         make_step(
@@ -229,8 +304,18 @@ def test_two_step_reference_case_matches_hand_calculated_metrics():
             },
             {"building_0": -0.04, "building_1": 0.0},
             [
-                Action(asset_id="building_0_battery", action_type=ActionType.BATTERY_DISCHARGE, value_kw=-0.5, timestep=1),
-                Action(asset_id="building_0_flex_0", action_type=ActionType.FLEXIBLE_LOAD, value_kw=1.0, timestep=1),
+                Action(
+                    asset_id="building_0_battery",
+                    action_type=ActionType.BATTERY_DISCHARGE,
+                    value_kw=-0.5,
+                    timestep=1,
+                ),
+                Action(
+                    asset_id="building_0_flex_0",
+                    action_type=ActionType.FLEXIBLE_LOAD,
+                    value_kw=1.0,
+                    timestep=1,
+                ),
             ],
         ),
     ]
@@ -266,7 +351,9 @@ def test_two_step_reference_case_matches_hand_calculated_metrics():
 
     # Member costs are .16 and .30; their two-member Gini coefficient is
     # (0.30 - 0.16) / (2 * 0.46).
-    assert fairness.per_member_costs == pytest.approx({"building_0": 0.16, "building_1": 0.30})
+    assert fairness.per_member_costs == pytest.approx(
+        {"building_0": 0.16, "building_1": 0.30}
+    )
     assert fairness.gini_coefficient == pytest.approx(0.14 / 0.92)
     assert fairness.worst_member_cost == pytest.approx(0.30)
     assert fairness.best_member_cost == pytest.approx(0.16)
@@ -299,8 +386,20 @@ def test_energy_metrics_skip_non_finite_demand_and_report_coverage():
     """A NaN building reading (injected failure) must not poison total_cost."""
     scenario = _tariff_scenario("m0", "m1")
     history = [
-        _obs_step(0, {"m0_net_electricity_consumption": 2.0, "m1_net_electricity_consumption": 1.0}),
-        _obs_step(1, {"m0_net_electricity_consumption": float("nan"), "m1_net_electricity_consumption": 1.0}),
+        _obs_step(
+            0,
+            {
+                "m0_net_electricity_consumption": 2.0,
+                "m1_net_electricity_consumption": 1.0,
+            },
+        ),
+        _obs_step(
+            1,
+            {
+                "m0_net_electricity_consumption": float("nan"),
+                "m1_net_electricity_consumption": 1.0,
+            },
+        ),
     ]
 
     metrics = compute_energy_metrics(history, scenario)
@@ -315,10 +414,15 @@ def test_energy_metrics_skip_non_finite_demand_and_report_coverage():
 def test_compute_all_metrics_reports_per_member_costs_and_gini():
     """Service metrics must carry computed member economics, not schema defaults."""
     scenario = _tariff_scenario("m0", "m1")
-    history = [_obs_step(0, {
-        "m0_net_electricity_consumption": 2.0,
-        "m1_net_electricity_consumption": 4.0,
-    })]
+    history = [
+        _obs_step(
+            0,
+            {
+                "m0_net_electricity_consumption": 2.0,
+                "m1_net_electricity_consumption": 4.0,
+            },
+        )
+    ]
 
     service = compute_all_metrics(history, scenario)["service"]
 
@@ -333,10 +437,15 @@ def test_compute_all_metrics_reports_per_member_costs_and_gini():
 def test_compute_all_metrics_marks_interrupted_member_as_none():
     """A failed member is None with explicit coverage, never a free 0.0."""
     scenario = _tariff_scenario("m0", "m1")
-    history = [_obs_step(0, {
-        "m0_net_electricity_consumption": 2.0,
-        "m1_net_electricity_consumption": float("nan"),
-    })]
+    history = [
+        _obs_step(
+            0,
+            {
+                "m0_net_electricity_consumption": 2.0,
+                "m1_net_electricity_consumption": float("nan"),
+            },
+        )
+    ]
 
     service = compute_all_metrics(history, scenario)["service"]
 
@@ -354,6 +463,7 @@ if __name__ == "__main__":
 def _ev_step(timestep, connected, soc, required=0.87):
     """Minimal step with the adapter's explicit EV observation keys."""
     from types import SimpleNamespace
+
     return SimpleNamespace(
         timestep=timestep,
         observations={
@@ -371,13 +481,15 @@ def test_ev_metrics_use_explicit_observation_keys():
     history = [
         _ev_step(0, True, 0.30),
         _ev_step(1, True, 0.90),
-        _ev_step(2, False, 0.0),   # departure, last connected SOC 0.90
+        _ev_step(2, False, 0.0),  # departure, last connected SOC 0.90
         _ev_step(3, True, 0.20),
         _ev_step(4, True, 0.50),
-        _ev_step(5, False, 0.0),   # departure, last connected SOC 0.50
+        _ev_step(5, False, 0.0),  # departure, last connected SOC 0.50
     ]
 
-    metrics = compute_service_metrics(history, {"buildings": [], "timestep_minutes": 60})
+    metrics = compute_service_metrics(
+        history, {"buildings": [], "timestep_minutes": 60}
+    )
 
     assert metrics.ev_completion_rate == pytest.approx(0.5)
     assert metrics.ev_avg_soc_at_departure == pytest.approx(0.70)
@@ -397,8 +509,14 @@ def test_ev_metrics_fall_back_without_explicit_keys():
             "buildings": [
                 {
                     "building_id": "b0",
-                    "evs": [{"target_soc": 0.8, "arrival_time": "18:00",
-                             "departure_time": "07:00", "initial_soc": 0.3}],
+                    "evs": [
+                        {
+                            "target_soc": 0.8,
+                            "arrival_time": "18:00",
+                            "departure_time": "07:00",
+                            "initial_soc": 0.3,
+                        }
+                    ],
                 }
             ],
         },

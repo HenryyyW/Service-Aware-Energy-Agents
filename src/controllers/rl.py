@@ -167,9 +167,13 @@ class QLearningController(BaseController):
         self._rule_based.reset()
         self.unseen_states = 0
 
-    def get_actions(self, observations: Dict[str, Any], timestep: int) -> RequestedActions:
+    def get_actions(
+        self, observations: Dict[str, Any], timestep: int
+    ) -> RequestedActions:
         self.timestep = timestep
-        buildings = [b for b in self.building_ids if b in self.device_metadata] or list(self.building_ids)
+        buildings = [b for b in self.building_ids if b in self.device_metadata] or list(
+            self.building_ids
+        )
         state = self._encode(observations, buildings)
 
         if state in self.q_table:
@@ -186,26 +190,35 @@ class QLearningController(BaseController):
             battery = meta.get("battery") or {}
             power_kw = float(battery.get("power_kw") or 0.0)
             if power_kw > 0.0 and abs(battery_level) > 1e-6:
-                action_type = ActionType.BATTERY_CHARGE if battery_level > 0 else ActionType.BATTERY_DISCHARGE
-                actions.append(Action(
-                    asset_id=f"{building_id}_electrical_storage",
-                    action_type=action_type,
-                    value_kw=float(battery_level) * power_kw,
-                    timestep=timestep,
-                ))
+                action_type = (
+                    ActionType.BATTERY_CHARGE
+                    if battery_level > 0
+                    else ActionType.BATTERY_DISCHARGE
+                )
+                actions.append(
+                    Action(
+                        asset_id=f"{building_id}_electrical_storage",
+                        action_type=action_type,
+                        value_kw=float(battery_level) * power_kw,
+                        timestep=timestep,
+                    )
+                )
 
             if observations.get(f"{building_id}_ev_0_connected") and ev_level > 1e-6:
                 chargers = meta.get("chargers") or []
                 max_charge_kw = max(
-                    (float(c.get("max_charge_kw") or 0.0) for c in chargers), default=0.0
+                    (float(c.get("max_charge_kw") or 0.0) for c in chargers),
+                    default=0.0,
                 )
                 if max_charge_kw > 0.0:
-                    actions.append(Action(
-                        asset_id=f"{building_id}_electric_vehicle_storage",
-                        action_type=ActionType.EV_CHARGE,
-                        value_kw=float(ev_level) * max_charge_kw,
-                        timestep=timestep,
-                    ))
+                    actions.append(
+                        Action(
+                            asset_id=f"{building_id}_electric_vehicle_storage",
+                            action_type=ActionType.EV_CHARGE,
+                            value_kw=float(ev_level) * max_charge_kw,
+                            timestep=timestep,
+                        )
+                    )
 
         actions.extend(self._deferrable_actions(observations))
         return self._create_requested_actions(actions)
@@ -215,14 +228,23 @@ class QLearningController(BaseController):
         for building_id in self.building_ids:
             if not observations.get(f"{building_id}_deferrable_appliance_can_start"):
                 continue
-            urgency = float(observations.get(f"{building_id}_deferrable_appliance_urgency_ratio", 0.0) or 0.0)
+            urgency = float(
+                observations.get(
+                    f"{building_id}_deferrable_appliance_urgency_ratio", 0.0
+                )
+                or 0.0
+            )
             pv = float(observations.get(f"{building_id}_solar_generation", 0.0) or 0.0)
-            load = float(observations.get(f"{building_id}_non_shiftable_load", 0.0) or 0.0)
+            load = float(
+                observations.get(f"{building_id}_non_shiftable_load", 0.0) or 0.0
+            )
             if urgency >= 0.5 or pv > load:
-                actions.append(Action(
-                    asset_id=f"{building_id}_deferrable_appliance",
-                    action_type=ActionType.FLEXIBLE_LOAD,
-                    value_kw=1.0,
-                    timestep=self.timestep,
-                ))
+                actions.append(
+                    Action(
+                        asset_id=f"{building_id}_deferrable_appliance",
+                        action_type=ActionType.FLEXIBLE_LOAD,
+                        value_kw=1.0,
+                        timestep=self.timestep,
+                    )
+                )
         return actions

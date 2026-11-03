@@ -1,4 +1,5 @@
 """Task specification schemas for the code agent system."""
+
 from enum import Enum
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
@@ -36,6 +37,7 @@ class ConstraintType(str, Enum):
 
 class AssetSpec(BaseModel):
     """Specification for a single asset in the community."""
+
     asset_id: str
     asset_type: AssetType
     building_id: Optional[str] = None
@@ -46,6 +48,7 @@ class AssetSpec(BaseModel):
 
 class ConstraintSpec(BaseModel):
     """Specification for a constraint."""
+
     constraint_id: str
     constraint_type: ConstraintType
     assets: List[str] = Field(default_factory=list)  # asset_ids this applies to
@@ -55,6 +58,7 @@ class ConstraintSpec(BaseModel):
 
 class KPISpec(BaseModel):
     """Specification for a KPI to track."""
+
     kpi_id: str
     name: str
     description: str
@@ -64,6 +68,7 @@ class KPISpec(BaseModel):
 
 class TaskSpec(BaseModel):
     """Complete task specification from natural language or config."""
+
     task_id: str
     task_type: TaskType
     description: str

@@ -16,6 +16,7 @@ full phase 2 metric set (llm_calls, parse failures, fenced outputs, latency
 p50/p95, token counts, fallback steps/share, model digest) reaches
 result.json and manifest.json.
 """
+
 import json
 import os
 from types import SimpleNamespace
@@ -33,7 +34,11 @@ from src.schemas.scenario import (
     FlexibleLoadConfig,
     TariffConfig,
 )
-from src.controllers import LLMAgentController, LLMVerifiedController, RuleBasedController
+from src.controllers import (
+    LLMAgentController,
+    LLMVerifiedController,
+    RuleBasedController,
+)
 from src.agents.backend import AgentBackend, BackendResponse, CostBudget
 from src.agents.backend.fallback import FallbackBackend
 
@@ -64,7 +69,7 @@ def scenario():
                     efficiency_discharge=0.95,
                     soc_min=0.1,
                     soc_max=0.9,
-                    initial_soc=0.5
+                    initial_soc=0.5,
                 ),
                 evs=[
                     EVConfig(
@@ -75,7 +80,7 @@ def scenario():
                         target_soc=0.8,
                         arrival_time="18:00",
                         departure_time="07:00",
-                        connected_days=[0, 1, 2, 3, 4, 5, 6]
+                        connected_days=[0, 1, 2, 3, 4, 5, 6],
                     )
                 ],
                 flexible_loads=[
@@ -84,14 +89,14 @@ def scenario():
                         energy_kwh=6.0,
                         earliest_start="20:00",
                         latest_end="06:00",
-                        duration_hours=2.0
+                        duration_hours=2.0,
                     )
                 ],
                 tariff=TariffConfig(
                     type="time_of_use",
                     import_prices={"off_peak": 0.08, "mid_peak": 0.12, "on_peak": 0.20},
                     export_prices={"off_peak": 0.03, "mid_peak": 0.05, "on_peak": 0.08},
-                    demand_charge=5.0
+                    demand_charge=5.0,
                 ),
             )
         ],
@@ -243,9 +248,12 @@ def _ev_step(timestep, connected, soc, required=0.87):
 
 def test_fallback_mode_is_labelled_and_matches_rule_based(scenario):
     from src.agents.backend.config import LLMConfig
+
     llm_config = LLMConfig()
     llm_config._backend_raw = "fallback"
-    llm = LLMAgentController(scenario, device_metadata=_metadata(), llm_config=llm_config)
+    llm = LLMAgentController(
+        scenario, device_metadata=_metadata(), llm_config=llm_config
+    )
     rule = RuleBasedController(scenario)
     assert llm.agent_backend == "fallback"
     assert llm.prompt_hash
@@ -281,15 +289,27 @@ def test_llm_backend_proposals_are_parsed_and_applied(scenario):
 def _make_mock_actions():
     """Create mock actions for testing."""
     return [
-        Action(asset_id="ab_battery", action_type=ActionType.BATTERY_CHARGE, value_kw=2.0, timestep=0),
-        Action(asset_id="ab_ev_0", action_type=ActionType.EV_CHARGE, value_kw=5.0, timestep=0),
+        Action(
+            asset_id="ab_battery",
+            action_type=ActionType.BATTERY_CHARGE,
+            value_kw=2.0,
+            timestep=0,
+        ),
+        Action(
+            asset_id="ab_ev_0",
+            action_type=ActionType.EV_CHARGE,
+            value_kw=5.0,
+            timestep=0,
+        ),
     ]
 
 
 def test_unverified_arm_applies_out_of_bounds_proposal_unclamped(scenario):
     """P0-3 unverified treatment: apply as proposed, count, never repair."""
     llm = LLMAgentController(
-        scenario, device_metadata=_metadata(), backend=MockBackend([_battery_action(50.0)])
+        scenario,
+        device_metadata=_metadata(),
+        backend=MockBackend([_battery_action(50.0)]),
     )
     actions = llm.get_actions(_observations(), 0).actions
     assert actions[0].value_kw == 50.0  # passed through to the adapter
@@ -347,7 +367,9 @@ def test_out_of_bounds_proposal_is_verified_and_replaced(scenario):
     # 99 kW exceeds every device bound; the verified arm must replace the
     # step with the rule-based dispatch, never clamp silently.
     verified = LLMVerifiedController(
-        scenario, device_metadata=_metadata(), backend=MockBackend([_battery_action(99.0)])
+        scenario,
+        device_metadata=_metadata(),
+        backend=MockBackend([_battery_action(99.0)]),
     )
     obs = _observations()
     actions = verified.get_actions(obs, 0).actions
@@ -362,10 +384,12 @@ def test_out_of_bounds_proposal_is_verified_and_replaced(scenario):
 
 def test_verified_reprompt_success_applies_corrected_proposal(scenario):
     """A corrected re-prompt is applied without falling back (repair 1 of 2)."""
-    backend = SequenceBackend([
-        _response(_battery_action(50.0)),
-        _response(_battery_action(4.0)),
-    ])
+    backend = SequenceBackend(
+        [
+            _response(_battery_action(50.0)),
+            _response(_battery_action(4.0)),
+        ]
+    )
     verified = LLMVerifiedController(
         scenario, device_metadata=_metadata(), backend=backend
     )
@@ -379,10 +403,12 @@ def test_verified_reprompt_success_applies_corrected_proposal(scenario):
 
 
 def test_verified_reprompt_unusable_output_replaces_with_rule_based(scenario):
-    backend = SequenceBackend([
-        _response(_battery_action(99.0)),
-        RuntimeError("backend down"),
-    ])
+    backend = SequenceBackend(
+        [
+            _response(_battery_action(99.0)),
+            RuntimeError("backend down"),
+        ]
+    )
     verified = LLMVerifiedController(
         scenario, device_metadata=_metadata(), backend=backend
     )
@@ -401,7 +427,10 @@ def test_verified_reprompt_unusable_output_replaces_with_rule_based(scenario):
 
 def test_verified_unknown_asset_is_a_shape_violation_and_is_replaced(scenario):
     bad = Action(
-        asset_id="ab_foo", action_type=ActionType.BATTERY_CHARGE, value_kw=1.0, timestep=0
+        asset_id="ab_foo",
+        action_type=ActionType.BATTERY_CHARGE,
+        value_kw=1.0,
+        timestep=0,
     )
     verified = LLMVerifiedController(
         scenario, device_metadata=_metadata(), backend=MockBackend([bad])
@@ -421,23 +450,37 @@ def test_unparseable_llm_output_falls_back_and_runs_continue(scenario):
         @property
         def backend_id(self):
             return "bad_mock"
+
         @property
         def supports_streaming(self):
             return False
-        async def generate_actions(self, scenario, observations, timestep, context=None, budget=None):
+
+        async def generate_actions(
+            self, scenario, observations, timestep, context=None, budget=None
+        ):
             from src.agents.backend.interface import BackendResponse
+
             # Return invalid actions (wrong asset_id format)
             from src.schemas.action import Action, ActionType
+
             return BackendResponse(
-                actions=[Action(asset_id="invalid", action_type=ActionType.BATTERY_CHARGE, value_kw=1.0)],
+                actions=[
+                    Action(
+                        asset_id="invalid",
+                        action_type=ActionType.BATTERY_CHARGE,
+                        value_kw=1.0,
+                    )
+                ],
                 raw_output="not-json",
                 prompt_hash="test",
                 token_usage={"prompt": 100, "completion": 50, "total": 150},
                 latency_ms=10.0,
                 cost_usd=0.0,
             )
+
         async def health_check(self):
             return True
+
         def estimate_cost(self, prompt_tokens, max_completion_tokens):
             return 0.0
 
@@ -491,7 +534,9 @@ def _payload(value_kw: float) -> str:
 def test_parse_llm_actions_clean_fenced_invalid():
     from src.controllers.llm_agent import parse_llm_actions
 
-    actions, status = parse_llm_actions('[{"asset_id": "ab_battery", "value_kw": 2.0}]', 3)
+    actions, status = parse_llm_actions(
+        '[{"asset_id": "ab_battery", "value_kw": 2.0}]', 3
+    )
     assert status == "clean"
     assert [a.value_kw for a in actions] == [2.0]
     assert [a.timestep for a in actions] == [3]
@@ -504,7 +549,14 @@ def test_parse_llm_actions_clean_fenced_invalid():
         assert status == "fenced", fenced
         assert [a.value_kw for a in actions] == [2.0]
 
-    for raw in ("not-json", '{"a": 1}', '[{"asset": "x"}]', '["nope"]', "```json\n[oops", ""):
+    for raw in (
+        "not-json",
+        '{"a": 1}',
+        '[{"asset": "x"}]',
+        '["nope"]',
+        "```json\n[oops",
+        "",
+    ):
         actions, status = parse_llm_actions(raw)
         assert status == "invalid", raw
         assert actions is None, raw
@@ -629,19 +681,25 @@ def test_ollama_callable_talks_to_localhost_endpoint(monkeypatch):
         captured["url"] = request.full_url
         captured["payload"] = json.loads(request.data.decode("utf-8"))
         captured["timeout"] = timeout
-        body = json.dumps({
-            "response": "```json\n[{\"asset_id\": \"b0_battery\", \"value_kw\": 3.0}]\n```",
-            "prompt_eval_count": 639,
-            "eval_count": 327,
-        }).encode("utf-8")
+        body = json.dumps(
+            {
+                "response": '```json\n[{"asset_id": "b0_battery", "value_kw": 3.0}]\n```',
+                "prompt_eval_count": 639,
+                "eval_count": 327,
+            }
+        ).encode("utf-8")
         return _FakeResponse(body)
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
     # /api/tags digest lookup fails silently offline (fake_urlopen returns a
     # generate-shaped body without "models"); the generate call must still work.
     backend = ollama_prompt_callable(
-        model="qwen2.5-coder:7b", endpoint="http://localhost:11434",
-        temperature=0.0, seed=42, timeout_s=60, num_predict=512,
+        model="qwen2.5-coder:7b",
+        endpoint="http://localhost:11434",
+        temperature=0.0,
+        seed=42,
+        timeout_s=60,
+        num_predict=512,
     )
     text = backend("dispatch prompt")
     assert "qwen2.5-coder" in json.dumps(captured["payload"])
@@ -649,14 +707,18 @@ def test_ollama_callable_talks_to_localhost_endpoint(monkeypatch):
     assert captured["payload"]["options"]["seed"] == 42
     assert captured["payload"]["options"]["num_predict"] == 512
     assert captured["timeout"] == 60
-    assert "```json" in text  # raw text returned; fence handling is the controller's job
+    assert (
+        "```json" in text
+    )  # raw text returned; fence handling is the controller's job
     assert backend.call_count == 1
     assert backend.prompt_tokens == 639
     assert backend.completion_tokens == 327
     assert len(backend.latency_samples_ms) == 1
 
 
-def test_run_manifest_records_ollama_local_agent_fields(scenario, tmp_path, monkeypatch):
+def test_run_manifest_records_ollama_local_agent_fields(
+    scenario, tmp_path, monkeypatch
+):
     """End-to-end: AGENT_BACKEND=ollama:<model> reaches manifest.json.
 
     The endpoint is pointed at a dead port so every call fails fast; the run
@@ -676,15 +738,26 @@ def test_run_manifest_records_ollama_local_agent_fields(scenario, tmp_path, monk
     env.pop("SAEA_LLM_BACKEND", None)
     result = subprocess.run(
         [
-            sys.executable, "-m", "experiments.run_experiment",
-            "--config", str(config_path),
-            "--controller", "llm_agent",
-            "--seed", "42",
-            "--max-steps", "4",
-            "--output-dir", str(out_dir),
-            "--run-id", "llm_ollama_manifest_check",
+            sys.executable,
+            "-m",
+            "experiments.run_experiment",
+            "--config",
+            str(config_path),
+            "--controller",
+            "llm_agent",
+            "--seed",
+            "42",
+            "--max-steps",
+            "4",
+            "--output-dir",
+            str(out_dir),
+            "--run-id",
+            "llm_ollama_manifest_check",
         ],
-        capture_output=True, text=True, timeout=600, env=env,
+        capture_output=True,
+        text=True,
+        timeout=600,
+        env=env,
     )
     assert result.returncode == 0, result.stdout[-2000:] + result.stderr[-2000:]
     run_dir = out_dir / "llm_ablation_test" / "llm_ollama_manifest_check"

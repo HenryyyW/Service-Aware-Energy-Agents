@@ -54,7 +54,9 @@ class MPCController(BaseController):
         self._reset_state()
 
     # ------------------------------------------------------------------ public
-    def get_actions(self, observations: Dict[str, Any], timestep: int) -> RequestedActions:
+    def get_actions(
+        self, observations: Dict[str, Any], timestep: int
+    ) -> RequestedActions:
         self.timestep = timestep
         self._record_observation(observations)
 
@@ -90,18 +92,18 @@ class MPCController(BaseController):
 
     def _get_grid_violation_scale(self, observations: Dict[str, Any]) -> float:
         """Get scaling factor based on grid violations from previous step.
-        
+
         Returns 1.0 if no violations, or a scaling factor < 1.0 for violations.
         Hard overrides per PM decision.
         """
         if not self.last_grid_diagnostics:
             return 1.0
-        
+
         diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
         voltage_violated = False
         line_loading_violated = False
         transformer_loading_violated = False
-        
+
         for d in diagnostics:
             category = d.get("category", "")
             severity = d.get("severity", "")
@@ -112,22 +114,26 @@ class MPCController(BaseController):
                     line_loading_violated = True
                 elif category == "transformer_loading":
                     transformer_loading_violated = True
-        
+
         if voltage_violated:
             return 0.85  # Reduce export/charging to raise voltage
         elif line_loading_violated:
-            return 0.8   # Reduce power to fix line loading
+            return 0.8  # Reduce power to fix line loading
         elif transformer_loading_violated:
             return 0.9
-        
+
         return 1.0
 
-    def _forecast(self, observations: Dict[str, Any], building_id: str, start_hour: int) -> Dict[str, np.ndarray]:
+    def _forecast(
+        self, observations: Dict[str, Any], building_id: str, start_hour: int
+    ) -> Dict[str, np.ndarray]:
         price = np.empty(self.horizon_steps)
         export = np.empty(self.horizon_steps)
         load = np.empty(self.horizon_steps)
         pv = np.empty(self.horizon_steps)
-        current_price = float(observations.get(f"{building_id}_electricity_pricing", 0.15))
+        current_price = float(
+            observations.get(f"{building_id}_electricity_pricing", 0.15)
+        )
         current_load = float(observations.get(f"{building_id}_non_shiftable_load", 0.0))
         current_pv = float(observations.get(f"{building_id}_solar_generation", 0.0))
         building = self._buildings.get(building_id)
@@ -138,7 +144,11 @@ class MPCController(BaseController):
             pv_hist = self._pv_by_hour.get(hour, [])
             load[k] = float(np.mean(load_hist)) if load_hist else current_load
             pv[k] = float(np.mean(pv_hist)) if pv_hist else current_pv
-            export_price = self._tariff_price(building, hour, is_import=False) if building else None
+            export_price = (
+                self._tariff_price(building, hour, is_import=False)
+                if building
+                else None
+            )
             export[k] = export_price if export_price is not None else 0.0
         return {"price": price, "export": export, "load": load, "pv": pv}
 
@@ -154,15 +164,23 @@ class MPCController(BaseController):
         tariff = getattr(building, "tariff", None)
         if tariff is None:
             return None
-        prices = getattr(tariff, "import_prices" if is_import else "export_prices", None) or {}
+        prices = (
+            getattr(tariff, "import_prices" if is_import else "export_prices", None)
+            or {}
+        )
         if not prices:
             return None
         return float(prices.get(self._tariff_period(hour), 0.0))
 
     # ------------------------------------------------------------------- solve
-    def _solve(self, observations: Dict[str, Any], timestep: int) -> tuple[List[Action], List[Action]]:
+    def _solve(
+        self, observations: Dict[str, Any], timestep: int
+    ) -> tuple[List[Action], List[Action]]:
         horizon = self.horizon_steps
-        dt = float(self.device_metadata[self.building_ids[0]].get("hours_per_step", 1.0)) or 1.0
+        dt = (
+            float(self.device_metadata[self.building_ids[0]].get("hours_per_step", 1.0))
+            or 1.0
+        )
         start_hour = int(observations.get(f"{self.building_ids[0]}_hour", 0)) % 24
 
         buildings = [b for b in self.building_ids if b in self.device_metadata]
@@ -264,7 +282,9 @@ class MPCController(BaseController):
                     evdyn = np.zeros(n_vars)
                     evdyn[evsoc_idx(bidx, k)] = -1.0
                     evdyn[evsoc_idx(bidx, k + 1)] = 1.0
-                    evdyn[ev_idx(bidx, k)] = -float(ev_info["efficiency"]) * dt / ev_capacity
+                    evdyn[ev_idx(bidx, k)] = (
+                        -float(ev_info["efficiency"]) * dt / ev_capacity
+                    )
                     a_eq_rows.append(evdyn)
                     b_eq.append(0.0)
                 else:
@@ -319,7 +339,7 @@ class MPCController(BaseController):
                     row[flow_idx(i_exp, bidx, k)] = 1.0
                 a_ub_rows.append(row)
                 b_ub.append(float(export_limit))
-        
+
         # Grid violation constraints - hard limits on power when violations detected
         grid_scale = self._get_grid_violation_scale(observations)
         if grid_scale < 1.0:
@@ -327,7 +347,7 @@ class MPCController(BaseController):
                 meta = self.device_metadata[building_id]
                 battery = meta.get("battery") or {}
                 power = float(battery.get("power_kw") or 0.0)
-                
+
                 # Scale battery charge/discharge
                 if power > 0:
                     row = np.zeros(n_vars)
@@ -335,7 +355,7 @@ class MPCController(BaseController):
                     row[flow_idx(i_d, bidx, k)] = 1.0
                     a_ub_rows.append(row)
                     b_ub.append(float(power * grid_scale))
-                
+
                 # Scale EV charging
                 ev_info = self._connected_ev(observations, building_id, 0)
                 if ev_info and ev_info["max_charge_kw"] > 0:
@@ -410,42 +430,63 @@ class MPCController(BaseController):
             if power > 0.0:
                 net_kw = float(x[flow_idx(i_c, bidx, 0)] - x[flow_idx(i_d, bidx, 0)])
                 if abs(net_kw) > 1e-2:
-                    action_type = ActionType.BATTERY_CHARGE if net_kw > 0 else ActionType.BATTERY_DISCHARGE
-                    battery_actions.append(Action(
-                        asset_id=f"{building_id}_electrical_storage",
-                        action_type=action_type,
-                        value_kw=net_kw,
-                        timestep=timestep,
-                    ))
+                    action_type = (
+                        ActionType.BATTERY_CHARGE
+                        if net_kw > 0
+                        else ActionType.BATTERY_DISCHARGE
+                    )
+                    battery_actions.append(
+                        Action(
+                            asset_id=f"{building_id}_electrical_storage",
+                            action_type=action_type,
+                            value_kw=net_kw,
+                            timestep=timestep,
+                        )
+                    )
 
             ev_info = self._connected_ev(observations, building_id, 0)
             if ev_info and ev_info["max_charge_kw"] > 0.0:
                 charge_kw = float(x[ev_idx(bidx, 0)])
                 if charge_kw >= ev_info["min_charge_kw"] and charge_kw > 1e-2:
-                    ev_actions.append(Action(
-                        asset_id=f"{building_id}_electric_vehicle_storage",
-                        action_type=ActionType.EV_CHARGE,
-                        value_kw=charge_kw,
-                        timestep=timestep,
-                    ))
+                    ev_actions.append(
+                        Action(
+                            asset_id=f"{building_id}_electric_vehicle_storage",
+                            action_type=ActionType.EV_CHARGE,
+                            value_kw=charge_kw,
+                            timestep=timestep,
+                        )
+                    )
 
         return battery_actions, ev_actions
 
-    def _connected_ev(self, observations: Dict[str, Any], building_id: str, charger_index: int) -> Optional[Dict[str, Any]]:
+    def _connected_ev(
+        self, observations: Dict[str, Any], building_id: str, charger_index: int
+    ) -> Optional[Dict[str, Any]]:
         prefix = f"{building_id}_ev_{charger_index}"
         if not observations.get(f"{prefix}_connected"):
             return None
         capacity = float(observations.get(f"{prefix}_capacity_kwh", 0.0) or 0.0)
         if capacity <= 0.0:
             return None
-        hours_to_departure = float(observations.get(f"{prefix}_hours_to_departure", 0.0) or 0.0)
-        dt = float(self.device_metadata.get(building_id, {}).get("hours_per_step", 1.0)) or 1.0
+        hours_to_departure = float(
+            observations.get(f"{prefix}_hours_to_departure", 0.0) or 0.0
+        )
+        dt = (
+            float(self.device_metadata.get(building_id, {}).get("hours_per_step", 1.0))
+            or 1.0
+        )
         return {
             "soc": float(observations.get(f"{prefix}_soc", 0.0) or 0.0),
             "capacity_kwh": capacity,
-            "required_soc": float(observations.get(f"{prefix}_required_soc", 0.0) or 0.0),
-            "max_charge_kw": float(observations.get(f"{prefix}_max_charge_kw", 0.0) or 0.0),
-            "min_charge_kw": float(observations.get(f"{prefix}_min_charge_kw", 0.0) or 0.0),
+            "required_soc": float(
+                observations.get(f"{prefix}_required_soc", 0.0) or 0.0
+            ),
+            "max_charge_kw": float(
+                observations.get(f"{prefix}_max_charge_kw", 0.0) or 0.0
+            ),
+            "min_charge_kw": float(
+                observations.get(f"{prefix}_min_charge_kw", 0.0) or 0.0
+            ),
             "efficiency": 0.95,
             "departure_steps": int(np.ceil(hours_to_departure / dt)),
         }
@@ -456,14 +497,23 @@ class MPCController(BaseController):
         for building_id in self.device_metadata:
             if not observations.get(f"{building_id}_deferrable_appliance_can_start"):
                 continue
-            urgency = float(observations.get(f"{building_id}_deferrable_appliance_urgency_ratio", 0.0) or 0.0)
+            urgency = float(
+                observations.get(
+                    f"{building_id}_deferrable_appliance_urgency_ratio", 0.0
+                )
+                or 0.0
+            )
             pv = float(observations.get(f"{building_id}_solar_generation", 0.0) or 0.0)
-            load = float(observations.get(f"{building_id}_non_shiftable_load", 0.0) or 0.0)
+            load = float(
+                observations.get(f"{building_id}_non_shiftable_load", 0.0) or 0.0
+            )
             if urgency >= 0.5 or pv > load:
-                actions.append(Action(
-                    asset_id=f"{building_id}_deferrable_appliance",
-                    action_type=ActionType.FLEXIBLE_LOAD,
-                    value_kw=1.0,
-                    timestep=self.timestep,
-                ))
+                actions.append(
+                    Action(
+                        asset_id=f"{building_id}_deferrable_appliance",
+                        action_type=ActionType.FLEXIBLE_LOAD,
+                        value_kw=1.0,
+                        timestep=self.timestep,
+                    )
+                )
         return actions

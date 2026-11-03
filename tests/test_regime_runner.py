@@ -5,6 +5,7 @@ cost-basis mapping, p2p marked SCHEDULE-LATER, and end-to-end smoke runs in
 which the regime and cost basis land in result.json and manifest.json with
 run ids following the {scenario}_{controller}_{seed} convention.
 """
+
 import json
 import subprocess
 import sys
@@ -155,16 +156,27 @@ def _scenario_yaml(scenario, tmp_path):
 def _run_experiment(config_path, tmp_path, regime, run_id, max_steps=4):
     return subprocess.run(
         [
-            sys.executable, "-m", "experiments.run_experiment",
-            "--config", str(config_path),
-            "--controller", "rule_based",
-            "--seed", "42",
-            "--max-steps", str(max_steps),
-            "--output-dir", str(tmp_path / regime),
-            "--run-id", run_id,
-            "--regime", regime,
+            sys.executable,
+            "-m",
+            "experiments.run_experiment",
+            "--config",
+            str(config_path),
+            "--controller",
+            "rule_based",
+            "--seed",
+            "42",
+            "--max-steps",
+            str(max_steps),
+            "--output-dir",
+            str(tmp_path / regime),
+            "--run-id",
+            run_id,
+            "--regime",
+            regime,
         ],
-        capture_output=True, text=True, timeout=600,
+        capture_output=True,
+        text=True,
+        timeout=600,
     )
 
 
@@ -175,12 +187,16 @@ def _load_json(path):
 
 def test_smoke_pool_tou_manifest_and_result(tmp_path, scenario):
     config_path = _scenario_yaml(scenario, tmp_path)
-    result = _run_experiment(config_path, tmp_path, "pool_tou", "regime_test_rule_based_42")
+    result = _run_experiment(
+        config_path, tmp_path, "pool_tou", "regime_test_rule_based_42"
+    )
     assert result.returncode == 0, result.stdout[-2000:] + result.stderr[-2000:]
     run_dir = tmp_path / "pool_tou" / "regime_test" / "regime_test_rule_based_42"
 
     manifest = _load_json(run_dir / "manifest.json")
-    assert manifest["run_id"] == "regime_test_rule_based_42"  # {scenario}_{controller}_{seed}
+    assert (
+        manifest["run_id"] == "regime_test_rule_based_42"
+    )  # {scenario}_{controller}_{seed}
     assert manifest["pricing_regime"] == "pool_tou"
     assert manifest["cost_basis"] == "tariff"
 
@@ -226,9 +242,9 @@ def test_smoke_lmp_run_bills_at_lmp_and_differs_in_config_hash(tmp_path, scenari
         for line in diag.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    assert any("lmp_result" in row for row in lmp_rows), (
-        "per-step lmp_result (building prices, status, cap hits) must reach grid_diagnostics.jsonl"
-    )
+    assert any(
+        "lmp_result" in row for row in lmp_rows
+    ), "per-step lmp_result (building prices, status, cap hits) must reach grid_diagnostics.jsonl"
 
 
 def test_no_regime_flag_keeps_phase1_artifact_shape(tmp_path, scenario):
@@ -239,15 +255,25 @@ def test_no_regime_flag_keeps_phase1_artifact_shape(tmp_path, scenario):
     config_path.write_text(yaml.safe_dump(json.loads(scenario.model_dump_json())))
     result = subprocess.run(
         [
-            sys.executable, "-m", "experiments.run_experiment",
-            "--config", str(config_path),
-            "--controller", "rule_based",
-            "--seed", "42",
-            "--max-steps", "3",
-            "--output-dir", str(tmp_path / "base"),
-            "--run-id", "regime_test_rule_based_42",
+            sys.executable,
+            "-m",
+            "experiments.run_experiment",
+            "--config",
+            str(config_path),
+            "--controller",
+            "rule_based",
+            "--seed",
+            "42",
+            "--max-steps",
+            "3",
+            "--output-dir",
+            str(tmp_path / "base"),
+            "--run-id",
+            "regime_test_rule_based_42",
         ],
-        capture_output=True, text=True, timeout=600,
+        capture_output=True,
+        text=True,
+        timeout=600,
     )
     assert result.returncode == 0, result.stdout[-2000:] + result.stderr[-2000:]
     run_dir = tmp_path / "base" / "regime_test" / "regime_test_rule_based_42"

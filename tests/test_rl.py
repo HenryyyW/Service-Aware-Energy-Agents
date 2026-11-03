@@ -46,9 +46,15 @@ def metadata():
     return {
         "b0": {
             "battery": {"capacity_kwh": 10.0, "power_kw": 5.0, "efficiency": 0.9},
-            "chargers": [{"charger_id": "c0", "max_charge_kw": 11.0,
-                          "min_charge_kw": 1.4, "max_discharge_kw": 7.2,
-                          "efficiency": 0.95}],
+            "chargers": [
+                {
+                    "charger_id": "c0",
+                    "max_charge_kw": 11.0,
+                    "min_charge_kw": 1.4,
+                    "max_discharge_kw": 7.2,
+                    "efficiency": 0.95,
+                }
+            ],
             "deferrable": [],
             "pv_kw": 8.0,
             "hours_per_step": 1.0,
@@ -93,18 +99,22 @@ def test_encode_state_distinguishes_price_and_soc():
 
 def test_policy_drives_battery_and_ev_actions(tmp_path):
     observations_with_ev = observations()
-    observations_with_ev.update({
-        "b0_ev_0_connected": 1.0,
-        "b0_ev_0_soc": 0.2,
-        "b0_ev_0_required_soc": 0.87,
-        "b0_ev_0_hours_to_departure": 12.0,
-    })
+    observations_with_ev.update(
+        {
+            "b0_ev_0_connected": 1.0,
+            "b0_ev_0_soc": 0.2,
+            "b0_ev_0_required_soc": 0.87,
+            "b0_ev_0_hours_to_departure": 12.0,
+        }
+    )
     state = encode_state(observations_with_ev, ["b0"])
     q_values = [0.0] * N_ACTIONS
     q_values[N_ACTIONS - 1] = 1.0  # battery +1, EV +1
     policy = write_policy(tmp_path / "policy.json", {state: q_values})
 
-    controller = QLearningController(make_scenario(), policy, device_metadata=metadata())
+    controller = QLearningController(
+        make_scenario(), policy, device_metadata=metadata()
+    )
     actions = controller.get_actions(observations_with_ev, timestep=1)
 
     battery = [a for a in actions.actions if a.asset_id == "b0_electrical_storage"]
@@ -118,7 +128,9 @@ def test_policy_drives_battery_and_ev_actions(tmp_path):
 
 def test_unseen_state_falls_back_to_rule_based(tmp_path):
     policy = write_policy(tmp_path / "policy.json", {})
-    controller = QLearningController(make_scenario(), policy, device_metadata=metadata())
+    controller = QLearningController(
+        make_scenario(), policy, device_metadata=metadata()
+    )
     actions = controller.get_actions(observations(), timestep=0)
 
     assert controller.unseen_states == 1
@@ -142,7 +154,21 @@ def test_lmp_encoder_has_twelve_buckets_and_six_fields():
         "b0_deferrable_appliance_can_start": 0.0,
     }
     buckets = set()
-    for price in [0.04, 0.07, 0.09, 0.11, 0.13, 0.15, 0.17, 0.19, 0.21, 0.24, 0.27, 0.31, 0.40]:
+    for price in [
+        0.04,
+        0.07,
+        0.09,
+        0.11,
+        0.13,
+        0.15,
+        0.17,
+        0.19,
+        0.21,
+        0.24,
+        0.27,
+        0.31,
+        0.40,
+    ]:
         obs = dict(base, b0_electricity_pricing=price)
         key = encode_state_lmp(obs, ["b0"])
         assert key.count("|") == 5  # six |-separated components
@@ -168,9 +194,13 @@ def test_policy_json_round_trip(tmp_path):
     q_values = [0.0] * N_ACTIONS
     q_values[0] = 1.0
     path = tmp_path / "policy.json"
-    path.write_text(json.dumps({"q_table": {state: q_values}, "metadata": {"encoder": "base"}}))
+    path.write_text(
+        json.dumps({"q_table": {state: q_values}, "metadata": {"encoder": "base"}})
+    )
 
-    controller = QLearningController(make_scenario(), str(path), device_metadata=metadata())
+    controller = QLearningController(
+        make_scenario(), str(path), device_metadata=metadata()
+    )
     actions = controller.get_actions(observations(), timestep=0)
     assert controller.unseen_states == 0
 
@@ -179,6 +209,8 @@ def test_ql_controller_loads_lmp_policy():
     """QLearningController resolves the LMP encoder from an lmp_scenario_*.json policy."""
     path = LMP_POLICY_DIR / "lmp_scenario_a.json"
     assert path.exists(), f"Run the regen recipe to produce {path}"
-    controller = QLearningController(make_scenario(), str(path), device_metadata=metadata())
+    controller = QLearningController(
+        make_scenario(), str(path), device_metadata=metadata()
+    )
     assert controller.encoder == "lmp"
     assert controller._encode is encode_state_lmp

@@ -65,9 +65,19 @@ def paired_t_test(deltas: List[float]) -> Optional[Dict[str, float]]:
     if statistics.stdev(deltas) == 0:
         # Zero seed variance: the difference is deterministic for these seeds.
         # Report an infinite t rather than a numerically meaningless huge one.
-        return {"n": float(n), "mean": mean, "t": math.copysign(math.inf, mean), "p": 0.0}
+        return {
+            "n": float(n),
+            "mean": mean,
+            "t": math.copysign(math.inf, mean),
+            "p": 0.0,
+        }
     result = scipy_stats.ttest_rel(deltas, [0.0] * n)
-    return {"n": float(n), "mean": mean, "t": float(result.statistic), "p": float(result.pvalue)}
+    return {
+        "n": float(n),
+        "mean": mean,
+        "t": float(result.statistic),
+        "p": float(result.pvalue),
+    }
 
 
 def load_results(directory: Path) -> List[Dict]:
@@ -123,12 +133,16 @@ def build_markdown(
                 continue
             cells = [cell(rows, metric) for metric in metrics]
             lines.append(
-                f"| {scenario} | {controller} | {len(rows)} | " + " | ".join(cells) + " |"
+                f"| {scenario} | {controller} | {len(rows)} | "
+                + " | ".join(cells)
+                + " |"
             )
 
     # Paired deltas against the reference controller, matched on seed.
     lines.append("")
-    lines.append(f"Paired deltas vs `{reference}` (negative cost/import/peak is better):")
+    lines.append(
+        f"Paired deltas vs `{reference}` (negative cost/import/peak is better):"
+    )
     lines.append("")
     lines.append("| Scenario | Controller | n pairs | " + " | ".join(metrics) + " |")
     lines.append("|---|---|---|" + "|".join(["---"] * len(metrics)) + "|")
@@ -161,7 +175,9 @@ def build_markdown(
                     sign = "+" if stats["mean"] >= 0 else ""
                     cells.append(f"{sign}{stats['mean']:.2f} ± {stats['ci95']:.2f}")
             lines.append(
-                f"| {scenario} | {controller} | {len(paired)} | " + " | ".join(cells) + " |"
+                f"| {scenario} | {controller} | {len(paired)} | "
+                + " | ".join(cells)
+                + " |"
             )
 
     lines.append("")
@@ -217,9 +233,15 @@ def build_markdown(
     significant = [row for row in test_rows if row.get("p_holm") is not None]
     if significant:
         lines.append("")
-        lines.append("Paired t-tests vs `" + reference + "` (Holm within scenario x metric family):")
+        lines.append(
+            "Paired t-tests vs `"
+            + reference
+            + "` (Holm within scenario x metric family):"
+        )
         lines.append("")
-        lines.append("| Scenario | Comparison | Metric | n | mean delta | t | p | p (Holm) | sig 0.05 |")
+        lines.append(
+            "| Scenario | Comparison | Metric | n | mean delta | t | p | p (Holm) | sig 0.05 |"
+        )
         lines.append("|---|---|---|---|---|---|---|---|---|")
         for row in significant:
             sign = "+" if row["delta"] >= 0 else ""
@@ -240,13 +262,21 @@ def build_markdown(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Summarize benchmark results")
     parser.add_argument("--input", required=True, help="Benchmark output directory")
-    parser.add_argument("--reference", default="rule_based", help="Reference controller")
+    parser.add_argument(
+        "--reference", default="rule_based", help="Reference controller"
+    )
     parser.add_argument(
         "--metrics",
         nargs="+",
-        default=["total_cost", "grid_import_kwh", "peak_demand_kw",
-                 "pv_self_consumption_kwh", "ev_completion_rate",
-                 "member_cost_coverage", "members_interrupted_count"],
+        default=[
+            "total_cost",
+            "grid_import_kwh",
+            "peak_demand_kw",
+            "pv_self_consumption_kwh",
+            "ev_completion_rate",
+            "member_cost_coverage",
+            "members_interrupted_count",
+        ],
     )
     parser.add_argument("--out", default=None, help="Markdown output path")
     args = parser.parse_args()

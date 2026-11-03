@@ -73,7 +73,9 @@ class ApiPromptCallable:
         retry_backoff_s: float = 0.5,
     ):
         self.model = model
-        self.base_url = (base_url or os.getenv("LLM_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
+        self.base_url = (
+            base_url or os.getenv("LLM_BASE_URL") or DEFAULT_BASE_URL
+        ).rstrip("/")
         # When None, the key is read from LLM_API_KEY at call time so a key
         # supplied after construction still works.
         self.api_key = api_key
@@ -103,14 +105,16 @@ class ApiPromptCallable:
         return key
 
     def _request(self, prompt: str) -> urllib.request.Request:
-        payload = json.dumps({
-            "model": self.model,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": self.temperature,
-            "seed": self.seed,
-            "max_tokens": self.max_tokens,
-            "stream": False,
-        }).encode("utf-8")
+        payload = json.dumps(
+            {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": self.temperature,
+                "seed": self.seed,
+                "max_tokens": self.max_tokens,
+                "stream": False,
+            }
+        ).encode("utf-8")
         return urllib.request.Request(
             f"{self.base_url}/chat/completions",
             data=payload,
@@ -141,7 +145,9 @@ class ApiPromptCallable:
             if attempt:
                 time.sleep(self.retry_backoff_s * attempt)
             try:
-                with urllib.request.urlopen(request, timeout=self.timeout_s) as response:
+                with urllib.request.urlopen(
+                    request, timeout=self.timeout_s
+                ) as response:
                     body = json.loads(response.read().decode("utf-8"))
             except urllib.error.HTTPError as exc:
                 detail = ""

@@ -75,8 +75,15 @@ def _t_critical(count: int, confidence: float = 0.95) -> float:
         return float(student_t.ppf(0.5 + confidence / 2.0, count - 1))
     except Exception:  # pragma: no cover - scipy is a project dependency
         table = {
-            2: 12.706, 3: 4.303, 4: 3.182, 5: 2.776, 6: 2.571,
-            7: 2.447, 8: 2.365, 9: 2.306, 10: 2.262,
+            2: 12.706,
+            3: 4.303,
+            4: 3.182,
+            5: 2.776,
+            6: 2.571,
+            7: 2.447,
+            8: 2.365,
+            9: 2.306,
+            10: 2.262,
         }
         return table.get(count, 1.96)
 
@@ -88,11 +95,7 @@ def compute_statistics(values: List[float]) -> Dict[str, float]:
     are excluded before aggregating; if nothing remains the zero dict is
     returned so the summary never crashes on failed sub-metrics.
     """
-    clean = [
-        float(v)
-        for v in values
-        if v is not None and math.isfinite(float(v))
-    ]
+    clean = [float(v) for v in values if v is not None and math.isfinite(float(v))]
     count = len(clean)
     if count == 0:
         return {key: 0.0 for key in STAT_KEYS}
@@ -107,7 +110,7 @@ def compute_statistics(values: List[float]) -> Dict[str, float]:
             "ci95": 0.0,
         }
     stdev_value = statistics.stdev(clean)
-    half_width = _t_critical(count) * stdev_value / (count ** 0.5)
+    half_width = _t_critical(count) * stdev_value / (count**0.5)
     return {
         "mean": mean_value,
         "std": stdev_value,
@@ -138,15 +141,18 @@ def _kill_process_tree(process: "subprocess.Popen") -> None:
         if os.name == "nt":
             subprocess.run(
                 ["taskkill", "/F", "/T", "/PID", str(process.pid)],
-                capture_output=True, timeout=30,
+                capture_output=True,
+                timeout=30,
             )
         else:
             import signal
 
             os.killpg(os.getpgid(process.pid), signal.SIGKILL)
     except Exception as exc:  # pragma: no cover - best-effort cleanup
-        print(f"Warning: failed to kill process tree for PID {process.pid}: {exc}",
-              file=sys.stderr)
+        print(
+            f"Warning: failed to kill process tree for PID {process.pid}: {exc}",
+            file=sys.stderr,
+        )
     try:
         process.wait(timeout=30)
     except Exception:  # pragma: no cover
@@ -230,12 +236,19 @@ def run_experiment(
     result_file = Path(output_base) / scenario_name / run_id / "result.json"
 
     cmd = [
-        sys.executable, "-m", "experiments.run_experiment",
-        "--config", scenario_file,
-        "--controller", controller,
-        "--seed", str(seed),
-        "--run-id", run_id,
-        "--output-dir", output_base,
+        sys.executable,
+        "-m",
+        "experiments.run_experiment",
+        "--config",
+        scenario_file,
+        "--controller",
+        controller,
+        "--seed",
+        str(seed),
+        "--run-id",
+        run_id,
+        "--output-dir",
+        output_base,
     ]
     if controller in ("rl", "rl_single"):
         policy = rl_policy_path(policy_dir, scenario_name)
@@ -330,8 +343,10 @@ def run_benchmark(
             completed_runs += 1
             if result:
                 all_results.append(result)
-            print(f"[{completed_runs}/{total_runs}] {Path(task[0]).stem} {task[1]} seed={task[2]} "
-                  f"{'ok' if result else 'FAILED'}")
+            print(
+                f"[{completed_runs}/{total_runs}] {Path(task[0]).stem} {task[1]} seed={task[2]} "
+                f"{'ok' if result else 'FAILED'}"
+            )
     else:
         with ThreadPoolExecutor(max_workers=workers) as pool:
             for result in pool.map(_run, tasks):
@@ -345,7 +360,9 @@ def run_benchmark(
     summary_stats: Dict[str, Dict[str, Dict[str, float]]] = {}
     grouped: Dict[tuple, List[Dict[str, Any]]] = {}
     for result in all_results:
-        grouped.setdefault((result["scenario"], result["controller"]), []).append(result)
+        grouped.setdefault((result["scenario"], result["controller"]), []).append(
+            result
+        )
 
     for (scenario_name, controller), rows in grouped.items():
         key = f"{scenario_name}::{controller}"
@@ -403,10 +420,15 @@ def run_benchmark(
         handle.write("\\caption{Benchmark results across scenarios and controllers}\n")
         handle.write("\\label{tab:benchmark-results}\n")
         handle.write("\\begin{tabular}{llrrrr}\n\\hline\n")
-        handle.write("Scenario & Controller & Metric & Mean & 95\\% CI & n \\\\\n\\hline\n")
+        handle.write(
+            "Scenario & Controller & Metric & Mean & 95\\% CI & n \\\\\n\\hline\n"
+        )
         key_metrics = [
-            "total_cost", "grid_import_kwh", "peak_demand_kw",
-            "pv_self_consumption_kwh", "ev_completion_rate",
+            "total_cost",
+            "grid_import_kwh",
+            "peak_demand_kw",
+            "pv_self_consumption_kwh",
+            "ev_completion_rate",
         ]
         for key, stats in summary_stats.items():
             scenario_name, controller = key.split("::", 1)
@@ -437,33 +459,52 @@ def run_benchmark(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run benchmark experiments for energy agents")
+    parser = argparse.ArgumentParser(
+        description="Run benchmark experiments for energy agents"
+    )
     parser.add_argument(
-        "--scenarios", nargs="+",
+        "--scenarios",
+        nargs="+",
         default=[f"configs/scenario_{letter}.yaml" for letter in "abcde"],
         help="List of scenario YAML files",
     )
     parser.add_argument(
-        "--controllers", nargs="+",
+        "--controllers",
+        nargs="+",
         default=["rule_based", "multi_agent", "centralized", "mpc", "rl"],
         help="Controller types to test (mpc/rl need the baselines from src/controllers)",
     )
     parser.add_argument(
-        "--seeds", nargs="+", type=int, default=[42, 123, 456, 789, 999],
+        "--seeds",
+        nargs="+",
+        type=int,
+        default=[42, 123, 456, 789, 999],
         help="Random seeds; the brief requires >=3 runs per configuration",
     )
-    parser.add_argument("--output", type=str, default="experiments/benchmark",
-                        help="Base output directory")
-    parser.add_argument("--workers", type=int, default=1,
-                        help="Parallel experiment subprocesses")
-    parser.add_argument("--timeout", type=int, default=900,
-                        help="Per-run timeout in seconds")
-    parser.add_argument("--rl-policy-dir", type=str, default="experiments/rl_policy",
-                        help="Directory containing {scenario}.json RL policies")
-    parser.add_argument("--max-steps", type=int, default=None,
-                        help="Optional step cap (smoke tests)")
-    parser.add_argument("--quick-test", action="store_true",
-                        help="Run a two-seed smoke matrix")
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="experiments/benchmark",
+        help="Base output directory",
+    )
+    parser.add_argument(
+        "--workers", type=int, default=1, help="Parallel experiment subprocesses"
+    )
+    parser.add_argument(
+        "--timeout", type=int, default=900, help="Per-run timeout in seconds"
+    )
+    parser.add_argument(
+        "--rl-policy-dir",
+        type=str,
+        default="experiments/rl_policy",
+        help="Directory containing {scenario}.json RL policies",
+    )
+    parser.add_argument(
+        "--max-steps", type=int, default=None, help="Optional step cap (smoke tests)"
+    )
+    parser.add_argument(
+        "--quick-test", action="store_true", help="Run a two-seed smoke matrix"
+    )
     args = parser.parse_args()
 
     if args.quick_test:

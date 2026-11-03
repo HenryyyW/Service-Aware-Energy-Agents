@@ -4,6 +4,7 @@ The scenario YAML's device parameters (battery, PV, EV schedules, flexible
 loads) must reach the CityLearn schema; two scenarios that differ only in
 device mix must produce different simulations.
 """
+
 import json
 import os
 import shutil
@@ -133,7 +134,9 @@ def test_device_overrides_reach_the_schema(mixed_scenario, temp_data_dir):
         assert "chargers" not in second
 
         # Flexible load synthesized
-        assert sorted(first.get("deferrable_appliances", {})) == ["deferrable_appliance_0"]
+        assert sorted(first.get("deferrable_appliances", {})) == [
+            "deferrable_appliance_0"
+        ]
     finally:
         adapter.close()
 

@@ -9,54 +9,58 @@ from src.agents.backend.remote import RemoteAPIBackend
 
 class BackendRegistry:
     """Registry of available LLM backends."""
-    
+
     _backends: Dict[str, type] = {
         "fallback": FallbackBackend,
         "ollama": OllamaBackend,
         "openai_gpt4": "RemoteAPIBackend",  # Will resolve at runtime
         "anthropic_claude": "RemoteAPIBackend",
     }
-    
+
     _backend_configs: Dict[str, Dict] = {}
-    
+
     @classmethod
-    def register(cls, backend_id: str, backend_class: type, config: Dict = None) -> None:
+    def register(
+        cls, backend_id: str, backend_class: type, config: Dict = None
+    ) -> None:
         """Register a new backend class."""
         cls._backends[backend_id] = backend_class
         if config:
             cls._backend_configs[backend_id] = config
-    
+
     @classmethod
     def get(cls, backend_id: str, **kwargs) -> "AgentBackend":
         """Get a backend instance by ID."""
         if backend_id not in cls._backends:
-            raise ValueError(f"Unknown backend: {backend_id}. Available: {list(cls._backends.keys())}")
-        
+            raise ValueError(
+                f"Unknown backend: {backend_id}. Available: {list(cls._backends.keys())}"
+            )
+
         backend_class = cls._backends[backend_id]
-        
+
         # Resolve string references
         if isinstance(backend_class, str):
             if backend_class == "RemoteAPIBackend":
                 backend_class = RemoteAPIBackend
             else:
                 raise ValueError(f"Unknown backend class reference: {backend_class}")
-        
+
         # Merge default config with provided kwargs
         config = cls._backend_configs.get(backend_id, {}).copy()
         config.update(kwargs)
-        
+
         return backend_class(**config)
-    
+
     @classmethod
     def list_available(cls) -> List[str]:
         """List all available backend IDs."""
         return list(cls._backends.keys())
-    
+
     @classmethod
     def is_available(cls, backend_id: str) -> bool:
         """Check if a backend is registered."""
         return backend_id in cls._backends
-    
+
     @classmethod
     def get_default(cls) -> "AgentBackend":
         """Get the default fallback backend."""
@@ -65,7 +69,7 @@ class BackendRegistry:
 
 def create_backend_from_config(config: Dict[str, Any]) -> "AgentBackend":
     """Create a backend instance from a configuration dictionary.
-    
+
     Expected config format:
     {
         "backend": "fallback|ollama|openai_gpt4|anthropic_claude",
@@ -79,10 +83,10 @@ def create_backend_from_config(config: Dict[str, Any]) -> "AgentBackend":
     }
     """
     backend_type = config.get("backend", "fallback")
-    
+
     # Extract relevant config for the backend
     backend_config = {k: v for k, v in config.items() if k != "backend"}
-    
+
     # Map config keys to backend constructor parameters
     if "prompt_template" in backend_config:
         backend_config["prompt_template_id"] = backend_config.pop("prompt_template")
@@ -90,23 +94,47 @@ def create_backend_from_config(config: Dict[str, Any]) -> "AgentBackend":
         backend_config["endpoint"] = backend_config.pop("local_endpoint")
     if "local_model" in backend_config:
         backend_config["model"] = backend_config.pop("local_model")
-    
+
     # Filter out irrelevant keys based on backend type
     if backend_type == "ollama":
         # OllamaBackend only accepts: endpoint, model, prompt_template_id
         allowed_keys = {"endpoint", "model", "prompt_template_id"}
         backend_config = {k: v for k, v in backend_config.items() if k in allowed_keys}
-    elif backend_type in ("openai_gpt4", "openai_gpt4_turbo", "openai_gpt4o", "openai_gpt4o_mini"):
-        allowed_keys = {"model", "openai_api_key", "endpoint", "prompt_template_id", "provider"}
+    elif backend_type in (
+        "openai_gpt4",
+        "openai_gpt4_turbo",
+        "openai_gpt4o",
+        "openai_gpt4o_mini",
+    ):
+        allowed_keys = {
+            "model",
+            "openai_api_key",
+            "endpoint",
+            "prompt_template_id",
+            "provider",
+        }
         backend_config = {k: v for k, v in backend_config.items() if k in allowed_keys}
         # Map openai_api_key to api_key for RemoteAPIBackend
         if "openai_api_key" in backend_config:
             backend_config["api_key"] = backend_config.pop("openai_api_key")
-    elif backend_type in ("anthropic_claude", "anthropic_claude_sonnet", "anthropic_claude_opus", "anthropic_claude_haiku"):
-        allowed_keys = {"model", "anthropic_api_key", "endpoint", "prompt_template_id", "max_usd", "max_latency_ms", "max_tokens"}
+    elif backend_type in (
+        "anthropic_claude",
+        "anthropic_claude_sonnet",
+        "anthropic_claude_opus",
+        "anthropic_claude_haiku",
+    ):
+        allowed_keys = {
+            "model",
+            "anthropic_api_key",
+            "endpoint",
+            "prompt_template_id",
+            "max_usd",
+            "max_latency_ms",
+            "max_tokens",
+        }
         backend_config = {k: v for k, v in backend_config.items() if k in allowed_keys}
     elif backend_type == "fallback":
         allowed_keys = set()
         backend_config = {k: v for k, v in backend_config.items() if k in allowed_keys}
-    
+
     return BackendRegistry.get(backend_type, **backend_config)

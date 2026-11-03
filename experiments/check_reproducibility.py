@@ -143,7 +143,9 @@ def run_once(
         "result": result,
         "result_hash": _sha256_json(_normalize(result)),
         "trajectory_hash": _sha256_file(trajectory_path),
-        "trajectory_bytes": trajectory_path.stat().st_size if trajectory_path.exists() else 0,
+        "trajectory_bytes": (
+            trajectory_path.stat().st_size if trajectory_path.exists() else 0
+        ),
         "metrics": {block: _normalize(result.get(block)) for block in COMPARED_BLOCKS},
     }
 
@@ -158,13 +160,17 @@ def check_seed(
 ) -> Dict[str, Any]:
     runs: List[Dict[str, Any]] = []
     for replicate in range(1, replicates + 1):
-        runs.append(run_once(config, controller, seed, replicate, output_dir, max_steps))
+        runs.append(
+            run_once(config, controller, seed, replicate, output_dir, max_steps)
+        )
 
     reference = runs[0]
     problems: List[str] = []
     for run in runs[1:]:
         if run["result_hash"] != reference["result_hash"]:
-            problems.append(f"{run['run_id']}: result.json differs from {reference['run_id']}")
+            problems.append(
+                f"{run['run_id']}: result.json differs from {reference['run_id']}"
+            )
         if run["trajectory_hash"] != reference["trajectory_hash"]:
             problems.append(
                 f"{run['run_id']}: trajectories.jsonl differs from {reference['run_id']}"
@@ -188,24 +194,39 @@ def check_seed(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="configs/scenario_a.yaml")
-    parser.add_argument("--controller", default="rule_based",
-                        choices=["rule_based", "multi_agent", "centralized"])
+    parser.add_argument(
+        "--controller",
+        default="rule_based",
+        choices=["rule_based", "multi_agent", "centralized"],
+    )
     parser.add_argument("--seeds", type=int, nargs="+", default=[42])
     parser.add_argument("--replicates", type=int, default=2)
-    parser.add_argument("--max-steps", type=int, default=8,
-                        help="Keep CI runs short; use 0/omit for a full episode")
-    parser.add_argument("--output-dir", default=None,
-                        help="Where runs are written (default: a temp directory)")
-    parser.add_argument("--keep-output", action="store_true",
-                        help="Do not delete the temp output directory")
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=8,
+        help="Keep CI runs short; use 0/omit for a full episode",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        help="Where runs are written (default: a temp directory)",
+    )
+    parser.add_argument(
+        "--keep-output",
+        action="store_true",
+        help="Do not delete the temp output directory",
+    )
     parser.add_argument("--report", default=None, help="Optional JSON report path")
     args = parser.parse_args()
 
     if args.replicates < 2:
         parser.error("--replicates must be at least 2 to compare runs")
 
-    output_dir = Path(args.output_dir) if args.output_dir else Path(
-        tempfile.mkdtemp(prefix="repro-check-")
+    output_dir = (
+        Path(args.output_dir)
+        if args.output_dir
+        else Path(tempfile.mkdtemp(prefix="repro-check-"))
     )
     output_dir.mkdir(parents=True, exist_ok=True)
 

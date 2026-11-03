@@ -8,15 +8,15 @@ It supports:
 
 Usage:
     from src.agents.backend import create_backend_from_config, LLMConfig
-    
+
     # Load from environment
     config = LLMConfig()
     backend = config.create_backend()
-    
+
     # Or create directly
     from src.agents.backend.registry import BackendRegistry
     backend = BackendRegistry.get("fallback")
-    
+
     # Use in controller
     response = await backend.generate_actions(scenario, observations, timestep, context, budget)
 """

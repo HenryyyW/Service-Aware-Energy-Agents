@@ -5,6 +5,7 @@ hung ~33,000 s despite run_benchmark's 900 s per-run timeout: capturing output
 through pipes makes subprocess.run block after the kill until every inherited
 handle closes. The runner must use per-run log files and kill the process tree.
 """
+
 import os
 import subprocess
 import sys

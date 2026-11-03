@@ -89,12 +89,14 @@ def summarize(run_dir: Path) -> dict:
     if result_path.is_file():
         try:
             result = json.loads(result_path.read_text())
-            summary.update({
-                "run_id": result.get("run_id"),
-                "scenario_id": result.get("scenario_id"),
-                "random_seed": result.get("random_seed"),
-                "controller": result.get("controller_config"),
-            })
+            summary.update(
+                {
+                    "run_id": result.get("run_id"),
+                    "scenario_id": result.get("scenario_id"),
+                    "random_seed": result.get("random_seed"),
+                    "controller": result.get("controller_config"),
+                }
+            )
             for block, key in METRIC_KEYS:
                 value = (result.get(block) or {}).get(key)
                 if value is not None:
@@ -114,15 +116,23 @@ def summarize(run_dir: Path) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--runs", nargs="+", required=True,
-                        help="Run directories, or parent directories to search recursively")
+    parser.add_argument(
+        "--runs",
+        nargs="+",
+        required=True,
+        help="Run directories, or parent directories to search recursively",
+    )
     parser.add_argument("--output", required=True, help="Destination .zip path")
-    parser.add_argument("--include-plots", action="store_true",
-                        help="Also include plots/ directories")
-    parser.add_argument("--minimal", action="store_true",
-                        help="Only include result.json/manifest.json/trajectories.jsonl "
-                             "per run (skip grid diagnostics, kpis, market results and "
-                             "the pandapower network snapshot)")
+    parser.add_argument(
+        "--include-plots", action="store_true", help="Also include plots/ directories"
+    )
+    parser.add_argument(
+        "--minimal",
+        action="store_true",
+        help="Only include result.json/manifest.json/trajectories.jsonl "
+        "per run (skip grid diagnostics, kpis, market results and "
+        "the pandapower network snapshot)",
+    )
     args = parser.parse_args()
 
     run_dirs, root_artifacts = find_run_dirs(args.runs)
@@ -173,18 +183,25 @@ def main() -> int:
             archive.write(artifact, arcname)
             checksums.append((arcname, sha256_file(artifact)))
 
-        sums_payload = "".join(f"{digest}  {name}\n" for name, digest in sorted(checksums))
+        sums_payload = "".join(
+            f"{digest}  {name}\n" for name, digest in sorted(checksums)
+        )
         archive.writestr("SHA256SUMS", sums_payload)
         archive.writestr(
             "INDEX.json",
-            json.dumps({
-                "created_by": "scripts/package_results.py",
-                "root_artifacts": [a.name for a in root_artifacts],
-                "runs": index,
-            }, indent=2),
+            json.dumps(
+                {
+                    "created_by": "scripts/package_results.py",
+                    "root_artifacts": [a.name for a in root_artifacts],
+                    "runs": index,
+                },
+                indent=2,
+            ),
         )
 
-    print(f"[package] {len(run_dirs)} run(s), {len(checksums)} file(s), {len(root_artifacts)} root artifact(s) -> {output}")
+    print(
+        f"[package] {len(run_dirs)} run(s), {len(checksums)} file(s), {len(root_artifacts)} root artifact(s) -> {output}"
+    )
     print(f"[package] size {output.stat().st_size / (1024 * 1024):.1f} MB")
     return 0
 

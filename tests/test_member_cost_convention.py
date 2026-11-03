@@ -7,6 +7,7 @@ free). Economic aggregates (gini, worst/best member) use valid members only,
 and the interruption is reported explicitly via members_interrupted and
 member_cost_coverage.
 """
+
 import math
 
 import pytest

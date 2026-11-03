@@ -1,4 +1,5 @@
 """Scenario configuration schemas for CityLearn and pandapower."""
+
 from typing import Optional, List, Dict, Any, Literal
 from pydantic import BaseModel, Field, field_validator
 from enum import Enum
@@ -13,6 +14,7 @@ class BuildingType(str, Enum):
 
 class PVConfig(BaseModel):
     """PV system configuration."""
+
     capacity_kw: float
     azimuth: float = 180.0  # degrees, 180 = south
     tilt: float = 30.0  # degrees
@@ -22,6 +24,7 @@ class PVConfig(BaseModel):
 
 class BatteryConfig(BaseModel):
     """Battery storage configuration."""
+
     capacity_kwh: float
     power_kw: float
     efficiency_charge: float = 0.95
@@ -34,6 +37,7 @@ class BatteryConfig(BaseModel):
 
 class EVConfig(BaseModel):
     """Electric vehicle configuration."""
+
     capacity_kwh: float
     max_charge_kw: float
     efficiency: float = 0.90
@@ -41,11 +45,14 @@ class EVConfig(BaseModel):
     departure_time: str  # HH:MM format
     target_soc: float = 0.8
     initial_soc: float = 0.3
-    connected_days: List[int] = Field(default_factory=lambda: list(range(7)))  # 0-6 for week
+    connected_days: List[int] = Field(
+        default_factory=lambda: list(range(7))
+    )  # 0-6 for week
 
 
 class FlexibleLoadConfig(BaseModel):
     """Flexible load configuration."""
+
     power_kw: float
     energy_kwh: float
     earliest_start: str  # HH:MM
@@ -55,6 +62,7 @@ class FlexibleLoadConfig(BaseModel):
 
 class TariffConfig(BaseModel):
     """Electricity tariff configuration."""
+
     type: str = "time_of_use"  # time_of_use, real_time, flat
     import_prices: Dict[str, float] = Field(default_factory=dict)  # period -> price
     export_prices: Dict[str, float] = Field(default_factory=dict)
@@ -63,6 +71,7 @@ class TariffConfig(BaseModel):
 
 class BuildingConfig(BaseModel):
     """Building configuration."""
+
     building_id: str
     building_type: BuildingType = BuildingType.RESIDENTIAL
     location: Dict[str, Any] = Field(default_factory=dict)  # lat, lon, timezone
@@ -80,6 +89,7 @@ class BuildingConfig(BaseModel):
 
 class GridBusMapping(BaseModel):
     """Mapping from building/community to pandapower bus."""
+
     building_id: str
     bus_idx: int
     phase: str = "all"  # a, b, c, all
@@ -88,12 +98,15 @@ class GridBusMapping(BaseModel):
 
 class PandapowerConfig(BaseModel):
     """pandapower network configuration."""
+
     network_type: str = "ieee_34"  # ieee_13, ieee_34, simbench, custom
     network_file: Optional[str] = None
     coordinate_system: Literal["geographic", "schematic"] = "schematic"
     bus_mappings: List[GridBusMapping] = Field(default_factory=list)
     slack_bus: int = 0
-    voltage_limits: Dict[str, float] = Field(default_factory=lambda: {"min": 0.95, "max": 1.05})
+    voltage_limits: Dict[str, float] = Field(
+        default_factory=lambda: {"min": 0.95, "max": 1.05}
+    )
     line_loading_limit: float = 1.0  # per unit
     transformer_loading_limit: float = 1.0
     run_power_flow_every: int = 1  # every N timesteps
@@ -101,6 +114,7 @@ class PandapowerConfig(BaseModel):
 
 class DynamicPricingConfig(BaseModel):
     """Dynamic/LMP pricing configuration."""
+
     enabled: bool = False
     pricing_type: str = "lmp"  # lmp, dynamic_tariff, rtp
     lmp_update_interval_minutes: int = 15
@@ -112,8 +126,11 @@ class DynamicPricingConfig(BaseModel):
 
 class EnergySharingConfig(BaseModel):
     """Local energy sharing and settlement configuration."""
+
     enabled: bool = False
-    market_type: str = "uniform_price"  # uniform_price, weighted, carbon_aware, fairness_aware, lmp
+    market_type: str = (
+        "uniform_price"  # uniform_price, weighted, carbon_aware, fairness_aware, lmp
+    )
     settlement_interval: str = "15min"  # 15min, hourly, daily
     export_limit_kw: Optional[float] = None
     import_limit_kw: Optional[float] = None
@@ -129,7 +146,14 @@ class EnergySharingConfig(BaseModel):
     @field_validator("market_type")
     @classmethod
     def validate_market_type(cls, v: str) -> str:
-        valid = {"uniform_price", "weighted", "carbon_aware", "fairness_aware", "lmp", "p2p"}
+        valid = {
+            "uniform_price",
+            "weighted",
+            "carbon_aware",
+            "fairness_aware",
+            "lmp",
+            "p2p",
+        }
         if v not in valid:
             raise ValueError(f"market_type must be one of {valid}")
         return v
@@ -137,6 +161,7 @@ class EnergySharingConfig(BaseModel):
 
 class FailureConfig(BaseModel):
     """Failure injection configuration."""
+
     failure_id: str
     asset_id: str
     failure_type: str  # pv_inverter, battery, ev_charger, sensor, grid_limit
@@ -147,6 +172,7 @@ class FailureConfig(BaseModel):
 
 class ScenarioConfig(BaseModel):
     """Complete scenario configuration."""
+
     scenario_id: str
     name: str
     description: str

@@ -1,4 +1,5 @@
 """Tests package for service-aware energy agents."""
+
 # This file makes the tests directory a Python package
 # Test modules:
 # - test_citylearn_adapter

@@ -1,4 +1,5 @@
 """Pytest configuration for contract tests."""
+
 import sys
 from pathlib import Path
 

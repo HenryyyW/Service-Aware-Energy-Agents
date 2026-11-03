@@ -1,4 +1,5 @@
 """Persistent simulation run, report, and comparison routes."""
+
 import json
 import math
 import uuid
@@ -40,7 +41,9 @@ def _read_result(path: Path) -> Dict[str, Any]:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise HTTPException(status_code=500, detail=f"Could not read run result: {error}") from error
+        raise HTTPException(
+            status_code=500, detail=f"Could not read run result: {error}"
+        ) from error
 
 
 def _json_safe(value: Any) -> Any:
@@ -99,7 +102,12 @@ def _summary(result: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _execute_run(run_id: str, scenario_data: Dict[str, Any], controller_type: str, max_steps: Optional[int]):
+def _execute_run(
+    run_id: str,
+    scenario_data: Dict[str, Any],
+    controller_type: str,
+    max_steps: Optional[int],
+):
     _active_runs[run_id]["status"] = "running"
     try:
         scenario = ScenarioConfig.model_validate(scenario_data)
@@ -127,15 +135,23 @@ async def list_runs():
                 runs.setdefault(result["run_id"], _summary(result))
         except (OSError, json.JSONDecodeError, KeyError):
             continue
-    return sorted(runs.values(), key=lambda run: run.get("start_time") or "", reverse=True)
+    return sorted(
+        runs.values(), key=lambda run: run.get("start_time") or "", reverse=True
+    )
 
 
 @runs_router.post("")
 async def create_run(request: RunRequest, background_tasks: BackgroundTasks):
-    source = _scenarios.get(request.scenario_id) or _load_config_scenario(request.scenario_id)
+    source = _scenarios.get(request.scenario_id) or _load_config_scenario(
+        request.scenario_id
+    )
     parameters = request.parameters
     updates = {}
-    for field in ("community_import_limit_kw", "community_export_limit_kw", "random_seed"):
+    for field in (
+        "community_import_limit_kw",
+        "community_export_limit_kw",
+        "random_seed",
+    ):
         if field in parameters and parameters[field] is not None:
             updates[field] = parameters[field]
     scenario = source.model_copy(update=updates)
@@ -148,7 +164,13 @@ async def create_run(request: RunRequest, background_tasks: BackgroundTasks):
         "start_time": datetime.now(timezone.utc).isoformat(),
         "random_seed": scenario.random_seed,
     }
-    background_tasks.add_task(_execute_run, run_id, scenario.model_dump(mode="json"), request.controller_type, parameters.get("max_steps"))
+    background_tasks.add_task(
+        _execute_run,
+        run_id,
+        scenario.model_dump(mode="json"),
+        request.controller_type,
+        parameters.get("max_steps"),
+    )
     return _active_runs[run_id]
 
 
@@ -170,23 +192,33 @@ async def get_run_trajectories(run_id: str):
     trajectory_path = result_path.parent / "trajectories.jsonl"
     if not trajectory_path.is_file():
         raise HTTPException(status_code=404, detail="Trajectory data not found")
-    return _json_safe([
-        json.loads(line)
-        for line in trajectory_path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ])
+    return _json_safe(
+        [
+            json.loads(line)
+            for line in trajectory_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+    )
 
 
 @runs_router.get("/{run_id}/grid")
 async def get_run_grid_diagnostics(run_id: str):
     trajectories = await get_run_trajectories(run_id)
-    return [{"timestep": item.get("timestep"), "grid_diagnostics": item.get("grid_diagnostics")} for item in trajectories]
+    return [
+        {
+            "timestep": item.get("timestep"),
+            "grid_diagnostics": item.get("grid_diagnostics"),
+        }
+        for item in trajectories
+    ]
 
 
 def _markdown_report(run_id: str) -> str:
     result, _ = _find_run(run_id)
     if result.get("status") != "completed" and "energy" not in result:
-        raise HTTPException(status_code=409, detail="Report is available after the run completes")
+        raise HTTPException(
+            status_code=409, detail="Report is available after the run completes"
+        )
     data = result if "energy" in result else None
     if data is None:
         _, result_path = _find_run(run_id)
@@ -196,41 +228,56 @@ def _markdown_report(run_id: str) -> str:
     service = summary["service_metrics"]
     grid = summary["grid_metrics"]
     sharing = summary["energy_sharing_metrics"]
-    return "\n".join([
-        f"# Simulation Report: {run_id}", "",
-        f"- Scenario: {data.get('scenario_id')}",
-        f"- Controller: {data.get('controller_type')}",
-        f"- Seed: {data.get('random_seed')}",
-        f"- Status: {data.get('status')}",
-        f"- Started: {data.get('start_time')}", "",
-        "## Energy and Cost", "",
-        f"- Total cost: ${energy.get('total_cost', 0):.2f}",
-        f"- Grid import: {energy.get('grid_import_kwh', 0):.2f} kWh",
-        f"- Grid export: {energy.get('grid_export_kwh', 0):.2f} kWh",
-        f"- Peak demand: {energy.get('peak_demand_kw', 0):.2f} kW", "",
-        "## Service", "",
-        f"- EV completion: {service.get('ev_completion_rate', 0):.1%}",
-        f"- Average EV departure SOC: {service.get('avg_ev_soc_at_departure', 0)}",
-        f"- Comfort violations: {service.get('comfort_violation_degree_hours', 0):.2f} degree-hours", "",
-        "## Grid", "",
-        f"- Power-flow convergence: {grid.get('power_flow_convergence_rate', 0):.1%}",
-        f"- Voltage violations: {grid.get('voltage_violations_count', 0)}",
-        f"- Maximum line loading: {grid.get('max_line_loading_pct', 0):.2f}%",
-        f"- Maximum transformer loading: {grid.get('max_transformer_loading_pct', 0):.2f}%", "",
-        "## Energy Sharing Settlement", "",
-        f"- Market: {sharing.get('market_type', 'not enabled')}",
-        f"- Community settlement volume: {sharing.get('total_community_volume_kwh', 0):.2f} kWh",
-        f"- Baseline grid bill: ${sharing.get('baseline_grid_bill', 0):.2f}",
-        f"- Actual grid bill: ${sharing.get('actual_grid_bill', 0):.2f}",
-        f"- Actual total bill: ${sharing.get('actual_total_bill', 0):.2f}",
-        f"- Savings vs. no-sharing baseline: ${sharing.get('total_savings_vs_baseline', 0):.2f}",
-        "", "| Member | Baseline bill | Actual total bill | Savings |", "|---|---:|---:|---:|",
-        *[
-            f"| {member_id} | ${member.get('baseline_grid_bill', 0):.2f} | ${member.get('actual_total_bill', 0):.2f} | ${member.get('settlement_savings', 0):.2f} |"
-            for member_id, member in sharing.get("per_member", {}).items()
-        ], "",
-        "> This report summarizes saved experiment outputs. Metrics marked as placeholders in the evaluation implementation should not be interpreted as validated measurements.", "",
-    ])
+    return "\n".join(
+        [
+            f"# Simulation Report: {run_id}",
+            "",
+            f"- Scenario: {data.get('scenario_id')}",
+            f"- Controller: {data.get('controller_type')}",
+            f"- Seed: {data.get('random_seed')}",
+            f"- Status: {data.get('status')}",
+            f"- Started: {data.get('start_time')}",
+            "",
+            "## Energy and Cost",
+            "",
+            f"- Total cost: ${energy.get('total_cost', 0):.2f}",
+            f"- Grid import: {energy.get('grid_import_kwh', 0):.2f} kWh",
+            f"- Grid export: {energy.get('grid_export_kwh', 0):.2f} kWh",
+            f"- Peak demand: {energy.get('peak_demand_kw', 0):.2f} kW",
+            "",
+            "## Service",
+            "",
+            f"- EV completion: {service.get('ev_completion_rate', 0):.1%}",
+            f"- Average EV departure SOC: {service.get('avg_ev_soc_at_departure', 0)}",
+            f"- Comfort violations: {service.get('comfort_violation_degree_hours', 0):.2f} degree-hours",
+            "",
+            "## Grid",
+            "",
+            f"- Power-flow convergence: {grid.get('power_flow_convergence_rate', 0):.1%}",
+            f"- Voltage violations: {grid.get('voltage_violations_count', 0)}",
+            f"- Maximum line loading: {grid.get('max_line_loading_pct', 0):.2f}%",
+            f"- Maximum transformer loading: {grid.get('max_transformer_loading_pct', 0):.2f}%",
+            "",
+            "## Energy Sharing Settlement",
+            "",
+            f"- Market: {sharing.get('market_type', 'not enabled')}",
+            f"- Community settlement volume: {sharing.get('total_community_volume_kwh', 0):.2f} kWh",
+            f"- Baseline grid bill: ${sharing.get('baseline_grid_bill', 0):.2f}",
+            f"- Actual grid bill: ${sharing.get('actual_grid_bill', 0):.2f}",
+            f"- Actual total bill: ${sharing.get('actual_total_bill', 0):.2f}",
+            f"- Savings vs. no-sharing baseline: ${sharing.get('total_savings_vs_baseline', 0):.2f}",
+            "",
+            "| Member | Baseline bill | Actual total bill | Savings |",
+            "|---|---:|---:|---:|",
+            *[
+                f"| {member_id} | ${member.get('baseline_grid_bill', 0):.2f} | ${member.get('actual_total_bill', 0):.2f} | ${member.get('settlement_savings', 0):.2f} |"
+                for member_id, member in sharing.get("per_member", {}).items()
+            ],
+            "",
+            "> This report summarizes saved experiment outputs. Metrics marked as placeholders in the evaluation implementation should not be interpreted as validated measurements.",
+            "",
+        ]
+    )
 
 
 @reports_router.get("/{run_id}")
@@ -241,7 +288,11 @@ async def get_report(run_id: str):
 @reports_router.get("/{run_id}/download")
 async def download_report(run_id: str, format: Literal["markdown"] = Query("markdown")):
     content = _markdown_report(run_id)
-    return Response(content, media_type="text/markdown; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="report_{run_id}.md"'})
+    return Response(
+        content,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="report_{run_id}.md"'},
+    )
 
 
 @comparison_router.get("")
@@ -249,15 +300,23 @@ async def compare_runs(run_id_a: str, run_id_b: str):
     run_a, _ = _find_run(run_id_a)
     run_b, _ = _find_run(run_id_b)
     if "energy" not in run_a or "energy" not in run_b:
-        raise HTTPException(status_code=409, detail="Both runs must be complete before comparison")
+        raise HTTPException(
+            status_code=409, detail="Both runs must be complete before comparison"
+        )
     summary_a, summary_b = _summary(run_a), _summary(run_b)
-    groups = ("energy_metrics", "service_metrics", "grid_metrics", "energy_sharing_metrics")
+    groups = (
+        "energy_metrics",
+        "service_metrics",
+        "grid_metrics",
+        "energy_sharing_metrics",
+    )
     comparison = {}
     for group in groups:
         keys = set(summary_a[group]) & set(summary_b[group])
         comparison[group] = {
             key: {"run_a": summary_a[group][key], "run_b": summary_b[group][key]}
             for key in keys
-            if isinstance(summary_a[group][key], (int, float)) and isinstance(summary_b[group][key], (int, float))
+            if isinstance(summary_a[group][key], (int, float))
+            and isinstance(summary_b[group][key], (int, float))
         }
     return {"run_a": summary_a, "run_b": summary_b, "metrics_comparison": comparison}

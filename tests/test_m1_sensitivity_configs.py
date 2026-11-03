@@ -1,4 +1,5 @@
 """Tests for M1 cap-sensitivity and no-sharing configs (plan 4.3, 4.4)."""
+
 from experiments.run_experiment import load_scenario
 
 

@@ -99,7 +99,7 @@ def summarize(
         grouped.setdefault((row["scenario"], row["controller"]), []).append(row)
 
     summary: List[Dict[str, Any]] = []
-    for (scenario, controller) in sorted(grouped):
+    for scenario, controller in sorted(grouped):
         runs = grouped[(scenario, controller)]
         record: Dict[str, Any] = {
             "scenario": scenario,
@@ -260,14 +260,18 @@ def plot_seed_strips(summary, metric: str, out_dir: Path) -> List[Path]:
         axis.set_axisbelow(True)
 
     axes_list[0].set_ylabel(metric_label(metric))
-    figure.suptitle(f"{metric_label(metric)}: per-seed values (line = mean)", fontsize=9)
+    figure.suptitle(
+        f"{metric_label(metric)}: per-seed values (line = mean)", fontsize=9
+    )
     figure.tight_layout()
     written = save_figure(figure, out_dir, f"f2_{metric}")
     plt.close(figure)
     return written
 
 
-def pareto_points(summary, cost_metric="total_cost", service_metric="ev_completion_rate"):
+def pareto_points(
+    summary, cost_metric="total_cost", service_metric="ev_completion_rate"
+):
     """Points for F3: mean cost, mean service, mean peak demand per record."""
     points = []
     for record in summary:
@@ -303,13 +307,17 @@ def plot_pareto(summary, out_dir: Path) -> List[Path]:
             continue
         style = style_for(controller)
         for scenario in scenarios:
-            scenario_points = [point for point in subset if point["scenario"] == scenario]
+            scenario_points = [
+                point for point in subset if point["scenario"] == scenario
+            ]
             if not scenario_points:
                 continue
             axis.scatter(
                 [point["cost"] for point in scenario_points],
                 [point["service"] for point in scenario_points],
-                s=[min(max(point["peak"], 1.0) * 2.5, 120) for point in scenario_points],
+                s=[
+                    min(max(point["peak"], 1.0) * 2.5, 120) for point in scenario_points
+                ],
                 marker=markers[controller_index % len(markers)],
                 color=style["color"],
                 alpha=0.85,
@@ -330,8 +338,14 @@ def plot_pareto(summary, out_dir: Path) -> List[Path]:
         if not any(point["controller"] == controller for point in points):
             continue
         style = style_for(controller)
-        axis.scatter([], [], marker=markers[controller_index % len(markers)],
-                     color=style["color"], label=style["label"], s=36)
+        axis.scatter(
+            [],
+            [],
+            marker=markers[controller_index % len(markers)],
+            color=style["color"],
+            label=style["label"],
+            s=36,
+        )
 
     axis.set_xlabel("Total cost (USD, mean)")
     axis.set_ylabel("EV completion rate (mean)")

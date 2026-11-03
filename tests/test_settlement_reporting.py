@@ -1,4 +1,5 @@
 """Regression tests for settlement data flowing into experiment reports."""
+
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -64,7 +65,9 @@ def test_experiment_result_includes_settlement_metrics(monkeypatch):
     monkeypatch.setattr(
         runner_module,
         "compute_per_member_metrics",
-        lambda *args: [PerMemberMetrics(member_id="building_0", building_id="building_0")],
+        lambda *args: [
+            PerMemberMetrics(member_id="building_0", building_id="building_0")
+        ],
     )
     runner = object.__new__(runner_module.ExperimentRunner)
     runner.scenario_config = scenario
@@ -89,7 +92,10 @@ def test_experiment_result_includes_settlement_metrics(monkeypatch):
         "community_settlement_volume",
         "community_actual_bill",
     }
-    assert saved_result["energy_sharing"]["per_member"]["building_0"]["settlement_savings"] == 0.01
+    assert (
+        saved_result["energy_sharing"]["per_member"]["building_0"]["settlement_savings"]
+        == 0.01
+    )
 
 
 def test_markdown_report_shows_community_and_member_settlement(monkeypatch):

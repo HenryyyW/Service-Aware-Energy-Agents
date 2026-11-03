@@ -24,11 +24,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # Paths that may legitimately contain binary or generated-looking files.
 ALLOWLIST_PREFIXES = (
     "frontend/src/assets/",  # application artwork shipped with the UI
-    "frontend/public/",      # static public assets
-    "docs/assets/",          # documentation images
-    "arxiv_submission/",     # arXiv paper source + compiled PDF + figures
+    "frontend/public/",  # static public assets
+    "docs/assets/",  # documentation images
+    "arxiv_submission/",  # arXiv paper source + compiled PDF + figures
     "experiments/reference/",  # curated, small reproducibility fixtures
-    "results/README.md",     # explains why results/ stays empty in git
+    "results/README.md",  # explains why results/ stays empty in git
     "results/.gitkeep",
 )
 
@@ -48,7 +48,15 @@ GENERATED_DIRS = (
 
 # Generated output owns everything under experiments/ except code, docs, configs
 # and the curated reference fixtures.
-EXPERIMENTS_ALLOWED_SUFFIXES = (".py", ".sh", ".md", ".yml", ".yaml", ".toml", ".gitkeep")
+EXPERIMENTS_ALLOWED_SUFFIXES = (
+    ".py",
+    ".sh",
+    ".md",
+    ".yml",
+    ".yaml",
+    ".toml",
+    ".gitkeep",
+)
 
 MAX_TRACKED_FILE_MB = 2.0
 
@@ -78,7 +86,10 @@ def collect_problems(files: list[str]) -> list[str]:
         if is_allowed(path):
             continue
 
-        if any(fnmatch(path, pattern) or fnmatch(name, pattern) for pattern in GENERATED_PATTERNS):
+        if any(
+            fnmatch(path, pattern) or fnmatch(name, pattern)
+            for pattern in GENERATED_PATTERNS
+        ):
             problems.append(f"generated file pattern: {path}")
             continue
 
@@ -87,7 +98,7 @@ def collect_problems(files: list[str]) -> list[str]:
             continue
 
         if path.startswith("experiments/"):
-            relative = path[len("experiments/"):]
+            relative = path[len("experiments/") :]
             if "/" in relative or not relative.endswith(EXPERIMENTS_ALLOWED_SUFFIXES):
                 problems.append(f"generated run output under experiments/: {path}")
                 continue
@@ -96,7 +107,9 @@ def collect_problems(files: list[str]) -> list[str]:
         if absolute.is_file():
             size_mb = absolute.stat().st_size / (1024 * 1024)
             if size_mb > MAX_TRACKED_FILE_MB:
-                problems.append(f"tracked file larger than {MAX_TRACKED_FILE_MB} MB ({size_mb:.1f} MB): {path}")
+                problems.append(
+                    f"tracked file larger than {MAX_TRACKED_FILE_MB} MB ({size_mb:.1f} MB): {path}"
+                )
     return problems
 
 

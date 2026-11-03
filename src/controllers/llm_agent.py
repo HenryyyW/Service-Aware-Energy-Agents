@@ -49,6 +49,7 @@ proposal and repair prompt template hashes, and the sampling temperature/seed,
 both in ``result.json`` (via the controller config) and ``manifest.json`` (via
 the runner).
 """
+
 import asyncio
 import concurrent.futures
 import hashlib
@@ -60,7 +61,12 @@ from typing import Any, Dict, List, Optional, Tuple
 from src.controllers import BaseController
 from src.schemas.action import Action, ActionType, RequestedActions
 from src.schemas.scenario import ScenarioConfig
-from src.agents.backend import AgentBackend, BackendResponse, CostBudget, FallbackBackend
+from src.agents.backend import (
+    AgentBackend,
+    BackendResponse,
+    CostBudget,
+    FallbackBackend,
+)
 from src.agents.backend.config import LLMConfig
 from src.agents.backend.local import ollama_prompt_callable
 from src.agents.backend.api import api_prompt_callable, DEFAULT_API_MODEL
@@ -193,7 +199,10 @@ class LLMAgentController(BaseController):
 
         # Sampling parameters (needed by the env backend wiring below).
         self.sampling_temperature = float(
-            os.environ.get("SAEA_LLM_TEMPERATURE", sampling_temperature if sampling_temperature is not None else 0.0)
+            os.environ.get(
+                "SAEA_LLM_TEMPERATURE",
+                sampling_temperature if sampling_temperature is not None else 0.0,
+            )
         )
         self.sampling_seed = int(
             sampling_seed if sampling_seed is not None else scenario_config.random_seed
@@ -215,7 +224,9 @@ class LLMAgentController(BaseController):
                 "fallback" if isinstance(self._backend, FallbackBackend) else "llm"
             )
         self.prompt_version = PROMPT_VERSION
-        self.prompt_hash = hashlib.sha256(LLM_PROMPT_TEMPLATE.encode("utf-8")).hexdigest()
+        self.prompt_hash = hashlib.sha256(
+            LLM_PROMPT_TEMPLATE.encode("utf-8")
+        ).hexdigest()
         self.repair_prompt_version = REPAIR_PROMPT_VERSION
         self.repair_prompt_hash = hashlib.sha256(
             LLM_REPAIR_PROMPT_TEMPLATE.encode("utf-8")
@@ -264,7 +275,9 @@ class LLMAgentController(BaseController):
         defers to the LLMConfig path.
         """
         raw = ""
-        if self.llm_config is not None and getattr(self.llm_config, "_backend_raw", None):
+        if self.llm_config is not None and getattr(
+            self.llm_config, "_backend_raw", None
+        ):
             raw = str(self.llm_config._backend_raw).strip()
         if not raw:
             raw = os.environ.get("AGENT_BACKEND", "").strip()
@@ -331,7 +344,9 @@ class LLMAgentController(BaseController):
     @property
     def _is_prompt_callable(self) -> bool:
         """True when the backend is a plain ``prompt -> text`` callable."""
-        return callable(self._backend) and not hasattr(self._backend, "generate_actions")
+        return callable(self._backend) and not hasattr(
+            self._backend, "generate_actions"
+        )
 
     def agent_model(self) -> Optional[str]:
         """The model name for the run manifest, when one is configured."""
@@ -343,13 +358,15 @@ class LLMAgentController(BaseController):
         """The Ollama model digest (sha256), when the backend exposes one."""
         return getattr(self._backend, "model_digest", None)
 
-    def _build_prompt_context(self, observations: Dict[str, Any], timestep: int) -> Dict[str, Any]:
+    def _build_prompt_context(
+        self, observations: Dict[str, Any], timestep: int
+    ) -> Dict[str, Any]:
         """Build context for prompt template."""
         assets = self._build_asset_list()
 
         # Grid diagnostics if available
         grid_diag = None
-        if hasattr(self, 'last_grid_diagnostics') and self.last_grid_diagnostics:
+        if hasattr(self, "last_grid_diagnostics") and self.last_grid_diagnostics:
             grid_diag = self.last_grid_diagnostics
 
         return {
@@ -377,15 +394,22 @@ class LLMAgentController(BaseController):
                 f"{bid}_ev_{index}" for index in range(len(meta.get("chargers", [])))
             )
             asset_ids.extend(
-                f"{bid}_flex_{index}" for index in range(len(meta.get("deferrable", [])))
+                f"{bid}_flex_{index}"
+                for index in range(len(meta.get("deferrable", [])))
             )
-            assets.append({
-                "asset_ids": asset_ids,
-                "building": bid,
-                "battery_power_kw": (meta.get("battery") or {}).get("power_kw"),
-                "chargers": [c.get("max_charge_kw") for c in meta.get("chargers", [])],
-                "deferrable": [d.get("power_kw") for d in meta.get("deferrable", [])],
-            })
+            assets.append(
+                {
+                    "asset_ids": asset_ids,
+                    "building": bid,
+                    "battery_power_kw": (meta.get("battery") or {}).get("power_kw"),
+                    "chargers": [
+                        c.get("max_charge_kw") for c in meta.get("chargers", [])
+                    ],
+                    "deferrable": [
+                        d.get("power_kw") for d in meta.get("deferrable", [])
+                    ],
+                }
+            )
         return assets
 
     def _build_text_prompt(
@@ -446,10 +470,14 @@ class LLMAgentController(BaseController):
             except Exception:
                 self.llm_backend_errors += 1
                 return None
-            self._record_tokens({
-                "prompt": getattr(callable_backend, "prompt_tokens", 0) - prompt_tokens_before,
-                "completion": getattr(callable_backend, "completion_tokens", 0) - completion_tokens_before,
-            })
+            self._record_tokens(
+                {
+                    "prompt": getattr(callable_backend, "prompt_tokens", 0)
+                    - prompt_tokens_before,
+                    "completion": getattr(callable_backend, "completion_tokens", 0)
+                    - completion_tokens_before,
+                }
+            )
             if (
                 calls_before is not None
                 and callable_backend.latency_samples_ms
@@ -469,11 +497,13 @@ class LLMAgentController(BaseController):
             )
 
         context: Dict[str, Any] = {
-            "grid_diagnostics": getattr(self, 'last_grid_diagnostics', None),
+            "grid_diagnostics": getattr(self, "last_grid_diagnostics", None),
         }
         if repair_violations:
             context["repair_violations"] = repair_violations
-        budget = self.llm_config.create_cost_budget() if self.llm_config else CostBudget()
+        budget = (
+            self.llm_config.create_cost_budget() if self.llm_config else CostBudget()
+        )
         try:
             # Run async backend call, handling existing event loops
             try:
@@ -544,13 +574,17 @@ class LLMAgentController(BaseController):
     # Decision path
     # ------------------------------------------------------------------
 
-    def get_actions(self, observations: Dict[str, Any], timestep: int) -> RequestedActions:
+    def get_actions(
+        self, observations: Dict[str, Any], timestep: int
+    ) -> RequestedActions:
         self.timestep = timestep
         self.total_steps += 1
         actions: List[Action]
 
         # Check if we have a real LLM backend (not fallback)
-        use_llm = self._backend is not None and not isinstance(self._backend, FallbackBackend)
+        use_llm = self._backend is not None and not isinstance(
+            self._backend, FallbackBackend
+        )
 
         if use_llm:
             proposed, _status = self._propose_via_llm(observations, timestep)
@@ -580,7 +614,9 @@ class LLMAgentController(BaseController):
 
         return self._create_requested_actions(actions)
 
-    def _fallback_actions(self, observations: Dict[str, Any], timestep: int) -> List[Action]:
+    def _fallback_actions(
+        self, observations: Dict[str, Any], timestep: int
+    ) -> List[Action]:
         requested = self._fallback.get_actions(observations, timestep)
         for action in requested.actions:
             action.timestep = timestep
@@ -674,7 +710,9 @@ class LLMVerifiedController(LLMAgentController):
     and the accounting stays comparable.
     """
 
-    def get_actions(self, observations: Dict[str, Any], timestep: int) -> RequestedActions:
+    def get_actions(
+        self, observations: Dict[str, Any], timestep: int
+    ) -> RequestedActions:
         if self._backend is None or isinstance(self._backend, FallbackBackend):
             # Fallback proposals are deterministic and in-bounds; run the same
             # accounting so both variants produce comparable traces.
@@ -691,7 +729,9 @@ class LLMVerifiedController(LLMAgentController):
             return self._create_requested_actions(actions)
         return self._verified_llm_actions(observations, timestep)
 
-    def _verified_llm_actions(self, observations: Dict[str, Any], timestep: int) -> RequestedActions:
+    def _verified_llm_actions(
+        self, observations: Dict[str, Any], timestep: int
+    ) -> RequestedActions:
         """Verified backend path: verify -> one re-prompt -> deterministic replacement."""
         self.timestep = timestep
         self.total_steps += 1
@@ -744,20 +784,24 @@ class LLMVerifiedController(LLMAgentController):
         issues: List[Tuple[str, str]] = []
         for action in actions:
             if not self._asset_known(action.asset_id):
-                issues.append((
-                    "action_shape",
-                    f"{action.asset_id}: not a known asset of this community",
-                ))
+                issues.append(
+                    (
+                        "action_shape",
+                        f"{action.asset_id}: not a known asset of this community",
+                    )
+                )
                 continue
             limit = self._asset_power_limit(action.asset_id)
             if limit is not None and abs(action.value_kw) > limit + 1e-9:
-                issues.append((
-                    "bound_violation",
+                issues.append(
                     (
-                        f"{action.asset_id}: |{action.value_kw:.3f}| kW exceeds "
-                        f"the device power limit of {limit:.3f} kW"
-                    ),
-                ))
+                        "bound_violation",
+                        (
+                            f"{action.asset_id}: |{action.value_kw:.3f}| kW exceeds "
+                            f"the device power limit of {limit:.3f} kW"
+                        ),
+                    )
+                )
         return issues
 
     def _asset_known(self, asset_id: str) -> bool:

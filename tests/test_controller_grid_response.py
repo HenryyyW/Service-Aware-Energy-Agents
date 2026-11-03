@@ -2,6 +2,7 @@
 
 Validates Phase 3 M3.1: controllers respond to pandapower violations with hard overrides.
 """
+
 from typing import Any, Dict, List
 import pytest
 
@@ -48,7 +49,7 @@ def _scenario() -> ScenarioConfig:
                     efficiency_discharge=0.95,
                     soc_min=0.1,
                     soc_max=0.9,
-                    initial_soc=0.5
+                    initial_soc=0.5,
                 ),
                 evs=[
                     EVConfig(
@@ -59,7 +60,7 @@ def _scenario() -> ScenarioConfig:
                         target_soc=0.8,
                         arrival_time="18:00",
                         departure_time="07:00",
-                        connected_days=[0, 1, 2, 3, 4, 5, 6]
+                        connected_days=[0, 1, 2, 3, 4, 5, 6],
                     )
                 ],
                 flexible_loads=[
@@ -68,14 +69,14 @@ def _scenario() -> ScenarioConfig:
                         energy_kwh=6.0,
                         earliest_start="20:00",
                         latest_end="06:00",
-                        duration_hours=2.0
+                        duration_hours=2.0,
                     )
                 ],
                 tariff=TariffConfig(
                     type="time_of_use",
                     import_prices={"off_peak": 0.08, "mid_peak": 0.12, "on_peak": 0.20},
                     export_prices={"off_peak": 0.03, "mid_peak": 0.05, "on_peak": 0.08},
-                    demand_charge=5.0
+                    demand_charge=5.0,
                 ),
             )
         ],
@@ -107,7 +108,12 @@ def _voltage_violation_diagnostics() -> Dict[str, Any]:
     return {
         "diagnostics": [
             {"category": "voltage", "severity": "violation", "bus": 2, "value": 1.06},
-            {"category": "line_loading", "severity": "normal", "line": 1, "value": 80.0},
+            {
+                "category": "line_loading",
+                "severity": "normal",
+                "line": 1,
+                "value": 80.0,
+            },
         ]
     }
 
@@ -116,7 +122,12 @@ def _line_loading_violation_diagnostics() -> Dict[str, Any]:
     return {
         "diagnostics": [
             {"category": "voltage", "severity": "normal", "bus": 1, "value": 1.02},
-            {"category": "line_loading", "severity": "violation", "line": 2, "value": 110.0},
+            {
+                "category": "line_loading",
+                "severity": "violation",
+                "line": 2,
+                "value": 110.0,
+            },
         ]
     }
 
@@ -124,7 +135,12 @@ def _line_loading_violation_diagnostics() -> Dict[str, Any]:
 def _transformer_violation_diagnostics() -> Dict[str, Any]:
     return {
         "diagnostics": [
-            {"category": "transformer_loading", "severity": "violation", "transformer": 1, "value": 105.0},
+            {
+                "category": "transformer_loading",
+                "severity": "violation",
+                "transformer": 1,
+                "value": 105.0,
+            },
         ]
     }
 
@@ -133,7 +149,12 @@ def _no_violation_diagnostics() -> Dict[str, Any]:
     return {
         "diagnostics": [
             {"category": "voltage", "severity": "normal", "bus": 1, "value": 1.01},
-            {"category": "line_loading", "severity": "normal", "line": 1, "value": 70.0},
+            {
+                "category": "line_loading",
+                "severity": "normal",
+                "line": 1,
+                "value": 70.0,
+            },
         ]
     }
 
@@ -141,7 +162,9 @@ def _no_violation_diagnostics() -> Dict[str, Any]:
 def _make_battery_action(value_kw: float) -> Action:
     return Action(
         asset_id="b1_battery",
-        action_type=ActionType.BATTERY_CHARGE if value_kw > 0 else ActionType.BATTERY_DISCHARGE,
+        action_type=(
+            ActionType.BATTERY_CHARGE if value_kw > 0 else ActionType.BATTERY_DISCHARGE
+        ),
         value_kw=abs(value_kw),
         timestep=0,
     )
@@ -168,8 +191,12 @@ def _make_flex_action(value_kw: float) -> Action:
 def _has_controllable_actions(actions: RequestedActions) -> bool:
     """Check if actions include battery, EV, or flexible load."""
     for a in actions.actions:
-        if a.action_type in (ActionType.BATTERY_CHARGE, ActionType.BATTERY_DISCHARGE,
-                             ActionType.EV_CHARGE, ActionType.FLEXIBLE_LOAD):
+        if a.action_type in (
+            ActionType.BATTERY_CHARGE,
+            ActionType.BATTERY_DISCHARGE,
+            ActionType.EV_CHARGE,
+            ActionType.FLEXIBLE_LOAD,
+        ):
             return True
     return False
 
@@ -180,25 +207,28 @@ class TestRuleBasedControllerGridResponse:
     def test_no_violation_no_scaling(self):
         controller = RuleBasedController(_scenario())
         controller.update_grid_diagnostics(_no_violation_diagnostics())
-        
+
         actions = controller.get_actions(_observations(), 0)
-        
+
         # Should have controllable actions
         assert _has_controllable_actions(actions)
 
     def test_voltage_violation_scales_down(self):
         controller = RuleBasedController(_scenario())
         controller.update_grid_diagnostics(_voltage_violation_diagnostics())
-        
+
         actions = controller.get_actions(_observations(), 0)
-        
+
         # Find battery action
         battery_action = None
         for a in actions.actions:
-            if a.action_type in (ActionType.BATTERY_CHARGE, ActionType.BATTERY_DISCHARGE):
+            if a.action_type in (
+                ActionType.BATTERY_CHARGE,
+                ActionType.BATTERY_DISCHARGE,
+            ):
                 battery_action = a
                 break
-        
+
         assert battery_action is not None
         # Should be scaled by 0.85
         # Original would be ~5kW charge from excess PV, scaled to ~4.25
@@ -208,22 +238,25 @@ class TestRuleBasedControllerGridResponse:
     def test_line_loading_violation_scales_more(self):
         controller = RuleBasedController(_scenario())
         controller.update_grid_diagnostics(_line_loading_violation_diagnostics())
-        
+
         actions = controller.get_actions(_observations(), 0)
-        
+
         # Line loading violation uses 0.8 scale (more aggressive)
         battery_action = None
         for a in actions.actions:
-            if a.action_type in (ActionType.BATTERY_CHARGE, ActionType.BATTERY_DISCHARGE):
+            if a.action_type in (
+                ActionType.BATTERY_CHARGE,
+                ActionType.BATTERY_DISCHARGE,
+            ):
                 battery_action = a
                 break
-        
+
         assert battery_action is not None
 
     def test_transformer_violation_scales(self):
         controller = RuleBasedController(_scenario())
         controller.update_grid_diagnostics(_transformer_violation_diagnostics())
-        
+
         actions = controller.get_actions(_observations(), 0)
         assert _has_controllable_actions(actions)
 
@@ -234,28 +267,28 @@ class TestCentralizedControllerGridResponse:
     def test_no_violation_no_scaling(self):
         controller = CentralizedController(_scenario())
         controller.update_grid_diagnostics(_no_violation_diagnostics())
-        
+
         actions = controller.get_actions(_observations(), 0)
         assert _has_controllable_actions(actions)
 
     def test_voltage_violation_scales(self):
         controller = CentralizedController(_scenario())
         controller.update_grid_diagnostics(_voltage_violation_diagnostics())
-        
+
         actions = controller.get_actions(_observations(), 0)
         assert _has_controllable_actions(actions)
 
     def test_line_loading_violation_scales(self):
         controller = CentralizedController(_scenario())
         controller.update_grid_diagnostics(_line_loading_violation_diagnostics())
-        
+
         actions = controller.get_actions(_observations(), 0)
         assert _has_controllable_actions(actions)
 
     def test_transformer_violation_scales(self):
         controller = CentralizedController(_scenario())
         controller.update_grid_diagnostics(_transformer_violation_diagnostics())
-        
+
         actions = controller.get_actions(_observations(), 0)
         assert _has_controllable_actions(actions)
 
@@ -266,28 +299,28 @@ class TestMultiAgentControllerGridResponse:
     def test_no_violation_no_scaling(self):
         controller = MultiAgentController(_scenario())
         controller.update_grid_diagnostics(_no_violation_diagnostics())
-        
+
         actions = controller.get_actions(_observations(), 0)
         assert _has_controllable_actions(actions)
 
     def test_voltage_violation_scales(self):
         controller = MultiAgentController(_scenario())
         controller.update_grid_diagnostics(_voltage_violation_diagnostics())
-        
+
         actions = controller.get_actions(_observations(), 0)
         assert _has_controllable_actions(actions)
 
     def test_line_loading_violation_scales(self):
         controller = MultiAgentController(_scenario())
         controller.update_grid_diagnostics(_line_loading_violation_diagnostics())
-        
+
         actions = controller.get_actions(_observations(), 0)
         assert _has_controllable_actions(actions)
 
     def test_transformer_violation_scales(self):
         controller = MultiAgentController(_scenario())
         controller.update_grid_diagnostics(_transformer_violation_diagnostics())
-        
+
         actions = controller.get_actions(_observations(), 0)
         assert _has_controllable_actions(actions)
 
@@ -298,7 +331,7 @@ class TestMPCControllerGridResponse:
     def test_no_violation_no_scaling(self):
         controller = MPCController(_scenario(), device_metadata=_metadata())
         controller.update_grid_diagnostics(_no_violation_diagnostics())
-        
+
         actions = controller.get_actions(_observations(), 0)
         # MPC may fall back to rule-based if no metadata properly set
         # Just verify it runs without error
@@ -307,14 +340,14 @@ class TestMPCControllerGridResponse:
     def test_voltage_violation_constrains_lp(self):
         controller = MPCController(_scenario(), device_metadata=_metadata())
         controller.update_grid_diagnostics(_voltage_violation_diagnostics())
-        
+
         actions = controller.get_actions(_observations(), 0)
         assert isinstance(actions, RequestedActions)
 
     def test_line_loading_violation_constrains_lp(self):
         controller = MPCController(_scenario(), device_metadata=_metadata())
         controller.update_grid_diagnostics(_line_loading_violation_diagnostics())
-        
+
         actions = controller.get_actions(_observations(), 0)
         assert isinstance(actions, RequestedActions)
 
@@ -325,10 +358,10 @@ class TestLLMAgentReceivesGridDiagnostics:
     def test_llm_agent_gets_diagnostics(self):
         scenario = _scenario()
         controller = LLMAgentController(scenario, device_metadata=_metadata())
-        
+
         # Update with violation diagnostics
         controller.update_grid_diagnostics(_voltage_violation_diagnostics())
-        
+
         # The controller should have the diagnostics stored
         assert controller.last_grid_diagnostics is not None
         assert "diagnostics" in controller.last_grid_diagnostics

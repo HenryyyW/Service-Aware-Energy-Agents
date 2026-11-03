@@ -9,17 +9,17 @@ from src.controllers import RuleBasedController
 
 class FallbackBackend(AgentBackend):
     """Deterministic rule-based fallback when no LLM available.
-    
+
     Uses the existing RuleBasedController logic internally to provide
     deterministic, zero-cost actions when no LLM backend is available.
     """
-    
+
     backend_id = "fallback"
     supports_streaming = False
-    
+
     def __init__(self):
         self._controller_cache: Dict[str, RuleBasedController] = {}
-    
+
     async def generate_actions(
         self,
         scenario: ScenarioConfig,
@@ -33,21 +33,21 @@ class FallbackBackend(AgentBackend):
         scenario_key = scenario.scenario_id
         if scenario_key not in self._controller_cache:
             self._controller_cache[scenario_key] = RuleBasedController(scenario)
-        
+
         controller = self._controller_cache[scenario_key]
-        
+
         # Pass grid diagnostics if available for re-dispatch
         if context and "grid_diagnostics" in context:
             controller.update_grid_diagnostics(context["grid_diagnostics"])
-        
+
         requested = controller.get_actions(observations, timestep)
-        
+
         # Convert to our action format
         actions = []
         for action in requested.actions:
             # Action is already in the right format
             actions.append(action)
-        
+
         return BackendResponse(
             actions=actions,
             raw_output="fallback",
@@ -55,13 +55,13 @@ class FallbackBackend(AgentBackend):
             token_usage={"prompt": 0, "completion": 0, "total": 0},
             latency_ms=0.0,
             cost_usd=0.0,
-            metadata={"backend": "fallback", "controller": "RuleBasedController"}
+            metadata={"backend": "fallback", "controller": "RuleBasedController"},
         )
-    
+
     async def health_check(self) -> bool:
         """Fallback is always healthy."""
         return True
-    
+
     def estimate_cost(self, prompt_tokens: int, max_completion_tokens: int) -> float:
         """Fallback has zero cost."""
         return 0.0

@@ -9,7 +9,8 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "serve": "vite preview --port 4173 --host 0.0.0.0",
     "lighthouse": "lhci autorun --fail-on-budget",
-    "axe": "axe --dir dist --exit"
+    "axe": "axe --dir dist --exit",
+    "i18n:check": "node scripts/check-i18n.mjs"
   },
   "dependencies": {
     "@deck.gl/core": "^9.4.1",

@@ -4,6 +4,7 @@ The figures are generated artifacts, so these tests check the data assembly
 (aggregation, ordering, Pareto points) and that a synthetic benchmark directory
 renders end-to-end. They do not compare pixel output.
 """
+
 import json
 
 import pytest
@@ -115,7 +116,11 @@ def test_make_figures_renders_all_panels(tmp_path):
     assert len(written["f1"]) == 4  # 2 metrics x (png + pdf)
     assert len(written["f2"]) == 4
     assert len(written["f3"]) == 2
-    assert all(path.exists() and path.stat().st_size > 0 for paths in written.values() for path in paths)
+    assert all(
+        path.exists() and path.stat().st_size > 0
+        for paths in written.values()
+        for path in paths
+    )
 
 
 def test_extract_run_metrics_reports_scenario_e_covariate():
@@ -130,9 +135,7 @@ def test_extract_run_metrics_reports_scenario_e_covariate():
             "members_interrupted": ["m3"],
         },
     }
-    metrics = extract_run_metrics(
-        result_data, "scenario_e", "rule_based", 42, 12.34
-    )
+    metrics = extract_run_metrics(result_data, "scenario_e", "rule_based", 42, 12.34)
 
     assert metrics["members_interrupted_count"] == 1
     assert metrics["member_cost_coverage"] == pytest.approx(0.75)

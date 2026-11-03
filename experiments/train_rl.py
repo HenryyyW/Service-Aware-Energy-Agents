@@ -71,25 +71,33 @@ def _build_actions(
         battery = meta.get("battery") or {}
         power_kw = float(battery.get("power_kw") or 0.0)
         if power_kw > 0.0 and abs(battery_level) > 1e-6:
-            action_type = ActionType.BATTERY_CHARGE if battery_level > 0 else ActionType.BATTERY_DISCHARGE
-            actions.append(Action(
-                asset_id=f"{building_id}_electrical_storage",
-                action_type=action_type,
-                value_kw=float(battery_level) * power_kw,
-                timestep=timestep,
-            ))
+            action_type = (
+                ActionType.BATTERY_CHARGE
+                if battery_level > 0
+                else ActionType.BATTERY_DISCHARGE
+            )
+            actions.append(
+                Action(
+                    asset_id=f"{building_id}_electrical_storage",
+                    action_type=action_type,
+                    value_kw=float(battery_level) * power_kw,
+                    timestep=timestep,
+                )
+            )
         if observations.get(f"{building_id}_ev_0_connected") and ev_level > 1e-6:
             chargers = meta.get("chargers") or []
             max_charge_kw = max(
                 (float(c.get("max_charge_kw") or 0.0) for c in chargers), default=0.0
             )
             if max_charge_kw > 0.0:
-                actions.append(Action(
-                    asset_id=f"{building_id}_electric_vehicle_storage",
-                    action_type=ActionType.EV_CHARGE,
-                    value_kw=float(ev_level) * max_charge_kw,
-                    timestep=timestep,
-                ))
+                actions.append(
+                    Action(
+                        asset_id=f"{building_id}_electric_vehicle_storage",
+                        action_type=ActionType.EV_CHARGE,
+                        value_kw=float(ev_level) * max_charge_kw,
+                        timestep=timestep,
+                    )
+                )
     return RequestedActions(timestep=timestep, actions=actions)
 
 
@@ -144,7 +152,9 @@ def train(
     episode_returns: List[float] = []
 
     for episode in range(episodes):
-        epsilon = epsilon_start + (epsilon_end - epsilon_start) * episode / max(1, episodes - 1)
+        epsilon = epsilon_start + (epsilon_end - epsilon_start) * episode / max(
+            1, episodes - 1
+        )
         observations = adapter.reset(seed)
         total_reward = 0.0
         terminated = False
@@ -157,7 +167,9 @@ def train(
             else:
                 action_index = int(np.argmax(values))
 
-            actions = _build_actions(observations, building_ids, action_index, step, metadata)
+            actions = _build_actions(
+                observations, building_ids, action_index, step, metadata
+            )
             next_observations, result = adapter.step(actions)
             reward = _reward(next_observations, building_ids, dt)
             total_reward += reward
@@ -200,7 +212,9 @@ def train(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Train the tabular Q-learning baseline")
+    parser = argparse.ArgumentParser(
+        description="Train the tabular Q-learning baseline"
+    )
     parser.add_argument("--config", required=True, help="Scenario YAML")
     parser.add_argument("--out", required=True, help="Output policy JSON")
     parser.add_argument("--episodes", type=int, default=40)

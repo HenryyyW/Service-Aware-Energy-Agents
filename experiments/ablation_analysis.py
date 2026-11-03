@@ -70,9 +70,7 @@ def parse_run_id(run_id: str) -> Optional[Dict[str, Any]]:
 
 def iter_run_dirs(directory: Path) -> List[Path]:
     """Run directories containing a result.json, deterministically ordered."""
-    return sorted(
-        path.parent for path in Path(directory).rglob("result.json")
-    )
+    return sorted(path.parent for path in Path(directory).rglob("result.json"))
 
 
 def _duration_seconds(result: Dict[str, Any]) -> Optional[float]:
@@ -80,7 +78,9 @@ def _duration_seconds(result: Dict[str, Any]) -> Optional[float]:
     if not start or not end:
         return None
     try:
-        return (datetime.fromisoformat(end) - datetime.fromisoformat(start)).total_seconds()
+        return (
+            datetime.fromisoformat(end) - datetime.fromisoformat(start)
+        ).total_seconds()
     except (TypeError, ValueError):
         return None
 
@@ -173,9 +173,11 @@ def agent_execution_rows(rows: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]
         grouped.setdefault((row["scenario"], row["controller"]), []).append(row)
 
     summary: List[Dict[str, Any]] = []
-    for (scenario, controller) in sorted(grouped):
+    for scenario, controller in sorted(grouped):
         runs = grouped[(scenario, controller)]
-        backends = sorted({str(row["agent_backend"]) for row in runs if row["agent_backend"]})
+        backends = sorted(
+            {str(row["agent_backend"]) for row in runs if row["agent_backend"]}
+        )
         repairs = _mean(row.get("repair_iterations") for row in runs)
         steps = _mean(row.get("total_steps") for row in runs)
         summary.append(
@@ -194,7 +196,9 @@ def agent_execution_rows(rows: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]
                 "verification_failures": _mean(
                     _failures_total(row.get("verification_failures")) for row in runs
                 ),
-                "unparseable_outputs": _mean(row.get("unparseable_outputs") for row in runs),
+                "unparseable_outputs": _mean(
+                    row.get("unparseable_outputs") for row in runs
+                ),
                 "wall_seconds": _mean(row.get("wall_seconds") for row in runs),
             }
         )
@@ -283,7 +287,9 @@ def repro_report(directory: Path) -> Dict[str, Any]:
         "runs_with_manifest": manifests_seen,
         "git_commits": sorted(commits),
         "git_dirty_values": sorted(dirty),
-        "config_hashes": {scenario: sorted(values) for scenario, values in sorted(hashes.items())},
+        "config_hashes": {
+            scenario: sorted(values) for scenario, values in sorted(hashes.items())
+        },
         "run_counts": dict(sorted(run_counts.items())),
         "python_versions": sorted(pythons),
         "agent_backend_counts": backends,
@@ -365,7 +371,8 @@ def run_ablation(
     reference_rows: List[Dict[str, Any]] = []
     if reference_input is not None:
         reference_rows = [
-            row for row in load_ablation_rows(Path(reference_input))
+            row
+            for row in load_ablation_rows(Path(reference_input))
             if row.get("controller") == reference
         ]
 
@@ -377,11 +384,15 @@ def run_ablation(
     # UTF-8 explicitly: the tables contain ± and — and the default locale
     # encoding on Windows (cp936/cp1252) mangles them for reviewers.
     (out_dir / "ablation_kpis.md").write_text(kpi_markdown, encoding="utf-8")
-    (out_dir / "ablation_agent_execution.md").write_text(agent_markdown, encoding="utf-8")
+    (out_dir / "ablation_agent_execution.md").write_text(
+        agent_markdown, encoding="utf-8"
+    )
 
     payload = {
         "reference": reference,
-        "reference_input": str(reference_input) if reference_input is not None else None,
+        "reference_input": (
+            str(reference_input) if reference_input is not None else None
+        ),
         "metrics": metrics,
         "per_run": rows,
         "reference_runs": len(reference_rows),
@@ -418,7 +429,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--reference-input",
         default=None,
         help="Directory holding the reference controller's runs (e.g. the matrix), "
-             "when the reference is not part of the ablation sweep.",
+        "when the reference is not part of the ablation sweep.",
     )
 
     repro = sub.add_parser("repro", help="T5 reproducibility sweep")
@@ -433,7 +444,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         payload = run_ablation(
             Path(args.input), out_dir, args.reference, reference_input
         )
-        print(f"wrote {out_dir}/ablation_kpis.md, ablation_agent_execution.md, ablation_stats.json")
+        print(
+            f"wrote {out_dir}/ablation_kpis.md, ablation_agent_execution.md, ablation_stats.json"
+        )
         print(
             f"runs: {len(payload['per_run'])} ablation + "
             f"{payload['reference_runs']} {args.reference} reference"

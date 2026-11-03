@@ -1,4 +1,5 @@
 """Role definitions for the code-agent workflow."""
+
 from enum import Enum
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
@@ -16,6 +17,7 @@ class AgentRole(str, Enum):
 
 class Message(BaseModel):
     """Inter-agent message."""
+
     role: AgentRole
     content: str
     metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -25,6 +27,7 @@ class Message(BaseModel):
 @dataclass
 class AgentState:
     """Shared state between agents."""
+
     experiment_result: Any = None
     diagnostic_reports: List[Any] = field(default_factory=list)
     controller_code: str = ""
@@ -40,13 +43,18 @@ class AgentState:
     iteration: int = 0
     max_iterations: int = 3
     messages: List[Message] = field(default_factory=list)
-    
-    def add_message(self, role: AgentRole, content: str, metadata: Dict[str, Any] = None):
-        self.messages.append(Message(role=role, content=content, metadata=metadata or {}))
+
+    def add_message(
+        self, role: AgentRole, content: str, metadata: Dict[str, Any] = None
+    ):
+        self.messages.append(
+            Message(role=role, content=content, metadata=metadata or {})
+        )
 
 
 class PlannerOutput(BaseModel):
     """Output from the Planner agent."""
+
     primary_issue: str
     secondary_issues: List[str] = Field(default_factory=list)
     root_cause_analysis: str
@@ -58,6 +66,7 @@ class PlannerOutput(BaseModel):
 
 class CoderOutput(BaseModel):
     """Output from the Coder agent."""
+
     code_changes: List[Dict[str, Any]] = Field(default_factory=list)
     patched_code: str = ""
     diff: str = ""
@@ -66,6 +75,7 @@ class CoderOutput(BaseModel):
 
 class ExecutorOutput(BaseModel):
     """Output from the Executor agent."""
+
     success: bool
     stdout: str = ""
     stderr: str = ""
@@ -76,6 +86,7 @@ class ExecutorOutput(BaseModel):
 
 class VerifierOutput(BaseModel):
     """Output from the Verifier agent."""
+
     violations_resolved: bool
     remaining_violations: List[Dict[str, Any]] = Field(default_factory=list)
     new_violations: List[Dict[str, Any]] = Field(default_factory=list)
@@ -86,6 +97,7 @@ class VerifierOutput(BaseModel):
 
 class ReporterOutput(BaseModel):
     """Output from the Reporter agent."""
+
     summary: str
     detailed_report: Dict[str, Any] = Field(default_factory=dict)
     artifacts: List[str] = Field(default_factory=list)

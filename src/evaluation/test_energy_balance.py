@@ -8,6 +8,7 @@ non‑shiftable load minus solar generation (within a small tolerance).
 This confirms that the 60‑minute dataset resolution is correctly respected
 and that observation / action / energy units are consistent.
 """
+
 import sys
 from pathlib import Path
 
@@ -44,12 +45,9 @@ def test_energy_balance():
                 atype = ActionType.EV_CHARGE
             else:
                 atype = ActionType.FLEXIBLE_LOAD
-            zero_actions.actions.append(Action(
-                asset_id=asset_id,
-                action_type=atype,
-                value_kw=0.0,
-                timestep=0
-            ))
+            zero_actions.actions.append(
+                Action(asset_id=asset_id, action_type=atype, value_kw=0.0, timestep=0)
+            )
 
     residuals = {}
     # Step twice
@@ -71,12 +69,15 @@ def test_energy_balance():
                 # Store residual for this building at this step
                 residuals.setdefault(bid, []).append(residual)
                 # Basic sanity: values should be numeric and not NaN
-                assert not (residual != residual), f"NaN residual for {bid} at step {step}"
+                assert not (
+                    residual != residual
+                ), f"NaN residual for {bid} at step {step}"
     # Verify residuals stay within plausible bounds each step
     for bid, res_list in residuals.items():
         for step, residual in enumerate(res_list):
-            assert -20.0 <= residual <= 20.0, \
-                f"Residual for {bid} at step {step} out of bounds: {residual:.3f} kW (expected -20..20 kW)"
+            assert (
+                -20.0 <= residual <= 20.0
+            ), f"Residual for {bid} at step {step} out of bounds: {residual:.3f} kW (expected -20..20 kW)"
     print("[OK] Energy-balance test passed for 2 steps (60-min resolution).")
     adapter.close()
 
