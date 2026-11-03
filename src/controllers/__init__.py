@@ -5,7 +5,13 @@ from typing import Optional, List, Dict, Any
 import numpy as np
 
 from src.schemas.action import RequestedActions, Action, ActionType, ControllerOutput
-from src.schemas.scenario import ScenarioConfig, BuildingConfig, EVConfig, BatteryConfig, FlexibleLoadConfig
+from src.schemas.scenario import (
+    ScenarioConfig,
+    BuildingConfig,
+    EVConfig,
+    BatteryConfig,
+    FlexibleLoadConfig,
+)
 
 
 class BaseController(ABC):

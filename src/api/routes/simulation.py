@@ -76,7 +76,9 @@ async def step_simulation(scenario_id: str, request: StepRequest) -> Dict[str, A
             )
         )
 
-    requested_actions = RequestedActions(actions=actions, timestep=request.timestep or 0)
+    requested_actions = RequestedActions(
+        actions=actions, timestep=request.timestep or 0
+    )
     result = coupler.step(requested_actions)
 
     # Get current observations

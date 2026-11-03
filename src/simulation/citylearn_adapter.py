@@ -59,7 +59,9 @@ class CityLearnAdapter:
         self.observation_names: List[str] = []
         self.action_names: List[str] = []  # All action names from schema
         self.active_action_names: List[str] = []  # Only active actions globally
-        self.building_actions: Dict[str, List[Tuple[str, int]]] = {}  # Active actions per building
+        self.building_actions: Dict[str, List[Tuple[str, int]]] = (
+            {}
+        )  # Active actions per building
         self.device_metadata: Dict[str, Dict[str, Any]] = {}
         self.episode_step = 0
         self.observation_history: List[Dict[str, Any]] = []
@@ -1146,7 +1148,9 @@ class CityLearnAdapter:
                                 else f"{bid}_{action_name}_{device_index}"
                             )
                             # Try to get the action_type from the requested actions for this asset_id
-                            action_obj = requested.get_action(asset_id, ActionType.BATTERY_CHARGE)
+                            action_obj = requested.get_action(
+                                asset_id, ActionType.BATTERY_CHARGE
+                            )
                             action_type = (
                                 action_obj.action_type
                                 if action_obj is not None
@@ -1193,7 +1197,9 @@ class CityLearnAdapter:
                                 else f"{bid}_{action_name}_{device_index}"
                             )
                             # Try to get the action_type from the requested actions for this asset_id
-                            action_obj = requested.get_action(asset_id, ActionType.BATTERY_CHARGE)
+                            action_obj = requested.get_action(
+                                asset_id, ActionType.BATTERY_CHARGE
+                            )
                             action_type = (
                                 action_obj.action_type
                                 if action_obj is not None

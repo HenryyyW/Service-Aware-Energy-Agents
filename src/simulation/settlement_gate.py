@@ -132,7 +132,11 @@ class SettlementLedgerGate:
         return all(r.status == GateStatus.PASSED for r in results)
 
     def _gate(
-        self, name: str, condition: bool, message: str, details: Optional[Dict[str, Any]] = None
+        self,
+        name: str,
+        condition: bool,
+        message: str,
+        details: Optional[Dict[str, Any]] = None,
     ) -> GateResult:
         """Create a gate result."""
         if condition:

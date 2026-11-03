@@ -985,5 +985,7 @@ def validate_controller_in_sandbox(
             return syntax_result
 
         # Run quick experiment
-        result: SandboxResult = sandbox.run_experiment(scenario_config, controller_file, max_steps)
+        result: SandboxResult = sandbox.run_experiment(
+            scenario_config, controller_file, max_steps
+        )
         return result

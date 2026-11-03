@@ -169,13 +169,13 @@ async def get_scenario_buildings(scenario_id: str) -> List[Dict[str, Any]]:
         ):
             net = _couplers[scenario_id].pandapower.net
             assert net is not None
-            bus_name = net.bus.at[
-                bus_mapping.bus_idx, "name"
-            ]
+            bus_name = net.bus.at[bus_mapping.bus_idx, "name"]
 
         # Get bus coordinates if available
         location = None
-        pandapower = _couplers[scenario_id].pandapower if scenario_id in _couplers else None
+        pandapower = (
+            _couplers[scenario_id].pandapower if scenario_id in _couplers else None
+        )
         if (
             bus_name
             and bus_name in bus_coords

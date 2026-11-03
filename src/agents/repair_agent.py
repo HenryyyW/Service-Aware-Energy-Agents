@@ -291,7 +291,8 @@ class RepairAgent:
         }
 
         strategy["approach"] = approaches.get(
-            strategy["primary_issue"] or "none", "General optimization of controller parameters"
+            strategy["primary_issue"] or "none",
+            "General optimization of controller parameters",
         )
 
         return strategy
