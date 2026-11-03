@@ -15,11 +15,16 @@ fail() { log "FAIL: $*"; exit 1; }
 # Cleanup on exit
 cleanup() {
     log "Cleaning up..."
+    # Dump container logs so CI shows why the API crashed
+    if [ "${SMOKE_STARTED:-0}" = "1" ]; then
+        docker compose -f "$COMPOSE_FILE" logs --tail 40 api frontend db redis 2>/dev/null || true
+    fi
     docker compose -f "$COMPOSE_FILE" down -v --remove-orphans 2>/dev/null || true
 }
 trap cleanup EXIT
 
 log "Starting docker compose..."
+SMOKE_STARTED=1
 # Use pre-built tagged images (CI pulls sea-backend:latest / sea-frontend:latest
 # before calling this script). --build would rebuild in-job and blow the timeout.
 docker compose -f "$COMPOSE_FILE" up -d --no-build db redis api frontend
