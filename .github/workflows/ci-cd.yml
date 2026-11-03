@@ -173,7 +173,22 @@ jobs:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
 
       - name: Run axe-core accessibility checks
-        run: npm run axe
+        run: |
+          # Start preview server in background
+          npm run serve &
+          PREVIEW_PID=$!
+          # Wait for server to be ready
+          for i in {1..30}; do
+            if curl -sf http://localhost:4173 >/dev/null 2>&1; then
+              echo "Preview server ready"
+              break
+            fi
+            sleep 1
+          done
+          # Run axe-core
+          npx axe http://localhost:4173 --exit
+          # Kill preview server
+          kill $PREVIEW_PID 2>/dev/null || true
         working-directory: frontend
 
   # ============================================================

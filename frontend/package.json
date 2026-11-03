@@ -9,7 +9,7 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives",
     "serve": "vite preview --port 4173 --host 0.0.0.0",
     "lighthouse": "lhci autorun --fail-on-budget",
-    "axe": "axe --dir dist --exit",
+    "axe": "axe http://localhost:4173 --exit",
     "i18n:check": "node scripts/check-i18n.mjs"
   },
   "dependencies": {
