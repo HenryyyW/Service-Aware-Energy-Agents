@@ -73,7 +73,7 @@ class OllamaBackend(AgentBackend):
         # Build prompt using template
         from src.agents.backend.prompts import PROMPT_REGISTRY
 
-        prompt_template = PROMPT_REGISTRY.get(self.prompt_template_id)
+        prompt_template = PROMPT_REGISTRY.get(self.prompt_template_id or "")
         if not prompt_template:
             raise ValueError(f"Prompt template {self.prompt_template_id} not found")
 
@@ -84,9 +84,10 @@ class OllamaBackend(AgentBackend):
         user_prompt = prompt_template.render(**prompt_context)
 
         # Prepare request
-        payload = {
+        prompt_str = f"{prompt_template.system_prompt or ''}\n\n{user_prompt}"
+        payload: Dict[str, Any] = {
             "model": self.model,
-            "prompt": f"{prompt_template.system_prompt}\n\n{user_prompt}",
+            "prompt": prompt_str,
             "stream": False,
             "options": {
                 "temperature": 0.2,
@@ -106,7 +107,7 @@ class OllamaBackend(AgentBackend):
                     )
 
                 result = await response.json()
-                raw_output = result.get("response", "")
+                raw_output: str = result.get("response", "") or ""
 
         except Exception as e:
             raise RuntimeError(f"Local LLM request failed: {e}")
@@ -193,7 +194,7 @@ class OllamaBackend(AgentBackend):
         """Get hash of current prompt template."""
         from src.agents.backend.prompts import PROMPT_REGISTRY
 
-        prompt_template = PROMPT_REGISTRY.get(self.prompt_template_id)
+        prompt_template = PROMPT_REGISTRY.get(self.prompt_template_id or "")
         if prompt_template:
             return prompt_template.prompt_hash
         return "unknown"

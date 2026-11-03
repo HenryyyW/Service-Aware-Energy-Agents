@@ -201,11 +201,11 @@ if __name__ == "__main__":
     print(f"ControllerCode valid: {cc.hash}")
 
     # Test AgentTaskInput
-    from src.schemas.task import TaskSpec
+    from src.schemas.task import TaskSpec, TaskType
 
     ts = TaskSpec(
         task_id="test",
-        task_type="scenario_construction",
+        task_type=TaskType.SCENARIO_CONSTRUCTION,
         description="Build a test scenario",
     )
     ati = AgentTaskInput(task_id="test", role=AgentRole.PLANNER, task_spec=ts)

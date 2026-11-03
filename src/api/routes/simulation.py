@@ -1,5 +1,6 @@
 """Simulation control routes."""
 
+from dataclasses import asdict
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
@@ -71,10 +72,11 @@ async def step_simulation(scenario_id: str, request: StepRequest) -> Dict[str, A
                 asset_id=a["asset_id"],
                 action_type=ActionType(a["action_type"]),
                 value_kw=a["value_kw"],
+                timestep=request.timestep or 0,
             )
         )
 
-    requested_actions = RequestedActions(actions=actions)
+    requested_actions = RequestedActions(actions=actions, timestep=request.timestep or 0)
     result = coupler.step(requested_actions)
 
     # Get current observations
@@ -90,7 +92,7 @@ async def step_simulation(scenario_id: str, request: StepRequest) -> Dict[str, A
         "costs": costs,
         "grid_diagnostics": grid_diagnostics,
         "market_result": (
-            result.market_result.model_dump() if result.market_result else None
+            asdict(result.market_result) if result.market_result else None
         ),
         "settlement_snapshot": result.settlement_snapshot,
         "terminated": result.terminated,
@@ -113,7 +115,9 @@ async def run_simulation(
     if max_steps is None:
         max_steps = (
             len(coupler.citylearn.env.data) - 1
-            if hasattr(coupler.citylearn.env, "data")
+            if hasattr(coupler.citylearn, "env")
+            and coupler.citylearn.env is not None
+            and hasattr(coupler.citylearn.env, "data")
             else 96
         )
 
@@ -122,7 +126,7 @@ async def run_simulation(
         # Default: no actions (passive simulation)
         from src.schemas.action import RequestedActions
 
-        requested_actions = RequestedActions(actions=[])
+        requested_actions = RequestedActions(actions=[], timestep=i)
         result = coupler.step(requested_actions)
 
         results.append(
@@ -147,7 +151,7 @@ async def run_simulation(
         "steps_completed": len(results),
         "results": results,
         "kpis": kpis,
-        "settlement": settlement.model_dump() if settlement else None,
+        "settlement": asdict(settlement) if settlement else None,
     }
 
 

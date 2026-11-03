@@ -49,6 +49,7 @@ class ExecutorAgent:
                     )
 
             # Write patched controller to sandbox (get the modified code from sandbox)
+            assert self.sandbox.temp_dir is not None
             controller_path = os.path.join(self.sandbox.temp_dir, state.controller_file)
             # Read the modified code from sandbox after changes were applied
             with open(controller_path, "r") as f:

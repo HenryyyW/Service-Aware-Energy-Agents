@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from src.simulation.pandapower_adapter import create_grid_from_scenario
-from app.routers.scenarios import _scenarios, _load_scenario_from_disk
+from backend.app.routers.scenarios import _scenarios, _load_scenario_from_disk
 
 router = APIRouter()
 
@@ -149,7 +149,7 @@ async def get_realtime_network_state(
 
     # If run_id provided, try to get state from running simulation
     if run_id:
-        from app.routers.simulations import _couplers
+        from backend.app.routers.simulations import _couplers
 
         if run_id in _couplers:
             coupler = _couplers[run_id]
@@ -191,7 +191,7 @@ async def get_asset_metadata(scenario_id: str):
 
     scenario = _scenarios[scenario_id]
 
-    assets = {
+    assets: Dict[str, List[Dict[str, Any]]] = {
         "pv": [],
         "batteries": [],
         "evs": [],
@@ -245,33 +245,35 @@ async def get_asset_metadata(scenario_id: str):
             )
 
         # EV assets
-        for i, ev in enumerate(building.evs):
-            assets["evs"].append(
-                {
-                    "asset_id": f"{bid}_ev_{i}",
-                    "building_id": bid,
-                    "capacity_kwh": ev.capacity_kwh,
-                    "charger_power_kw": ev.max_charge_kw,
-                    "arrival_time": ev.arrival_time,
-                    "departure_time": ev.departure_time,
-                    "target_soc": ev.target_soc,
-                    "location": location,
-                }
-            )
+        if building.evs:
+            for i, ev in enumerate(building.evs):
+                assets["evs"].append(
+                    {
+                        "asset_id": f"{bid}_ev_{i}",
+                        "building_id": bid,
+                        "capacity_kwh": ev.capacity_kwh,
+                        "charger_power_kw": ev.max_charge_kw,
+                        "arrival_time": ev.arrival_time,
+                        "departure_time": ev.departure_time,
+                        "target_soc": ev.target_soc,
+                        "location": location,
+                    }
+                )
 
         # Flexible load assets
-        for i, fl in enumerate(building.flexible_loads):
-            assets["flexible_loads"].append(
-                {
-                    "asset_id": f"{bid}_flex_{i}",
-                    "building_id": bid,
-                    "power_kw": fl.power_kw,
-                    "energy_kwh": fl.energy_kwh,
-                    "earliest_start": fl.earliest_start,
-                    "latest_end": fl.latest_end,
-                    "location": location,
-                }
-            )
+        if building.flexible_loads:
+            for i, fl in enumerate(building.flexible_loads):
+                assets["flexible_loads"].append(
+                    {
+                        "asset_id": f"{bid}_flex_{i}",
+                        "building_id": bid,
+                        "power_kw": fl.power_kw,
+                        "energy_kwh": fl.energy_kwh,
+                        "earliest_start": fl.earliest_start,
+                        "latest_end": fl.latest_end,
+                        "location": location,
+                    }
+                )
 
     return assets
 

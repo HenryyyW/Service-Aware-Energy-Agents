@@ -227,27 +227,32 @@ class ExperimentRunner:
         print(f"Starting experiment: {self.run_id}")
 
         # Reset
+        assert self.coupler is not None
         observations = self.coupler.reset(random_seed=self.scenario_config.random_seed)
 
         # Generate dummy data if needed
         data_dir = Path("data") / self.scenario_config.scenario_id
         if not data_dir.exists():
             print("Generating dummy data...")
+            assert self.coupler.citylearn is not None
             self.coupler.citylearn.generate_dummy_data(str(data_dir))
             # Re-reset with data
             observations = self.coupler.reset(
                 random_seed=self.scenario_config.random_seed
             )
 
+        assert self.controller is not None
         self.controller.reset()
         step = 0
         last_grid_diagnostics = None
 
         while True:
             # Get actions from controller (pass grid diagnostics from previous step)
+            assert self.controller is not None
             requested_actions = self.controller.get_actions(observations, step)
 
             # Step co-simulation
+            assert self.coupler is not None
             cosim_result = self.coupler.step(requested_actions)
             self.history.append(cosim_result)
 
@@ -283,6 +288,7 @@ class ExperimentRunner:
                 break
 
         self.end_time = time.time()
+        assert self.coupler is not None
         self.coupler.close()
 
         # Compute metrics and generate results
@@ -563,7 +569,6 @@ class ExperimentRunner:
                     value=value,
                     unit=unit,
                     target=None,
-                    direction=direction,
                 )
             )
 
@@ -721,13 +726,14 @@ class ExperimentRunner:
     def _save_results(self, result: ExperimentResult):
         """Save experiment results."""
         # Export trajectories and diagnostics
+        assert self.coupler is not None
         self.coupler.export_results(str(self.run_dir))
 
         # Save result summary
         result_dict = result.model_dump()
         # Convert datetime to string
         result_dict["start_time"] = result.start_time.isoformat()
-        result_dict["end_time"] = result.end_time.isoformat()
+        result_dict["end_time"] = result.end_time.isoformat() if result.end_time else ""
         # Pricing regime bookkeeping (phase 2 M1); absent for phase 1 runs.
         if self.pricing_regime is not None:
             result_dict["pricing_regime"] = self.pricing_regime

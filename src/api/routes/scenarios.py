@@ -150,26 +150,37 @@ async def get_scenario_buildings(scenario_id: str) -> List[Dict[str, Any]]:
 
     buildings = []
     for building in config.buildings:
-        bus_mapping = next(
-            (
-                m
-                for m in config.pandapower.bus_mappings
-                if m.building_id == building.building_id
-            ),
-            None,
-        )
+        bus_mapping = None
+        if config.pandapower:
+            bus_mapping = next(
+                (
+                    m
+                    for m in config.pandapower.bus_mappings
+                    if m.building_id == building.building_id
+                ),
+                None,
+            )
         bus_name = None
-        if bus_mapping:
-            bus_name = _couplers[scenario_id].pandapower.net.bus.at[
+        if (
+            bus_mapping
+            and scenario_id in _couplers
+            and _couplers[scenario_id].pandapower
+            and _couplers[scenario_id].pandapower.net is not None
+        ):
+            net = _couplers[scenario_id].pandapower.net
+            assert net is not None
+            bus_name = net.bus.at[
                 bus_mapping.bus_idx, "name"
             ]
 
         # Get bus coordinates if available
         location = None
+        pandapower = _couplers[scenario_id].pandapower if scenario_id in _couplers else None
         if (
             bus_name
             and bus_name in bus_coords
-            and _couplers[scenario_id].pandapower.coordinate_system == "geographic"
+            and pandapower
+            and pandapower.coordinate_system == "geographic"
         ):
             bc = bus_coords[bus_name]
             location = {"lat": bc["lat"], "lon": bc["lon"]}

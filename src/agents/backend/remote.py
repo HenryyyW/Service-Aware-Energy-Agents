@@ -55,7 +55,8 @@ class RemoteAPIBackend(AgentBackend):
 
     @property
     def backend_id(self) -> str:
-        return f"{self.provider}_{self.model.replace('.', '_').replace('-', '_')}"
+        model = self.model or "unknown"
+        return f"{self.provider}_{model.replace('.', '_').replace('-', '_')}"
 
     @property
     def supports_streaming(self) -> bool:
@@ -91,7 +92,7 @@ class RemoteAPIBackend(AgentBackend):
         # Build prompt
         from src.agents.backend.prompts import PROMPT_REGISTRY
 
-        prompt_template = PROMPT_REGISTRY.get(self.prompt_template_id)
+        prompt_template = PROMPT_REGISTRY.get(self.prompt_template_id or "")
         if not prompt_template:
             raise ValueError(f"Prompt template {self.prompt_template_id} not found")
 
@@ -152,10 +153,10 @@ class RemoteAPIBackend(AgentBackend):
         context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Build context for prompt template (same as local backend)."""
-        from src.agents.backend.local import LocalLLMBackend
+        from src.agents.backend.local import OllamaBackend
 
         # Reuse the same context building logic
-        local_backend = LocalLLMBackend()
+        local_backend = OllamaBackend()
         return local_backend._build_prompt_context(
             scenario, observations, timestep, context
         )
@@ -164,12 +165,6 @@ class RemoteAPIBackend(AgentBackend):
         """Parse LLM output into Action objects."""
         # TODO: Implement proper action parsing
         return []
-
-    def _get_prompt_hash(self) -> str:
-        from src.agents.backend.prompts import PROMPT_REGISTRY
-
-        prompt_template = PROMPT_REGISTRY.get(self.prompt_template_id)
-        return prompt_template.prompt_hash if prompt_template else "unknown"
 
     async def _call_openai(
         self, system_prompt: str, user_prompt: str
@@ -189,11 +184,12 @@ class RemoteAPIBackend(AgentBackend):
             "response_format": {"type": "json_object"},
         }
 
-        async with self._session.post(url, json=payload) as response:
+        async with session.post(url, json=payload) as response:
             if response.status != 200:
                 error_text = await response.text()
                 raise RuntimeError(f"OpenAI API error {response.status}: {error_text}")
-            return await response.json()
+            result = await response.json()
+            return result if isinstance(result, dict) else {}
 
     async def _call_anthropic(
         self, system_prompt: str, user_prompt: str
@@ -210,25 +206,36 @@ class RemoteAPIBackend(AgentBackend):
             "max_tokens": 2048,
         }
 
-        async with self._session.post(url, json=payload) as response:
+        async with session.post(url, json=payload) as response:
             if response.status != 200:
                 error_text = await response.text()
                 raise RuntimeError(
                     f"Anthropic API error {response.status}: {error_text}"
                 )
-            return await response.json()
+            result = await response.json()
+            return result if isinstance(result, dict) else {}
 
     def _extract_response(self, response: Dict[str, Any]) -> str:
         """Extract text content from provider response."""
         if self.provider == "openai":
-            return response["choices"][0]["message"]["content"]
+            choices = response.get("choices", [])
+            if choices:
+                message = choices[0].get("message", {})
+                content = message.get("content")
+                if content and isinstance(content, str):
+                    return content
         elif self.provider == "anthropic":
-            return response["content"][0]["text"]
+            content_list = response.get("content", [])
+            if content_list:
+                text = content_list[0].get("text")
+                if text and isinstance(text, str):
+                    return text
         return ""
 
     def _calculate_cost(self, prompt_tokens: int, completion_tokens: int) -> float:
         """Calculate cost in USD based on model pricing."""
-        pricing = self.MODEL_PRICING.get(self.model, {"input": 0, "output": 0})
+        model = self.model or "gpt-4-turbo"
+        pricing = self.MODEL_PRICING.get(model, {"input": 0, "output": 0})
         cost = (prompt_tokens / 1_000_000) * pricing["input"] + (
             completion_tokens / 1_000_000
         ) * pricing["output"]
@@ -237,7 +244,7 @@ class RemoteAPIBackend(AgentBackend):
     def _get_prompt_hash(self) -> str:
         from src.agents.backend.prompts import PROMPT_REGISTRY
 
-        prompt_template = PROMPT_REGISTRY.get(self.prompt_template_id)
+        prompt_template = PROMPT_REGISTRY.get(self.prompt_template_id or "")
         return prompt_template.prompt_hash if prompt_template else "unknown"
 
     async def health_check(self) -> bool:
@@ -256,7 +263,8 @@ class RemoteAPIBackend(AgentBackend):
 
     def estimate_cost(self, prompt_tokens: int, max_completion_tokens: int) -> float:
         """Estimate cost for a request."""
-        pricing = self.MODEL_PRICING.get(self.model, {"input": 0, "output": 0})
+        model = self.model or "gpt-4-turbo"
+        pricing = self.MODEL_PRICING.get(model, {"input": 0, "output": 0})
         return (prompt_tokens / 1_000_000) * pricing["input"] + (
             max_completion_tokens / 1_000_000
         ) * pricing["output"]

@@ -36,6 +36,7 @@ def get_pandapower_adapter() -> PandapowerAdapter:
             raise HTTPException(
                 status_code=503, detail=f"Default network could not be loaded: {error}"
             ) from error
+    assert _pandapower_adapter is not None
     return _pandapower_adapter
 
 

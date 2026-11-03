@@ -67,7 +67,7 @@ class CommunityAggregator(CoordinationAgent):
 
         return None
 
-    def _reconcile_proposals(self) -> CoordinationMessage:
+    def _reconcile_proposals(self) -> Optional[CoordinationMessage]:
         """Reconcile building proposals with community limits."""
         # Calculate total import/export
         total_import = sum(

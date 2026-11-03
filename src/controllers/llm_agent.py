@@ -212,6 +212,7 @@ class LLMAgentController(BaseController):
         # (ollama-local / echo debug) > the PR #43 LLMConfig path.
         self._env_backend_label: Optional[str] = None
         self._env_agent_model: Optional[str] = None
+        self.agent_backend: str = "llm"
         if backend is None:
             backend = self._backend_from_env()
         if backend is None:
@@ -466,7 +467,7 @@ class LLMAgentController(BaseController):
             prompt_tokens_before = getattr(callable_backend, "prompt_tokens", 0)
             completion_tokens_before = getattr(callable_backend, "completion_tokens", 0)
             try:
-                raw = callable_backend(prompt)
+                raw = callable_backend(prompt)  # type: ignore[operator]
             except Exception:
                 self.llm_backend_errors += 1
                 return None
@@ -480,10 +481,11 @@ class LLMAgentController(BaseController):
             )
             if (
                 calls_before is not None
-                and callable_backend.latency_samples_ms
-                and len(callable_backend.latency_samples_ms) > calls_before
+                and hasattr(callable_backend, "latency_samples_ms")
+                and callable_backend.latency_samples_ms  # type: ignore[attr-defined]
+                and len(callable_backend.latency_samples_ms) > calls_before  # type: ignore[attr-defined]
             ):
-                self._record_call_latency(callable_backend.latency_samples_ms[-1])
+                self._record_call_latency(callable_backend.latency_samples_ms[-1])  # type: ignore[attr-defined]
             # Wrap the text response in a BackendResponse-like record so both
             # paths share one downstream contract.
             return BackendResponse(
@@ -539,9 +541,9 @@ class LLMAgentController(BaseController):
         except Exception:
             self.llm_backend_errors += 1
             return None
-        self._record_call_latency(getattr(response, "latency_ms", None))
+        self._record_call_latency(float(getattr(response, "latency_ms", 0.0)))
         self._record_tokens(getattr(response, "token_usage", None))
-        return response
+        return response  # type: ignore[no-any-return]
 
     def _propose_via_llm(
         self,

@@ -67,7 +67,7 @@ class PlannerAgent:
 
     def _analyze_violations(self, state: AgentState) -> Dict[str, List[Dict[str, Any]]]:
         """Analyze all violations from diagnostics and metrics."""
-        violations = {
+        violations: Dict[str, List[Dict[str, Any]]] = {
             "voltage": [],
             "line_loading": [],
             "transformer_loading": [],
@@ -251,7 +251,7 @@ class PlannerAgent:
         self, primary_issue: str, state: AgentState
     ) -> Dict[str, Any]:
         """Define measurable success criteria."""
-        criteria = {
+        criteria: Dict[str, Dict[str, Any]] = {
             "voltage": {
                 "voltage_violations": 0,
                 "max_voltage_pu": 1.05,

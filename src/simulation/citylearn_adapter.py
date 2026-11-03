@@ -59,7 +59,7 @@ class CityLearnAdapter:
         self.observation_names: List[str] = []
         self.action_names: List[str] = []  # All action names from schema
         self.active_action_names: List[str] = []  # Only active actions globally
-        self.building_actions: Dict[str, List[str]] = {}  # Active actions per building
+        self.building_actions: Dict[str, List[Tuple[str, int]]] = {}  # Active actions per building
         self.device_metadata: Dict[str, Dict[str, Any]] = {}
         self.episode_step = 0
         self.observation_history: List[Dict[str, Any]] = []
@@ -715,7 +715,7 @@ class CityLearnAdapter:
         )
         data.to_csv(filepath, index=False)
 
-    def _convert_observations_to_dict(self, observations) -> Dict[str, Any]:
+    def _convert_observations_to_dict(self, observations: Any) -> Dict[str, Any]:
         """Convert observations to flat dict keyed by '{building_id}_{observation_name}'."""
         if isinstance(observations, list):
             # Assume it's a list of lists, one per building, in the order of self.building_ids
@@ -753,7 +753,7 @@ class CityLearnAdapter:
             try:
                 return dict(observations)
             except Exception:
-                return observations
+                return {}
 
     def reset(self, random_seed: Optional[int] = None) -> Dict[str, Any]:
         """Reset environment and return initial observations."""
@@ -763,6 +763,7 @@ class CityLearnAdapter:
         # given scenario/seed pair reproduces exactly across runs.
         random.seed(seed)
         np.random.seed(seed)
+        assert self.env is not None
         result = self.env.reset(seed=seed)
         # CityLearn v3 reset returns (observations, info)
         observations = result[0] if isinstance(result, tuple) else result
@@ -783,6 +784,7 @@ class CityLearnAdapter:
         cl_actions = self._actions_to_citylearn(requested_actions)
 
         # Step environment
+        assert self.env is not None
         result = self.env.step(cl_actions)
         # CityLearn v3 step returns (observations, rewards, terminated, truncated, info)
         if isinstance(result, tuple) and len(result) == 5:
@@ -810,9 +812,9 @@ class CityLearnAdapter:
         # Check if episode is done (all buildings terminated/truncated)
         done = False
         if isinstance(terminated, dict):
-            done = all(terminated.values()) or all(truncated.values())
+            done = bool(all(terminated.values())) or bool(all(truncated.values()))
         elif isinstance(terminated, (bool, np.bool_)):
-            done = terminated or truncated
+            done = bool(terminated or truncated)
 
         # Build step result
         step_result = SimulationStepResult(
@@ -1144,7 +1146,7 @@ class CityLearnAdapter:
                                 else f"{bid}_{action_name}_{device_index}"
                             )
                             # Try to get the action_type from the requested actions for this asset_id
-                            action_obj = requested.get_action(asset_id, None)
+                            action_obj = requested.get_action(asset_id, ActionType.BATTERY_CHARGE)
                             action_type = (
                                 action_obj.action_type
                                 if action_obj is not None
@@ -1191,7 +1193,7 @@ class CityLearnAdapter:
                                 else f"{bid}_{action_name}_{device_index}"
                             )
                             # Try to get the action_type from the requested actions for this asset_id
-                            action_obj = requested.get_action(asset_id, None)
+                            action_obj = requested.get_action(asset_id, ActionType.BATTERY_CHARGE)
                             action_type = (
                                 action_obj.action_type
                                 if action_obj is not None
@@ -1315,7 +1317,8 @@ class CityLearnAdapter:
     def get_kpis(self) -> Dict[str, float]:
         """Get KPIs from completed episode."""
         if self.env and hasattr(self.env, "kpis"):
-            return self.env.kpis
+            kpis = self.env.kpis
+            return kpis if isinstance(kpis, dict) else {}
         return {}
 
     def close(self):

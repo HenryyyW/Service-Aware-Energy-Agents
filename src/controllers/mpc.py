@@ -278,7 +278,7 @@ class MPCController(BaseController):
                     a_eq_rows.append(dyn)
                     b_eq.append(0.0)
 
-                if ev_capacity > 0.0 and k < ev_departure:
+                if ev_capacity > 0.0 and k < ev_departure and ev_info:
                     evdyn = np.zeros(n_vars)
                     evdyn[evsoc_idx(bidx, k)] = -1.0
                     evdyn[evsoc_idx(bidx, k + 1)] = 1.0

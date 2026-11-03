@@ -198,7 +198,11 @@ class ReporterAgent:
                 (
                     PlannerOutput(**final_state.repair_plan)
                     if final_state.repair_plan
-                    else PlannerOutput(primary_issue="unknown", repair_strategy="")
+                    else PlannerOutput(
+                        primary_issue="unknown",
+                        repair_strategy="",
+                        root_cause_analysis="No repair plan available",
+                    )
                 ),
                 (
                     VerifierOutput(**verification_result)

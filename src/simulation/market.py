@@ -643,7 +643,7 @@ class FairnessAwareClearing(UniformPriceClearing):
         trades = base_result.trades.copy()
 
         # Calculate each building's net benefit from market
-        net_benefits = {}
+        net_benefits: Dict[str, float] = {}
         for bid, trade in trades.items():
             state = building_states[bid]
             if trade > 0:  # Buyer
@@ -668,8 +668,8 @@ class FairnessAwareClearing(UniformPriceClearing):
                 break
 
             # Find building with highest benefit and lowest benefit
-            max_bid = max(net_benefits, key=net_benefits.get)
-            min_bid = min(net_benefits, key=net_benefits.get)
+            max_bid = max(net_benefits, key=lambda k: net_benefits.get(k, 0.0))
+            min_bid = min(net_benefits, key=lambda k: net_benefits.get(k, 0.0))
 
             # Small transfer from max to min if possible
             transfer_kw = 0.01  # Small increment
@@ -1004,7 +1004,7 @@ class P2PClearing(MarketClearingEngine):
             trades[trade.seller_id] = trades.get(trade.seller_id, 0.0) - trade_kw
 
         # Calculate settlements
-        settlements = {}
+        settlements: Dict[str, float] = {}
         if p2p_result.clearing_price is not None:
             for trade in p2p_result.trades:
                 trade_kwh = trade.quantity_kwh
@@ -1065,4 +1065,4 @@ def create_market_engine(
     }
 
     engine_class = engines.get(market_type, UniformPriceClearing)
-    return engine_class(scenario_config, energy_sharing_config)
+    return engine_class(scenario_config, energy_sharing_config)  # type: ignore[abstract]

@@ -37,19 +37,19 @@ class CustomJsonFormatter(jsonlogger.JsonFormatter):
 
 def setup_logging(log_level: str = "INFO", log_format: str = "json") -> None:
     """Configure application logging."""
-    log_level = getattr(logging, log_level.upper(), logging.INFO)
+    level: int = getattr(logging, log_level.upper(), logging.INFO)
 
     # Clear existing handlers
     root_logger = logging.getLogger()
     root_logger.handlers.clear()
-    root_logger.setLevel(log_level)
+    root_logger.setLevel(level)
 
     # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(log_level)
+    console_handler.setLevel(level)
 
     if log_format == "json":
-        formatter = CustomJsonFormatter(
+        formatter: logging.Formatter = CustomJsonFormatter(
             "%(timestamp)s %(level)s %(name)s %(correlation_id)s %(message)s",
             datefmt="%Y-%m-%dT%H:%M:%S.%fZ",
         )

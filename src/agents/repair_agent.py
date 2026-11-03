@@ -79,7 +79,7 @@ class RepairAgent:
 
     def _analyze_violations(self, context: RepairContext) -> Dict[str, Any]:
         """Analyze all violations from diagnostics and experiment results."""
-        violations = {
+        violations: Dict[str, List[Dict[str, Any]]] = {
             "voltage": [],
             "line_loading": [],
             "transformer_loading": [],
@@ -243,10 +243,9 @@ class RepairAgent:
         return violations
 
     def _generate_repair_strategy(
-        self, violations: Dict[str, Any], context: RepairContext
+        self, violations: Dict[str, List[Dict[str, Any]]], context: RepairContext
     ) -> Dict[str, Any]:
-        """Generate a repair strategy based on violations."""
-        strategy = {
+        strategy: Dict[str, Any] = {
             "primary_issue": None,
             "secondary_issues": [],
             "approach": "",
@@ -292,7 +291,7 @@ class RepairAgent:
         }
 
         strategy["approach"] = approaches.get(
-            strategy["primary_issue"], "General optimization of controller parameters"
+            strategy["primary_issue"] or "none", "General optimization of controller parameters"
         )
 
         return strategy

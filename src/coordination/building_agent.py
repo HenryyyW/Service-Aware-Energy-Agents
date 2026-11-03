@@ -1,6 +1,10 @@
 """Building agent for multi-agent coordination."""
 
-from typing import Optional, List, Dict, Any
+from typing import TYPE_CHECKING, Optional, List, Dict, Any
+
+if TYPE_CHECKING:
+    from src.coordination.battery_agent import BatteryAgent
+    from src.coordination.ev_agent import EVAgent
 
 from src.coordination.base import (
     CoordinationAgent,
@@ -29,9 +33,9 @@ class BuildingAgent(CoordinationAgent):
         self,
         building_id: str,
         building_config: BuildingConfig,
-        battery_agent: "BatteryAgent" = None,
-        ev_agents: List["EVAgent"] = None,
-        flexible_load_agents: List["FlexibleLoadAgent"] = None,
+        battery_agent: Optional["BatteryAgent"] = None,
+        ev_agents: Optional[List["EVAgent"]] = None,
+        flexible_load_agents: Optional[List["FlexibleLoadAgent"]] = None,
     ):
         super().__init__(f"building_{building_id}")
         self.building_id = building_id
@@ -61,8 +65,6 @@ class BuildingAgent(CoordinationAgent):
             ]
 
         if not self.flexible_load_agents and building_config.flexible_loads:
-            from src.coordination.flexible_load_agent import FlexibleLoadAgent
-
             self.flexible_load_agents = [
                 FlexibleLoadAgent(f"{building_id}_flex_{i}", fl_config)
                 for i, fl_config in enumerate(building_config.flexible_loads or [])
@@ -284,6 +286,10 @@ class FlexibleLoadAgent(CoordinationAgent):
             if allocation:
                 self.current_progress = allocation.constraints.get("progress", 0)
         return None
+
+    def update_progress(self, progress: float) -> None:
+        """Update the current progress from external observation."""
+        self.current_progress = progress
 
     def get_actions(self) -> List[Action]:
         # Convert allocation to action

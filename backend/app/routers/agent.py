@@ -7,11 +7,15 @@ from uuid import uuid4
 from datetime import datetime, timezone
 import time
 
-from app.state import (
+from backend.app.state import (
     get_task_queue,
     TASK_DURATION,
     TASKS_TOTAL,
     TASK_RETRIES,
+)
+from src.schemas.report import (
+    AgentMetrics,
+    ControllerType,
 )
 
 router = APIRouter()
@@ -127,7 +131,8 @@ async def _run_agent_task(
             ev_completion_rate=0.5,
             comfort_violation_degree_hours=10.0,
             flexible_load_completion_rate=0.5,
-            demand_response_delivery_rate=0.5,
+            dr_delivered_kw=100.0,
+            dr_requested_kw=200.0,
         )
         grid = GridMetrics(
             voltage_violations_count=5,
@@ -143,14 +148,14 @@ async def _run_agent_task(
         experiment_result = ExperimentResult(
             run_id=f"repair_{uuid4().hex[:8]}",
             scenario_id="scenario_e",
-            controller_type="rule_based",
+            controller_type=ControllerType.RULE_BASED,
             controller_config={},
             status=ExperimentStatus.FAILED,
             random_seed=42,
             energy=energy,
             service=service,
             grid=grid,
-            agent={},
+            agent=AgentMetrics(),
             kpis=[],
             per_member=[],
             diagnostic_reports=[],

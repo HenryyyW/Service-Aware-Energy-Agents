@@ -5,7 +5,7 @@ are accepted. It enforces invariants for money conservation, energy conservation
 no-arbitrage, ledger conservation, and no double settlement.
 """
 
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 from dataclasses import dataclass
 from enum import Enum
 import logging
@@ -34,7 +34,7 @@ class GateResult:
     gate_name: str
     status: GateStatus
     message: str
-    details: Dict[str, Any] = None
+    details: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -132,7 +132,7 @@ class SettlementLedgerGate:
         return all(r.status == GateStatus.PASSED for r in results)
 
     def _gate(
-        self, name: str, condition: bool, message: str, details: Dict[str, Any] = None
+        self, name: str, condition: bool, message: str, details: Optional[Dict[str, Any]] = None
     ) -> GateResult:
         """Create a gate result."""
         if condition:
@@ -191,11 +191,7 @@ class SettlementLedgerGate:
             )
 
         clearing_price = result.clearing_price
-        buy_prices = [
-            o.price_per_kwh for t in result.trades for o in [] if False
-        ]  # Not directly available
-        # We need to check from the result metadata if available
-        # For now, check that clearing price is reasonable
+        # Not directly available from result.trades, use clearing price bounds
         price_ok = 0.0 <= clearing_price <= 10.0  # Reasonable price bounds
 
         return self._gate(
@@ -278,7 +274,7 @@ class SettlementLedgerGate:
     def _check_min_spread(self, result: P2PMatchingResult) -> GateResult:
         """Check minimum spread enforcement."""
         # Check that no trades occurred where buy_price + min_spread < sell_price
-        spread_violations = []
+        spread_violations: List[Any] = []
         for t in result.trades:
             # We don't have access to original order prices in the trade
             # This would need access to original orders
@@ -365,9 +361,9 @@ if __name__ == "__main__":
     results = gate.check_p2p_matching_result(result)
 
     print("Gate Results:")
-    for r in result:
-        status = "✓" if r.status == "passed" else "✗"
+    for r in results:
+        status = "✓" if r.status == GateStatus.PASSED else "✗"
         print(f"  {status} {r.gate_name}: {r.message}")
 
-    all_passed = all(r.status == "passed" for r in results)
+    all_passed = all(r.status == GateStatus.PASSED for r in results)
     print(f"\nAll passed: {all_passed}")

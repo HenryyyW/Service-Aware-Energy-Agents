@@ -8,7 +8,7 @@ import shutil
 import time
 import ast
 import resource
-from typing import Optional, Dict, Any, List, Set
+from typing import Optional, Dict, Any, List, Set, FrozenSet
 from dataclasses import dataclass, field
 
 
@@ -41,7 +41,7 @@ class Sandbox:
     """
 
     # Restricted modules - no network, no filesystem, no dangerous operations
-    RESTRICTED_IMPORTS: Set[str] = frozenset(
+    RESTRICTED_IMPORTS: FrozenSet[str] = frozenset(
         {
             # Network
             "socket",
@@ -115,7 +115,7 @@ class Sandbox:
     )
 
     # Allowed modules (explicitly permitted)
-    ALLOWED_IMPORTS: Set[str] = frozenset(
+    ALLOWED_IMPORTS: FrozenSet[str] = frozenset(
         {
             "math",
             "random",
@@ -235,6 +235,7 @@ class Sandbox:
             self.create_sandbox()
 
         for change in changes:
+            assert self.temp_dir is not None
             file_path = os.path.join(self.temp_dir, change["file"])
             if not os.path.exists(file_path):
                 return False
@@ -326,9 +327,7 @@ class Sandbox:
                                 item.lineno - 1
                             )  # AST line numbers are 1-indexed
                             indent = item.col_offset
-                            func_end = (
-                                item.end_lineno
-                            )  # AST end_lineno is 1-indexed, exclusive
+                            func_end = item.end_lineno or func_start + 1
                             break
 
             # Fallback: find last occurrence
@@ -976,14 +975,15 @@ def validate_controller_in_sandbox(
             f.write(controller_code)
 
         # Validate imports (restricted imports check)
-        import_result = sandbox._validate_imports(controller_code)
+        import_result: SandboxResult = sandbox._validate_imports(controller_code)
         if not import_result.success:
             return import_result
 
         # Validate syntax
-        syntax_result = sandbox.validate_syntax(controller_file)
+        syntax_result: SandboxResult = sandbox.validate_syntax(controller_file)
         if not syntax_result.success:
             return syntax_result
 
         # Run quick experiment
-        return sandbox.run_experiment(scenario_config, controller_file, max_steps)
+        result: SandboxResult = sandbox.run_experiment(scenario_config, controller_file, max_steps)
+        return result

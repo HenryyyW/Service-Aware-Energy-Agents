@@ -5,7 +5,7 @@ from typing import Optional, List, Dict, Any
 import numpy as np
 
 from src.schemas.action import RequestedActions, Action, ActionType, ControllerOutput
-from src.schemas.scenario import ScenarioConfig, BuildingConfig, EVConfig, BatteryConfig
+from src.schemas.scenario import ScenarioConfig, BuildingConfig, EVConfig, BatteryConfig, FlexibleLoadConfig
 
 
 class BaseController(ABC):
@@ -80,56 +80,6 @@ class RuleBasedController(BaseController):
             for i, fl in enumerate(building.flexible_loads or []):
                 fl_id = f"{bid}_flex_{i}"
                 self.flexible_load_progress[fl_id] = 0.0
-
-    def get_actions(
-        self, observations: Dict[str, Any], timestep: int
-    ) -> RequestedActions:
-        """Generate rule-based actions."""
-        self.timestep = timestep
-        actions = []
-
-        # Get current hour for time-of-use decisions
-        current_hour = (timestep * self.scenario_config.timestep_minutes) / 60
-        hour_of_day = current_hour % 24
-
-        for building in self.scenario_config.buildings:
-            bid = building.building_id
-
-            # Get observations for this building
-            net_demand = observations.get(f"{bid}_net_electricity_consumption", 0)
-            pv_gen = observations.get(f"{bid}_solar_generation", 0)
-            load = observations.get(f"{bid}_non_shiftable_load", 0)
-
-            # Battery control
-            if building.battery:
-                battery_action = self._control_battery(
-                    bid, building.battery, net_demand, pv_gen, hour_of_day
-                )
-                if battery_action:
-                    actions.append(battery_action)
-
-            # EV control
-            for i, ev in enumerate(building.evs or []):
-                ev_id = f"{bid}_ev_{i}"
-                ev_action = self._control_ev(
-                    ev_id, ev, net_demand, pv_gen, hour_of_day, timestep
-                )
-                if ev_action:
-                    actions.append(ev_action)
-
-            # Flexible load control
-            for i, fl in enumerate(building.flexible_loads or []):
-                fl_id = f"{bid}_flex_{i}"
-                fl_action = self._control_flexible_load(
-                    fl_id, fl, pv_gen, hour_of_day, timestep
-                )
-                if fl_action:
-                    actions.append(fl_action)
-
-        # Apply community-level grid limits
-        actions = self._apply_grid_limits(actions)
-
-        return self._create_requested_actions(actions)
 
     def _control_battery(
         self,

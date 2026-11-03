@@ -354,7 +354,7 @@ STANDARD_ACTION_SPACE = {
 
 def get_observation_space(scenario_config: Dict[str, Any]) -> Dict[str, Any]:
     """Generate observation space from scenario config."""
-    space = {}
+    space: Dict[str, Dict[str, Any]] = {}
     for building in scenario_config.get("buildings", []):
         bid = building.get("building_id", "unknown")
         space[f"{bid}_net_electricity_consumption"] = {"type": "float", "unit": "kW"}

@@ -39,7 +39,7 @@ def _iter_result_files():
 
 def _read_result(path: Path) -> Dict[str, Any]:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
     except (OSError, json.JSONDecodeError) as error:
         raise HTTPException(
             status_code=500, detail=f"Could not read run result: {error}"
@@ -146,7 +146,7 @@ async def create_run(request: RunRequest, background_tasks: BackgroundTasks):
         request.scenario_id
     )
     parameters = request.parameters
-    updates = {}
+    updates: Dict[str, Any] = {}
     for field in (
         "community_import_limit_kw",
         "community_export_limit_kw",

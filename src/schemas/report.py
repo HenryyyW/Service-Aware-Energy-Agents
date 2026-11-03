@@ -79,6 +79,7 @@ class ServiceMetrics(BaseModel):
     dr_requested_kw: float = 0.0
     dr_delivered_kw: float = 0.0
     dr_credited_kw: float = 0.0
+    load_shedding_total_kw: float = 0.0
     per_member_costs: Dict[str, Optional[float]] = Field(default_factory=dict)
     per_member_savings: Dict[str, Optional[float]] = Field(default_factory=dict)
     # Scenario E failure-reporting convention: members whose cost data is

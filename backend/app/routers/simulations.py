@@ -56,7 +56,7 @@ from src.controllers import (
     CentralizedController,
     MultiAgentController,
 )
-from app.routers.scenarios import (
+from backend.app.routers.scenarios import (
     _scenarios,
     _load_scenario_from_disk,
     SCENARIO_DATA_DIR,

@@ -10,11 +10,11 @@ from src.agents.backend.remote import RemoteAPIBackend
 class BackendRegistry:
     """Registry of available LLM backends."""
 
-    _backends: Dict[str, type] = {
+    _backends: Dict[str, Any] = {
         "fallback": FallbackBackend,
         "ollama": OllamaBackend,
-        "openai_gpt4": "RemoteAPIBackend",  # Will resolve at runtime
-        "anthropic_claude": "RemoteAPIBackend",
+        "openai_gpt4": RemoteAPIBackend,  # type: ignore[name-defined]
+        "anthropic_claude": RemoteAPIBackend,  # type: ignore[name-defined]
     }
 
     _backend_configs: Dict[str, Dict] = {}
@@ -29,7 +29,7 @@ class BackendRegistry:
             cls._backend_configs[backend_id] = config
 
     @classmethod
-    def get(cls, backend_id: str, **kwargs) -> "AgentBackend":
+    def get(cls, backend_id: str, **kwargs) -> AgentBackend:
         """Get a backend instance by ID."""
         if backend_id not in cls._backends:
             raise ValueError(
@@ -38,18 +38,11 @@ class BackendRegistry:
 
         backend_class = cls._backends[backend_id]
 
-        # Resolve string references
-        if isinstance(backend_class, str):
-            if backend_class == "RemoteAPIBackend":
-                backend_class = RemoteAPIBackend
-            else:
-                raise ValueError(f"Unknown backend class reference: {backend_class}")
-
         # Merge default config with provided kwargs
         config = cls._backend_configs.get(backend_id, {}).copy()
         config.update(kwargs)
 
-        return backend_class(**config)
+        return backend_class(**config)  # type: ignore[return-value, no-any-return]
 
     @classmethod
     def list_available(cls) -> List[str]:

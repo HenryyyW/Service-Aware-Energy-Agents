@@ -1,6 +1,10 @@
 """Multi-agent controller for energy community coordination."""
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.coordination.coordinator import CoordinationResult
 
 from src.controllers import BaseController
 from src.schemas.action import RequestedActions, Action, ActionType
@@ -28,7 +32,7 @@ class MultiAgentController(BaseController):
             pandapower_network=pandapower_network,
             max_iterations=max_iterations,
         )
-        self.last_coordination_result = None
+        self.last_coordination_result: Optional["CoordinationResult"] = None
 
     def get_actions(
         self, observations: Dict[str, Any], timestep: int

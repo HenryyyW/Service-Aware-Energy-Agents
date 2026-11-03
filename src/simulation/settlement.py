@@ -457,13 +457,15 @@ class SettlementEngine:
             "actual_total_bill": actual_total_bill,
             "total_savings_vs_baseline": sum(self.get_building_savings().values()),
             "avg_clearing_price": (
-                np.mean(
-                    [
-                        s
-                        for s in self.building_settlements.values()
-                        for s in s.clearing_prices
-                        if s > 0
-                    ]
+                float(
+                    np.mean(
+                        [
+                            price
+                            for settlement in self.building_settlements.values()
+                            for price in settlement.clearing_prices
+                            if price > 0
+                        ]
+                    )
                 )
                 if any(s.clearing_prices for s in self.building_settlements.values())
                 else 0.0

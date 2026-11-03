@@ -1,10 +1,10 @@
 """Scenario comparison API endpoints."""
 
-from typing import Dict, Any
+from typing import Dict, Any, List
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from app.routers.simulations import _runs, _couplers
+from backend.app.routers.simulations import _runs, _couplers
 
 router = APIRouter()
 
@@ -22,9 +22,9 @@ class ComparisonResult(BaseModel):
 
 def _compare_metrics(
     metrics_a: Dict[str, float], metrics_b: Dict[str, float], group_name: str
-) -> Dict[str, Dict[str, float]]:
+) -> Dict[str, Dict[str, Dict[str, float]]]:
     """Compare two metric dictionaries."""
-    comparison = {}
+    comparison: Dict[str, Dict[str, float]] = {}
     all_keys = set(metrics_a.keys()) | set(metrics_b.keys())
     for key in all_keys:
         val_a = metrics_a.get(key, 0)
@@ -76,7 +76,7 @@ async def compare_runs(
     metrics_comparison.update(grid_comparison)
 
     # Generate summary
-    summary = {
+    summary: Dict[str, List[str]] = {
         "run_a_better": [],
         "run_b_better": [],
         "similar": [],
@@ -84,8 +84,11 @@ async def compare_runs(
 
     for group_name, group_metrics in metrics_comparison.items():
         for metric_name, values in group_metrics.items():
-            diff = values["difference"]
-            if abs(diff) < 0.01 * max(abs(values["run_a"]), abs(values["run_b"]), 1):
+            values_dict: Dict[str, float] = values
+            diff = values_dict["difference"]
+            if abs(diff) < 0.01 * max(
+                abs(values_dict["run_a"]), abs(values_dict["run_b"]), 1
+            ):
                 summary["similar"].append(f"{group_name}.{metric_name}")
             elif diff > 0:
                 summary["run_b_better"].append(f"{group_name}.{metric_name}")
@@ -138,7 +141,7 @@ async def compare_runs_detailed(run_id_a: str, run_id_b: str):
             )
 
     # Time series comparison
-    time_series = {
+    time_series: Dict[str, List[Dict[str, Any]]] = {
         "cost_comparison": [],
         "voltage_comparison": [],
         "loading_comparison": [],
@@ -146,42 +149,40 @@ async def compare_runs_detailed(run_id_a: str, run_id_b: str):
 
     min_steps = min(len(trajectories_a), len(trajectories_b))
     for i in range(min_steps):
-        ta = trajectories_a[i]
-        tb = trajectories_b[i]
+        ta: Dict[str, Any] = trajectories_a[i]
+        tb: Dict[str, Any] = trajectories_b[i]
 
+        costs_a = ta.get("costs", {})
+        costs_b = tb.get("costs", {})
         time_series["cost_comparison"].append(
             {
                 "timestep": i,
-                "run_a": sum(ta["costs"].values()) if ta["costs"] else 0,
-                "run_b": sum(tb["costs"].values()) if tb["costs"] else 0,
+                "run_a": sum(costs_a.values()) if costs_a else 0,
+                "run_b": sum(costs_b.values()) if costs_b else 0,
             }
         )
 
         if ta.get("grid_diagnostics") and tb.get("grid_diagnostics"):
-            gd_a = ta["grid_diagnostics"]
-            gd_b = tb["grid_diagnostics"]
+            gd_a: Dict[str, Any] = ta["grid_diagnostics"]  # type: ignore[assignment]
+            gd_b: Dict[str, Any] = tb["grid_diagnostics"]  # type: ignore[assignment]
 
+            vp_a = gd_a.get("voltage_profile", {})
+            vp_b = gd_b.get("voltage_profile", {})
             time_series["voltage_comparison"].append(
                 {
                     "timestep": i,
-                    "run_a_avg": sum(gd_a.get("voltage_profile", {}).values())
-                    / max(len(gd_a.get("voltage_profile", {})), 1),
-                    "run_b_avg": sum(gd_b.get("voltage_profile", {}).values())
-                    / max(len(gd_b.get("voltage_profile", {})), 1),
+                    "run_a_avg": sum(vp_a.values()) / max(len(vp_a), 1),
+                    "run_b_avg": sum(vp_b.values()) / max(len(vp_b), 1),
                 }
             )
 
+            lp_a = gd_a.get("loading_profile", {}).get("lines", {})
+            lp_b = gd_b.get("loading_profile", {}).get("lines", {})
             time_series["loading_comparison"].append(
                 {
                     "timestep": i,
-                    "run_a_max_line": max(
-                        gd_a.get("loading_profile", {}).get("lines", {}).values(),
-                        default=0,
-                    ),
-                    "run_b_max_line": max(
-                        gd_b.get("loading_profile", {}).get("lines", {}).values(),
-                        default=0,
-                    ),
+                    "run_a_max_line": max(lp_a.values(), default=0),
+                    "run_b_max_line": max(lp_b.values(), default=0),
                 }
             )
 

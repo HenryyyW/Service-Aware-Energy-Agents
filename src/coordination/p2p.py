@@ -380,7 +380,7 @@ def run_p2p_invariant_tests() -> Dict[str, bool]:
     results["ledger_conservation"] = abs(total_payments - total_revenues) < 1e-6
 
     # No double settlement
-    traded_quantities = {}
+    traded_quantities: Dict[tuple, float] = {}
     for t in result.trades:
         key = (t.buyer_id, t.seller_id, t.timestamp)
         traded_quantities[key] = traded_quantities.get(key, 0) + t.quantity_kwh

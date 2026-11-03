@@ -12,12 +12,12 @@ from datetime import datetime
 from prometheus_client import generate_latest
 from fastapi.responses import Response
 
-from app.state import (
+from backend.app.state import (
     REDIS_AVAILABLE,
     get_redis_client,
 )
 
-from app.routers import scenarios, simulations, agent, reports, compare, network
+from backend.app.routers import scenarios, simulations, agent, reports, compare, network
 
 
 @asynccontextmanager
@@ -357,7 +357,7 @@ async def websocket_agent_task(websocket: WebSocket, task_id: str):
     )
 
     try:
-        from app.routers import agent as agent_router
+        from backend.app.routers import agent as agent_router
 
         while True:
             await asyncio.sleep(1)

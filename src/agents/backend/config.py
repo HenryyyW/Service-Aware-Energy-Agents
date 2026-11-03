@@ -197,19 +197,24 @@ def get_llm_config_for_scenario(scenario_id: str) -> "LLMConfig":
     prefix = f"SCENARIO_{scenario_id.upper()}_LLM_"
 
     # Override backend if specified
-    if os.getenv(f"{prefix}BACKEND"):
-        config._backend_raw = os.getenv(f"{prefix}BACKEND")
+    backend_val = os.getenv(f"{prefix}BACKEND")
+    if backend_val:
+        config._backend_raw = backend_val
 
     # Override model
-    if os.getenv(f"{prefix}MODEL"):
-        config.model = os.getenv(f"{prefix}MODEL")
+    model_val = os.getenv(f"{prefix}MODEL")
+    if model_val:
+        config.model = model_val
 
     # Override budget
-    if os.getenv(f"{prefix}MAX_USD"):
-        config.max_usd = float(os.getenv(f"{prefix}MAX_USD"))
-    if os.getenv(f"{prefix}MAX_LATENCY_MS"):
-        config.max_latency_ms = int(os.getenv(f"{prefix}MAX_LATENCY_MS"))
-    if os.getenv(f"{prefix}MAX_TOKENS"):
-        config.max_tokens = int(os.getenv(f"{prefix}MAX_TOKENS"))
+    max_usd_val = os.getenv(f"{prefix}MAX_USD")
+    if max_usd_val:
+        config.max_usd = float(max_usd_val)
+    max_latency_val = os.getenv(f"{prefix}MAX_LATENCY_MS")
+    if max_latency_val:
+        config.max_latency_ms = int(max_latency_val)
+    max_tokens_val = os.getenv(f"{prefix}MAX_TOKENS")
+    if max_tokens_val:
+        config.max_tokens = int(max_tokens_val)
 
     return config
