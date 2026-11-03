@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useSimulationStore } from '../store/simulationStore';
 import { useScenarioStore } from '../store/scenarioStore';
 import { api } from '../api/client';
 import { ScenarioComparison } from '../components/scenario/ScenarioComparison';
-import { ToastProvider, useToast } from '../components/ui/Toast';
+import { ToastProvider } from '@/components/ui/Toast'
+import { useToast } from '@/hooks';
 import { Button } from '../components/ui/Button';
 import { ChevronLeft, GitCompare, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -17,13 +18,7 @@ function ComparisonPageContent() {
   // Comparison data state removed
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (runIdA && runIdB) {
-      loadComparison();
-    }
-  }, [runIdA, runIdB]);
-
-  const loadComparison = async () => {
+  const loadComparison = useCallback(async () => {
     setLoading(true);
     try {
       const runA = runs.find(r => r.run_id === runIdA);
@@ -41,7 +36,13 @@ function ComparisonPageContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [runIdA, runIdB, runs, setComparisonRunA, setComparisonRunB, addToast]);
+
+  useEffect(() => {
+    if (runIdA && runIdB) {
+      loadComparison();
+    }
+  }, [runIdA, runIdB, loadComparison]);
 
   const handleSelectA = (run: any) => {
     setComparisonRunA(run);

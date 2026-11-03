@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useToast } from '../ui/Toast';
+import { useToast } from '../../hooks';
 import { Button } from '../ui/Button';
 import { Copy } from 'lucide-react';
 

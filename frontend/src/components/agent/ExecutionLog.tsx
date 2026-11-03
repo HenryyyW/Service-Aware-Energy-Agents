@@ -2,7 +2,7 @@ import { clsx } from 'clsx';
 import { Terminal, AlertCircle, ChevronDown, Download, Trash2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Input';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAgentStore } from '../../store/agentStore';
 
 interface ExecutionLogProps {
@@ -12,7 +12,7 @@ interface ExecutionLogProps {
 
 export function ExecutionLog({ logs, autoScroll = true }: ExecutionLogProps) {
   const { currentTask } = useAgentStore();
-  const taskLogs = logs || currentTask?.execution_log || [];
+  const taskLogs = useMemo(() => logs || currentTask?.execution_log || [], [logs, currentTask?.execution_log]);
   const [filter, setFilter] = useState<'all' | 'stdout' | 'stderr' | 'error'>('all');
   const logContainerRef = useRef<HTMLDivElement>(null);
 

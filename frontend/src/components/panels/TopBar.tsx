@@ -4,7 +4,7 @@ import { Select } from '../ui/Input';
 import { useCanvasStore } from '../../store/canvasStore';
 import { useSimulationStore } from '../../store/simulationStore';
 import { api } from '../../api/client';
-import { useI18n } from '../../i18n';
+import { useI18n } from '../../hooks/useI18n';
 
 interface TopBarProps {
   communityName: string;

@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { clsx } from 'clsx';
-import { Zap, AlertTriangle, CheckCircle, TrendingUp, TrendingDown, Download } from 'lucide-react';
-import { Button } from '../ui/Button';
+import { Zap, AlertTriangle, CheckCircle, TrendingUp, TrendingDown } from 'lucide-react';
 import { TimeSeriesChart } from './TimeSeriesChart';
 import type { SelectedAsset, GridDiagnostics, TimeStepData } from '../../api/types';
 
@@ -12,31 +11,29 @@ interface GridExplorerProps {
 }
 
 export function GridExplorer({ asset, gridDiagnostics, trajectories }: GridExplorerProps) {
-  const { type, id, data } = asset;
+  const { type, id } = asset;
 
-  if (!gridDiagnostics) {
-    return (
-      <div className="glass-card p-4 text-center text-text-muted">
-        <Zap className="w-12 h-12 mx-auto mb-3 text-text-muted/30" />
-        <p className="text-body-sm">No grid diagnostics available</p>
-        <p className="text-caption text-text-muted/50 mt-1">Run a simulation with grid coupling to see voltage and loading data</p>
-      </div>
-    );
-  }
+  const voltageViolationIds = useMemo(() => {
+    if (!gridDiagnostics) return new Set<string>();
+    const voltageViolationSource = gridDiagnostics.violations?.voltage || [];
+    const voltageViolations = Array.isArray(voltageViolationSource)
+      ? voltageViolationSource
+      : Object.entries(voltageViolationSource).map(([bus, violation]) => ({ bus, ...violation }));
+    return new Set(voltageViolations.map((violation) => violation.bus));
+  }, [gridDiagnostics]);
 
-  const voltageViolationSource = gridDiagnostics.violations?.voltage || [];
-  const voltageViolations = Array.isArray(voltageViolationSource)
-    ? voltageViolationSource
-    : Object.entries(voltageViolationSource).map(([bus, violation]) => ({ bus, ...violation }));
-  const voltageViolationIds = new Set(voltageViolations.map((violation) => violation.bus));
-  const loadingViolationSource = gridDiagnostics.violations?.loading || [];
-  const loadingViolations = Array.isArray(loadingViolationSource)
-    ? loadingViolationSource
-    : Object.entries(loadingViolationSource).map(([element, violation]) => ({ element, ...violation }));
-  const loadingViolationIds = new Set(loadingViolations.map((violation) => violation.element));
+  const loadingViolationIds = useMemo(() => {
+    if (!gridDiagnostics) return new Set<string>();
+    const loadingViolationSource = gridDiagnostics.violations?.loading || [];
+    const loadingViolations = Array.isArray(loadingViolationSource)
+      ? loadingViolationSource
+      : Object.entries(loadingViolationSource).map(([element, violation]) => ({ element, ...violation }));
+    return new Set(loadingViolations.map((violation) => violation.element));
+  }, [gridDiagnostics]);
 
   // Voltage data for selected element
   const voltageData = useMemo(() => {
+    if (!gridDiagnostics) return [];
     if (type === 'bus' && gridDiagnostics.voltage_profile[id] !== undefined) {
       return [{
         bus: id,
@@ -44,45 +41,48 @@ export function GridExplorer({ asset, gridDiagnostics, trajectories }: GridExplo
         violation: voltageViolationIds.has(id),
       }];
     }
-    return Object.entries(gridDiagnostics.voltage_profile).map(([bus, voltage]) => ({
+    return Object.entries(gridDiagnostics.voltage_profile || {}).map(([bus, voltage]) => ({
       bus,
       voltage_pu: voltage,
       violation: voltageViolationIds.has(bus),
     }));
-  }, [gridDiagnostics, type, id]);
+  }, [gridDiagnostics, type, id, voltageViolationIds]);
 
   // Loading data for selected element
   const loadingData = useMemo(() => {
+    if (!gridDiagnostics) return [];
     if (type === 'feeder' || type === 'transformer') {
       const loading = type === 'feeder'
-        ? gridDiagnostics.loading_profile.lines[id]
-        : gridDiagnostics.loading_profile.trafos[id];
+        ? gridDiagnostics.loading_profile?.lines[id]
+        : gridDiagnostics.loading_profile?.trafos[id];
       if (loading !== undefined) {
         return [{
           element: id,
           loading_pct: loading * 100,
           violation: loadingViolationIds.has(id),
+          type: type === 'feeder' ? 'line' as const : 'transformer' as const,
         }];
       }
     }
     return [
-      ...Object.entries(gridDiagnostics.loading_profile.lines).map(([line, loading]) => ({
+      ...Object.entries(gridDiagnostics.loading_profile?.lines || {}).map(([line, loading]) => ({
         element: line,
         loading_pct: loading * 100,
         violation: loadingViolationIds.has(line),
         type: 'line' as const,
       })),
-      ...Object.entries(gridDiagnostics.loading_profile.trafos).map(([trafo, loading]) => ({
+      ...Object.entries(gridDiagnostics.loading_profile?.trafos || {}).map(([trafo, loading]) => ({
         element: trafo,
         loading_pct: loading * 100,
         violation: loadingViolationIds.has(trafo),
         type: 'transformer' as const,
       })),
     ];
-  }, [gridDiagnostics, type, id]);
+  }, [gridDiagnostics, type, id, loadingViolationIds]);
 
   // Time series for grid metrics
   const gridTimeSeries = useMemo(() => {
+    if (!gridDiagnostics) return [];
     return trajectories.map(step => {
       const diag = step.grid_diagnostics;
       if (!diag) return { timestep: step.timestep };
@@ -101,7 +101,17 @@ export function GridExplorer({ asset, gridDiagnostics, trajectories }: GridExplo
         converged: diag.power_flow_converged ? 1 : 0,
       };
     });
-  }, [trajectories]);
+  }, [trajectories, gridDiagnostics]);
+
+  if (!gridDiagnostics) {
+    return (
+      <div className="glass-card p-4 text-center text-text-muted">
+        <Zap className="w-12 h-12 mx-auto mb-3 text-text-muted/30" />
+        <p className="text-body-sm">No grid diagnostics available</p>
+        <p className="text-caption text-text-muted/50 mt-1">Run a simulation with grid coupling to see voltage and loading data</p>
+      </div>
+    );
+  }
 
   const getVoltageStatus = (v: number) => {
     if (v < 0.95) return { label: 'Low', color: 'text-ev', icon: TrendingDown };
@@ -119,276 +129,147 @@ export function GridExplorer({ asset, gridDiagnostics, trajectories }: GridExplo
     <div className="space-y-4">
       {/* Grid Status Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Zap className="w-6 h-6 text-grid" />
-          <div>
-            <h3 className="font-display font-semibold text-body text-text">Grid Explorer</h3>
-            <p className="text-caption text-text-muted">
-              {gridDiagnostics.power_flow_converged
-                ? <span className="flex items-center gap-1 text-energy"><CheckCircle className="w-3 h-3" /> Power Flow Converged</span>
-                : <span className="flex items-center gap-1 text-violation"><AlertTriangle className="w-3 h-3" /> Power Flow Diverged</span>
-              }
-            </p>
-          </div>
-        </div>
-        <Button variant="ghost" size="icon" aria-label="Download grid data">
-          <Download className="w-4 h-4" />
-        </Button>
+        <h3 className="font-body font-semibold text-body text-text">Grid Diagnostics</h3>
+        <span className="badge badge-info">Real-time</span>
       </div>
 
-      {/* Selected Element Details */}
-      {type === 'bus' && voltageData.length === 1 && (
-        <div className="glass-card p-4">
-          <h4 className="font-body font-medium text-body-sm text-text mb-3">Bus {id} Details</h4>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-caption text-text-muted">Voltage</p>
-              <p className="metric-value font-mono text-data text-2xl">{voltageData[0].voltage_pu.toFixed(4)} p.u.</p>
-            </div>
-            <div>
-              <p className="text-caption text-text-muted">Status</p>
-              <div className="flex items-center gap-2">
-                {(() => {
-                  const status = getVoltageStatus(voltageData[0].voltage_pu);
-                  const Icon = status.icon;
-                  return (
-                    <span className={clsx('flex items-center gap-1 font-medium', status.color)}>
-                      <Icon className="w-4 h-4" />
-                      {status.label}
-                    </span>
-                  );
-                })()}
-              </div>
-            </div>
-            <div>
-              <p className="text-caption text-text-muted">Limits</p>
-              <p className="metric-value font-mono text-data text-sm">0.95 – 1.05 p.u.</p>
-            </div>
-            <div>
-              <p className="text-caption text-text-muted">Violation</p>
-              <p className={clsx('metric-value font-mono', voltageData[0].violation ? 'text-violation' : 'text-energy')}>
-                {voltageData[0].violation ? 'Yes' : 'No'}
-              </p>
-            </div>
-          </div>
+      {/* Voltage Profile */}
+      <div className="glass-card">
+        <div className="p-4 border-b border-border/30 flex items-center justify-between">
+          <h4 className="font-body font-medium text-body-sm text-text">Bus Voltages</h4>
+          <span className="badge badge-secondary">{voltageData.length} buses</span>
         </div>
-      )}
-
-      {type === 'feeder' && loadingData.length === 1 && (
-        <div className="glass-card p-4">
-          <h4 className="font-body font-medium text-body-sm text-text mb-3">Feeder {id} Details</h4>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-caption text-text-muted">Loading</p>
-              <p className="metric-value font-mono text-data text-2xl">{loadingData[0].loading_pct.toFixed(1)}%</p>
-            </div>
-            <div>
-              <p className="text-caption text-text-muted">Status</p>
-              <div className="flex items-center gap-2">
-                {(() => {
-                  const status = getLoadingStatus(loadingData[0].loading_pct);
-                  const Icon = status.icon;
-                  return (
-                    <span className={clsx('flex items-center gap-1 font-medium', status.color)}>
-                      <Icon className="w-4 h-4" />
-                      {status.label}
-                    </span>
-                  );
-                })()}
-              </div>
-            </div>
-            <div>
-              <p className="text-caption text-text-muted">Limit</p>
-              <p className="metric-value font-mono text-data text-sm">100%</p>
-            </div>
-            <div>
-              <p className="text-caption text-text-muted">Violation</p>
-              <p className={clsx('metric-value font-mono', loadingData[0].violation ? 'text-violation' : 'text-energy')}>
-                {loadingData[0].violation ? 'Yes' : 'No'}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {type === 'transformer' && loadingData.length === 1 && (
-        <div className="glass-card p-4">
-          <h4 className="font-body font-medium text-body-sm text-text mb-3">Transformer {id} Details</h4>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-caption text-text-muted">Loading</p>
-              <p className="metric-value font-mono text-data text-2xl">{loadingData[0].loading_pct.toFixed(1)}%</p>
-            </div>
-            <div>
-              <p className="text-caption text-text-muted">Status</p>
-              <div className="flex items-center gap-2">
-                {(() => {
-                  const status = getLoadingStatus(loadingData[0].loading_pct);
-                  const Icon = status.icon;
-                  return (
-                    <span className={clsx('flex items-center gap-1 font-medium', status.color)}>
-                      <Icon className="w-4 h-4" />
-                      {status.label}
-                    </span>
-                  );
-                })()}
-              </div>
-            </div>
-            <div>
-              <p className="text-caption text-text-muted">Capacity</p>
-              <p className="metric-value font-mono text-data text-sm">{data?.capacity_kva || 630} kVA</p>
-            </div>
-            <div>
-              <p className="text-caption text-text-muted">Violation</p>
-              <p className={clsx('metric-value font-mono', loadingData[0].violation ? 'text-violation' : 'text-energy')}>
-                {loadingData[0].violation ? 'Yes' : 'No'}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Voltage Profile Table */}
-      <div className="space-y-2">
-        <h4 className="font-body font-medium text-body-sm text-text">Voltage Profile</h4>
-        <div className="glass-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border/30 bg-surface/50">
-                  <th className="text-left p-2 text-caption text-text-muted">Bus</th>
-                  <th className="text-right p-2 text-caption text-text-muted">Voltage (p.u.)</th>
-                  <th className="text-left p-2 text-caption text-text-muted">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {voltageData.slice(0, 20).map((v) => {
-                  const status = getVoltageStatus(v.voltage_pu);
-                  const Icon = status.icon;
-                  return (
-                    <tr key={v.bus} className="border-b border-border/20 hover:bg-white/5">
-                      <td className="p-2 font-mono text-data">{v.bus}</td>
-                      <td className="p-2 text-right font-mono text-data">{v.voltage_pu.toFixed(4)}</td>
-                      <td className="p-2">
-                        <span className={clsx('flex items-center gap-1 font-medium', status.color)}>
-                          <Icon className="w-3 h-3" />
-                          {status.label}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {voltageData.length > 20 && (
-                  <tr>
-                    <td colSpan={3} className="p-2 text-center text-caption text-text-muted">
-                      +{voltageData.length - 20} more buses
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border/30">
+                <th className="text-left p-3 font-body font-medium text-body-sm text-text-muted">Bus</th>
+                <th className="text-left p-3 font-body font-medium text-body-sm text-text-muted">Voltage (pu)</th>
+                <th className="text-left p-3 font-body font-medium text-body-sm text-text-muted">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {voltageData.map((item, idx) => {
+                const status = getVoltageStatus(item.voltage_pu);
+                return (
+                  <tr key={idx} className="border-b border-border/20 hover:bg-surface/30">
+                    <td className="p-3 font-mono text-body-sm text-text">{item.bus}</td>
+                    <td className="p-3 font-mono text-body-sm text-text">{item.voltage_pu.toFixed(3)}</td>
+                    <td className="p-3">
+                      <span className={clsx('badge', status.color)}>
+                        <status.icon className="w-3 h-3 mr-1" />
+                        {status.label}
+                      </span>
                     </td>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {/* Loading Profile Table */}
-      <div className="space-y-2">
-        <h4 className="font-body font-medium text-body-sm text-text">Loading Profile</h4>
-        <div className="glass-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border/30 bg-surface/50">
-                  <th className="text-left p-2 text-caption text-text-muted">Element</th>
-                  <th className="text-left p-2 text-caption text-text-muted">Type</th>
-                  <th className="text-right p-2 text-caption text-text-muted">Loading (%)</th>
-                  <th className="text-left p-2 text-caption text-text-muted">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loadingData.slice(0, 20).map((l: { element: string; loading_pct: number; violation: boolean; type?: string }) => {
-                  const status = getLoadingStatus(l.loading_pct);
-                  const Icon = status.icon;
-                  return (
-                    <tr key={l.element} className="border-b border-border/20 hover:bg-white/5">
-                      <td className="p-2 font-mono text-data">{l.element}</td>
-                      <td className="p-2 text-caption capitalize text-text-muted">{l.type || 'line'}</td>
-                      <td className="p-2 text-right font-mono text-data">{l.loading_pct.toFixed(1)}</td>
-                      <td className="p-2">
-                        <span className={clsx('flex items-center gap-1 font-medium', status.color)}>
-                          <Icon className="w-3 h-3" />
-                          {status.label}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {loadingData.length > 20 && (
-                  <tr>
-                    <td colSpan={4} className="p-2 text-center text-caption text-text-muted">
-                      +{loadingData.length - 20} more elements
+      {/* Line & Transformer Loadings */}
+      <div className="glass-card">
+        <div className="p-4 border-b border-border/30 flex items-center justify-between">
+          <h4 className="font-body font-medium text-body-sm text-text">Line & Transformer Loadings</h4>
+          <span className="badge badge-secondary">{loadingData.length} elements</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border/30">
+                <th className="text-left p-3 font-body font-medium text-body-sm text-text-muted">Element</th>
+                <th className="text-left p-3 font-body font-medium text-body-sm text-text-muted">Loading</th>
+                <th className="text-left p-3 font-body font-medium text-body-sm text-text-muted">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loadingData.map((item, idx) => {
+                const status = getLoadingStatus(item.loading_pct);
+                const isTransformer = item.type === 'transformer';
+                return (
+                  <tr key={idx} className="border-b border-border/20 hover:bg-surface/30">
+                    <td className="p-3 font-body text-body-sm text-text">
+                      {isTransformer ? '⚡ ' : '🔗 '}{item.element}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-2 bg-border rounded overflow-hidden">
+                          <div
+                            className={clsx('h-full rounded', status.color.replace('text-', 'bg-'))}
+                            style={{ width: `${Math.min(item.loading_pct, 100)}%` }}
+                          />
+                        </div>
+                        <span className="font-mono text-body-sm text-text w-16 text-right">{item.loading_pct.toFixed(1)}%</span>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <span className={clsx('badge', status.color)}>
+                        <status.icon className="w-3 h-3 mr-1" />
+                        {status.label}
+                      </span>
                     </td>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
-
-      {/* Time Series Charts */}
-      {gridTimeSeries.length > 0 && (
-        <div className="space-y-4">
-          <h4 className="font-body font-medium text-body-sm text-text">Grid Time Series</h4>
-
-          <TimeSeriesChart
-            data={gridTimeSeries}
-            metrics={['min_voltage', 'max_voltage', 'avg_voltage']}
-            height={180}
-            showLegend={true}
-          />
-
-          <TimeSeriesChart
-            data={gridTimeSeries}
-            metrics={['max_line_loading', 'max_trafo_loading']}
-            height={180}
-            showLegend={true}
-          />
-        </div>
-      )}
 
       {/* Violations Summary */}
-      {(voltageViolations.length > 0 || loadingViolations.length > 0) && (
-        <div className="space-y-2">
-          <h4 className="font-body font-medium text-body-sm text-text">Active Violations</h4>
-          <div className="glass-card p-3 space-y-2">
-            {voltageViolations.map((v, i) => (
-              <div key={`v-${i}`} className="flex items-center justify-between p-2 bg-violation/10 rounded-lg border border-violation/20">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-violation" />
-                  <span className="font-mono text-data text-sm">{v.bus}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-violation font-mono">{v.value.toFixed(4)} p.u.</span>
-                  <span className="text-text-muted">limit: {v.limit.toFixed(2)}</span>
-                </div>
+      {voltageViolationIds.size > 0 || loadingViolationIds.size > 0 ? (
+        <div className="glass-card border-violation/30">
+          <div className="p-4 border-b border-border/30 flex items-center justify-between">
+            <h4 className="font-body font-medium text-body-sm text-text">Active Violations</h4>
+            <span className="badge badge-violation">{voltageViolationIds.size + loadingViolationIds.size} Total</span>
+          </div>
+          <div className="p-4 space-y-2">
+            {Array.from(voltageViolationIds).map((bus, idx) => (
+              <div key={idx} className="flex items-center gap-3 p-2 bg-violation/10 rounded">
+                <AlertTriangle className="w-5 h-5 text-violation" />
+                <span className="font-body text-body-sm text-text">Voltage violation at Bus {bus}</span>
               </div>
             ))}
-            {loadingViolations.map((v, i) => (
-              <div key={`l-${i}`} className="flex items-center justify-between p-2 bg-violation/10 rounded-lg border border-violation/20">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-violation" />
-                  <span className="font-mono text-data text-sm">{v.element}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-violation font-mono">{v.value.toFixed(1)}%</span>
-                  <span className="text-text-muted">limit: {v.limit.toFixed(0)}%</span>
-                </div>
+            {Array.from(loadingViolationIds).map((element, idx) => (
+              <div key={idx} className="flex items-center gap-3 p-2 bg-violation/10 rounded">
+                <AlertTriangle className="w-5 h-5 text-violation" />
+                <span className="font-body text-body-sm text-text">Loading violation: {element}</span>
               </div>
             ))}
           </div>
         </div>
+      ) : (
+        <div className="glass-card">
+          <div className="p-4 text-center text-text-muted">
+            <CheckCircle className="w-12 h-12 mx-auto mb-3 text-energy" />
+            <p className="text-body">No active violations</p>
+            <p className="text-caption text-text-muted/50 mt-1">All grid parameters within normal limits</p>
+          </div>
+        </div>
       )}
+
+      {/* Time Series Charts */}
+      <div className="glass-card">
+        <div className="p-4 border-b border-border/30 flex items-center justify-between">
+          <h4 className="font-body font-medium text-body-sm text-text">Grid Metrics Over Time</h4>
+        </div>
+        <div className="p-4">
+          <TimeSeriesChart
+            data={gridTimeSeries}
+            xAxisKey="timestep"
+            metrics={['min_voltage', 'max_voltage', 'avg_voltage']}
+            height={200}
+          />
+          <TimeSeriesChart
+            data={gridTimeSeries}
+            xAxisKey="timestep"
+            metrics={['max_line_loading', 'max_trafo_loading']}
+            height={200}
+          />
+        </div>
+      </div>
     </div>
   );
 }

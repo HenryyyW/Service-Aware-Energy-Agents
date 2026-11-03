@@ -418,7 +418,7 @@ export interface PVAssetMetadata {
   capacity_kw: number;
   orientation: number;
   tilt: number;
-  location: { lat: number; lon: number } | {};
+  location: { lat: number; lon: number } | Record<string, never>;
 }
 
 export interface BatteryAssetMetadata {
@@ -449,13 +449,13 @@ export interface FlexibleLoadAssetMetadata {
   energy_kwh: number;
   earliest_start: string;
   latest_end: string;
-  location: { lat: number; lon: number } | {};
+  location: { lat: number; lon: number } | Record<string, never>;
 }
 
 export interface BuildingMetadata {
   building_id: string;
   name: string;
-  location: { lat: number; lon: number } | {};
+  location: { lat: number; lon: number } | Record<string, never>;
   building_type: string;
 }
 

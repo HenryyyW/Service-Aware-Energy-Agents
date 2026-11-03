@@ -1,10 +1,11 @@
-﻿import { useEffect, useState } from 'react';
+﻿import { useEffect, useState, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useSimulationStore } from '../store/simulationStore';
 import { useAgentStore } from '../store/agentStore';
 import { api } from '../api/client';
 import { ReportView } from '../components/agent/ReportView';
-import { ToastProvider, useToast } from '../components/ui/Toast';
+import { ToastProvider } from '@/components/ui/Toast'
+import { useToast } from '@/hooks';
 import { Button } from '../components/ui/Button';
 import { Tabs, TabList, Tab, TabPanel } from '../components/ui/Tabs';
 import { Download, ChevronLeft, RotateCcw, FileText } from 'lucide-react';
@@ -216,13 +217,7 @@ function ReportPageContent() {
     setSelectedAsset('');
   };
 
-  useEffect(() => {
-    if (runId) {
-      loadReport();
-    }
-  }, [runId]);
-
-  const loadReport = async () => {
+  const loadReport = useCallback(async () => {
     setLoading(true);
     try {
       // Try to get report from agent task first
@@ -264,7 +259,13 @@ function ReportPageContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [runId, currentTask?.report, setReport, addToast]);
+
+  useEffect(() => {
+    if (runId) {
+      loadReport();
+    }
+  }, [runId, loadReport]);
 
   const handleDownload = async (fmt: 'markdown' | 'json') => {
     try {

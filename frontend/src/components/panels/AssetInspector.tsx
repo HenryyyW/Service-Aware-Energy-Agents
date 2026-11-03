@@ -123,15 +123,6 @@ export function AssetInspector({ asset, timestepData, trajectories }: AssetInspe
 
   const metrics = metricDefinitions[type] || [];
 
-  if (metrics.length === 0) {
-    return (
-      <div className="glass-card p-4 text-center text-text-muted">
-        <span className="text-4xl mb-2 block">{icon}</span>
-        <p>No metrics available for {type}</p>
-      </div>
-    );
-  }
-
   // Current actions at latest timestep
   const currentActions = useMemo(() => {
     const actions: Record<string, number> = {};
@@ -143,7 +134,16 @@ export function AssetInspector({ asset, timestepData, trajectories }: AssetInspe
       }
     });
     return actions;
-  }, [trajectories, timestepData, id]);
+  }, [trajectories, id]);
+
+  if (metrics.length === 0) {
+    return (
+      <div className="glass-card p-4 text-center text-text-muted">
+        <span className="text-4xl mb-2 block">{icon}</span>
+        <p>No metrics available for {type}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

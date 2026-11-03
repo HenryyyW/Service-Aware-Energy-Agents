@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, type ReactNode } from 'react';
 import { useTranslation as useTranslationHook } from 'react-i18next';
 
 const I18nContext = createContext<{
@@ -33,14 +33,4 @@ export function I18nProvider({ children }: I18nProviderProps) {
   );
 }
 
-export function useI18n() {
-  const context = useContext(I18nContext);
-  if (!context) {
-    throw new Error('useI18n must be used within an I18nProvider');
-  }
-  const { t } = useTranslationHook();
-  return { ...context, t };
-}
-
-// Re-export useTranslation for components that need multiple namespaces
-export { useTranslationHook as useTranslation };
+export { I18nContext };

@@ -5,7 +5,7 @@ import { api } from '../api/client';
 import { TaskInput } from '../components/agent/TaskInput';
 import { AgentTimeline } from '../components/agent/AgentTimeline';
 import { WorkspaceTimeline } from '../components/workspace';
-import { ToastProvider } from '../components/ui/Toast';
+import { ToastProvider } from '@/components/ui/Toast';
 import { Tabs, TabList, Tab, TabPanel } from '../components/ui/Tabs';
 import { useTranslation } from 'react-i18next';
 

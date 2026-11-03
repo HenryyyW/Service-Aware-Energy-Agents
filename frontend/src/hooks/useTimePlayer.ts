@@ -5,8 +5,8 @@ export function useTimePlayerAutoAdvance() {
   const { timePlayer, setCurrentTimestep } = useSimulationStore();
   const intervalRef = useRef<number | null>(null);
   const lastFrameRef = useRef<number>(0);
-
-  const fpsMap = { 1: 2, 2: 4, 4: 8 }; // frames per second per speed
+  
+  const fpsMap = useRef({ 1: 2, 2: 4, 4: 8 }).current; // frames per second per speed
 
   useEffect(() => {
     if (timePlayer.playing && timePlayer.currentTimestep < timePlayer.maxTimestep) {
@@ -40,7 +40,7 @@ export function useTimePlayerAutoAdvance() {
         cancelAnimationFrame(intervalRef.current);
       }
     };
-  }, [timePlayer.playing, timePlayer.speed, timePlayer.currentTimestep, timePlayer.maxTimestep, setCurrentTimestep]);
+  }, [timePlayer.playing, timePlayer.speed, timePlayer.currentTimestep, timePlayer.maxTimestep, setCurrentTimestep, fpsMap]);
 }
 
 export function useTimePlayerKeyboard() {
@@ -94,13 +94,14 @@ export function useTimePlayerKeyboard() {
         case '6':
         case '7':
         case '8':
-        case '9':
+        case '9': {
           // Number keys for quick jump (0-9 -> 0%-90%)
           e.preventDefault();
           const percent = parseInt(e.key) * 10;
           const targetTimestep = Math.round(timePlayer.minTimestep + (timePlayer.maxTimestep - timePlayer.minTimestep) * percent / 100);
           setCurrentTimestep(targetTimestep);
           break;
+        }
       }
     };
 

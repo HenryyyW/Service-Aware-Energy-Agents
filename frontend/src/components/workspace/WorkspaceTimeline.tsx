@@ -125,6 +125,31 @@ export function WorkspaceTimeline({ featureFlags = { timelineRich: false } }: Wo
     };
   }, []);
 
+  const navigateTimestep = useCallback((direction: number) => {
+    if (!trajectories || trajectories.length === 0) return;
+    
+    const timesteps = Array.from(new Set(dispatches.map(d => d.timestep))).sort((a, b) => a - b);
+    if (timesteps.length === 0) return;
+    
+    const currentIdx = selectedTimestep !== null 
+      ? timesteps.indexOf(selectedTimestep) 
+      : direction > 0 ? -1 : timesteps.length;
+    
+    const nextIdx = Math.max(0, Math.min(timesteps.length - 1, currentIdx + direction));
+    setSelectedTimestep(timesteps[nextIdx]);
+  }, [dispatches, selectedTimestep, trajectories]);
+
+  const toggleExpandSelected = useCallback(() => {
+    if (selectedTimestep !== null) {
+      setExpandedTimesteps(current => {
+        const next = new Set(current);
+        if (next.has(selectedTimestep!)) next.delete(selectedTimestep!);
+        else next.add(selectedTimestep!);
+        return next;
+      });
+    }
+  }, [selectedTimestep]);
+
   // Keyboard navigation (j/k for timestep navigation)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -142,34 +167,10 @@ export function WorkspaceTimeline({ featureFlags = { timelineRich: false } }: Wo
       }
     };
     
-    containerRef.current?.addEventListener('keydown', handleKeyDown);
-    return () => containerRef.current?.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  const navigateTimestep = useCallback((direction: number) => {
-    if (!trajectories || trajectories.length === 0) return;
-    
-    const timesteps = Array.from(new Set(dispatches.map(d => d.timestep))).sort((a, b) => a - b);
-    if (timesteps.length === 0) return;
-    
-    const currentIdx = selectedTimestep !== null 
-      ? timesteps.indexOf(selectedTimestep) 
-      : direction > 0 ? -1 : timesteps.length;
-    
-    const nextIdx = Math.max(0, Math.min(timesteps.length - 1, currentIdx + direction));
-    setSelectedTimestep(timesteps[nextIdx]);
-  }, [dispatches, selectedTimestep]);
-
-  const toggleExpandSelected = useCallback(() => {
-    if (selectedTimestep !== null) {
-      setExpandedTimesteps(current => {
-        const next = new Set(current);
-        if (next.has(selectedTimestep!)) next.delete(selectedTimestep!);
-        else next.add(selectedTimestep!);
-        return next;
-      });
-    }
-  }, [selectedTimestep]);
+    const container = containerRef.current;
+    container?.addEventListener('keydown', handleKeyDown);
+    return () => container?.removeEventListener('keydown', handleKeyDown);
+  }, [navigateTimestep, toggleExpandSelected]);
 
   const groupedDispatches = groupDispatchesByTimestep(dispatches);
   const availableTimesteps = Array.from(new Set(dispatches.map(d => d.timestep))).sort((a, b) => a - b);

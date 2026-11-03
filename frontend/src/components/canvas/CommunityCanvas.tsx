@@ -33,7 +33,7 @@ import type { Building, PVAsset, BatteryAsset, EVAsset, Feeder, Transformer, Gri
 
 interface CommunityCanvasProps {}
 
-export function CommunityCanvas({}: CommunityCanvasProps) {
+export function CommunityCanvas(_props: CommunityCanvasProps) {
   const navigate = useNavigate();
   const mapRef = useRef<HTMLDivElement>(null);
   const deckRef = useRef<typeof Deck>(null);

@@ -1,4 +1,4 @@
-import { type ReactNode, useRef, useEffect, useState } from 'react';
+import { type ReactNode, useRef, useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
 
@@ -104,10 +104,24 @@ export function Modal({ isOpen, onClose, title, children, size = 'md', showClose
   const [mounted, setMounted] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
 
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+  }, [onClose]);
+
   useEffect(() => {
     setMounted(true);
     return () => setMounted(false);
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    document.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [isOpen, handleKeyDown]);
 
   if (!mounted || !isOpen) return null;
 
@@ -118,19 +132,6 @@ export function Modal({ isOpen, onClose, title, children, size = 'md', showClose
     xl: 'max-w-4xl',
     full: 'max-w-[90vw]',
   };
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') onClose();
-  };
-
-  useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown);
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
-    };
-  }, []);
 
   const modalContent = (
     <div

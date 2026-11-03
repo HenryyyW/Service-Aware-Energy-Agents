@@ -16,7 +16,7 @@ export function useSimulationWebSocket(runId: string | null) {
 
   const handleMessage = useCallback((message: WebSocketMessage) => {
     switch (message.type) {
-      case 'simulation_update':
+      case 'simulation_update': {
         // Update trajectories with new timestep
         const payload = message.payload as TimeStepData;
         setTrajectories((prev: TimeStepData[]) => {
@@ -27,8 +27,9 @@ export function useSimulationWebSocket(runId: string | null) {
           return [...prev, payload].sort((a: TimeStepData, b: TimeStepData) => a.timestep - b.timestep);
         });
         break;
+      }
 
-      case 'simulation_complete':
+      case 'simulation_complete': {
         if (currentRun) {
           updateRun(currentRun.run_id, {
             status: 'completed',
@@ -40,15 +41,17 @@ export function useSimulationWebSocket(runId: string | null) {
         }
         setTimePlayer({ playing: false });
         break;
+      }
 
-      case 'simulation_error':
+      case 'simulation_error': {
         if (currentRun) {
           updateRun(currentRun.run_id, { status: 'failed' });
         }
         setTimePlayer({ playing: false });
         break;
+      }
 
-      case 'agent_update':
+      case 'agent_update': {
         updateTaskStatus(message.payload.status);
         if (message.payload.plan) updateTaskField('plan', message.payload.plan);
         if (message.payload.code) updateTaskField('code', message.payload.code);
@@ -57,10 +60,12 @@ export function useSimulationWebSocket(runId: string | null) {
         if (message.payload.repairs) updateTaskField('repairs', message.payload.repairs);
         if (message.payload.report) updateTaskField('report', message.payload.report);
         break;
+      }
 
-      case 'agent_complete':
+      case 'agent_complete': {
         updateTaskStatus('completed');
         break;
+      }
     }
   }, [setTrajectories, setTimePlayer, updateRun, currentRun, updateTaskStatus, updateTaskField]);
 
@@ -92,11 +97,19 @@ export function useSimulationWebSocket(runId: string | null) {
 
     return () => {
       wsManager.disconnect();
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
     };
   }, [runId, handleMessage]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    const ref = reconnectTimeoutRef;
+    return () => {
+      const timeout = ref.current;
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    };
+  }, []);
 }
 
 export function useTimePlayer() {

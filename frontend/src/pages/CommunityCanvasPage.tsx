@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { useSimulationStore } from '../store/simulationStore';
 import { api, wsManager } from '../api/client';
 import { CommunityCanvas } from '../components/canvas/CommunityCanvas';
-import { ToastProvider, useToast } from '../components/ui/Toast';
+import { ToastProvider } from '@/components/ui/Toast'
+import { useToast } from '@/hooks';
 
 function CommunityCanvasPageContent() {
   const { setRuns, setCurrentRun, setTrajectories } = useSimulationStore();

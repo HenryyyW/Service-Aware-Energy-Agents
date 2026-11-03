@@ -5,7 +5,8 @@ import { api } from '../api/client';
 import { ScenarioEditor } from '../components/scenario/ScenarioEditor';
 import { ParameterControls } from '../components/scenario/ParameterControls';
 import { ScenarioComparison } from '../components/scenario/ScenarioComparison';
-import { ToastProvider, useToast } from '../components/ui/Toast';
+import { ToastProvider } from '@/components/ui/Toast'
+import { useToast } from '@/hooks';
 import { Tabs, TabList, Tab, TabPanel } from '../components/ui/Tabs';
 
 function getPricingRegimeLabel(scenario: any): { label: string; color: 'sun' | 'energy' | 'ev' | 'violation' } | null {
