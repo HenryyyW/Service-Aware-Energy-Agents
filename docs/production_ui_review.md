@@ -70,8 +70,9 @@ Reviewed `frontend/nginx.conf`, `frontend/Dockerfile`, `docker-compose.yml`.
 - ✓ SPA fallback (`try_files $uri $uri/ /index.html`), `/api/` and `/ws/` proxy to `api:8000`,
   security headers (`X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`), hashed-asset
   caching (`1y immutable`).
-- ⧗ **P2P WebSocket:** only `/ws/` is proxied; a P2P channel (see the UX spec) needs its own
-  location block once the endpoint exists.
+- ⧗ **P2P / agent WebSockets:** `/ws/p2p/{run_id}` and `/ws/agent/{task_id}` ride the existing
+  `/ws/` location, so no extra block is needed — but confirm that block forwards the
+  `Upgrade`/`Connection` headers and sets a long `proxy_read_timeout`.
 - ⧗ **No CSP header** — add a `Content-Security-Policy` (and `Referrer-Policy`) for a hardened build.
 - ⧗ **Manifest MIME/caching:** `manifest.webmanifest` is served by the SPA fallback; add an explicit
   `application/manifest+json` type and a short cache to avoid stale manifests.
