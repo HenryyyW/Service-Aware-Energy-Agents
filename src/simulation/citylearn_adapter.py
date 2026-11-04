@@ -88,6 +88,17 @@ class CityLearnAdapter:
             )
             # Override scenario timestep for this adapter to avoid resampling issues
             self.scenario_config.timestep_minutes = dataset_timestep_minutes
+            # Keep the LMP update interval in lockstep with the effective
+            # simulation timestep. apply_pricing_regime runs before the dataset
+            # is resolved and bakes in the YAML timestep (e.g. 15), which the
+            # coupler's validator rejects against the dataset-native value (60).
+            # Ruling (a) 2026-11-04: LMP runs at the dataset-native timestep —
+            # preserves comparability with the 310-run history and the paper's
+            # LMP section.
+            es_cfg = self.scenario_config.energy_sharing
+            dp_cfg = es_cfg.dynamic_pricing if es_cfg is not None else None
+            if dp_cfg is not None and dp_cfg.enabled:
+                dp_cfg.lmp_update_interval_minutes = dataset_timestep_minutes
 
         # Save original root_directory BEFORE customizing schema
         original_root_dir = Path(schema["root_directory"])
