@@ -274,6 +274,15 @@ class CityLearnAdapter:
                 )
 
         schema["buildings"] = buildings_to_keep
+        # Store mapping from scenario building names to original dataset building names
+        # so _copy_dataset_files can find the correct source files
+        self._building_name_map = {}
+        for i, building_config in enumerate(self.scenario_config.buildings[:5]):
+            if i < len(self.building_ids):
+                old_name = self.building_ids[i]
+                new_name = building_config.building_id
+                self._building_name_map[new_name] = old_name
+        
         self.building_ids = list(buildings_to_keep.keys())
 
         # Register the synthesized electric vehicles so each charger schedule
@@ -623,18 +632,35 @@ class CityLearnAdapter:
         if pricing_src.exists():
             shutil.copy2(pricing_src, schema_dir / "pricing.csv")
 
-        # Copy building energy simulation files
+        # Copy building energy simulation files (FULL stock CSVs: solar + loads + demands)
         for building_name in self.building_ids:
             if building_name in schema["buildings"]:
                 energy_file = schema["buildings"][building_name].get(
                     "energy_simulation", f"{building_name}.csv"
                 )
-                src = source_dir / energy_file
-                if src.exists():
-                    shutil.copy2(src, schema_dir / energy_file)
-                else:
-                    # Create dummy file if not found
-                    self._create_dummy_energy_file(schema_dir / energy_file)
+                # Map scenario building name back to dataset building name to find source file
+                dataset_building_name = self._building_name_map.get(building_name, building_name)
+                dataset_energy_file = f"{dataset_building_name}.csv"
+                src = source_dir / dataset_energy_file
+                if not src.exists():
+                    raise FileNotFoundError(
+                        f"Dataset building CSV not found: {src}. "
+                        f"Scenario building '{building_name}' maps to dataset building '{dataset_building_name}'. "
+                        f"Ensure the CityLearn dataset is provisioned at {source_dir}/"
+                    )
+                # Slice the dataset to match episode_time_steps to avoid test mismatches
+                # and ensure CityLearn has the correct data range
+                try:
+                    df = pd.read_csv(src)
+                    episode_steps = schema.get("episode_time_steps")
+                    if episode_steps is not None and len(df) > episode_steps:
+                        # Keep only the first episode_steps rows (simulation period)
+                        df = df.iloc[:episode_steps]
+                    df.to_csv(schema_dir / energy_file, index=False)
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Failed to copy/slice dataset building CSV {src} -> {schema_dir / energy_file}: {e}"
+                    )
 
         # Copy charger simulation files if they exist
         for building_name in self.building_ids:
@@ -665,57 +691,12 @@ class CityLearnAdapter:
                                     shutil.copy2(src, schema_dir / app_schema[key])
 
     def _create_dummy_energy_file(self, filepath: Path):
-        """Create a dummy energy simulation file with correct columns for EnergySimulation."""
-        # Use episode_time_steps from schema to match CityLearn's expectation
-        # episode_time_steps = 7 * timesteps_per_day + 1 (for safety)
-        dataset_timestep_minutes = int(self.dataset_seconds_per_step // 60)
-        timesteps_per_day = int(24 * 60 // dataset_timestep_minutes)
-        timesteps = int(
-            7 * timesteps_per_day + 1
-        )  # +1 for safety to match episode_time_steps
-        timestamps = pd.date_range(
-            start="2023-07-01",  # Summer month to avoid heating
-            periods=timesteps,
-            freq=f"{self.scenario_config.timestep_minutes}min",
+        """Create a dummy energy simulation file - HARD FAILURE: no synthetic physics in benchmarks."""
+        raise RuntimeError(
+            f"_create_dummy_energy_file called for {filepath}. "
+            f"This indicates a missing dataset building CSV. "
+            f"Benchmarks must use real stock data only — no synthetic physics fallback."
         )
-        # Deterministic per (scenario seed, building file): regeneration must not
-        # change the physics between runs of the same seed, and distinct building
-        # files must not share one synthetic trace.
-        import zlib
-
-        rng = np.random.default_rng(
-            self.scenario_config.random_seed
-            + (zlib.crc32(filepath.name.encode()) & 0xFFFF)
-        )
-        data = pd.DataFrame(
-            {
-                "month": timestamps.month,
-                "hour": timestamps.hour,
-                "day_type": (timestamps.dayofweek < 5).astype(int),
-                "daylight_savings_status": 0,
-                "indoor_dry_bulb_temperature": 22
-                + 2 * np.sin(2 * np.pi * timestamps.hour / 24)
-                + rng.normal(0, 1, timesteps),
-                "average_unmet_cooling_setpoint_difference": np.zeros(timesteps),
-                "indoor_relative_humidity": 50
-                + 15 * np.sin(2 * np.pi * timestamps.hour / 24)
-                + rng.normal(0, 3, timesteps),
-                "non_shiftable_load": rng.uniform(1, 5, timesteps),
-                "dhw_demand": np.zeros(
-                    timesteps
-                ),  # No DHW demand - buildings may not have DHW devices
-                "cooling_demand": np.zeros(
-                    timesteps
-                ),  # No cooling demand - buildings may not have cooling devices
-                "heating_demand": np.zeros(timesteps),  # No heating demand
-                "solar_generation": np.maximum(
-                    0,
-                    5 * np.sin(2 * np.pi * (timestamps.hour - 6) / 12)
-                    + rng.normal(0, 1, timesteps),
-                ),
-            }
-        )
-        data.to_csv(filepath, index=False)
 
     def _convert_observations_to_dict(self, observations: Any) -> Dict[str, Any]:
         """Convert observations to flat dict keyed by '{building_id}_{observation_name}'."""
