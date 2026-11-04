@@ -178,10 +178,12 @@ jobs:
 
       - name: Run axe-core accessibility checks
         run: |
-          # Install chromedriver
-          npx @puppeteer/browsers install chromedriver@stable --path $HOME/.cache/chromedriver
+          # Get Chrome version and install matching chromedriver
+          CHROME_VER=$(google-chrome --version | grep -oP '\d+(?=\.)')
+          echo "Chrome version: $CHROME_VER"
+          npx @puppeteer/browsers install chromedriver@${CHROME_VER}.0 --path $HOME/.cache/chromedriver
           CHROMEDRIVER_PATH=$(find $HOME/.cache/chromedriver -name chromedriver -type f | head -1)
-          echo "Using chromedriver at: $CHROMEDRIVER_PATH"
+          echo "Using chromedriver at: $CHROMEDRIVER_PATH (for Chrome $CHROME_VER)"
           # Start preview server in background
           npm run serve &
           PREVIEW_PID=$!
