@@ -182,3 +182,39 @@ expected PV from the restored series x YAML capacities within 5% of measured,
 CF in 10-35% — 907 to 3,175 kWh/week at 54 kW) AND nonzero p2p trades AND
 settlement-gate pass. His 1914.8 (CF 21.1%) would satisfy the band if pushed
 and reproduced. The 750-run queue stays paused.
+
+---
+
+## B0-re FINAL (2026-11-04): fix 4ab9e10 PUSHED + VERIFIED — gate PASS, B1 launched
+
+Backend B pushed 4ab9e10 (full stock CSV copy + hard-fail fallback). Verified
+independently by Research Engineer on a clean worktree of the branch, then on
+merged main (0911a6f):
+
+- **First-principles check EXACT**: expected PV computed from the cache dataset
+  series (Building_1..5.csv, first 169 rows) x YAML capacities (12+9+15+7.5+10.5
+  kW) = **1914.8 kWh; measured 1914.8 kWh (delta +0.00%)**. Mapping
+  building_i -> Building_{i+1} and slicing confirmed correct. CF 21.1% (band
+  10-35%). The +31.6% gap vs the 1455.3 release anchor is legitimate data
+  provenance (the release machine's series differed); the dataset-faithful
+  number is the ground truth.
+- **Market engine on real trades**: p2p volume 327.8 kWh, settlement savings
+  46.26 USD with exact money conservation (69.6 baseline -> 23.3 actual).
+- **Hard-fail fallback**: missing dataset CSVs now raise (no silent synthetic
+  physics); adapter `_building_name_map` + slicing verified in the diff.
+- **Tests**: 374 passed on merged main (386 minus 12 fastapi-dependent API
+  tests; module not installed in this venv — CI covers them).
+- **Merge**: 0911a6f on main (keeps the full evidence doc; the branch's 96-line
+  deletion was not carried over). Local WIP by another agent (metrics.py/
+  run_experiment.py timestep_hours refactor) left untouched in the shared
+  working tree; the benchmark runs from a clean worktree at 0911a6f.
+- **Measurement caveat for the paper**: with restored PV, scenario_c multi_agent
+  total cost can go NEGATIVE (-24.7 USD in the smoke) — export revenue exceeds
+  import cost. T2 should report this and treat negative costs as export-credit,
+  not as an error.
+
+**750-run queue LAUNCHED** (B1a pool_tou ref 125 + B1 p2p 125 + B2 LMP 125 +
+B3 seeds 375, new seeds 1234/2024/3456/5555/8888), 3 workers, ~20 s/run
+measured, projected ~83 min. Pause rules armed (>2 gate fails, >5% failures,
+>6h). B0-re smoke run counts as B1 run 1/125 (matrix_p2p, git_dirty=False,
+commit 0911a6f).
