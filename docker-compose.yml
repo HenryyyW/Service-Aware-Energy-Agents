@@ -125,53 +125,6 @@ services:
           cpus: '0.1'
           memory: 64M
 
-  # Celery worker for background agent tasks
-  worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: saea-worker
-    command: celery -A src.api.celery_app worker --loglevel=info --concurrency=4
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/saea
-      - REDIS_URL=redis://redis:6379/1
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - saea-network
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-
-  # Celery beat scheduler
-  scheduler:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: saea-scheduler
-    command: celery -A src.api.celery_app beat --loglevel=info --schedule=/app/celerybeat-schedule
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/saea
-      - REDIS_URL=redis://redis:6379/1
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - saea-network
-    restart: unless-stopped
-
   # Prometheus metrics
   prometheus:
     image: prom/prometheus:v2.48.0
