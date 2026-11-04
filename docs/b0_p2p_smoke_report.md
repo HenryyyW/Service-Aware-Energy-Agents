@@ -218,3 +218,35 @@ B3 seeds 375, new seeds 1234/2024/3456/5555/8888), 3 workers, ~20 s/run
 measured, projected ~83 min. Pause rules armed (>2 gate fails, >5% failures,
 >6h). B0-re smoke run counts as B1 run 1/125 (matrix_p2p, git_dirty=False,
 commit 0911a6f).
+
+---
+
+## CORRECTION + RESOLUTION (2026-11-04, after PM key-fact update)
+
+**Accepted correction**: "no base dataset on this machine" was imprecise. The
+real dataset IS present in the CityLearn 3.0.2 standard cache
+(`~/.cache/citylearn/v3.0.2/datasets/citylearn_challenge_2022_phase_all_plus_evs/`,
+Building_1.csv: 8760 rows, solar sum 1,803,124 / max 976.2 — verified) and in
+Backend B's untracked `data/datasets/`. What is absent is any LOWERCASE
+`building_N.csv` matching the pre-fix code's lookup name.
+
+**Repro re-interpretation**: the b7efcb9 worktree run DID resolve source_dir to
+the cache (via CityLearn's own `get_schema` -> `original_root_dir`), but the
+pre-fix lookup asked for `building_0.csv` and the cache ships `Building_1.csv`
+-> silent dummy fallback -> 14.53 kWh. So the repro proves the NAME-LOOKUP GAP
+(exactly the absent fix), not a missing dataset. Backend B's local 1914.8 was a
+real-data run (his provisioning or unpushed code) — moot now: **4ab9e10 was
+verified independently and merged** (first-principles +0.00%), and the
+merged-main smoke produces 1914.8 on THIS checkout with zero provisioning —
+i.e., the cache resolution the PM suggested is already the merged behavior
+(source_dir = cache-resolved root; hard failure replaced the dummy path). No
+further code change needed.
+
+**1455.3 vs 1914.8 anchor gap SOLVED**: scanning all 8592 169-row windows of
+the stock series x capacities, the release value corresponds to the window
+starting at row 2266 (computes 1455.8 kWh vs the 1455.3 anchor, +0.5 kWh) —
+the release ran a ~day-95 (early April) episode window, while the current tree
+slices rows 0-168 (January start, 1914.8 kWh). Both windows are physically
+sane (16.0% vs 21.1% CF at 54.0 kW); the current slicing is deterministic and
+documented. The ±20% anchor is retired in favor of the first-principles
+criterion (exact) + CF band.
