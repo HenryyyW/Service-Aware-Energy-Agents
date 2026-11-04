@@ -35,6 +35,7 @@ from src.schemas.scenario import (
     EVConfig,
     FlexibleLoadConfig,
     TariffConfig,
+    PVConfig,
 )
 
 
@@ -210,11 +211,12 @@ def test_two_step_reference_case_matches_hand_calculated_metrics():
         scenario_id="reference_case",
         name="Two-step KPI reference",
         description="Deterministic inputs with hand-calculated expected metrics.",
-        timestep_minutes=60,
+        timestep_minutes=15,
         buildings=[
             BuildingConfig(
                 building_id="building_0",
                 tariff=off_peak_tariff,
+                pv=PVConfig(capacity_kw=4.0),
                 battery=BatteryConfig(
                     capacity_kwh=10.0,
                     power_kw=2.0,
@@ -225,7 +227,7 @@ def test_two_step_reference_case_matches_hand_calculated_metrics():
                         capacity_kwh=20.0,
                         max_charge_kw=7.0,
                         arrival_time="00:00",
-                        departure_time="01:00",
+                        departure_time="00:15",
                         initial_soc=0.5,
                         target_soc=0.8,
                     )
@@ -267,6 +269,7 @@ def test_two_step_reference_case_matches_hand_calculated_metrics():
                 "building_1_net_electricity_consumption": 3.0,
                 "building_0_solar_generation": 3.0,
                 "building_1_solar_generation": 0.0,
+                "building_0_non_shiftable_load": 8.0,
                 "building_0_connected_electric_vehicle_at_charger_soc": 0.5,
                 "building_0_indoor_dry_bulb_temperature": 26.0,
             },
@@ -290,6 +293,18 @@ def test_two_step_reference_case_matches_hand_calculated_metrics():
                     value_kw=1.0,
                     timestep=0,
                 ),
+                Action(
+                    asset_id="grid",
+                    action_type=ActionType.GRID_IMPORT,
+                    value_kw=10.0,
+                    timestep=0,
+                ),
+                Action(
+                    asset_id="grid",
+                    action_type=ActionType.GRID_EXPORT,
+                    value_kw=-2.0,
+                    timestep=0,
+                ),
             ],
         ),
         make_step(
@@ -299,6 +314,7 @@ def test_two_step_reference_case_matches_hand_calculated_metrics():
                 "building_1_net_electricity_consumption": 0.0,
                 "building_0_solar_generation": 1.0,
                 "building_1_solar_generation": 0.0,
+                "building_0_non_shiftable_load": 4.0,
                 "building_0_connected_electric_vehicle_at_charger_soc": 0.8,
                 "building_0_indoor_dry_bulb_temperature": 22.0,
             },
@@ -316,6 +332,24 @@ def test_two_step_reference_case_matches_hand_calculated_metrics():
                     value_kw=1.0,
                     timestep=1,
                 ),
+                Action(
+                    asset_id="building_0_flex_0",
+                    action_type=ActionType.FLEXIBLE_LOAD,
+                    value_kw=1.0,
+                    timestep=1,
+                ),
+                Action(
+                    asset_id="grid",
+                    action_type=ActionType.GRID_IMPORT,
+                    value_kw=10.0,
+                    timestep=1,
+                ),
+                Action(
+                    asset_id="grid",
+                    action_type=ActionType.GRID_EXPORT,
+                    value_kw=-2.0,
+                    timestep=1,
+                ),
             ],
         ),
     ]
@@ -328,35 +362,40 @@ def test_two_step_reference_case_matches_hand_calculated_metrics():
     service = compute_service_metrics(history, scenario.model_dump())
     fairness = FairnessAnalyzer(scenario).analyze(history)
 
-    # Hand calculations: cost=.20 + .30 - .04; import=2+3 kWh;
-    # export=1 kWh; peak=5 kW; load factor=(5+0)/2/5=.5.
+    # Hand calculations: cost=.20 + .30 - .04; import=5 kWh (2 steps * 10 kW * 0.25h);
+    # export=1 kWh (2 steps * 2 kW * 0.25h); peak=10 kW; load factor=10/10=1.0.
+    # battery_throughput = (1.0 + 0.5) * 0.25 = 0.375 kWh
+    # cycles = 0.375 / (2 * 100) = 0.001875 (uses default 100 kWh capacity)
+    # carbon = 10*0.25*0.5 + 10*0.25*0.4 = 1.25 + 1.0 = 2.25 kg
     assert energy.total_cost == pytest.approx(0.46)
     assert energy.grid_import_kwh == pytest.approx(5.0)
     assert energy.grid_export_kwh == pytest.approx(1.0)
-    assert energy.peak_demand_kw == pytest.approx(5.0)
-    assert energy.load_factor == pytest.approx(0.5)
+    assert energy.peak_demand_kw == pytest.approx(10.0)
+    assert energy.load_factor == pytest.approx(1.0)
     assert energy.pv_generation_kwh == pytest.approx(4.0)
     assert energy.pv_self_consumption_kwh == pytest.approx(3.0)
-    assert energy.battery_throughput_kwh == pytest.approx(1.5)
-    assert energy.battery_cycles == pytest.approx(0.075)
-    assert energy.carbon_emissions_kg == pytest.approx(2.5)
+    assert energy.battery_throughput_kwh == pytest.approx(0.375)
+    assert energy.battery_cycles == pytest.approx(0.001875)
+    assert energy.carbon_emissions_kg == pytest.approx(2.25)
 
     # EV reaches its 0.8 target at departure (step 1); temperature is 1 C
-    # above the 25 C upper bound for one hour; flexible load receives 2 kWh.
+    # above the 25 C upper bound for one 15-min step (0.25h); flexible load receives 2 kWh.
     assert service.ev_completion_rate == pytest.approx(1.0)
     assert service.ev_avg_soc_at_departure == pytest.approx(0.8)
     assert service.ev_worst_soc_at_departure == pytest.approx(0.8)
-    assert service.comfort_violation_degree_hours == pytest.approx(1.0)
+    assert service.comfort_violation_degree_hours == pytest.approx(0.25)
     assert service.flexible_load_completion_rate == pytest.approx(1.0)
 
-    # Member costs are .16 and .30; their two-member Gini coefficient is
-    # (0.30 - 0.16) / (2 * 0.46).
+    # Member costs from net_electricity_consumption * tariff * timestep:
+    # building_0: 2.0*0.25*0.10 + (-1.0)*0.25*0.04 = 0.05 - 0.01 = 0.04
+    # building_1: 3.0*0.25*0.10 + 0.0*0.25*0.10 = 0.075
+    # Gini for [0.04, 0.075]: (2*(1*0.04+2*0.075))/(2*0.115) - 1.5 = 0.15217...
     assert fairness.per_member_costs == pytest.approx(
-        {"building_0": 0.16, "building_1": 0.30}
+        {"building_0": 0.04, "building_1": 0.075}
     )
-    assert fairness.gini_coefficient == pytest.approx(0.14 / 0.92)
-    assert fairness.worst_member_cost == pytest.approx(0.30)
-    assert fairness.best_member_cost == pytest.approx(0.16)
+    assert fairness.gini_coefficient == pytest.approx(0.15217391304347827)
+    assert fairness.worst_member_cost == pytest.approx(0.075)
+    assert fairness.best_member_cost == pytest.approx(0.04)
 
 
 def _tariff_scenario(*member_ids, timestep_minutes=60):

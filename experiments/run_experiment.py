@@ -343,6 +343,10 @@ class ExperimentRunner:
         cl_history = [h.citylearn_result for h in self.history]
 
         # Compute metrics
+        # Get actual timestep from CityLearn adapter (accounts for dataset native resolution)
+        timestep_hours = getattr(self.coupler.citylearn, 'hours_per_step', 
+                                 self.scenario_config.timestep_minutes / 60.0)
+        
         all_metrics = compute_all_metrics(
             history=cl_history,
             scenario_config=scenario_dict,
@@ -353,6 +357,7 @@ class ExperimentRunner:
                 if self.end_time and self.start_time
                 else 0
             ),
+            timestep_hours=timestep_hours,
         )
         energy = all_metrics["energy"]
         service = all_metrics["service"]

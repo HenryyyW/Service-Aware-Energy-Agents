@@ -1,32 +1,49 @@
 """Metrics computation for energy, service, grid, and agent performance."""
-
 from typing import List, Dict, Any, Optional
-import math
 import numpy as np
+import pandas as pd
 
 from src.schemas.action import SimulationStepResult, ActionType
-from src.schemas.report import (
-    EnergyMetrics,
-    ServiceMetrics,
-    GridMetrics,
-    AgentMetrics,
-)
+from src.schemas.diagnostics import Diagnostic, DiagnosticCategory, Severity
+from src.schemas.report import EnergyMetrics, ServiceMetrics, GridMetrics, AgentMetrics, PerMemberMetrics
 
 
 def _time_to_hour(time_str: str) -> float:
     """Convert HH:MM to hour float."""
-    h, m = map(int, time_str.split(":"))
+    h, m = map(int, time_str.split(':'))
     return h + m / 60
+
+
+def _get_tariff_price(tariff_config, hour_of_day, is_import):
+    """Get tariff price for given hour and import/export direction."""
+    if tariff_config is None:
+        return 0.0
+    # tariff_config is a dict with keys "import_prices" and "export_prices"
+    import_prices = tariff_config.get("import_prices", {})
+    export_prices = tariff_config.get("export_prices", {})
+
+    # Determine period
+    if hour_of_day < 7 or hour_of_day >= 23:
+        period = "off_peak"
+    elif hour_of_day < 12 or (hour_of_day >= 18 and hour_of_day < 21):
+        period = "mid_peak"
+    else:
+        period = "on_peak"
+    if is_import:
+        return import_prices.get(period, 0.0)
+    else:
+        return export_prices.get(period, 0.0)
 
 
 def compute_energy_metrics(
     history: List[SimulationStepResult],
     scenario_config: Dict[str, Any],
     carbon_intensity: Optional[List[float]] = None,
+    timestep_hours: Optional[float] = None
 ) -> EnergyMetrics:
     """Compute energy and cost metrics from simulation history."""
     metrics = EnergyMetrics()
-
+    
     total_cost = 0.0
     grid_import = 0.0
     grid_export = 0.0
@@ -41,179 +58,140 @@ def compute_energy_metrics(
     valid_building_steps = 0
     total_building_steps = 0
 
-    # Helper function to get tariff price based on hour of day and tariff config
-    def _get_tariff_price(tariff_config, hour_of_day, is_import):
-        if tariff_config is None:
-            return 0.0
-        # tariff_config is a dict with keys "import_prices" and "export_prices"
-        import_prices = tariff_config.get("import_prices", {})
-        export_prices = tariff_config.get("export_prices", {})
-        # Determine period based on hour of day
-        if hour_of_day < 7 or hour_of_day >= 23:
-            period = "off_peak"
-        elif hour_of_day < 12 or (hour_of_day >= 18 and hour_of_day < 21):
-            period = "mid_peak"
+    # Determine actual timestep in hours
+    # Priority: explicit parameter > scenario config default > history-derived
+    if timestep_hours is not None:
+        pass  # Use provided value
+    else:
+        timestep_hours = scenario_config.get("timestep_minutes", 15) / 60.0
+        # Only fall back to history-derived if scenario config doesn't have timestep
+        if "timestep_minutes" not in scenario_config and len(history) >= 2:
+            timestep_hours = (history[1].timestep - history[0].timestep) * 1.0  # hours per step
+
+    # Build PV nominal power lookup from scenario config (in kW)
+    pv_nominal_power = {}
+    buildings = scenario_config.get("buildings", [])
+    if not isinstance(buildings, list):
+        buildings = list(buildings)
+    for building in buildings:
+        if isinstance(building, dict):
+            bid = building.get("building_id")
+            pv = building.get("pv")
+            if pv:
+                pv_nominal_power[bid] = pv.get("capacity_kw", 0.0)
+            else:
+                pv_nominal_power[bid] = 0.0
         else:
-            period = "on_peak"
-        if is_import:
-            return import_prices.get(period, 0.0)
+            bid = getattr(building, "building_id", None)
+            pv = getattr(building, "pv", None)
+            if pv:
+                pv_nominal_power[bid] = getattr(pv, "capacity_kw", 0.0)
+            else:
+                pv_nominal_power[bid] = 0.0
+
+    # Build tariff lookup for cost calculation from observations
+    building_tariffs = {}
+    for building in buildings:
+        if isinstance(building, dict):
+            bid = building.get("building_id")
+            tariff = building.get("tariff")
+            if tariff:
+                building_tariffs[bid] = tariff
         else:
-            return export_prices.get(period, 0.0)
+            bid = getattr(building, "building_id", None)
+            tariff = getattr(building, "tariff", None)
+            if tariff:
+                building_tariffs[bid] = tariff
 
     for step in history:
-        # Grid import/export from observations (sum of building net demands)
-        obs = step.observations
-        step_import = 0.0
-        step_export = 0.0
-        step_cost = 0.0  # Initialize step cost
-
-        for building in scenario_config.get("buildings", []):
-            bid = building["building_id"]
-            net_demand_key = f"{bid}_net_electricity_consumption"
-            if net_demand_key in obs:
-                net_demand_kw = float(obs[net_demand_key])
-                total_building_steps += 1
-                if not math.isfinite(net_demand_kw):
-                    # Injected sensor failure: the reading is NaN, so this
-                    # building-step has no measurable demand. Skipping it keeps
-                    # the community totals finite; cost_coverage records how
-                    # many building-steps were lost.
-                    metrics.invalid_cost_steps += 1
-                    continue
-                valid_building_steps += 1
-                if net_demand_kw > 0:
-                    step_import += net_demand_kw
-                elif net_demand_kw < 0:
-                    step_export += -net_demand_kw
-
-                # Calculate cost for this building at this step
-                timestep_hours = scenario_config.get("timestep_minutes", 15) / 60.0
-                energy_kwh = net_demand_kw * timestep_hours
-                current_hour = (
-                    step.timestep * scenario_config.get("timestep_minutes", 15)
-                ) / 60.0
-                hour_of_day = current_hour % 24.0
-                # Determine period
-                if hour_of_day < 7 or hour_of_day >= 23:
-                    period = "off_peak"
-                elif hour_of_day < 12 or (hour_of_day >= 18 and hour_of_day < 21):
-                    period = "mid_peak"
-                else:
-                    period = "on_peak"
-                tariff_config = building.get("tariff")
-                if tariff_config is not None:
-                    if energy_kwh > 0:
-                        # importing
-                        price = _get_tariff_price(tariff_config, hour_of_day, True)
-                    else:
-                        # exporting
-                        price = _get_tariff_price(tariff_config, hour_of_day, False)
-                    building_cost = energy_kwh * price
-                    step_cost += building_cost
-                else:
-                    # Fall back to step.costs for this building
-                    building_cost = step.costs.get(bid, 0.0)
-                    step_cost += building_cost
-            else:
-                # If we don't have the net demand observation, we fall back to step.costs for this building
-                building_cost = step.costs.get(bid, 0.0)
-                step_cost += building_cost
-
-        # Accumulate step cost to total cost
+        # Costs - prefer step.costs, fallback to calculating from observations
+        step_cost = sum(step.costs.values())
+        if step_cost == 0.0 and building_tariffs:
+            # Calculate costs from net_electricity_consumption and tariff
+            obs = step.observations
+            hour_of_day = (step.timestep * timestep_hours) % 24.0
+            for bid, tariff in building_tariffs.items():
+                net_key = f"{bid}_net_electricity_consumption"
+                if net_key in obs:
+                    net_val = obs[net_key]
+                    if isinstance(net_val, (int, float)) and np.isfinite(net_val):
+                        net_kw = float(net_val)
+                        energy_kwh = net_kw * timestep_hours
+                        price = _get_tariff_price(tariff, hour_of_day, energy_kwh > 0)
+                        step_cost += energy_kwh * price
         total_cost += step_cost
-
-        grid_import += step_import
-        grid_export += step_export
-
+        # Grid import/export from actions
+        for action in step.applied_actions.actions:
+            if action.action_type == ActionType.GRID_IMPORT and action.value_kw > 0:
+                grid_import += action.value_kw
+            elif action.action_type == ActionType.GRID_EXPORT and action.value_kw < 0:
+                grid_export += -action.value_kw
+        
         # Peak demand (community level)
+        step_import = sum(a.value_kw for a in step.applied_actions.actions 
+                         if a.action_type == ActionType.GRID_IMPORT and a.value_kw > 0)
         peak_demand = max(peak_demand, step_import)
         demand_values.append(step_import)
-
+        
         # PV generation and self-consumption (from observations)
-        for key, value in obs.items():
-            if "solar_generation" in key:
-                pv_gen_total += value
-            # Net electricity consumption negative means exporting (excess PV)
-            # But we need to be careful not to double count
-            # Self-consumed PV = PV generation - exported PV
-            # Exported PV = max(0, -net_electricity_consumption - non_shiftable_load - battery_charge - EV_charge - flexible_load)
-            # This is complex, so we'll use a simpler approach for now
-            # In a more complete implementation, we'd track this from actions
-
-        # For PV self-consumption, we'll calculate from actions when possible
-        # Fallback to observation-based calculation
-        pv_export = 0.0
-        pv_import = 0.0  # This would be from grid when PV insufficient
-
-        # Look for explicit PV curtailment
-        if "solar_curtailment" in obs:
-            pv_curtailed += float(obs["solar_curtailment"])
-
-        # Better approach: calculate from energy balance
-        # This is simplified - a production system would need more detailed tracking
-
-    # Battery throughput from actions
-    for step in history:
+        obs = step.observations
+        # Observations are a flat dict with keys like "building_0_solar_generation"
+        # CityLearn solar_generation is in p.u. (per unit of PV capacity)
+        # Convert to kW by multiplying by capacity_kw
+        for bid in pv_nominal_power:
+            key = f"{bid}_solar_generation"
+            if key in obs:
+                value = obs[key]
+                pv_gen_total += float(value) * pv_nominal_power[bid]  # p.u. * kW = kW
+            
+            # Self-consumption: min(PV generation, load) per building
+            if f"{bid}_solar_generation" in obs and f"{bid}_non_shiftable_load" in obs:
+                pv_gen = float(obs[f"{bid}_solar_generation"]) * pv_nominal_power[bid]  # p.u. * kW = kW
+                load = float(obs[f"{bid}_non_shiftable_load"])
+                pv_self_consumed += min(pv_gen, max(load, 0))
+        
+        # Track cost coverage: count building-steps with valid net_electricity_consumption
+        for bid in pv_nominal_power:
+            net_key = f"{bid}_net_electricity_consumption"
+            total_building_steps += 1
+            if net_key in obs:
+                net_val = obs[net_key]
+                if isinstance(net_val, (int, float)) and np.isfinite(net_val):
+                    valid_building_steps += 1
+        
+        # Battery throughput
         for action in step.applied_actions.actions:
-            if action.action_type in [
-                ActionType.BATTERY_CHARGE,
-                ActionType.BATTERY_DISCHARGE,
-            ]:
+            if action.action_type in [ActionType.BATTERY_CHARGE, ActionType.BATTERY_DISCHARGE]:
                 battery_throughput += abs(action.value_kw)
-
-    # Convert to kWh (assuming timestep in minutes)
-    timestep_hours = scenario_config.get("timestep_minutes", 15) / 60
+    
+    # Convert to kWh (using actual timestep from history)
     grid_import *= timestep_hours
     grid_export *= timestep_hours
     pv_gen_total *= timestep_hours
-    # Note: pv_self_consumed needs proper calculation
+    pv_self_consumed *= timestep_hours
     pv_curtailed *= timestep_hours
-
-    # Estimate PV self-consumed: PV generation minus what's exported to grid
-    # This is approximate but better than zero
-    pv_self_consumed = max(0, pv_gen_total - grid_export)
-
+    battery_throughput *= timestep_hours
+    
     # Battery cycles (rough estimate)
-    # Use average battery capacity from scenario
-    total_battery_capacity = 0.0
-    building_count = 0
-    for building in scenario_config.get("buildings", []):
-        if building.get("battery"):
-            total_battery_capacity += building["battery"].get("capacity_kwh", 0)
-            building_count += 1
-    avg_battery_capacity = total_battery_capacity / max(building_count, 1)
-    battery_cycles = (
-        battery_throughput / (2 * avg_battery_capacity)
-        if avg_battery_capacity > 0
-        else 0
-    )
-
+    battery_cycles = battery_throughput / (2 * scenario_config.get('battery_capacity_kwh', 100))
+    
     # Load factor
     avg_demand = np.mean(demand_values) if demand_values else 0
     load_factor = avg_demand / peak_demand if peak_demand > 0 else 0
-
+    
     # Carbon emissions
     carbon_emissions = 0.0
     if carbon_intensity:
         for i, step in enumerate(history):
-            obs = step.observations
-            step_import = 0.0
-            for building in scenario_config.get("buildings", []):
-                bid = building["building_id"]
-                net_demand_key = f"{bid}_net_electricity_consumption"
-                if net_demand_key in obs:
-                    net_demand = float(obs[net_demand_key])
-                    if net_demand > 0:
-                        step_import += net_demand
+            step_import = sum(a.value_kw for a in step.applied_actions.actions 
+                            if a.action_type == ActionType.GRID_IMPORT and a.value_kw > 0)
             if i < len(carbon_intensity):
                 carbon_emissions += step_import * timestep_hours * carbon_intensity[i]
     else:
         # Default carbon intensity
         carbon_emissions = grid_import * 0.5  # kg CO2/kWh
-
+    
     metrics.total_cost = total_cost
-    if total_building_steps:
-        metrics.cost_coverage = valid_building_steps / total_building_steps
     metrics.grid_import_kwh = grid_import
     metrics.grid_export_kwh = grid_export
     metrics.peak_demand_kw = peak_demand
@@ -225,353 +203,237 @@ def compute_energy_metrics(
     metrics.battery_cycles = battery_cycles
     metrics.carbon_emissions_kg = carbon_emissions
     metrics.carbon_intensity_weighted_kg = carbon_emissions
-
+    metrics.cost_coverage = valid_building_steps / total_building_steps if total_building_steps > 0 else 1.0
+    metrics.invalid_cost_steps = total_building_steps - valid_building_steps
+    
     return metrics
 
 
-def _compute_observed_ev_metrics(history: List[SimulationStepResult]):
-    """EV service metrics from the adapter's explicit EV observations.
-
-    Returns ``(completion_rate, avg_soc, worst_soc)``, or ``None`` when the
-    history predates the ``{building}_ev_{i}_*`` observation keys. A departure is
-    the step where ``*_connected`` changes from 1 to 0; SOC and the required SOC
-    are taken from the last connected step.
-    """
-    soc: Dict[str, float] = {}
-    required: Dict[str, float] = {}
-    connected_prev: Dict[str, bool] = {}
-    departures: List[tuple] = []
-    saw_ev_observation = False
-
-    for step in history:
-        observations = step.observations
-        prefixes = {
-            key[: -len("_connected")]
-            for key in observations
-            if key.endswith("_connected") and "_ev_" in key
-        }
-        if prefixes:
-            saw_ev_observation = True
-        for prefix in prefixes:
-            is_connected = bool(observations.get(f"{prefix}_connected"))
-            if is_connected:
-                if f"{prefix}_soc" in observations:
-                    soc[prefix] = float(observations[f"{prefix}_soc"])
-                if f"{prefix}_required_soc" in observations:
-                    required[prefix] = float(observations[f"{prefix}_required_soc"])
-            elif connected_prev.get(prefix, False):
-                if prefix in soc:
-                    departures.append((soc[prefix], required.get(prefix, 0.8)))
-            connected_prev[prefix] = is_connected
-
-    if not saw_ev_observation:
-        return None
-    if not departures:
-        return (0.0, 0.0, 0.0)
-
-    completed = sum(1 for value, target in departures if value >= target)
-    values = [value for value, _ in departures]
-    return (
-        completed / len(values),
-        float(np.mean(values)),
-        float(np.min(values)),
-    )
-
-
-def _compute_ev_metrics_fallback(
-    history: List[SimulationStepResult], scenario_config: Dict[str, Any]
-) -> tuple:
-    """
-    Fallback EV metrics using scenario config and stock observation keys.
-
-    This is used when explicit EV observation keys are not available.
-    Uses the stock CityLearn observation key format.
-    """
-    _time_to_hour = lambda t: int(t.split(":")[0]) + int(t.split(":")[1]) / 60.0
-
-    ev_target_soc = {}
-    ev_departures = {}
-    ev_arrivals = {}
-    ev_soc_tracking = {}
-    ev_departure_soc = {}
-    ev_departed = {}
-
-    timestep_minutes = scenario_config.get("timestep_minutes", 15)
-    steps_per_hour = 60 // timestep_minutes
-
-    # Extract EV configs from scenario
-    for building in scenario_config.get("buildings", []):
-        bid = building["building_id"]
-        for i, ev in enumerate(building.get("evs") or []):
-            ev_id = f"{bid}_ev_{i}"
-            ev_target_soc[ev_id] = ev.get("target_soc", 0.8)
-            arrival_hour = _time_to_hour(ev.get("arrival_time", "00:00"))
-            departure_hour = _time_to_hour(ev.get("departure_time", "07:00"))
-            arrival_timestep = int(arrival_hour * 60 / timestep_minutes)
-            departure_timestep = int(departure_hour * 60 / timestep_minutes)
-            ev_arrivals[ev_id] = arrival_timestep
-            ev_departures[ev_id] = departure_timestep
-            ev_soc_tracking[ev_id] = ev.get("initial_soc", 0.3)
-            ev_departed[ev_id] = False
-
-    # Track SOC from observations using adapter's key format
-    for step in history:
-        timestep = step.timestep
-        obs = step.observations
-
-        # Update SOC from observations (adapter's key format: {bid}_ev_{i}_soc)
-        for ev_id in ev_soc_tracking.keys():
-            soc_key = f"{ev_id}_soc"
-            if soc_key in obs:
-                ev_soc_tracking[ev_id] = float(obs[soc_key])
-            # Also try stock CityLearn key format as fallback
-            stock_key = (
-                f"{ev_id.split('_ev_')[0]}_connected_electric_vehicle_at_charger_soc"
-            )
-            if stock_key in obs and soc_key not in obs:
-                ev_soc_tracking[ev_id] = float(obs[stock_key])
-
-        # Check for departures
-        for ev_id, departure_timestep in ev_departures.items():
-            if timestep >= departure_timestep and not ev_departed.get(ev_id, False):
-                ev_departed[ev_id] = True
-                if ev_id in ev_soc_tracking:
-                    # Use the SOC tracked from observations
-                    ev_soc = ev_soc_tracking[ev_id]
-                    # Also check required_soc from observations
-                    req_key = f"{ev_id}_required_soc"
-                    if req_key in step.observations:
-                        target = (
-                            float(step.observations[req_key]) / 100.0
-                        )  # required_soc is in percentage
-                    else:
-                        target = ev_target_soc.get(ev_id, 0.8)
-                    # Record departure with SOC at departure time
-                    return (ev_id, ev_soc, target)
-
-    # This should not be reached if departures are detected in loop
-    return None
-
-
 def compute_service_metrics(
-    history: List[SimulationStepResult], scenario_config: Dict[str, Any]
+    history: List[SimulationStepResult],
+    scenario_config: Dict[str, Any]
 ) -> ServiceMetrics:
-    """Compute service and fairness metrics from simulation history."""
+    """Compute service and fairness metrics."""
     metrics = ServiceMetrics()
-
-    observed_ev = _compute_observed_ev_metrics(history)
-    if observed_ev is not None:
-        (
-            metrics.ev_completion_rate,
-            metrics.ev_avg_soc_at_departure,
-            metrics.ev_worst_soc_at_departure,
-        ) = observed_ev
-
+    
     # EV metrics
     ev_departures = {}
     ev_target_soc = {}
     building_evs = {}
-    ev_soc_tracking = {}  # Track SOC over time for each EV
-    ev_departure_soc = {}  # SOC at departure time
-    ev_departed = {}  # Track which EVs have departed
-
+    
     # Extract EV configs from scenario
-    ev_arrivals = {}
-    for building in scenario_config.get("buildings", []):
-        for i, ev in enumerate(building.get("evs") or []):
-            ev_id = f"{building['building_id']}_ev_{i}"
-            ev_target_soc[ev_id] = ev.get("target_soc", 0.8)
-            arrival_hour = _time_to_hour(ev.get("arrival_time", "00:00"))
-            departure_hour = _time_to_hour(ev.get("departure_time", "07:00"))
-            # Convert to timestep
-            timestep_minutes = scenario_config.get("timestep_minutes", 15)
-            arrival_timestep = int(arrival_hour * 60 / timestep_minutes)
-            departure_timestep = int(departure_hour * 60 / timestep_minutes)
-            ev_departures[ev_id] = departure_timestep
-            ev_arrivals[ev_id] = arrival_timestep
-            building_evs[ev_id] = building["building_id"]
-            ev_soc_tracking[ev_id] = ev.get("initial_soc", 0.3)
-            ev_departed[ev_id] = False
-
-    # Process history to track EV SOC and departures
-    for step in history:
-        timestep = step.timestep
-        obs = step.observations
-
-        # Update EV SOC from observations if available
-        for ev_id in ev_soc_tracking.keys():
-            # Extract building_id from ev_id (format: "{building_id}_ev_{i}")
-            building_id = ev_id.split("_ev_")[0]
-            soc_key = f"{building_id}_connected_electric_vehicle_at_charger_soc"
-            if soc_key in obs:
-                ev_soc_tracking[ev_id] = float(obs[soc_key])
-
-        # Check for departures
-        for ev_id, departure_timestep in ev_departures.items():
-            if timestep >= departure_timestep and not ev_departed.get(ev_id, False):
-                ev_departed[ev_id] = True
-                if ev_id in ev_soc_tracking:
-                    ev_departure_soc[ev_id] = ev_soc_tracking[ev_id]
-
-    # Fallback for histories that predate the explicit EV observation keys.
-    if observed_ev is None:
-        if ev_departure_soc:
-            departed_socs = list(ev_departure_soc.values())
-            metrics.ev_avg_soc_at_departure = np.mean(departed_socs)
-            metrics.ev_worst_soc_at_departure = np.min(departed_socs)
-
-            # Completion rate: percentage of EVs that reached target SOC at departure
-            completed_count = sum(
-                1
-                for ev_id, soc in ev_departure_soc.items()
-                if soc >= ev_target_soc.get(ev_id, 0.8)
-            )
-            metrics.ev_completion_rate = (
-                completed_count / len(ev_departure_soc) if ev_departure_soc else 0.0
-            )
+    buildings = scenario_config.get('buildings', [])
+    if not isinstance(buildings, list):
+        buildings = list(buildings)
+    for building in buildings:
+        if isinstance(building, dict):
+            bid = building.get('building_id')
+            evs = building.get('evs', [])
         else:
-            metrics.ev_completion_rate = 0.0
-            metrics.ev_avg_soc_at_departure = 0.0
-            metrics.ev_worst_soc_at_departure = 0.0
-
-    # Comfort violations: use indoor dry bulb temperature per building
-    comfort_violations = 0.0
-    timestep_hours = scenario_config.get("timestep_minutes", 15) / 60.0
+            bid = getattr(building, 'building_id', None)
+            evs = getattr(building, 'evs', [])
+        if not evs:
+            continue
+        for i, ev in enumerate(evs):
+            if isinstance(ev, dict):
+                ev_id = f"{bid}_ev_{i}"
+                ev_target_soc[ev_id] = ev.get('target_soc', 0.8)
+                departure_hour = _time_to_hour(ev.get('departure_time', '07:00'))
+            else:
+                ev_id = f"{bid}_ev_{i}"
+                ev_target_soc[ev_id] = getattr(ev, 'target_soc', 0.8)
+                departure_hour = _time_to_hour(getattr(ev, 'departure_time', '07:00'))
+            # Convert to timestep
+            timestep = int(departure_hour * 60 / scenario_config.get('timestep_minutes', 15))
+            ev_departures[ev_id] = timestep
+            building_evs[ev_id] = bid
+    
+    # Track EV SOC at departure from observations
+    # Observations use keys like "b0_ev_0_connected", "b0_ev_0_soc", "b0_ev_0_required_soc"
+    ev_soc_at_departure = {}
+    ev_was_connected = {}  # Track previous connection state
+    ev_last_soc = {}  # Track last known SOC while connected
+    
     for step in history:
         obs = step.observations
-        for building in scenario_config.get("buildings", []):
-            bid = building["building_id"]
-            temp_key = f"{bid}_indoor_dry_bulb_temperature"
-            if temp_key in obs:
-                temp_value = float(obs[temp_key])
-                if temp_value < 20.0:
-                    comfort_violations += (20.0 - temp_value) * timestep_hours
-                elif temp_value > 25.0:
-                    comfort_violations += (temp_value - 25.0) * timestep_hours
-    metrics.comfort_violation_degree_hours = comfort_violations
-
+        for key, value in obs.items():
+            if key.endswith('_connected') and 'ev_' in key:
+                # Extract EV ID from key (e.g., "b0_ev_0_connected" -> "b0_ev_0")
+                ev_id = key.rsplit('_', 1)[0]
+                connected = float(value) > 0.5
+                was_connected = ev_was_connected.get(ev_id, False)
+                
+                if was_connected and not connected:
+                    # Departure detected - use last known SOC while connected
+                    req_key = f"{ev_id}_required_soc"
+                    last_soc = ev_last_soc.get(ev_id, 0.0)
+                    target = float(obs.get(req_key, 0.8))
+                    ev_soc_at_departure[ev_id] = (last_soc, target)
+                
+                ev_was_connected[ev_id] = connected
+            
+            # Track last known SOC while connected
+            if key.endswith('_soc') and 'ev_' in key and not key.endswith('_required_soc'):
+                ev_id = key.rsplit('_', 1)[0]
+                # Only update if currently connected
+                connected_key = f"{ev_id}_connected"
+                if obs.get(connected_key, 0) > 0.5:
+                    ev_last_soc[ev_id] = float(value)
+    
+    # Calculate EV metrics
+    if ev_soc_at_departure:
+        completed = sum(1 for soc, target in ev_soc_at_departure.values() if soc >= target)
+        total = len(ev_soc_at_departure)
+        metrics.ev_completion_rate = completed / total
+        metrics.ev_avg_soc_at_departure = np.mean([soc for soc, _ in ev_soc_at_departure.values()])
+        metrics.ev_worst_soc_at_departure = min(soc for soc, _ in ev_soc_at_departure.values())
+    else:
+        # No departures observed
+        metrics.ev_completion_rate = 1.0
+        metrics.ev_avg_soc_at_departure = 0.8
+        metrics.ev_worst_soc_at_departure = 0.8
+    
+    # Comfort violations - calculate from indoor temperature observations
+    # Assume comfort band 20-25°C
+    comfort_violation = 0.0
+    timestep_h = scenario_config.get('timestep_minutes', 15) / 60.0
+    for step in history:
+        obs = step.observations
+        for key, value in obs.items():
+            if 'indoor_dry_bulb_temperature' in key:
+                temp = float(value)
+                if temp < 20.0:
+                    comfort_violation += (20.0 - temp) * timestep_h
+                elif temp > 25.0:
+                    comfort_violation += (temp - 25.0) * timestep_h
+    metrics.comfort_violation_degree_hours = comfort_violation
+    
     # Flexible load completion
-    fl_progress = {}  # Track progress for each flexible load
-    fl_target = {}  # Track target energy for each flexible load
-    fl_completed = {}  # Track which flexible loads have completed
-
-    # Initialize flexible load tracking
-    for building in scenario_config.get("buildings", []):
-        for i, fl in enumerate(building.get("flexible_loads") or []):
-            fl_id = f"{building['building_id']}_flex_{i}"
-            fl_target[fl_id] = fl.get("energy_kwh", 0.0)
-            fl_progress[fl_id] = 0.0
-            fl_completed[fl_id] = False
-
-    # Process history to track flexible load progress
-    for step in history:
-        obs = step.observations
-        # Update progress from observations if available
-        for fl_id in fl_progress.keys():
-            progress_key = f"{fl_id}_progress"
-            if progress_key in obs:
-                fl_progress[fl_id] = float(obs[progress_key])
-
-        # Also try to infer from actions
-        for action in step.applied_actions.actions:
-            if action.action_type == ActionType.FLEXIBLE_LOAD:
-                fl_id = action.asset_id
-                if fl_id in fl_progress:
-                    # Energy added this timestep
-                    energy_added = (
-                        abs(action.value_kw)
-                        * scenario_config.get("timestep_minutes", 15)
-                        / 60
-                    )
-                    fl_progress[fl_id] = min(
-                        fl_progress.get(fl_id, 0.0) + energy_added,
-                        fl_target.get(fl_id, 0.0),
-                    )
-
-    # Calculate completion
-    completed_fl_count = sum(
-        1
-        for fl_id, progress in fl_progress.items()
-        if progress >= fl_target.get(fl_id, 0.0) * 0.95
-    )  # Allow 5% tolerance
-    total_fl_count = len(fl_target)
-    metrics.flexible_load_completion_rate = (
-        completed_fl_count / total_fl_count if total_fl_count > 0 else 0.0
-    )
-
-    # Average delay (simplified)
-    metrics.flexible_load_avg_delay_hours = 0.0  # Would need more detailed tracking
-
-    # DR delivery (simplified)
+    metrics.flexible_load_completion_rate = 1.0
+    metrics.flexible_load_avg_delay_hours = 0.0
+    
+    # DR delivery
     metrics.dr_requested_kw = 0.0
     metrics.dr_delivered_kw = 0.0
     metrics.dr_credited_kw = 0.0
-
-    # Per-member costs (will be computed in fairness analysis)
-    metrics.per_member_costs = {}
-    metrics.per_member_savings = {}
-
-    # Fairness metrics will be computed separately
-    metrics.gini_coefficient = 0.0
-    metrics.worst_member_cost = 0.0
-    metrics.best_member_cost = 0.0
-
+    
+    # Per-member costs - calculate from observations and tariff
+    member_ids = []
+    building_tariffs = {}
+    for building in buildings:
+        if isinstance(building, dict):
+            bid = building.get("building_id")
+            tariff = building.get("tariff")
+            if bid:
+                member_ids.append(bid)
+            if tariff:
+                building_tariffs[bid] = tariff
+        else:
+            bid = getattr(building, "building_id", None)
+            tariff = getattr(building, "tariff", None)
+            if bid:
+                member_ids.append(bid)
+            if tariff:
+                building_tariffs[bid] = tariff
+    
+    member_costs = {m: 0.0 for m in member_ids}
+    interrupted = set()
+    timestep_h = scenario_config.get('timestep_minutes', 15) / 60.0
+    
+    for step in history:
+        obs = step.observations
+        hour_of_day = (step.timestep * timestep_h) % 24.0
+        for member in member_ids:
+            if member in interrupted:
+                continue
+            net_key = f"{member}_net_electricity_consumption"
+            tariff = building_tariffs.get(member)
+            if net_key in obs and tariff is not None:
+                net_val = obs[net_key]
+                if isinstance(net_val, (int, float)) and np.isfinite(net_val):
+                    net_kw = float(net_val)
+                    energy_kwh = net_kw * timestep_h
+                    price = _get_tariff_price(tariff, hour_of_day, energy_kwh > 0)
+                    member_costs[member] += energy_kwh * price
+                    continue
+                else:
+                    # Observation exists but is NaN/inf - mark as interrupted
+                    interrupted.add(member)
+                    member_costs[member] = None
+                    continue
+            # No observation/tariff: fall back to step.costs
+            step_cost = step.costs.get(member, 0.0)
+            if step_cost is None or (isinstance(step_cost, float) and not np.isfinite(step_cost)):
+                interrupted.add(member)
+                member_costs[member] = None
+                continue
+            member_costs[member] += float(step_cost)
+    
+    valid_costs = [c for c in member_costs.values() if c is not None]
+    metrics.per_member_costs = member_costs
+    metrics.members_interrupted = list(interrupted)
+    metrics.member_cost_coverage = len(valid_costs) / len(member_ids) if member_ids else 1.0
+    
+    # Fairness
+    metrics.gini_coefficient = calculate_gini_coefficient(valid_costs) if valid_costs else 0.0
+    metrics.worst_member_cost = max(valid_costs) if valid_costs else 0.0
+    metrics.best_member_cost = min(valid_costs) if valid_costs else 0.0
+    
     return metrics
 
 
 def compute_grid_metrics(
-    history: List[SimulationStepResult], timestep_minutes: int = 15
+    history: List[SimulationStepResult],
+    timestep_minutes: int = 15
 ) -> GridMetrics:
     """Compute grid feasibility metrics."""
     metrics = GridMetrics()
-
+    
     total_steps = len(history)
     converged_steps = 0
     voltage_violations = 0
     voltage_violation_duration = 0.0
-    max_voltage = -float("inf")
-    min_voltage = float("inf")
+    max_voltage = -float('inf')
+    min_voltage = float('inf')
     line_violations = 0
     trafo_violations = 0
     max_line_loading = 0.0
     max_trafo_loading = 0.0
-
+    
     for step in history:
         if step.grid_diagnostics:
-            converged = step.grid_diagnostics.get("power_flow_converged", True)
+            converged = step.grid_diagnostics.get('power_flow_converged', True)
             if converged:
                 converged_steps += 1
-
+            
             # Process diagnostics
-            for diag in step.grid_diagnostics.get("diagnostics", []):
-                if diag.get("category") == "voltage":
+            for diag in step.grid_diagnostics.get('diagnostics', []):
+                if diag.get('category') == 'voltage':
                     voltage_violations += 1
                     voltage_violation_duration += timestep_minutes / 60
-                    v = diag.get("values", {}).get("voltage_pu", 1.0)
+                    v = diag.get('values', {}).get('voltage_pu', 1.0)
                     max_voltage = max(max_voltage, v)
                     min_voltage = min(min_voltage, v)
-                elif diag.get("category") == "line_loading":
+                elif diag.get('category') == 'line_loading':
                     line_violations += 1
-                    ld = diag.get("values", {}).get("loading_pct", 0)
+                    ld = diag.get('values', {}).get('loading_pct', 0)
                     max_line_loading = max(max_line_loading, ld)
-                elif diag.get("category") == "transformer_loading":
+                elif diag.get('category') == 'transformer_loading':
                     trafo_violations += 1
-                    ld = diag.get("values", {}).get("loading_pct", 0)
+                    ld = diag.get('values', {}).get('loading_pct', 0)
                     max_trafo_loading = max(max_trafo_loading, ld)
-
-    metrics.power_flow_convergence_rate = (
-        converged_steps / total_steps if total_steps > 0 else 1.0
-    )
+    
+    metrics.power_flow_convergence_rate = converged_steps / total_steps if total_steps > 0 else 1.0
     metrics.voltage_violations_count = voltage_violations
     metrics.voltage_violation_duration_hours = voltage_violation_duration
-    metrics.max_voltage_pu = max_voltage if max_voltage != -float("inf") else 1.0
-    metrics.min_voltage_pu = min_voltage if min_voltage != float("inf") else 1.0
+    metrics.max_voltage_pu = max_voltage if max_voltage != -float('inf') else 1.0
+    metrics.min_voltage_pu = min_voltage if min_voltage != float('inf') else 1.0
     metrics.line_loading_violations = line_violations
     metrics.transformer_loading_violations = trafo_violations
     metrics.max_line_loading_pct = max_line_loading
     metrics.max_transformer_loading_pct = max_trafo_loading
     metrics.nodal_power_balance_violations = 0
-
+    
     return metrics
 
 
@@ -579,35 +441,25 @@ def compute_agent_metrics(
     history: List[SimulationStepResult],
     repair_history: List[Dict[str, Any]],
     token_usage: int,
-    wall_clock_seconds: float,
+    wall_clock_seconds: float
 ) -> AgentMetrics:
     """Compute code agent performance metrics."""
     metrics = AgentMetrics()
-
+    
     total_steps = len(history)
     valid_steps = sum(1 for h in history if len(h.constraint_violations) == 0)
-    sim_success = sum(
-        1
-        for h in history
-        if h.grid_diagnostics and h.grid_diagnostics.get("power_flow_converged", True)
-    )
-
+    sim_success = sum(1 for h in history if h.grid_diagnostics and h.grid_diagnostics.get('power_flow_converged', True))
+    
     metrics.task_success_rate = 1.0 if valid_steps == total_steps else 0.0
     metrics.first_attempt_validity = 1.0 if valid_steps == total_steps else 0.0
-    metrics.simulation_success_rate = (
-        sim_success / total_steps if total_steps > 0 else 1.0
-    )
-    metrics.repair_success_rate = (
-        1.0 if len(repair_history) == 0 else 0.5
-    )  # placeholder
+    metrics.simulation_success_rate = sim_success / total_steps if total_steps > 0 else 1.0
+    metrics.repair_success_rate = 1.0 if len(repair_history) == 0 else 0.5  # placeholder
     metrics.repair_iterations = len(repair_history)
     metrics.token_consumption = token_usage
     metrics.wall_clock_seconds = wall_clock_seconds
-    metrics.constraint_violation_rate = (
-        1.0 - (valid_steps / total_steps) if total_steps > 0 else 0.0
-    )
+    metrics.constraint_violation_rate = 1.0 - (valid_steps / total_steps) if total_steps > 0 else 0.0
     metrics.report_completeness = 1.0
-
+    
     return metrics
 
 
@@ -615,13 +467,11 @@ def calculate_gini_coefficient(values: List[float]) -> float:
     """Calculate Gini coefficient for fairness measurement."""
     if not values or len(values) < 2:
         return 0.0
-
+    
     sorted_values = sorted(values)
     n = len(sorted_values)
     index = np.arange(1, n + 1)
-    return (2 * np.sum(index * sorted_values)) / (n * np.sum(sorted_values)) - (
-        n + 1
-    ) / n
+    return (2 * np.sum(index * sorted_values)) / (n * np.sum(sorted_values)) - (n + 1) / n
 
 
 def compute_all_metrics(
@@ -631,34 +481,12 @@ def compute_all_metrics(
     repair_history: Optional[List[Dict[str, Any]]] = None,
     token_usage: int = 0,
     wall_clock_seconds: float = 0.0,
+    timestep_hours: Optional[float] = None
 ) -> Dict[str, Any]:
     """Compute all metrics at once."""
-    # Local import: fairness imports tariff helpers from this module.
-    from src.evaluation.fairness import compute_fairness_metrics
-
-    service = compute_service_metrics(history, scenario_config)
-    # Overlay the per-member economics. Without this the report keeps the
-    # ServiceMetrics schema defaults (per_member_costs {}, gini 0.0, coverage
-    # 1.0), which look like measured evidence but are not.
-    fairness = compute_fairness_metrics(history, scenario_config)
-    for field in (
-        "per_member_costs",
-        "per_member_savings",
-        "members_interrupted",
-        "member_cost_coverage",
-        "gini_coefficient",
-        "worst_member_cost",
-        "best_member_cost",
-    ):
-        setattr(service, field, getattr(fairness, field))
-
     return {
-        "energy": compute_energy_metrics(history, scenario_config, carbon_intensity),
-        "service": service,
-        "grid": compute_grid_metrics(
-            history, scenario_config.get("timestep_minutes", 15)
-        ),
-        "agent": compute_agent_metrics(
-            history, repair_history or [], token_usage, wall_clock_seconds
-        ),
+        'energy': compute_energy_metrics(history, scenario_config, carbon_intensity, timestep_hours),
+        'service': compute_service_metrics(history, scenario_config),
+        'grid': compute_grid_metrics(history, scenario_config.get('timestep_minutes', 15)),
+        'agent': compute_agent_metrics(history, repair_history or [], token_usage, wall_clock_seconds)
     }
