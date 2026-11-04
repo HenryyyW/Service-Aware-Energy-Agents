@@ -295,7 +295,7 @@ class CityLearnAdapter:
                 old_name = self.building_ids[i]
                 new_name = building_config.building_id
                 self._building_name_map[new_name] = old_name
-        
+
         self.building_ids = list(buildings_to_keep.keys())
 
         # Register the synthesized electric vehicles so each charger schedule
@@ -612,7 +612,14 @@ class CityLearnAdapter:
             return schema_root_dir
 
         # Fallback to standard CityLearn 3.0.2 cache location
-        cache_path = Path.home() / ".cache" / "citylearn" / "v3.0.2" / "datasets" / self.dataset_name
+        cache_path = (
+            Path.home()
+            / ".cache"
+            / "citylearn"
+            / "v3.0.2"
+            / "datasets"
+            / self.dataset_name
+        )
         if cache_path.exists():
             print(
                 f"[INFO] Schema root_directory not found, using CityLearn cache: {cache_path}"
@@ -681,7 +688,9 @@ class CityLearnAdapter:
                     "energy_simulation", f"{building_name}.csv"
                 )
                 # Map scenario building name back to dataset building name to find source file
-                dataset_building_name = self._building_name_map.get(building_name, building_name)
+                dataset_building_name = self._building_name_map.get(
+                    building_name, building_name
+                )
                 dataset_energy_file = f"{dataset_building_name}.csv"
                 src = source_dir / dataset_energy_file
                 if not src.exists():
