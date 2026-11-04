@@ -1,0 +1,133 @@
+{
+  "dashboard": {
+    "uid": "sea-api-metrics",
+    "title": "SEA - API Metrics",
+    "tags": ["sea", "production", "api"],
+    "timezone": "utc",
+    "refresh": "15s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "API Request Rate (req/s)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[1m])) by (method, path)",
+            "legendFormat": "{{method}} {{path}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "API Latency p50 / p95 / p99",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[1m])) by (le))",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[1m])) by (le))",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[1m])) by (le))",
+            "legendFormat": "p99"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Error Rate (5xx) %",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{status=~\"5..\"}[1m])) / sum(rate(http_requests_total[1m])) * 100",
+            "legendFormat": "5xx %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.5},
+                {"color": "red", "value": 1}
+              ]
+            },
+            "unit": "percent"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Request Duration by Endpoint (p95)",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{path=~\"/api/.*\"}[1m])) by (le, path))",
+            "legendFormat": "{{path}}"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Active Connections (WebSocket)",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 16, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "websocket_connections_active",
+            "legendFormat": "Active WS"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "HTTP Request Size (bytes)",
+        "type": "timeseries",
+        "gridPos": {"x": 6, "y": 16, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_size_bytes_bucket[1m])) by (le))",
+            "legendFormat": "p95"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "HTTP Response Size (bytes)",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 16, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_response_size_bytes_bucket[1m])) by (le))",
+            "legendFormat": "p95"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Requests by Status Code (5m)",
+        "type": "piechart",
+        "gridPos": {"x": 18, "y": 16, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[5m])) by (status)",
+            "legendFormat": "{{status}}"
+          }
+        ]
+      }
+    ]
+  },
+  "overwrite": true
+}

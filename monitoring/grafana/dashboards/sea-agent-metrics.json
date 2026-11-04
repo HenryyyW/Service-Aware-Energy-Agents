@@ -1,0 +1,196 @@
+{
+  "dashboard": {
+    "uid": "sea-agent-metrics",
+    "title": "SEA - Agent & Simulation Metrics",
+    "tags": ["sea", "production", "agent", "simulation"],
+    "timezone": "utc",
+    "refresh": "15s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Agent Task Queue Depth",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "agent_task_queue_depth",
+            "legendFormat": "Queue Depth"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 50},
+                {"color": "red", "value": 100}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Agent Task Success Rate",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(agent_tasks_completed_total[5m])) / sum(rate(agent_tasks_started_total[5m])) * 100",
+            "legendFormat": "Success Rate %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 90},
+                {"color": "green", "value": 99}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Agent Task Duration (p50, p95)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(agent_task_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(agent_task_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p95"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "LLM Token Usage (per minute)",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(llm_tokens_total[1m])",
+            "legendFormat": "Tokens/min"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "LLM Cost (USD per minute)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(llm_cost_usd_total[1m])",
+            "legendFormat": "USD/min"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "LLM Latency (p50, p95, p99)",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(llm_latency_seconds_bucket[1m])) by (le))",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(llm_latency_seconds_bucket[1m])) by (le))",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(llm_latency_seconds_bucket[1m])) by (le))",
+            "legendFormat": "p99"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Simulation Run Duration (p50, p95)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(simulation_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p50 (min)"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(simulation_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "p95 (min)"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Simulation Completion Rate",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(simulation_completed_total[5m])",
+            "legendFormat": "Completed/min"
+          },
+          {
+            "expr": "rate(simulation_failed_total[5m])",
+            "legendFormat": "Failed/min"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Agent Task State Distribution",
+        "type": "piechart",
+        "gridPos": {"x": 0, "y": 32, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(agent_tasks_total) by (status)",
+            "legendFormat": "{{status}}"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "LLM Fallback Rate",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(llm_fallback_total[5m])) / sum(rate(llm_requests_total[5m])) * 100",
+            "legendFormat": "Fallback %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 10},
+                {"color": "red", "value": 25}
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "overwrite": true
+}
