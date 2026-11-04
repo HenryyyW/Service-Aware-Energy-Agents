@@ -124,13 +124,18 @@ Before rollback, take a DB backup: `bash scripts/backup_postgres.sh`.
 | Loki | http://localhost:3100 (query from Grafana; datasource `monitoring/grafana/datasources/datasources.yml`) |
 | Log shipping | `promtail` tails `/var/log` (`monitoring/promtail-config.yml`) |
 
-## 9. Known blockers (from code — fix before a real staging deploy)
+## 9. Known blockers (verified 2026-11-04 — updated after fixes)
 
-1. **`pyproject.toml` api extra lists `httpx2>=2.14.0`** (typo for `httpx`). The root `Dockerfile` and
-   CI both run `pip install -e ".[api]"`, so the image build fails until this is corrected.
-2. **`docker-compose.yml` worker/scheduler run `celery -A src.api.celery_app`**, but there is no
-   `src/api/celery_app.py` module — those two services will crash-loop. Either add the Celery app or
-   drop the services.
-3. **Deploy/rollback CI jobs are simulated** (§6/§7).
-4. **PWA icons:** `manifest.webmanifest` ships SVG only; add 192/512 px PNG for installability, and
-   add a `Content-Security-Policy` header in `frontend/nginx.conf`.
+Resolved since this guide was drafted:
+- ~~`httpx2` typo~~ — `httpx2` is a real PyPI package (2.14.0); Docker builds pass.
+- ~~Celery worker/scheduler crash-loop~~ — services removed from compose (the real
+  queue is RQ; the worker runs inside the `api` container, see `scripts/smoke_deploy.sh`).
+- ~~PWA icons / CSP~~ — 192/512 px PNG icons shipped; CSP header in `frontend/nginx.conf`.
+
+Still open:
+1. **Deploy/rollback CI jobs are simulated** (§6/§7) — placeholder until real infra
+   (a staging host / GHCR-backed deploy target) exists.
+2. **Legacy `src/api/` coexists with canonical `backend/app/`** — single FastAPI entry is
+   `backend.app.main:app` (Dockerfile CMD); `src/api/` is legacy routes kept for
+   reference, slated for removal (structure-cleanup task).
+
