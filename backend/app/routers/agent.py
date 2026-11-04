@@ -12,6 +12,14 @@ from backend.app.state import (
     TASK_DURATION,
     TASKS_TOTAL,
     TASK_RETRIES,
+    get_task,
+    set_task,
+    delete_task,
+    get_idempotency_key,
+    set_idempotency_key,
+    get_task_retries,
+    set_task_retries,
+    increment_task_retries,
 )
 from src.schemas.report import (
     AgentMetrics,
@@ -20,14 +28,6 @@ from src.schemas.report import (
 
 router = APIRouter()
 
-# In-memory storage for agent tasks (fallback when Redis not available)
-_tasks: Dict[str, dict] = {}
-
-# Idempotency key storage (in-memory, use Redis in production)
-_idempotency_keys: Dict[str, str] = {}
-
-# Task retry tracking
-_task_retries: Dict[str, int] = {}
 MAX_RETRIES = 3
 TASK_TIMEOUT_SECONDS = 30 * 60  # 30 minutes
 
@@ -63,7 +63,9 @@ async def _run_agent_task(
     PROJECT_ROOT = "/home/box/OpenBot/Shared/Service-Aware-Energy-Agents"
 
     # Check timeout
-    task_data = _tasks.get(task_id, {})
+    task_data = get_task(task_id)
+    if not task_data:
+        return
     started_at = task_data.get("started_at")
     timeout_seconds = task_data.get("timeout_seconds", 30 * 60)
 
@@ -73,11 +75,12 @@ async def _run_agent_task(
         start_time = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
         elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
         if elapsed > timeout_seconds:
-            _tasks[task_id]["status"] = "failed"
-            _tasks[task_id]["updated_at"] = datetime.now(timezone.utc).isoformat()
-            _tasks[task_id]["execution_log"].append(
+            task_data["status"] = "failed"
+            task_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+            task_data.setdefault("execution_log", []).append(
                 f"Task timed out after {timeout_seconds}s"
             )
+            set_task(task_id, task_data)
             TASK_DURATION.labels(status="timeout").observe(timeout_seconds)
             TASKS_TOTAL.labels(status="timeout").inc()
             return
@@ -85,11 +88,14 @@ async def _run_agent_task(
     start_time_float = time.time()
 
     try:
-        _tasks[task_id]["status"] = "planning"
-        _tasks[task_id]["updated_at"] = datetime.now(timezone.utc).isoformat()
-        _tasks[task_id]["execution_log"].append(
-            "Starting multi-agent repair workflow..."
-        )
+        task_data = get_task(task_id)
+        if task_data:
+            task_data["status"] = "planning"
+            task_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+            task_data.setdefault("execution_log", []).append(
+                "Starting multi-agent repair workflow..."
+            )
+            set_task(task_id, task_data)
 
         # Load scenario
         from src.schemas.scenario import ScenarioConfig
@@ -205,9 +211,12 @@ async def _run_agent_task(
         with open(f"{PROJECT_ROOT}/src/controllers/__init__.py", "r") as f:
             baseline_controller_code = f.read()
 
-        _tasks[task_id]["status"] = "running"
-        _tasks[task_id]["updated_at"] = datetime.now(timezone.utc).isoformat()
-        _tasks[task_id]["execution_log"].append("Running multi-agent repair loop...")
+        task_data = get_task(task_id)
+        if task_data:
+            task_data["status"] = "running"
+            task_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+            task_data.setdefault("execution_log", []).append("Running multi-agent repair loop...")
+            set_task(task_id, task_data)
 
         # Run the actual multi-agent repair loop
         from src.agents.multi_agent_loop import run_multi_agent_repair
@@ -224,56 +233,62 @@ async def _run_agent_task(
         )
 
         # Update task with results
-        _tasks[task_id]["status"] = "completed" if result.success else "failed"
-        _tasks[task_id]["updated_at"] = datetime.now(timezone.utc).isoformat()
-        _tasks[task_id]["plan"] = (
-            result.iterations[0].planner_output.model_dump()
-            if result.iterations
-            else {}
-        )
-        _tasks[task_id]["code"] = (
-            result.iterations[0].coder_output.patched_code if result.iterations else ""
-        )
-        _tasks[task_id]["verification"] = (
-            result.iterations[0].verifier_output.model_dump()
-            if result.iterations
-            else {}
-        )
-        _tasks[task_id]["repairs"] = [
-            iter.coder_output.code_changes for iter in result.iterations
-        ]
-        _tasks[task_id]["report"] = result.final_report
-        _tasks[task_id]["execution_log"].append(
-            f"Repair {'succeeded' if result.success else 'failed'} after {result.total_iterations} iterations"
-        )
-        _tasks[task_id]["execution_log"].append(f"Total time: {result.total_time:.1f}s")
-
-        # Record metrics
-        duration = time.time() - start_time_float
-        TASK_DURATION.labels(status=_tasks[task_id]["status"]).observe(duration)
-        TASKS_TOTAL.labels(status=_tasks[task_id]["status"]).inc()
-
-        if result.success:
-            _tasks[task_id]["status"] = "completed"
-            _tasks[task_id]["execution_log"].append("Task completed successfully")
-        else:
-            _tasks[task_id]["status"] = "failed"
-            _tasks[task_id]["execution_log"].append(
-                "Repair loop did not resolve all violations"
+        task_data = get_task(task_id)
+        if task_data:
+            task_data["status"] = "completed" if result.success else "failed"
+            task_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+            task_data["plan"] = (
+                result.iterations[0].planner_output.model_dump()
+                if result.iterations
+                else {}
             )
+            task_data["code"] = (
+                result.iterations[0].coder_output.patched_code if result.iterations else ""
+            )
+            task_data["verification"] = (
+                result.iterations[0].verifier_output.model_dump()
+                if result.iterations
+                else {}
+            )
+            task_data["repairs"] = [
+                iter.coder_output.code_changes for iter in result.iterations
+            ]
+            task_data["report"] = result.final_report
+            task_data.setdefault("execution_log", []).append(
+                f"Repair {'succeeded' if result.success else 'failed'} after {result.total_iterations} iterations"
+            )
+            task_data["execution_log"].append(f"Total time: {result.total_time:.1f}s")
 
-        _tasks[task_id]["updated_at"] = datetime.now(timezone.utc).isoformat()
-        _tasks[task_id]["completed_at"] = datetime.now(timezone.utc).isoformat()
+            # Record metrics
+            duration = time.time() - start_time_float
+            TASK_DURATION.labels(status=task_data["status"]).observe(duration)
+            TASKS_TOTAL.labels(status=task_data["status"]).inc()
+
+            if result.success:
+                task_data["status"] = "completed"
+                task_data["execution_log"].append("Task completed successfully")
+            else:
+                task_data["status"] = "failed"
+                task_data["execution_log"].append(
+                    "Repair loop did not resolve all violations"
+                )
+
+            task_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+            task_data["completed_at"] = datetime.now(timezone.utc).isoformat()
+            set_task(task_id, task_data)
 
     except Exception as e:
-        _tasks[task_id]["status"] = "failed"
-        _tasks[task_id]["updated_at"] = datetime.now(timezone.utc).isoformat()
-        _tasks[task_id]["execution_log"].append(f"Error: {str(e)}")
-        import traceback
+        task_data = get_task(task_id)
+        if task_data:
+            task_data["status"] = "failed"
+            task_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+            task_data.setdefault("execution_log", []).append(f"Error: {str(e)}")
+            import traceback
 
-        _tasks[task_id]["execution_log"].append(traceback.format_exc())
-        TASK_DURATION.labels(status="error").observe(time.time() - start_time_float)
-        TASKS_TOTAL.labels(status="error").inc()
+            task_data["execution_log"].append(traceback.format_exc())
+            set_task(task_id, task_data)
+            TASK_DURATION.labels(status="error").observe(time.time() - start_time_float)
+            TASKS_TOTAL.labels(status="error").inc()
 
 
 @router.post("/agent/tasks", response_model=AgentTask, status_code=201)
@@ -286,15 +301,13 @@ async def create_agent_task(
     """Create a new agent task with idempotency support."""
     # Check idempotency key
     if idempotency_key:
-        if idempotency_key in _idempotency_keys:
-            existing_task_id = _idempotency_keys[idempotency_key]
-            if existing_task_id in _tasks:
-                existing_task = _tasks[existing_task_id]
+        existing_task_id = get_idempotency_key(idempotency_key)
+        if existing_task_id:
+            existing_task = get_task(existing_task_id)
+            if existing_task:
                 existing_task["updated_at"] = datetime.now(timezone.utc).isoformat()
+                set_task(existing_task_id, existing_task)
                 return existing_task
-        else:
-            # Store idempotency key (will be linked after task creation)
-            pass
 
     task_id = f"task_{uuid4().hex[:12]}"
     now = datetime.now(timezone.utc).isoformat()
@@ -308,19 +321,22 @@ async def create_agent_task(
         updated_at=now,
     )
 
-    _tasks[task_id] = task.model_dump()
+    task_data = task.model_dump()
+    set_task(task_id, task_data)
 
     # Store idempotency key mapping
     if idempotency_key:
-        _idempotency_keys[idempotency_key] = task_id
+        set_idempotency_key(idempotency_key, task_id)
 
     # Initialize retry counter
-    _task_retries[task_id] = 0
+    set_task_retries(task_id, 0)
 
     # Add timeout tracking
-    task_data = _tasks[task_id]
-    task_data["started_at"] = datetime.now(timezone.utc).isoformat()
-    task_data["timeout_seconds"] = 30 * 60  # 30 minutes
+    task_data = get_task(task_id)
+    if task_data:
+        task_data["started_at"] = datetime.now(timezone.utc).isoformat()
+        task_data["timeout_seconds"] = 30 * 60  # 30 minutes
+        set_task(task_id, task_data)
 
     # Start background agent workflow
     queue = get_task_queue()
@@ -351,44 +367,51 @@ async def create_agent_task(
 @router.get("/agent/tasks", response_model=List[AgentTask])
 async def get_agent_tasks():
     """Get all agent tasks."""
+    # For Redis-backed, we'd need to scan keys; fallback to in-memory
+    # Note: This only returns in-memory tasks. In production with Redis,
+    # you'd scan Redis keys with pattern "saea:task:*"
+    from backend.app.state import _tasks
+
     return list(_tasks.values())
 
 
 @router.get("/agent/tasks/{task_id}", response_model=AgentTask)
 async def get_agent_task(task_id: str):
     """Get a specific agent task."""
-    if task_id not in _tasks:
+    task = get_task(task_id)
+    if not task:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return _tasks[task_id]
+    return task
 
 
 @router.delete("/agent/tasks/{task_id}", status_code=204)
 async def delete_agent_task(task_id: str):
     """Delete an agent task."""
-    if task_id not in _tasks:
+    task = get_task(task_id)
+    if not task:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    del _tasks[task_id]
+    delete_task(task_id)
 
 
 @router.post("/agent/tasks/{task_id}/retry")
 async def retry_agent_task(task_id: str, background_tasks: BackgroundTasks):
     """Retry a failed agent task with retry tracking."""
-    if task_id not in _tasks:
+    task = get_task(task_id)
+    if not task:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
 
-    task = _tasks[task_id]
     if task["status"] != "failed":
         raise HTTPException(status_code=400, detail="Can only retry failed tasks")
 
     # Check retry limit
-    retry_count = _task_retries.get(task_id, 0)
+    retry_count = get_task_retries(task_id)
     if retry_count >= MAX_RETRIES:
         raise HTTPException(
             status_code=400, detail=f"Max retries ({MAX_RETRIES}) exceeded"
         )
 
     # Increment retry counter
-    _task_retries[task_id] = retry_count + 1
+    new_retry_count = increment_task_retries(task_id)
     TASK_RETRIES.labels(task_id=task_id).inc()
 
     # Reset task for retry
@@ -402,6 +425,7 @@ async def retry_agent_task(task_id: str, background_tasks: BackgroundTasks):
     task["repairs"] = []
     task["report"] = None
     task["started_at"] = datetime.now(timezone.utc).isoformat()
+    set_task(task_id, task)
 
     # Start background agent workflow
     queue = get_task_queue()
@@ -413,7 +437,7 @@ async def retry_agent_task(task_id: str, background_tasks: BackgroundTasks):
             task.get("scenario_id"),
             task.get("run_id"),
             job_timeout=30 * 60,
-            job_id=f"{task_id}_retry_{_task_retries[task_id]}",
+            job_id=f"{task_id}_retry_{new_retry_count}",
         )
     else:
         background_tasks.add_task(

@@ -1,6 +1,7 @@
 """Shared application state and utilities for the agent service."""
 
 import os
+from typing import Dict, Optional
 from prometheus_client import Counter, Histogram, Gauge
 
 try:
@@ -23,6 +24,14 @@ __all__ = [
     "get_redis_client",
     "get_task_queue",
     "get_job",
+    "get_task",
+    "set_task",
+    "delete_task",
+    "get_idempotency_key",
+    "set_idempotency_key",
+    "get_task_retries",
+    "set_task_retries",
+    "increment_task_retries",
 ]
 
 # Prometheus metrics
@@ -104,3 +113,140 @@ def get_job(task_id: str):
         except Exception:
             return None
     return None
+
+
+# In-memory fallback for task state (when Redis not available)
+_tasks: Dict[str, dict] = {}
+_idempotency_keys: Dict[str, str] = {}
+_task_retries: Dict[str, int] = {}
+
+# Redis key prefixes
+TASK_KEY_PREFIX = "saea:task:"
+IDEMPOTENCY_KEY_PREFIX = "saea:idempotency:"
+TASK_RETRIES_KEY_PREFIX = "saea:retries:"
+
+
+def _get_redis():
+    """Get Redis client if available."""
+    return get_redis_client()
+
+
+def _task_key(task_id: str) -> str:
+    return f"{TASK_KEY_PREFIX}{task_id}"
+
+
+def _idempotency_key(key: str) -> str:
+    return f"{IDEMPOTENCY_KEY_PREFIX}{key}"
+
+
+def _retries_key(task_id: str) -> str:
+    return f"{TASK_RETRIES_KEY_PREFIX}{task_id}"
+
+
+def get_task(task_id: str) -> Optional[dict]:
+    """Get task state from Redis or in-memory fallback."""
+    r = _get_redis()
+    if r:
+        try:
+            import json
+
+            data = r.hgetall(_task_key(task_id))
+            if data:
+                return {k: json.loads(v) for k, v in data.items()}
+        except Exception:
+            pass
+    return _tasks.get(task_id)
+
+
+def set_task(task_id: str, data: dict) -> None:
+    """Set task state in Redis or in-memory fallback."""
+    r = _get_redis()
+    if r:
+        try:
+            import json
+
+            pipe = r.pipeline()
+            for k, v in data.items():
+                pipe.hset(_task_key(task_id), k, json.dumps(v))
+            # Set TTL for 24 hours
+            pipe.expire(_task_key(task_id), 86400)
+            pipe.execute()
+            return
+        except Exception:
+            pass
+    _tasks[task_id] = data
+
+
+def delete_task(task_id: str) -> None:
+    """Delete task state from Redis or in-memory fallback."""
+    r = _get_redis()
+    if r:
+        try:
+            r.delete(_task_key(task_id))
+            return
+        except Exception:
+            pass
+    _tasks.pop(task_id, None)
+
+
+def get_idempotency_key(key: str) -> Optional[str]:
+    """Get task_id from idempotency key."""
+    r = _get_redis()
+    if r:
+        try:
+            return r.get(_idempotency_key(key))
+        except Exception:
+            pass
+    return _idempotency_keys.get(key)
+
+
+def set_idempotency_key(key: str, task_id: str) -> None:
+    """Set idempotency key mapping."""
+    r = _get_redis()
+    if r:
+        try:
+            r.setex(_idempotency_key(key), 86400, task_id)
+            return
+        except Exception:
+            pass
+    _idempotency_keys[key] = task_id
+
+
+def get_task_retries(task_id: str) -> int:
+    """Get task retry count."""
+    r = _get_redis()
+    if r:
+        try:
+            val = r.get(_retries_key(task_id))
+            if val is not None:
+                return int(val)
+        except Exception:
+            pass
+    return _task_retries.get(task_id, 0)
+
+
+def set_task_retries(task_id: str, count: int) -> None:
+    """Set task retry count."""
+    r = _get_redis()
+    if r:
+        try:
+            r.setex(_retries_key(task_id), 86400, str(count))
+            return
+        except Exception:
+            pass
+    _task_retries[task_id] = count
+
+
+def increment_task_retries(task_id: str) -> int:
+    """Increment and return task retry count."""
+    r = _get_redis()
+    if r:
+        try:
+            val = r.incr(_retries_key(task_id))
+            r.expire(_retries_key(task_id), 86400)
+            return val
+        except Exception:
+            pass
+    count = _task_retries.get(task_id, 0) + 1
+    _task_retries[task_id] = count
+    return count
