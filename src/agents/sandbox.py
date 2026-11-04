@@ -7,7 +7,11 @@ import sys
 import shutil
 import time
 import ast
-import resource
+
+try:
+    import resource
+except ImportError:  # Windows: the resource module is Unix-only
+    resource = None
 from typing import Optional, Dict, Any, List, FrozenSet
 from dataclasses import dataclass, field
 
@@ -823,10 +827,12 @@ class Sandbox:
 
     def _set_memory_limit(self):
         """Set memory limit for the current process."""
+        if resource is None:  # Windows: no setrlimit; rely on container limits
+            return
         try:
             limit_bytes = self.memory_limit_mb * 1024 * 1024
             resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
-        except (ValueError, resource.error):
+        except (ValueError, OSError):
             # May fail on some platforms or if limit too low
             pass
 
