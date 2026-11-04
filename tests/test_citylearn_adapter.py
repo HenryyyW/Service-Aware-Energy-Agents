@@ -466,8 +466,6 @@ if __name__ == "__main__":
     pytest.main([__file__, "-v"])
 
 
-
-
 def test_saea_run_id_reads_back_its_own_schema_dir(
     minimal_scenario, temp_data_dir, monkeypatch
 ):
