@@ -91,6 +91,8 @@ class CityLearnAdapter:
 
         # Save original root_directory BEFORE customizing schema
         original_root_dir = Path(schema["root_directory"])
+        # Resolve dataset path with fallback chain
+        self._resolved_dataset_path = self._resolve_dataset_path(original_root_dir)
 
         # Extract active action names from schema
         self.action_names = list(schema.get("actions", {}).keys())
@@ -121,8 +123,8 @@ class CityLearnAdapter:
         schema_dir = self._schema_dir()
         schema_dir.mkdir(parents=True, exist_ok=True)
 
-        # Copy dataset files to our schema directory (using original root dir)
-        self._copy_dataset_files(schema, schema_dir, original_root_dir)
+        # Copy dataset files to our schema directory (using resolved dataset path with fallback chain)
+        self._copy_dataset_files(schema, schema_dir, self._resolved_dataset_path)
 
         # Save modified schema
         schema_path = schema_dir / "schema.json"
@@ -585,6 +587,35 @@ class CityLearnAdapter:
             )
         schedule = pd.DataFrame(rows)
         return cycles, schedule
+
+    def _resolve_dataset_path(self, schema_root_dir: Path) -> Path:
+        """Resolve the dataset path with fallback chain.
+
+        Resolution order:
+        1. Schema's root_directory (from CityLearn's get_schema)
+        2. Standard CityLearn 3.0.2 cache path (~/.cache/citylearn/v3.0.2/datasets/{dataset_name})
+        3. Hard failure
+        """
+        # Try schema's root_directory first (set by CityLearn's get_schema)
+        if schema_root_dir.exists():
+            return schema_root_dir
+
+        # Fallback to standard CityLearn 3.0.2 cache location
+        cache_path = Path.home() / ".cache" / "citylearn" / "v3.0.2" / "datasets" / self.dataset_name
+        if cache_path.exists():
+            print(
+                f"[INFO] Schema root_directory not found, using CityLearn cache: {cache_path}"
+            )
+            return cache_path
+
+        # Hard failure - no dataset found
+        raise FileNotFoundError(
+            f"CityLearn dataset not found. "
+            f"Schema root_directory: {schema_root_dir} (not found). "
+            f"CityLearn cache: {cache_path} (not found). "
+            f"Ensure the dataset '{self.dataset_name}' is downloaded "
+            f"(run: python -c \"from citylearn.data import DataSet; DataSet().get_schema('{self.dataset_name}')\")"
+        )
 
     def _schema_dir(self) -> Path:
         """Per-run CityLearn schema directory.
