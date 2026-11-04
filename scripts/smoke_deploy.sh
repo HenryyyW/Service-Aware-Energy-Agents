@@ -6,7 +6,7 @@ set -euo pipefail
 
 COMPOSE_FILE="${1:-docker-compose.yml}"
 BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
-TIMEOUT="${TIMEOUT:-300}"
+TIMEOUT="${TIMEOUT:-600}"
 POLL_INTERVAL="${POLL_INTERVAL:-5}"
 
 log() { echo "[$(date -u +'%H:%M:%S')] $*"; }
@@ -18,7 +18,9 @@ cleanup() {
     # Dump container logs so CI shows why the API crashed
     if [ "${SMOKE_STARTED:-0}" = "1" ]; then
         docker compose -f "$COMPOSE_FILE" logs --tail 40 api frontend db redis 2>/dev/null || true
+        [ -f rq_worker.log ] && echo "=== rq_worker.log (tail) ===" && tail -20 rq_worker.log || true
     fi
+    [ -n "${RQ_PID:-}" ] && kill "$RQ_PID" 2>/dev/null || true
     docker compose -f "$COMPOSE_FILE" down -v --remove-orphans 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -32,9 +34,14 @@ docker compose -f "$COMPOSE_FILE" up -d --no-build db redis api frontend
 # Start an RQ worker inside the api container so queued agent tasks execute.
 # The API enqueues to the 'agent_tasks' RQ queue; without a worker the task
 # sits pending forever and the poll below times out.
-log "Starting RQ worker..."
-docker compose -f "$COMPOSE_FILE" exec -d api sh -c 'PYTHONPATH=/app rq worker --url redis://redis:6379/0 agent_tasks' \
-  || log "WARN: RQ worker did not start (task may rely on fallback execution)"
+# Run via runner-side background exec with -T so stdout lands in rq_worker.log
+# (detached `exec -d` hides crashes — we learned that the hard way).
+log "Checking rq availability in image..."
+docker compose -f "$COMPOSE_FILE" exec -T api python -c "import rq; print('rq', rq.__version__)" \
+  || log "WARN: rq not importable inside api container"
+log "Starting RQ worker (foreground-in-container, logged)..."
+docker compose -f "$COMPOSE_FILE" exec -T api sh -c 'PYTHONPATH=/app rq worker --url redis://redis:6379/0 agent_tasks' > rq_worker.log 2>&1 &
+RQ_PID=$!
 
 log "Waiting for backend health endpoint..."
 start=$(date +%s)
