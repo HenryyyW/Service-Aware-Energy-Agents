@@ -29,6 +29,13 @@ SMOKE_STARTED=1
 # before calling this script). --build would rebuild in-job and blow the timeout.
 docker compose -f "$COMPOSE_FILE" up -d --no-build db redis api frontend
 
+# Start an RQ worker inside the api container so queued agent tasks execute.
+# The API enqueues to the 'agent_tasks' RQ queue; without a worker the task
+# sits pending forever and the poll below times out.
+log "Starting RQ worker..."
+docker compose -f "$COMPOSE_FILE" exec -d api sh -c 'PYTHONPATH=/app rq worker --url redis://redis:6379/0 agent_tasks' \
+  || log "WARN: RQ worker did not start (task may rely on fallback execution)"
+
 log "Waiting for backend health endpoint..."
 start=$(date +%s)
 while true; do
