@@ -7,7 +7,13 @@ import json
 import os
 from pathlib import Path
 
-from src.schemas.scenario import ScenarioConfig, BuildingConfig, PandapowerConfig
+from src.schemas.scenario import (
+    ScenarioConfig,
+    BuildingConfig,
+    PandapowerConfig,
+    PVConfig,
+    BatteryConfig,
+)
 
 router = APIRouter()
 
@@ -50,9 +56,49 @@ def _load_scenario_from_disk(scenario_id: str) -> Optional[ScenarioConfig]:
 def _schema_to_scenario_config(schema: dict, scenario_id: str) -> ScenarioConfig:
     """Convert CityLearn schema to our ScenarioConfig."""
     buildings = []
-    for bid, bdata in schema.get("buildings", {}).items():
+    buildings_data = schema.get("buildings", {})
+    if isinstance(buildings_data, dict):
+        # CityLearn-style schema: building_id -> device config
+        building_items = list(buildings_data.items())
+    else:
+        # Round-tripped config (saved by POST/PATCH /scenarios): list of
+        # BuildingConfig-shaped dicts.
+        building_items = [
+            (
+                b.get("building_id", f"building_{index}"),
+                b,
+            )
+            for index, b in enumerate(buildings_data)
+        ]
+    for bid, bdata in building_items:
         if not bdata.get("include", True):
             continue
+        pv = None
+        pv_data = bdata.get("pv")
+        if isinstance(pv_data, dict):
+            pv_attrs = pv_data.get("attributes") or {}
+            nominal_power = pv_attrs.get("nominal_power") or pv_data.get(
+                "capacity_kw"
+            )
+            if nominal_power:
+                pv = PVConfig(capacity_kw=float(nominal_power))
+        battery = None
+        storage_data = bdata.get("electrical_storage")
+        if isinstance(storage_data, dict):
+            storage_attrs = storage_data.get("attributes") or {}
+            capacity = storage_attrs.get("capacity") or storage_data.get(
+                "capacity_kwh"
+            )
+            power = storage_attrs.get("nominal_power") or storage_data.get(
+                "power_kw"
+            )
+            if capacity and power:
+                battery = BatteryConfig(
+                    capacity_kwh=float(capacity),
+                    power_kw=float(power),
+                    efficiency_charge=float(storage_attrs.get("efficiency", 0.95)),
+                    initial_soc=float(storage_attrs.get("initial_soc", 0.5)),
+                )
         buildings.append(
             BuildingConfig(
                 building_id=bid,
@@ -60,6 +106,8 @@ def _schema_to_scenario_config(schema: dict, scenario_id: str) -> ScenarioConfig
                 location=bdata.get("location", {}),
                 simulation_start=bdata.get("simulation_start", "2023-01-01"),
                 simulation_end=bdata.get("simulation_end", "2023-01-08"),
+                pv=pv,
+                battery=battery,
             )
         )
 
@@ -95,6 +143,7 @@ def _scenario_to_dict(scenario: ScenarioConfig) -> dict:
         "scenario_id": scenario.scenario_id,
         "name": scenario.name,
         "description": scenario.description,
+        "buildings": [b.model_dump() for b in scenario.buildings],
         "community": {
             "name": scenario.name,
             "buildings": len(scenario.buildings),

@@ -9,7 +9,6 @@ import asyncio
 import numpy as np
 import hashlib
 import json
-import traceback
 
 
 def _convert_numpy(obj):
@@ -131,14 +130,6 @@ async def _run_simulation_background(
 
         # Use the same data directory resolution as scenarios router
         data_dir = str(SCENARIO_DATA_DIR.parent)
-        # Write debug info to file
-        import os
-
-        debug_log = os.path.join(os.environ.get("TEMP", "C:\\tmp"), "debug_sim.log")
-        with open(debug_log, "a") as f:
-            f.write(f"DEBUG: data_dir = {data_dir}\n")
-            f.write(f"DEBUG: SCENARIO_DATA_DIR = {SCENARIO_DATA_DIR}\n")
-            f.write(f"DEBUG: scenario = {scenario.scenario_id}\n")
 
         # Disable colorama to prevent stdout flush issues in background task
         import colorama
@@ -146,15 +137,7 @@ async def _run_simulation_background(
         colorama.deinit()
 
         # Initialize coupler and controller
-        try:
-            coupler = SimulationCoupler(scenario, data_dir=data_dir)
-            with open(debug_log, "a") as f:
-                f.write("DEBUG: Coupler created successfully\n")
-        except Exception as e:
-            with open(debug_log, "a") as f:
-                f.write(f"DEBUG: Coupler creation failed: {e}\n")
-                f.write(traceback.format_exc())
-            raise
+        coupler = SimulationCoupler(scenario, data_dir=data_dir)
 
         controller = _get_controller(controller_type, scenario)
 
@@ -207,10 +190,27 @@ async def _run_simulation_background(
         kpis = coupler.get_kpis()
         settlement = coupler.get_settlement_result()
 
-        # Generate outcome sentence
-        total_cost = kpis.get("total_cost", 0)
-        grid_import = kpis.get("grid_import_kwh", 0)
-        pv_self = kpis.get("pv_self_consumption", 0) * 100
+        # Absolute energy metrics from per-step building contributions.
+        # CityLearn's evaluate() returns baseline-normalized ratios, not
+        # absolute values, so we aggregate the co-simulation history instead.
+        energy = coupler.compute_energy_summary()
+
+        # Total cost: settlement engine when energy sharing is enabled, else a
+        # default tariff consistent with SettlementEngine ($0.30/kWh import,
+        # $0.05/kWh export).
+        total_cost = (
+            energy["grid_import_kwh"] * 0.30 - energy["grid_export_kwh"] * 0.05
+        )
+        if settlement is not None and settlement.building_settlements:
+            settled_cost = sum(
+                s.total_grid_import_cost - s.total_grid_export_revenue
+                for s in settlement.building_settlements.values()
+            )
+            if settled_cost != 0:
+                total_cost = settled_cost
+
+        grid_import = energy["grid_import_kwh"]
+        pv_self = energy["pv_self_consumption"] * 100
         ev_rate = kpis.get("ev_completion_rate", 0) * 100
         convergence = kpis.get("grid_convergence_rate", 0) * 100
 
@@ -229,15 +229,15 @@ async def _run_simulation_background(
         _runs[run_id]["generation_status"] = "ready"
         _runs[run_id]["outcome_sentence"] = outcome_sentence
         _runs[run_id]["energy_metrics"] = {
-            "total_cost": kpis.get("total_cost", 0),
-            "grid_import_kwh": kpis.get("grid_import_kwh", 0),
-            "grid_export_kwh": kpis.get("grid_export_kwh", 0),
-            "peak_demand_kw": kpis.get("peak_demand_kw", 0),
-            "pv_self_consumption": kpis.get("pv_self_consumption", 0),
-            "pv_generation_kwh": kpis.get("pv_generation_kwh", 0),
-            "pv_curtailment": kpis.get("pv_curtailment", 0),
-            "battery_throughput_kwh": kpis.get("battery_throughput_kwh", 0),
-            "carbon_emissions_kg": kpis.get("carbon_emissions_kg", 0),
+            "total_cost": total_cost,
+            "grid_import_kwh": energy["grid_import_kwh"],
+            "grid_export_kwh": energy["grid_export_kwh"],
+            "peak_demand_kw": energy["peak_demand_kw"],
+            "pv_self_consumption": energy["pv_self_consumption"],
+            "pv_generation_kwh": energy["pv_generation_kwh"],
+            "pv_curtailment": energy["pv_curtailment"],
+            "battery_throughput_kwh": energy["battery_throughput_kwh"],
+            "carbon_emissions_kg": energy["carbon_emissions_kg"],
         }
         _runs[run_id]["service_metrics"] = {
             "ev_completion_rate": kpis.get("ev_completion_rate", 0),

@@ -27,3 +27,5 @@ export const Filter = icons.Filter;
 export const Download = icons.Download;
 export const Edit = icons.Edit;
 export const Trash2 = icons.Trash2;
+export const SlidersHorizontal = icons.SlidersHorizontal;
+export const Activity = icons.Activity;

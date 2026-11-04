@@ -1,5 +1,6 @@
 import { useScenarioStore } from '../store/scenarioStore';
 import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useSimulationStore } from '../store/simulationStore';
 import { api } from '../api/client';
 import { ScenarioEditor } from '../components/scenario/ScenarioEditor';
@@ -94,10 +95,27 @@ function materializeScenario(source: any, editor: any, scenarioId: string) {
 }
 
 function ScenarioStudioPageContent() {
-  const { scenarios, currentScenario } = useScenarioStore();
+  const { scenarios, currentScenario, setScenarios } = useScenarioStore();
   const { addToast } = useToast();
   const navigate = useNavigate();
   const { addRun, setCurrentRun, setTrajectories, updateRun } = useSimulationStore();
+
+  useEffect(() => {
+    // Load scenarios available on the backend (disk-backed) into the store so
+    // the Saved Scenarios list reflects reality.
+    let cancelled = false;
+    api
+      .getScenarios()
+      .then((list) => {
+        if (!cancelled && Array.isArray(list) && list.length > 0) {
+          setScenarios(list);
+        }
+      })
+      .catch((error) => console.error('Failed to load scenarios:', error));
+    return () => {
+      cancelled = true;
+    };
+  }, [setScenarios]);
 
   const persistEditorScenario = async (scenario: any, scenarioId: string) => {
     const source = await api.getScenario(scenario.scenario_id || 'scenario_a');
@@ -137,7 +155,7 @@ function ScenarioStudioPageContent() {
         title: 'Simulation queued',
         message: `Run ${run.run_id}. Timestep: ${timestepMinutes} min, ${maxSteps} steps.`,
       });
-      navigate('/');
+      navigate('/workspace');
 
       void (async () => {
         try {

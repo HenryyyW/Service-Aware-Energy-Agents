@@ -1,11 +1,21 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard, FileText, FlaskConical, Zap, Settings } from '../utils/lucide'
+import {
+  LayoutDashboard,
+  FileText,
+  FlaskConical,
+  Zap,
+  Settings,
+  SlidersHorizontal,
+  Activity,
+} from '../utils/lucide'
 import { useState } from 'react'
 import './Layout.css'
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Scenarios', href: '/scenarios', icon: FileText },
+  { name: 'Studio', href: '/studio', icon: SlidersHorizontal },
+  { name: 'Workspace', href: '/workspace', icon: Activity },
   { name: 'Experiments', href: '/experiments', icon: FlaskConical },
   { name: 'Network', href: '/network', icon: Zap },
 ]

@@ -51,7 +51,7 @@ class ApiClient {
       scenario_id: scenario.scenario_id,
       name: scenario.name || scenario.community.name,
       description: scenario.description || '',
-      config: scenario,
+      ...scenario,
     });
     return response.data;
   }

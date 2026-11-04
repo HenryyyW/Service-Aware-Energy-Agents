@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAgentStore } from '../store/agentStore';
 import { useSimulationStore } from '../store/simulationStore';
 import { api } from '../api/client';
@@ -7,13 +8,18 @@ import { AgentTimeline } from '../components/agent/AgentTimeline';
 import { WorkspaceTimeline } from '../components/workspace';
 import { ToastProvider } from '@/components/ui/Toast';
 import { Tabs, TabList, Tab, TabPanel } from '../components/ui/Tabs';
+import { Button } from '../components/ui/Button';
+import { FileText } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import type { SimulationRun } from '../api/types';
 
 function AgentWorkspacePageContent() {
   const { currentTask, tasks, setCurrentTask } = useAgentStore();
-  const { currentRun } = useSimulationStore();
+  const { currentRun, setCurrentRun, setTrajectories } = useSimulationStore();
   const { t } = useTranslation('workspace');
   const [activeTab, setActiveTab] = useState<'agent' | 'simulation'>('agent');
+  const [runs, setRuns] = useState<SimulationRun[]>([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Load existing agent tasks
@@ -27,6 +33,42 @@ function AgentWorkspacePageContent() {
     };
     loadTasks();
   }, []);
+
+  // Poll the simulation run list while the workspace is open
+  useEffect(() => {
+    let cancelled = false;
+    const loadRuns = async () => {
+      try {
+        const list = await api.getRuns();
+        if (!cancelled) setRuns(list);
+      } catch (error) {
+        console.error('Failed to load simulation runs:', error);
+      }
+    };
+    loadRuns();
+    const interval = window.setInterval(loadRuns, 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  const selectRun = async (runId: string) => {
+    try {
+      const run = await api.getRun(runId);
+      setCurrentRun(run);
+      if (run.status === 'completed') {
+        try {
+          const trajectories = await api.getTrajectories(runId);
+          setTrajectories(trajectories);
+        } catch (error) {
+          console.error('Failed to load trajectories:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to select run:', error);
+    }
+  };
 
   const hasSimulationData = currentRun && currentRun.run_id;
 
@@ -58,11 +100,39 @@ function AgentWorkspacePageContent() {
                 <div className="space-y-3">
                   <p className="text-caption text-text-muted">{t('simulation.selectRun')}</p>
                   <div className="space-y-1 max-h-64 overflow-auto">
-                    {/* This would list runs for the current scenario */}
-                    <p className="text-caption text-text-muted text-center py-4">
-                      {t('simulation.noRuns')}
-                    </p>
+                    {runs.length === 0 && (
+                      <p className="text-caption text-text-muted text-center py-4">
+                        {t('simulation.noRuns')}
+                      </p>
+                    )}
+                    {runs.map((run) => (
+                      <button
+                        key={run.run_id}
+                        onClick={() => void selectRun(run.run_id)}
+                        className="w-full text-left glass-card p-2 hover:border-sun/50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-data text-xs">{run.run_id}</span>
+                          <span className={`badge px-2 py-0.5 text-caption ${run.status === 'completed' ? 'badge-energy' : run.status === 'failed' ? 'badge-violation' : 'badge-sun'}`}>
+                            {run.status}
+                          </span>
+                        </div>
+                        <p className="text-caption text-text-muted">
+                          {run.scenario_id} · {run.controller_type}
+                        </p>
+                      </button>
+                    ))}
                   </div>
+                  {currentRun && (
+                    <Button
+                      variant="secondary"
+                      className="w-full"
+                      onClick={() => navigate(`/runs/${currentRun.run_id}/report`)}
+                    >
+                      <FileText className="w-4 h-4 mr-1" />
+                      View report
+                    </Button>
+                  )}
                 </div>
               </TabPanel>
             </Tabs>

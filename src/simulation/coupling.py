@@ -816,6 +816,7 @@ class SimulationCoupler:
         building_powers = {}
         building_pvs = {}
         building_battery_powers = {}
+        building_ev_powers = {}
 
         # From observations
         obs = cl_result.observations
@@ -1037,6 +1038,80 @@ class SimulationCoupler:
                 else 0.0
             ),
             "failure_summary": failure_summary,
+        }
+
+    def compute_energy_summary(self) -> Dict[str, float]:
+        """Aggregate absolute energy metrics from the co-simulation history.
+
+        CityLearn's ``evaluate()`` returns baseline-normalized ratios (1.0 =
+        baseline), which are not usable as absolute KPIs. The per-step
+        building contributions recorded in ``co_sim_history`` are the source
+        of truth for the product UI.
+        """
+        dt_hours = self.scenario_config.timestep_minutes / 60.0
+
+        grid_import_kwh = 0.0
+        grid_export_kwh = 0.0
+        pv_generation_kwh = 0.0
+        pv_consumed_kwh = 0.0
+        battery_throughput_kwh = 0.0
+        carbon_emissions_kg = 0.0
+        community_load_kws: List[float] = []
+        community_net_kws: List[float] = []
+
+        for h in self.co_sim_history:
+            cl = h.citylearn_result
+            diag = cl.grid_diagnostics or {}
+            contribs = diag.get("building_contributions") or {}
+            if not contribs:
+                continue
+            total_load = 0.0
+            total_pv = 0.0
+            total_battery = 0.0
+            total_net = 0.0
+            for contribution in contribs.values():
+                total_load += float(contribution.get("load_kw", 0.0))
+                total_pv += float(contribution.get("pv_kw", 0.0))
+                total_battery += float(contribution.get("battery_kw", 0.0))
+                total_net += float(contribution.get("net_injection_kw", 0.0))
+
+            # net_injection_kw convention: positive = injection into the grid
+            # (export), negative = drawn from the grid (import).
+            grid_import_kwh += max(-total_net, 0.0) * dt_hours
+            grid_export_kwh += max(total_net, 0.0) * dt_hours
+            pv_generation_kwh += total_pv * dt_hours
+            pv_consumed_kwh += min(total_pv, total_load) * dt_hours
+            battery_throughput_kwh += abs(total_battery) * dt_hours
+            community_load_kws.append(total_load)
+            community_net_kws.append(total_net)
+
+            # Carbon intensity observation (kg/kWh) at this timestep
+            obs = cl.observations or {}
+            carbon_intensity = None
+            for bid in contribs:
+                value = obs.get(f"{bid}_carbon_intensity")
+                if value is not None:
+                    carbon_intensity = float(value)
+                    break
+            if carbon_intensity is not None:
+                carbon_emissions_kg += (
+                    max(-total_net, 0.0) * dt_hours * carbon_intensity
+                )
+
+        return {
+            "grid_import_kwh": grid_import_kwh,
+            "grid_export_kwh": grid_export_kwh,
+            "peak_demand_kw": max(community_load_kws) if community_load_kws else 0.0,
+            "peak_net_import_kw": (
+                max(community_net_kws) if community_net_kws else 0.0
+            ),
+            "pv_generation_kwh": pv_generation_kwh,
+            "pv_self_consumption": (
+                pv_consumed_kwh / pv_generation_kwh if pv_generation_kwh > 0 else 0.0
+            ),
+            "pv_curtailment": 0.0,
+            "battery_throughput_kwh": battery_throughput_kwh,
+            "carbon_emissions_kg": carbon_emissions_kg,
         }
 
     def get_per_building_contributions(self) -> List[Dict[str, Dict[str, float]]]:

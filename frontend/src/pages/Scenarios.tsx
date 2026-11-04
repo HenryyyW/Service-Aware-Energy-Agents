@@ -1,5 +1,6 @@
 import { Search, Filter, Download, Edit, Trash2, Eye } from '../utils/lucide'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import './Scenarios.css'
 
 interface Scenario {
@@ -24,6 +25,7 @@ const mockScenarios: Scenario[] = import.meta.env.DEV ? [
 export default function Scenarios() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedScenario, setSelectedScenario] = useState<Scenario | null>(null)
+  const navigate = useNavigate()
 
   const filteredScenarios = mockScenarios.filter(s =>
     s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -133,7 +135,15 @@ export default function Scenarios() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button className="btn btn-primary" onClick={() => {}}>Run Experiment</button>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setSelectedScenario(null)
+                    navigate('/studio')
+                  }}
+                >
+                  Run Experiment
+                </button>
               </div>
             </div>
           </div>
