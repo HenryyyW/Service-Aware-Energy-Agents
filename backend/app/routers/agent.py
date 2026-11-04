@@ -215,7 +215,9 @@ async def _run_agent_task(
         if task_data:
             task_data["status"] = "running"
             task_data["updated_at"] = datetime.now(timezone.utc).isoformat()
-            task_data.setdefault("execution_log", []).append("Running multi-agent repair loop...")
+            task_data.setdefault("execution_log", []).append(
+                "Running multi-agent repair loop..."
+            )
             set_task(task_id, task_data)
 
         # Run the actual multi-agent repair loop
@@ -243,7 +245,9 @@ async def _run_agent_task(
                 else {}
             )
             task_data["code"] = (
-                result.iterations[0].coder_output.patched_code if result.iterations else ""
+                result.iterations[0].coder_output.patched_code
+                if result.iterations
+                else ""
             )
             task_data["verification"] = (
                 result.iterations[0].verifier_output.model_dump()
