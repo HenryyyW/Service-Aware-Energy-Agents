@@ -89,49 +89,47 @@ main. Then B0-re + B1 relaunch per §4.1.
 
 ---
 
-## B0-re (2026-11-04): 89b36d7 OVERSHOOTS — gate FAIL, B1 still paused
+## B0-re ADJUDICATION (2026-11-04, Research Engineer ruling): REJECTED as pushed
 
-Backend B's `89b36d7` (nominal_power x 1000, "CityLearn expects WATTS") is
-contradicted by the pinned library's own source (`citylearn/energy_model.py`,
-CityLearn 3.0.2 in `.venv`):
+**Ruling on `fix/pv-schema-synthesis` (b7efcb9): REJECT — the described fix is
+not on origin.** Verified facts:
 
-- `PV` docstring: "nominal_power : float ... PV array output power in [kW]"
-- `PV.get_generation`: `generation = nominal_power[kW] x inverter_ac_power_per_kw[W/kW] / 1000 x dt[h]`
-  — the /1000 converts the *solar series*, not nominal_power.
+1. The pushed branch contains ONLY the x1000 revert (+ test 4000.0 -> 4.0,
+   correct) and a 49-line deletion of this evidence doc (must be restored).
+   Searched ALL refs: no synthesis-fix commit exists on any remote branch.
+2. **Reproducibility test**: ran scenario_c multi_agent_42 p2p on a worktree of
+   the pushed branch -> **pv_gen = 14.53 kWh, export 0.0, cost 332.8 USD —
+   byte-identical to the broken tree.** Backend B's claimed 1914.8 kWh is not
+   reproducible from origin; the fix exists only in his local checkout.
+3. **CF arithmetic correction (54.0 kW installed, 5 buildings incl. the 10.5 kW
+   one my earlier table missed)**: release 1455.3 kWh = CF 16.0%; broken
+   14.53 = 0.16%; 89b36d7 14,528 = 160% (still impossible); B's claimed
+   1914.8 = CF 21.1% (his denominator is right; the partner's 26.2% used the
+   wrong 43.5 kW).
+4. **New blocking finding — no base dataset on this machine**: `data/` holds
+   only synthesized schemas; `_copy_dataset_files` SILENTLY falls back to
+   `_create_dummy_energy_file` (sine solar 0.45*sin + noise, uniform 1-5 kW
+   random loads, fake temperatures) whenever a building CSV is missing, and
+   CityLearn 3.0.2's package bundles no dataset. Every run on this machine is
+   therefore on synthetic profiles. The release (035a52f, python 3.10.9,
+   another machine) evidently had real dataset files — its copy path succeeded.
+   A solar-only copy is insufficient: loads/demands are synthetic too.
 
-Measured B0-re smoke (`scenario_c_multi_agent_42`, `--regime p2p`; archived as
-`experiments/b0_broken_pv_evidence/scenario_c_multi_agent_42_OVERSHOOT_B0RE`):
+**Required from Backend B (specific deficiencies):**
+a. PUSH the actual synthesis-fix commit — it exists only locally.
+b. Copy the FULL stock building CSVs (solar + loads + demands), not solar
+   only, with the building-name mapping (building_0 -> Building_1 etc.) and
+   episode_time_steps slicing; provision the real CityLearn 2022
+   all_plus_evs dataset into the schema source_dir on THIS machine.
+c. Make the `_create_dummy_energy_file` fallback a HARD FAILURE (or at minimum
+   a gate-flagged, logged warning) so no benchmark run ever silently executes
+   on synthetic physics.
+d. Restore the deleted 49 lines of this doc.
 
-| Quantity | release `035a52f` | broken tree | 89b36d7 tree |
-|---|---:|---:|---:|
-| pv_generation (kWh/wk) | 1455.3 | 14.53 | 14,528.1 |
-| capacity factor (43.5 kW installed) | 19.9% OK | 0.2% FAIL | 199% IMPOSSIBLE |
-| grid_export (kWh) | 928.5 | 0.0 | 13,347.9 |
-| total_cost (USD) | 52.0 | 332.8 | -565.4 (negative) |
-| p2p_volume (kWh) | - | 0.0 | 990.5 |
-
-Notes: (a) "14,528 matches 035a52f" is a misread — the release value is
-1455.3 (a 10x gap, not a match); (b) the one positive result: the market
-engine is verified end-to-end on real trades — `market_results.jsonl` carries
-per-step `clearing_price` / `trades` / `settlements` / `total_volume_kwh`
-(e.g. t=0: price 0.125, volume 3.41 kWh, 4 parties settled) — so once PV is
-sane, B1 is mechanically ready.
-
-**True root cause of the original 100x collapse**: the synthesized per-run
-`building_*.csv` `solar_generation` series is ~450x too small —
-`data/schemas/scenario_c/building_0.csv` has sum 270.46 / max 6.78 over 169
-steps (mean ~1.6 W/kW), while the release-era series implied by the release
-KPIs is SAM-style W/kW (mean ~717, max ~1000). With kW nominal_power and a
-proper series, `per_kw` mode reproduces the release scale (CF ~20%).
-
-**Required fix (Backend B):**
-1. Revert the x1000 in `89b36d7` (nominal_power = `capacity_kw`).
-2. Repair schema synthesis: copy the dataset's stock `solar_generation`
-   W/kW series instead of the tiny synthesized values (regression window
-   `035a52f..b152037`, schema-copy path).
-3. Replace the absolute test expectation (14,528) with a capacity-factor
-   band (CF 10-35% => scenario_c ~700-2,500 kWh/week).
-
-**B0-re acceptance (pre-registered):** scenario_c multi_agent_42 p2p run with
-pv_generation within ~+/-20% of the 1455.3 kWh release anchor AND nonzero p2p
-trades AND settlement-gate pass. The 750-run queue stays paused until then.
+**Acceptance unchanged:** B0-re on merged main = scenario_c multi_agent_42 p2p
+with pv_generation within +/-20% of the 1455.3 kWh anchor (or, if the restored
+mapping legitimately differs from the release's, verified first-principles:
+expected PV from the restored series x YAML capacities within 5% of measured,
+CF in 10-35% — 907 to 3,175 kWh/week at 54 kW) AND nonzero p2p trades AND
+settlement-gate pass. His 1914.8 (CF 21.1%) would satisfy the band if pushed
+and reproduced. The 750-run queue stays paused.
