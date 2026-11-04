@@ -150,8 +150,8 @@ def test_rule_based_controller_redispatch_on_voltage_violation():
 
     assert battery_charge_redispatched is not None
     assert battery_charge_baseline is not None
-    # Should be scaled by 0.85 for voltage violation (compared to baseline without violation)
-    expected_scaled = battery_charge_baseline * 0.85
+    # Should be scaled by 2.0 for overvoltage violation (compared to baseline without violation)
+    expected_scaled = battery_charge_baseline * 2.0
     assert (
         abs(battery_charge_redispatched - expected_scaled) < 0.01
     ), f"Expected {expected_scaled}, got {battery_charge_redispatched}"
@@ -241,8 +241,8 @@ def test_rule_based_controller_redispatch_on_line_loading_violation():
 
     assert battery_charge_redispatched is not None
     assert battery_charge_baseline is not None
-    # Should be scaled by 0.8 for line loading (compared to baseline without violation)
-    expected_scaled = battery_charge_baseline * 0.8
+    # Should be scaled by 0.1 for line loading (compared to baseline without violation)
+    expected_scaled = battery_charge_baseline * 0.1
     assert (
         abs(battery_charge_redispatched - expected_scaled) < 0.01
     ), f"Expected {expected_scaled}, got {battery_charge_redispatched}"

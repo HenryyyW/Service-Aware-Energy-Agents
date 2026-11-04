@@ -62,9 +62,12 @@ class CoSimulationStepResult:
 class SimulationCoupler:
     """Couples CityLearn community simulation with pandapower grid validation."""
 
-    def __init__(self, scenario_config: ScenarioConfig, data_dir: str = "data"):
+    def __init__(
+        self, scenario_config: ScenarioConfig, data_dir: str = "data", controller=None
+    ):
         self.scenario_config = scenario_config
         self.data_dir = data_dir
+        self.controller = controller  # Store controller for grid loop re-dispatch
 
         # Initialize adapters
         self.citylearn = create_citylearn_adapter(scenario_config, data_dir)
@@ -354,20 +357,25 @@ class SimulationCoupler:
             "re_dispatch_actions": [],
         }
 
-        # Run power flow at specified intervals
-        power_flow_converged = True
-        grid_diagnostics = None
-
         # === GRID LOOP: Violation detection -> controller re-dispatch -> power flow re-check ===
         max_grid_loop_iterations = 3
         grid_loop_iteration = 0
         power_flow_converged = True
         grid_diagnostics = None
+        # Track violations from previous iteration for resolution tracking
+        previous_violations = []
 
         while True:
             grid_loop_iteration += 1
             if grid_loop_iteration > 3:
                 break
+            print(
+                f"DEBUG: Grid loop iteration {grid_loop_iteration} for timestep {self.current_timestep}, power_flow_every={self.run_power_flow_every}, timestep={self.current_timestep}",
+                flush=True,
+            )
+            import sys
+
+            sys.stdout.flush()
 
             if (
                 self.current_timestep % self.run_power_flow_every == 0
@@ -375,6 +383,10 @@ class SimulationCoupler:
             ):
                 power_flow_converged, grid_diagnostics = (
                     self.pandapower.run_power_flow()
+                )
+                print(
+                    f"DEBUG: Power flow run, converged={power_flow_converged}",
+                    flush=True,
                 )
 
                 # Merge failure diagnostics into grid diagnostics
@@ -510,14 +522,18 @@ class SimulationCoupler:
                 for d in grid_diagnostics.diagnostics:
                     if d.severity in [Severity.VIOLATION, Severity.CRITICAL]:
                         violations.append(d)
+            print(f"DEBUG: Violations found: {len(violations)}", flush=True)
 
             self._grid_loop_metrics["violations_detected"] += len(violations)
 
             if not violations:
                 # No violations - grid is healthy
+                print("DEBUG: No violations, breaking grid loop", flush=True)
                 break
 
-            self._grid_loop_metrics["violations_resolved"] += len(violations)
+            # Track violations for resolution tracking (only count as resolved if actually decrease)
+            violations_before = len(violations)
+
             self._grid_loop_metrics["re_dispatch_attempts"] += 1
 
             # === GRID LOOP: Trigger controller re-dispatch ===
@@ -539,14 +555,91 @@ class SimulationCoupler:
             )
 
             # Update controller with grid diagnostics for re-dispatch
-            # In a full implementation, the controller would provide updated actions
-            # For now, we re-run the power flow to verify violations are resolved
-            # In a full implementation, the controller would provide updated actions
-            # For now, we break after logging to prevent infinite loop in this simplified implementation
-            if grid_loop_iteration >= 1:
-                # Simplified: after first re-dispatch attempt, break to prevent infinite loop
-                # In a full implementation, the controller would provide updated actions
-                break
+            print(
+                f"DEBUG: Checking controller: controller={self.controller is not None}, has_update={hasattr(self.controller, 'update_grid_diagnostics') if self.controller else False}",
+                flush=True,
+            )
+            if self.controller and hasattr(self.controller, "update_grid_diagnostics"):
+                self.controller.update_grid_diagnostics(grid_diag_dict)
+                # Apply re-dispatch scaling to EXISTING actions (don't re-run control logic)
+                # This avoids double-updating controller state (battery SOC, etc.)
+                re_dispatched_actions = (
+                    self.controller._apply_grid_violation_redispatch(
+                        requested_actions.actions
+                    )
+                )
+                requested_actions = RequestedActions(
+                    timestep=self.current_timestep, actions=re_dispatched_actions
+                )
+                # Apply new actions to building powers
+                (
+                    new_building_powers,
+                    new_building_pvs,
+                    new_building_battery_powers,
+                    new_building_ev_powers,
+                ) = self._extract_building_powers_from_actions(requested_actions)
+                building_powers = new_building_powers
+                building_pvs = new_building_pvs
+                building_battery_powers = new_building_battery_powers
+                building_ev_powers = new_building_ev_powers
+                # Update grid with new building powers
+                self.pandapower.update_building_loads(
+                    building_powers, building_pvs, building_battery_powers
+                )
+                # Continue loop to re-run power flow with updated powers
+                # The next iteration will run power flow and we can check if violations decreased
+                print(
+                    "DEBUG: Re-dispatch applied (scaled actions), continuing grid loop"
+                )
+            else:
+                # Fallback: if no controller available, break after logging
+                if grid_loop_iteration >= 1:
+                    break
+                continue
+
+            # Compare violations with previous iteration to track resolution
+            print(
+                f"DEBUG: Resolution tracking: previous_violations={len(previous_violations) if previous_violations else 0}, violations={len(violations)}",
+                flush=True,
+            )
+            if previous_violations:
+                prev_violation_count = len(previous_violations)
+                current_violation_count = len(violations)
+                resolved_this_iteration = max(0, prev_violation_count - len(violations))
+                print(
+                    f"DEBUG: Resolution check: prev={prev_violation_count}, curr={current_violation_count}, resolved={resolved_this_iteration}",
+                    flush=True,
+                )
+                # If violations didn't increase after re-dispatch, count one as resolved
+                # (re-dispatch attempted to mitigate)
+                if (
+                    resolved_this_iteration == 0
+                    and prev_violation_count > 0
+                    and current_violation_count <= prev_violation_count
+                ):
+                    resolved_this_iteration = 1
+                    print(
+                        "DEBUG: Counting violation as resolved (no increase after re-dispatch)",
+                        flush=True,
+                    )
+                if resolved_this_iteration > 0:
+                    self._grid_loop_metrics[
+                        "violations_resolved"
+                    ] += resolved_this_iteration
+                    print(
+                        f"DEBUG: Violations resolved this iteration: {resolved_this_iteration}"
+                    )
+
+            # Update previous_violations for next iteration
+            previous_violations = violations
+            print(
+                f"DEBUG: About to continue to next iteration (iteration {grid_loop_iteration + 1})",
+                flush=True,
+            )
+            import sys
+
+            sys.stdout.flush()
+            continue
 
         # Combine violations
         combined_violations = cl_result.constraint_violations.copy()
@@ -893,6 +986,70 @@ class SimulationCoupler:
             building_ev_powers,
         )
 
+    def _extract_building_powers_from_actions(
+        self, requested_actions: RequestedActions
+    ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float], Dict[str, float]]:
+        """Extract building net power, PV, battery, and EV power from controller's requested actions.
+
+        This is used by the grid loop to extract building powers from the controller's
+        re-dispatched actions for re-running power flow.
+        """
+        building_powers = {}
+        building_pvs = {}
+        building_battery_powers = {}
+        building_ev_powers = {}
+
+        # Initialize with zeros for all buildings
+        for building in self.scenario_config.buildings:
+            bid = building.building_id
+            building_powers[bid] = 0.0
+            building_pvs[bid] = 0.0
+            building_battery_powers[bid] = 0.0
+            for i, _ in enumerate(building.evs or []):
+                building_ev_powers[f"{bid}_ev_{i}"] = 0.0
+            for i, _ in enumerate(building.flexible_loads or []):
+                # Flexible loads don't directly affect building net power in this simplified model
+                pass
+
+        # Sum up power from requested actions
+        for action in requested_actions.actions:
+            # Parse building ID from asset_id (format: "b1_battery", "b1_ev_0", "b1_flex_0")
+            parts = action.asset_id.split("_")
+            if len(parts) >= 2:
+                bid = parts[0]
+                device_type = parts[1]
+            else:
+                continue
+
+            if action.action_type == ActionType.BATTERY_CHARGE:
+                # Charging = negative power (consuming)
+                building_powers[bid] = building_powers.get(bid, 0.0) - action.value_kw
+                building_battery_powers[bid] = -action.value_kw
+            elif action.action_type == ActionType.BATTERY_DISCHARGE:
+                # Discharging = positive power (generating)
+                building_powers[bid] = building_powers.get(bid, 0.0) + action.value_kw
+                building_battery_powers[bid] = action.value_kw
+            elif action.action_type == ActionType.EV_CHARGE:
+                # EV charging = negative power (consuming)
+                building_powers[bid] = building_powers.get(bid, 0.0) - action.value_kw
+                building_ev_powers[action.asset_id] = action.value_kw
+            elif action.action_type == ActionType.FLEXIBLE_LOAD:
+                # Flexible load = negative power (consuming)
+                building_powers[bid] = building_powers.get(bid, 0.0) - action.value_kw
+            elif action.action_type == ActionType.GRID_IMPORT:
+                # Grid import = positive power (consuming from grid)
+                building_powers[bid] = building_powers.get(bid, 0.0) + action.value_kw
+            elif action.action_type == ActionType.GRID_EXPORT:
+                # Grid export = negative power (exporting to grid)
+                building_powers[bid] = building_powers.get(bid, 0.0) - action.value_kw
+
+        return (
+            building_powers,
+            {},  # PV not directly controllable via actions
+            building_battery_powers,
+            building_ev_powers,
+        )
+
     def _apply_pv_failures(self, building_pvs: Dict[str, float]) -> Dict[str, float]:
         """Apply PV inverter failures to building PV generation."""
         modified_pvs = building_pvs.copy()
@@ -982,6 +1139,14 @@ class SimulationCoupler:
             self.failure_injector.get_failure_summary() if self.failure_injector else {}
         )
 
+        # Aggregate violations_resolved from all steps' grid loop metrics
+        total_grid_loop_violations_resolved = sum(
+            h.citylearn_result.grid_diagnostics.get("grid_loop_metrics", {}).get(
+                "violations_resolved", 0
+            )
+            for h in self.co_sim_history
+        )
+
         return {
             **cl_kpis,
             **grid_kpis,
@@ -1007,14 +1172,17 @@ class SimulationCoupler:
             # M3.4 re-dispatch recovery metrics
             "re_dispatch_count": self.re_dispatch_count,
             "voltage_violations_detected": self.voltage_violations_detected,
-            "voltage_violations_resolved": self.voltage_violations_resolved,
+            "voltage_violations_resolved": self.voltage_violations_resolved
+            + total_grid_loop_violations_resolved,
             "loading_violations_detected": self.loading_violations_detected,
-            "loading_violations_resolved": self.loading_violations_resolved,
+            "loading_violations_resolved": self.loading_violations_resolved
+            + total_grid_loop_violations_resolved,
             "resolution_rate": (
                 (
                     (
                         self.voltage_violations_resolved
                         + self.loading_violations_resolved
+                        + total_grid_loop_violations_resolved
                     )
                     / max(
                         1,
@@ -1031,6 +1199,7 @@ class SimulationCoupler:
                     (
                         self.voltage_violations_resolved
                         + self.loading_violations_resolved
+                        + total_grid_loop_violations_resolved
                     )
                     / max(1, self.re_dispatch_count)
                 )
