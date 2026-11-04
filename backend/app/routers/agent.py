@@ -5,6 +5,8 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, Request, Header
 from pydantic import BaseModel
 from uuid import uuid4
 from datetime import datetime, timezone
+from pathlib import Path
+import os
 import time
 
 from backend.app.state import (
@@ -60,7 +62,11 @@ async def _run_agent_task(
     task_id: str, description: str, scenario_id: Optional[str], run_id: Optional[str]
 ):
     """Background task to run the real multi-agent repair workflow."""
-    PROJECT_ROOT = "/home/box/OpenBot/Shared/Service-Aware-Energy-Agents"
+    # Resolve the repository root dynamically so this works from any checkout
+    # and inside Docker (this file is backend/app/routers/agent.py).
+    PROJECT_ROOT = os.environ.get(
+        "PROJECT_ROOT", str(Path(__file__).resolve().parents[3])
+    )
 
     # Check timeout
     task_data = get_task(task_id)
