@@ -198,9 +198,7 @@ async def _run_simulation_background(
         # Total cost: settlement engine when energy sharing is enabled, else a
         # default tariff consistent with SettlementEngine ($0.30/kWh import,
         # $0.05/kWh export).
-        total_cost = (
-            energy["grid_import_kwh"] * 0.30 - energy["grid_export_kwh"] * 0.05
-        )
+        total_cost = energy["grid_import_kwh"] * 0.30 - energy["grid_export_kwh"] * 0.05
         if settlement is not None and settlement.building_settlements:
             settled_cost = sum(
                 s.total_grid_import_cost - s.total_grid_export_revenue

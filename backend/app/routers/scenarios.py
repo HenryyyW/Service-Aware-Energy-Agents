@@ -77,21 +77,15 @@ def _schema_to_scenario_config(schema: dict, scenario_id: str) -> ScenarioConfig
         pv_data = bdata.get("pv")
         if isinstance(pv_data, dict):
             pv_attrs = pv_data.get("attributes") or {}
-            nominal_power = pv_attrs.get("nominal_power") or pv_data.get(
-                "capacity_kw"
-            )
+            nominal_power = pv_attrs.get("nominal_power") or pv_data.get("capacity_kw")
             if nominal_power:
                 pv = PVConfig(capacity_kw=float(nominal_power))
         battery = None
         storage_data = bdata.get("electrical_storage")
         if isinstance(storage_data, dict):
             storage_attrs = storage_data.get("attributes") or {}
-            capacity = storage_attrs.get("capacity") or storage_data.get(
-                "capacity_kwh"
-            )
-            power = storage_attrs.get("nominal_power") or storage_data.get(
-                "power_kw"
-            )
+            capacity = storage_attrs.get("capacity") or storage_data.get("capacity_kwh")
+            power = storage_attrs.get("nominal_power") or storage_data.get("power_kw")
             if capacity and power:
                 battery = BatteryConfig(
                     capacity_kwh=float(capacity),
