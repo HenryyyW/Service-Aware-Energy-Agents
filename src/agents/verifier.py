@@ -3,7 +3,8 @@
 from typing import List, Dict, Any
 from src.agents.roles import AgentState, VerifierOutput, AgentRole
 from src.agents.planner import PlannerOutput
-from src.schemas.report import ExperimentResult, GridMetrics, ServiceMetrics
+from src.schemas.report import ExperimentResult
+from src.evaluation.repair_acceptance import evaluate_repair, RepairVerdict
 
 
 class VerifierAgent:
@@ -17,7 +18,7 @@ class VerifierAgent:
         self, state: AgentState, plan: PlannerOutput, executor_output: Dict[str, Any]
     ) -> VerifierOutput:
         """
-        Verify that the repair resolved the violations.
+        Verify that the repair resolved the violations using shared no-masking criteria.
 
         Args:
             state: Current agent state
@@ -86,6 +87,52 @@ class VerifierAgent:
         )
 
         return output
+
+    def _build_metrics_from_test_results(
+        self, test_results: Dict[str, Any], is_baseline: bool = False
+    ) -> Dict[str, Any]:
+        """Build metrics dict from test results for evaluate_repair."""
+        # Extract violation counts
+        violation_counts = test_results.get("violation_counts", {})
+
+        # Build metrics dict matching evaluate_repair expected format
+        return {
+            "grid": {
+                "voltage_violations_count": violation_counts.get("voltage", 0),
+                "line_loading_violations": violation_counts.get("line_loading", 0),
+                "transformer_loading_violations": violation_counts.get(
+                    "transformer_loading", 0
+                ),
+                "max_voltage_pu": test_results.get("max_voltage_pu", 1.05),
+                "min_voltage_pu": test_results.get("min_voltage_pu", 0.95),
+                "max_line_loading_pct": test_results.get("max_line_loading_pct", 100.0),
+                "max_transformer_loading_pct": test_results.get(
+                    "max_transformer_loading_pct", 100.0
+                ),
+            },
+            "service": {
+                "ev_completion_rate": test_results.get("ev_completion_rate", 1.0),
+                "ev_avg_soc_at_departure": test_results.get(
+                    "ev_avg_soc_at_departure", 1.0
+                ),
+                "ev_worst_soc_at_departure": test_results.get(
+                    "ev_worst_soc_at_departure", 1.0
+                ),
+                "flexible_load_completion_rate": test_results.get(
+                    "flexible_load_completion_rate", 1.0
+                ),
+                "comfort_violation_degree_hours": test_results.get(
+                    "comfort_violation_degree_hours", 0.0
+                ),
+                "member_cost_coverage": test_results.get("member_cost_coverage", 1.0),
+                "members_interrupted_count": test_results.get(
+                    "members_interrupted_count", 0
+                ),
+                "member_cost_interrupted": test_results.get(
+                    "member_cost_interrupted", None
+                ),
+            },
+        }
 
     def _check_violations(
         self, state: AgentState, plan: PlannerOutput, executor_output: Dict[str, Any]
@@ -216,147 +263,211 @@ class VerifierAgent:
         repaired_result: ExperimentResult,
         plan: PlannerOutput,
     ) -> VerifierOutput:
-        """Verify using full experiment results comparison."""
-        # Compare grid metrics
-        orig_grid: GridMetrics = original_result.grid
-        new_grid: GridMetrics = repaired_result.grid
+        """Verify using full experiment results comparison - uses shared no-masking criteria."""
+        # Convert ExperimentResult to dict format for evaluate_repair
+        baseline_metrics = {
+            "grid": {
+                "voltage_violations_count": original_result.grid.voltage_violations_count,
+                "line_loading_violations": original_result.grid.line_loading_violations,
+                "transformer_loading_violations": original_result.grid.transformer_loading_violations,
+                "max_voltage_pu": original_result.grid.max_voltage_pu,
+                "min_voltage_pu": original_result.grid.min_voltage_pu,
+                "max_line_loading_pct": original_result.grid.max_line_loading_pct,
+                "max_transformer_loading_pct": original_result.grid.max_transformer_loading_pct,
+            },
+            "service": {
+                "ev_completion_rate": original_result.service.ev_completion_rate,
+                "ev_avg_soc_at_departure": (
+                    original_result.service.ev_avg_soc_at_departure
+                    if hasattr(original_result.service, "ev_avg_soc_at_departure")
+                    else 1.0
+                ),
+                "ev_worst_soc_at_departure": (
+                    original_result.service.ev_worst_soc_at_departure
+                    if hasattr(original_result.service, "ev_worst_soc_at_departure")
+                    else 1.0
+                ),
+                "flexible_load_completion_rate": original_result.service.flexible_load_completion_rate,
+                "comfort_violation_degree_hours": original_result.service.comfort_violation_degree_hours,
+                "member_cost_coverage": (
+                    original_result.service.member_cost_coverage
+                    if hasattr(original_result.service, "member_cost_coverage")
+                    else 1.0
+                ),
+                "members_interrupted_count": (
+                    original_result.service.members_interrupted_count
+                    if hasattr(original_result.service, "members_interrupted_count")
+                    else 0
+                ),
+                "member_cost_interrupted": (
+                    original_result.service.member_cost_interrupted
+                    if hasattr(original_result.service, "member_cost_interrupted")
+                    else None
+                ),
+            },
+        }
 
-        # Compare service metrics
-        orig_service: ServiceMetrics = original_result.service
-        new_service: ServiceMetrics = repaired_result.service
+        repaired_metrics = {
+            "grid": {
+                "voltage_violations_count": repaired_result.grid.voltage_violations_count,
+                "line_loading_violations": repaired_result.grid.line_loading_violations,
+                "transformer_loading_violations": repaired_result.grid.transformer_loading_violations,
+                "max_voltage_pu": repaired_result.grid.max_voltage_pu,
+                "min_voltage_pu": repaired_result.grid.min_voltage_pu,
+                "max_line_loading_pct": repaired_result.grid.max_line_loading_pct,
+                "max_transformer_loading_pct": repaired_result.grid.max_transformer_loading_pct,
+            },
+            "service": {
+                "ev_completion_rate": repaired_result.service.ev_completion_rate,
+                "ev_avg_soc_at_departure": (
+                    repaired_result.service.ev_avg_soc_at_departure
+                    if hasattr(repaired_result.service, "ev_avg_soc_at_departure")
+                    else 1.0
+                ),
+                "ev_worst_soc_at_departure": (
+                    repaired_result.service.ev_worst_soc_at_departure
+                    if hasattr(repaired_result.service, "ev_worst_soc_at_departure")
+                    else 1.0
+                ),
+                "flexible_load_completion_rate": repaired_result.service.flexible_load_completion_rate,
+                "comfort_violation_degree_hours": repaired_result.service.comfort_violation_degree_hours,
+                "member_cost_coverage": (
+                    repaired_result.service.member_cost_coverage
+                    if hasattr(repaired_result.service, "member_cost_coverage")
+                    else 1.0
+                ),
+                "members_interrupted_count": (
+                    repaired_result.service.members_interrupted_count
+                    if hasattr(repaired_result.service, "members_interrupted_count")
+                    else 0
+                ),
+                "member_cost_interrupted": (
+                    repaired_result.service.member_cost_interrupted
+                    if hasattr(repaired_result.service, "member_cost_interrupted")
+                    else None
+                ),
+            },
+        }
+
+        # Use shared evaluation criteria
+        verdict: RepairVerdict = evaluate_repair(baseline_metrics, repaired_metrics)
 
         remaining = []
-        new_violations = []
+        if not verdict.accepted:
+            # Convert reasons to remaining violations format
+            for reason in verdict.reasons:
+                remaining.append({"issue": "no_masking_violation", "reason": reason})
 
-        # Check voltage
-        if plan.primary_issue == "voltage" or "voltage" in plan.secondary_issues:
-            if new_grid.voltage_violations_count > 0:
-                remaining.append(
-                    {
-                        "issue": "voltage",
-                        "count": new_grid.voltage_violations_count,
-                        "max_voltage_pu": new_grid.max_voltage_pu,
-                        "min_voltage_pu": new_grid.min_voltage_pu,
-                    }
-                )
-            elif orig_grid.voltage_violations_count > 0:
-                new_violations.append(
-                    {
-                        "issue": "voltage_resolved",
-                        "improvement": f"Reduced from {orig_grid.voltage_violations_count} to 0",
-                    }
-                )
-
-        # Check line loading
-        if (
-            plan.primary_issue == "line_loading"
-            or "line_loading" in plan.secondary_issues
-        ):
-            if new_grid.line_loading_violations > 0:
-                remaining.append(
-                    {
-                        "issue": "line_loading",
-                        "count": new_grid.line_loading_violations,
-                        "max_loading_pct": new_grid.max_line_loading_pct,
-                    }
-                )
-            elif orig_grid.line_loading_violations > 0:
-                new_violations.append(
-                    {
-                        "issue": "line_loading_resolved",
-                        "improvement": f"Reduced from {orig_grid.line_loading_violations} to 0",
-                    }
-                )
-
-        # Check transformer loading
-        if (
-            plan.primary_issue == "transformer_loading"
-            or "transformer_loading" in plan.secondary_issues
-        ):
-            if new_grid.transformer_loading_violations > 0:
-                remaining.append(
-                    {
-                        "issue": "transformer_loading",
-                        "count": new_grid.transformer_loading_violations,
-                        "max_loading_pct": new_grid.max_transformer_loading_pct,
-                    }
-                )
-
-        # Check EV completion
-        if (
-            plan.primary_issue == "ev_deadline"
-            or "ev_deadline" in plan.secondary_issues
-        ):
-            if new_service.ev_completion_rate < 0.95:
-                remaining.append(
-                    {
-                        "issue": "ev_deadline",
-                        "completion_rate": new_service.ev_completion_rate,
-                        "target": 0.95,
-                    }
-                )
-            elif orig_service.ev_completion_rate < new_service.ev_completion_rate:
-                new_violations.append(
-                    {
-                        "issue": "ev_deadline_improved",
-                        "improvement": f"Improved from {orig_service.ev_completion_rate:.2f} to {new_service.ev_completion_rate:.2f}",
-                    }
-                )
-
-        # Check comfort
-        if plan.primary_issue == "comfort" or "comfort" in plan.secondary_issues:
-            if new_service.comfort_violation_degree_hours > 0:
-                remaining.append(
-                    {
-                        "issue": "comfort",
-                        "degree_hours": new_service.comfort_violation_degree_hours,
-                    }
-                )
+        # Also add any remaining grid violations for backward compatibility
+        if repaired_result.grid.voltage_violations_count > 0:
+            remaining.append(
+                {
+                    "issue": "voltage",
+                    "count": repaired_result.grid.voltage_violations_count,
+                    "max_voltage_pu": repaired_result.grid.max_voltage_pu,
+                    "min_voltage_pu": repaired_result.grid.min_voltage_pu,
+                }
+            )
+        if repaired_result.grid.line_loading_violations > 0:
+            remaining.append(
+                {
+                    "issue": "line_loading",
+                    "count": repaired_result.grid.line_loading_violations,
+                    "max_loading_pct": repaired_result.grid.max_line_loading_pct,
+                }
+            )
+        if repaired_result.grid.transformer_loading_violations > 0:
+            remaining.append(
+                {
+                    "issue": "transformer_loading",
+                    "count": repaired_result.grid.transformer_loading_violations,
+                    "max_loading_pct": repaired_result.grid.max_transformer_loading_pct,
+                }
+            )
 
         violations_resolved = len(remaining) == 0
 
         metrics_comparison = {
             "grid": {
                 "voltage_violations": {
-                    "before": orig_grid.voltage_violations_count,
-                    "after": new_grid.voltage_violations_count,
+                    "before": baseline_metrics["grid"]["voltage_violations_count"],
+                    "after": repaired_metrics["grid"]["voltage_violations_count"],
                 },
                 "line_loading_violations": {
-                    "before": orig_grid.line_loading_violations,
-                    "after": new_grid.line_loading_violations,
+                    "before": baseline_metrics["grid"]["line_loading_violations"],
+                    "after": repaired_metrics["grid"]["line_loading_violations"],
                 },
                 "transformer_loading_violations": {
-                    "before": orig_grid.transformer_loading_violations,
-                    "after": new_grid.transformer_loading_violations,
+                    "before": baseline_metrics["grid"][
+                        "transformer_loading_violations"
+                    ],
+                    "after": repaired_metrics["grid"]["transformer_loading_violations"],
                 },
                 "max_line_loading_pct": {
-                    "before": orig_grid.max_line_loading_pct,
-                    "after": new_grid.max_line_loading_pct,
+                    "before": baseline_metrics["grid"]["max_line_loading_pct"],
+                    "after": repaired_metrics["grid"]["max_line_loading_pct"],
                 },
                 "max_transformer_loading_pct": {
-                    "before": orig_grid.max_transformer_loading_pct,
-                    "after": new_grid.max_transformer_loading_pct,
+                    "before": baseline_metrics["grid"]["max_transformer_loading_pct"],
+                    "after": repaired_metrics["grid"]["max_transformer_loading_pct"],
                 },
             },
             "service": {
                 "ev_completion_rate": {
-                    "before": orig_service.ev_completion_rate,
-                    "after": new_service.ev_completion_rate,
+                    "before": baseline_metrics["service"]["ev_completion_rate"],
+                    "after": repaired_metrics["service"]["ev_completion_rate"],
                 },
-                "comfort_violations": {
-                    "before": orig_service.comfort_violation_degree_hours,
-                    "after": new_service.comfort_violation_degree_hours,
+                "ev_avg_soc_at_departure": {
+                    "before": baseline_metrics["service"]["ev_avg_soc_at_departure"],
+                    "after": repaired_metrics["service"]["ev_avg_soc_at_departure"],
                 },
+                "ev_worst_soc_at_departure": {
+                    "before": baseline_metrics["service"]["ev_worst_soc_at_departure"],
+                    "after": repaired_metrics["service"]["ev_worst_soc_at_departure"],
+                },
+                "flexible_load_completion_rate": {
+                    "before": baseline_metrics["service"][
+                        "flexible_load_completion_rate"
+                    ],
+                    "after": repaired_metrics["service"][
+                        "flexible_load_completion_rate"
+                    ],
+                },
+                "comfort_violation_degree_hours": {
+                    "before": baseline_metrics["service"][
+                        "comfort_violation_degree_hours"
+                    ],
+                    "after": repaired_metrics["service"][
+                        "comfort_violation_degree_hours"
+                    ],
+                },
+                "member_cost_coverage": {
+                    "before": baseline_metrics["service"]["member_cost_coverage"],
+                    "after": repaired_metrics["service"]["member_cost_coverage"],
+                },
+                "members_interrupted_count": {
+                    "before": baseline_metrics["service"]["members_interrupted_count"],
+                    "after": repaired_metrics["service"]["members_interrupted_count"],
+                },
+                "member_cost_interrupted": {
+                    "before": baseline_metrics["service"]["member_cost_interrupted"],
+                    "after": repaired_metrics["service"]["member_cost_interrupted"],
+                },
+            },
+            "verdict": {
+                "accepted": verdict.accepted,
+                "reasons": verdict.reasons,
+                "metric_deltas": verdict.metric_deltas,
             },
         }
 
-        confidence = 0.9 if violations_resolved else 0.3
-        recommendation = "accept" if violations_resolved else "retry"
+        confidence = 0.9 if verdict.accepted else 0.2
+        recommendation = "accept" if verdict.accepted else "reject"
 
         return VerifierOutput(
-            violations_resolved=violations_resolved,
+            violations_resolved=verdict.accepted,
             remaining_violations=remaining,
-            new_violations=new_violations,
+            new_violations=[],
             metrics_comparison=metrics_comparison,
             confidence=confidence,
             recommendation=recommendation,
