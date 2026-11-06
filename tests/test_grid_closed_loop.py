@@ -123,8 +123,16 @@ def _create_tight_voltage_scenario(enable_redispatch: bool = True) -> ScenarioCo
                 ],
                 tariff={
                     "type": "time_of_use",
-                    "import_prices": {"off_peak": 0.08, "mid_peak": 0.12, "on_peak": 0.20},
-                    "export_prices": {"off_peak": 0.03, "mid_peak": 0.05, "on_peak": 0.20},
+                    "import_prices": {
+                        "off_peak": 0.08,
+                        "mid_peak": 0.12,
+                        "on_peak": 0.20,
+                    },
+                    "export_prices": {
+                        "off_peak": 0.03,
+                        "mid_peak": 0.05,
+                        "on_peak": 0.20,
+                    },
                     "demand_charge": 5.0,
                 },
             ),
@@ -141,7 +149,10 @@ def _create_tight_voltage_scenario(enable_redispatch: bool = True) -> ScenarioCo
                 },
             ],
             slack_bus=0,
-            voltage_limits={"min": 0.97, "max": 1.02},  # TIGHT: will trigger overvoltage with 25kW PV
+            voltage_limits={
+                "min": 0.97,
+                "max": 1.02,
+            },  # TIGHT: will trigger overvoltage with 25kW PV
             line_loading_limit=0.85,  # TIGHT: will trigger line loading violations
             transformer_loading_limit=0.9,
             run_power_flow_every=1,
@@ -322,8 +333,16 @@ def _create_tight_voltage_scenario(enable_redispatch: bool = True) -> ScenarioCo
                 ],
                 tariff={
                     "type": "time_of_use",
-                    "import_prices": {"off_peak": 0.08, "mid_peak": 0.12, "on_peak": 0.20},
-                    "export_prices": {"off_peak": 0.03, "mid_peak": 0.05, "on_peak": 0.20},
+                    "import_prices": {
+                        "off_peak": 0.08,
+                        "mid_peak": 0.12,
+                        "on_peak": 0.20,
+                    },
+                    "export_prices": {
+                        "off_peak": 0.03,
+                        "mid_peak": 0.05,
+                        "on_peak": 0.20,
+                    },
                     "demand_charge": 5.0,
                 },
             ),
@@ -340,7 +359,10 @@ def _create_tight_voltage_scenario(enable_redispatch: bool = True) -> ScenarioCo
                 },
             ],
             slack_bus=0,
-            voltage_limits={"min": 0.97, "max": 1.02},  # TIGHT: will trigger overvoltage with 25kW PV
+            voltage_limits={
+                "min": 0.97,
+                "max": 1.02,
+            },  # TIGHT: will trigger overvoltage with 25kW PV
             line_loading_limit=0.85,  # TIGHT: will trigger line loading violations
             transformer_loading_limit=0.9,
             run_power_flow_every=1,
@@ -363,7 +385,8 @@ class TestGridClosedLoop:
 
     def test_detected_violations_exist(self, scenario):
         """DETECTED: violations_detected > 0 for the injected scenario;
-        the violating category appears in the step diagnostics (voltage or line loading)."""
+        the violating category appears in the step diagnostics (voltage or line loading).
+        """
         coupler = run_simulation(scenario, seed=42, max_steps=48)
         kpis = coupler.get_kpis()
 
@@ -471,11 +494,15 @@ class TestGridClosedLoop:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             with mock.patch.object(
-                RuleBasedControllerWithGrid, "_apply_grid_violation_redispatch", side_effect=lambda x: x
+                RuleBasedControllerWithGrid,
+                "_apply_grid_violation_redispatch",
+                side_effect=lambda x: x,
             ):
                 controller = RuleBasedControllerWithGrid(scenario_config=scenario)
                 controller.reset()
-                coupler_control = SimulationCoupler(scenario, data_dir=tmpdir, controller=None)
+                coupler_control = SimulationCoupler(
+                    scenario, data_dir=tmpdir, controller=None
+                )
                 coupler_control.controller = controller
                 observations = coupler_control.reset(random_seed=42)
 
@@ -554,11 +581,15 @@ class TestGridClosedLoop:
         # Interrupted cost must stay None, never 0.0
         for m in treatment_kpis.get("members_interrupted", []):
             member_cost = treatment_kpis.get("per_member_costs", {}).get(m)
-            assert member_cost is None, f"Interrupted member {m} has cost {member_cost}, must be None"
+            assert (
+                member_cost is None
+            ), f"Interrupted member {m} has cost {member_cost}, must be None"
 
         # === VIOLATION WINDOW COMPARISON ===
         # Extract violation window [detection, resolution] from treatment
-        v_start, v_end = _extract_violation_window(treatment_kpis.get("co_sim_history", []))
+        v_start, v_end = _extract_violation_window(
+            treatment_kpis.get("co_sim_history", [])
+        )
 
         # If violation window exists, compare per-step building_contributions in window
         if v_start is not None and v_end is not None:
@@ -566,14 +597,24 @@ class TestGridClosedLoop:
             # For now, we ensure the window exists
             assert v_start is not None and v_end is not None
 
-        print(f"EV completion: treatment={ev_completion_treatment:.4f}, control={ev_completion_control:.4f}")
-        print(f"Avg departure SOC: treatment={ev_avg_soc_treatment:.4f}, control={ev_avg_soc_control:.4f}")
-        print(f"Worst departure SOC: treatment={ev_worst_soc_treatment:.4f}, control={ev_worst_soc_control:.4f}")
-        print(f"Comfort violation: treatment={comfort_treatment:.2f}, control={comfort_control:.2f}")
-        print(f"Flex completion: treatment={flex_treatment:.4f}, control={flex_control:.4f}")
+        print(
+            f"EV completion: treatment={ev_completion_treatment:.4f}, control={ev_completion_control:.4f}"
+        )
+        print(
+            f"Avg departure SOC: treatment={ev_avg_soc_treatment:.4f}, control={ev_avg_soc_control:.4f}"
+        )
+        print(
+            f"Worst departure SOC: treatment={ev_worst_soc_treatment:.4f}, control={ev_worst_soc_control:.4f}"
+        )
+        print(
+            f"Comfort violation: treatment={comfort_treatment:.2f}, control={comfort_control:.2f}"
+        )
+        print(
+            f"Flex completion: treatment={flex_treatment:.4f}, control={flex_control:.4f}"
+        )
 
     def test_masked_violation_detection(self, scenario):
-        """MASKED VIOLATION = assert False: grid violation resolved AND any criterion violated 
+        """MASKED VIOLATION = assert False: grid violation resolved AND any criterion violated
         in the same window -> FAIL printing metric name + before/after values."""
         coupler = run_simulation(scenario, seed=42, max_steps=48)
         kpis = coupler.get_kpis()
@@ -595,7 +636,9 @@ class TestGridClosedLoop:
             ev_avg = kpis.get("ev_avg_soc_at_departure", 1.0)
             ev_worst = kpis.get("ev_worst_soc_at_departure", 1.0)
             if ev_avg < 1.0 - 0.01 or ev_worst < 1.0 - 0.01:
-                violations.append(f"departure_SOC avg={ev_avg:.4f} worst={ev_worst:.4f} dropped >0.01")
+                violations.append(
+                    f"departure_SOC avg={ev_avg:.4f} worst={ev_worst:.4f} dropped >0.01"
+                )
 
             # Check comfort
             comfort = kpis.get("comfort_violation_degree_hours", 0.0)
@@ -605,7 +648,9 @@ class TestGridClosedLoop:
             # Check flex load completion
             flex_comp = kpis.get("flexible_load_completion_rate", 1.0)
             if flex_comp < 1.0:
-                violations.append(f"flexible_load_completion_rate={flex_comp:.4f} < 1.0")
+                violations.append(
+                    f"flexible_load_completion_rate={flex_comp:.4f} < 1.0"
+                )
 
             # Check member cost coverage
             mcc = kpis.get("member_cost_coverage", 1.0)
@@ -672,13 +717,18 @@ class TestGridClosedLoop:
 
         # Run control (counterfactual)
         import unittest.mock as mock
+
         with tempfile.TemporaryDirectory() as tmpdir:
             with mock.patch.object(
-                RuleBasedControllerWithGrid, "_apply_grid_violation_redispatch", side_effect=lambda x: x
+                RuleBasedControllerWithGrid,
+                "_apply_grid_violation_redispatch",
+                side_effect=lambda x: x,
             ):
                 controller = RuleBasedControllerWithGrid(scenario_config=scenario)
                 controller.reset()
-                coupler_control = SimulationCoupler(scenario, data_dir=tmpdir, controller=None)
+                coupler_control = SimulationCoupler(
+                    scenario, data_dir=tmpdir, controller=None
+                )
                 coupler_control.controller = controller
                 observations = coupler_control.reset(random_seed=42)
 
@@ -715,10 +765,10 @@ class TestGridClosedLoop:
         kpis_control = coupler_control.get_kpis()
 
         # Verify service metrics have expected keys and are computable
-        assert hasattr(treatment_service, 'ev_completion_rate')
-        assert hasattr(control_service, 'ev_completion_rate')
-        assert hasattr(treatment_service, 'gini_coefficient')
-        assert hasattr(control_service, 'gini_coefficient')
+        assert hasattr(treatment_service, "ev_completion_rate")
+        assert hasattr(control_service, "ev_completion_rate")
+        assert hasattr(treatment_service, "gini_coefficient")
+        assert hasattr(control_service, "gini_coefficient")
 
         # Fairness keys
         assert fairness_treatment.gini_coefficient >= 0.0
@@ -728,7 +778,9 @@ class TestGridClosedLoop:
         scenario_hash = _compute_scenario_hash(scenario)
         assert scenario_hash == _compute_scenario_hash(scenario)
 
-        print("Benchmark consistency verified: service metrics and fairness keys computed successfully")
+        print(
+            "Benchmark consistency verified: service metrics and fairness keys computed successfully"
+        )
 
         # Clean up
         coupler_treatment.close()
