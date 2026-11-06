@@ -70,10 +70,36 @@ while true; do
 done
 
 # --- STEP 1: Create a REAL simulation run first ---
-log "Creating REAL simulation run (scenario_c with violations)..."
+# Derive a violation-prone scenario on the runner side (bind mount makes it
+# visible in the container; POST /scenarios cannot write the read-only mount).
+# No stock scenario ships a pandapower config, so inject one with tight limits
+# to guarantee deterministic grid violations.
+log "Creating violation-prone scenario (smoke_violation)..."
+rm -rf data/schemas/smoke_violation
+cp -r data/schemas/scenario_c_test data/schemas/smoke_violation
+python3 - <<'EOF'
+import json
+
+path = "data/schemas/smoke_violation/schema.json"
+schema = json.load(open(path))
+schema["scenario_id"] = "smoke_violation"
+schema["name"] = "smoke_violation"
+schema["pandapower"] = {
+    "network_type": "ieee_34",
+    "voltage_limits": {"min": 0.99, "max": 1.01},
+    "line_loading_limit": 0.5,
+    "transformer_loading_limit": 0.4,
+    "run_power_flow_every": 1,
+}
+with open(path, "w") as f:
+    json.dump(schema, f, indent=2)
+print("smoke_violation scenario ready (tight voltage/trafo limits)")
+EOF
+
+log "Creating REAL simulation run (smoke_violation with violations)..."
 RUN_RESPONSE=$(curl -sf -X POST "$BACKEND_URL/api/simulations" \
     -H "Content-Type: application/json" \
-    -d '{"scenario_id": "scenario_c", "controller_type": "rule_based", "parameters": {"max_steps": 48, "random_seed": 42}, "run_name": "smoke_test_violation_run"}' || fail "Failed to create simulation run")
+    -d '{"scenario_id": "smoke_violation", "controller_type": "rule_based", "parameters": {"max_steps": 48, "random_seed": 42}, "run_name": "smoke_test_violation_run"}' || fail "Failed to create simulation run")
 
 RUN_ID=$(echo "$RUN_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['run_id'])")
 log "Simulation run created: $RUN_ID"
@@ -111,7 +137,7 @@ log "Simulation run has $GRID_VIOLATIONS grid voltage violations"
 log "Creating agent task with REAL run_id..."
 TASK_RESPONSE=$(curl -sf -X POST "$BACKEND_URL/api/agent/tasks" \
     -H "Content-Type: application/json" \
-    -d "{\"description\": \"Repair grid violations for smoke test run\", \"scenario_id\": \"scenario_c\", \"run_id\": \"$RUN_ID\"}" || fail "Failed to create task")
+    -d "{\"description\": \"Repair grid violations for smoke test run\", \"scenario_id\": \"smoke_violation\", \"run_id\": \"$RUN_ID\"}" || fail "Failed to create task")
 
 TASK_ID=$(echo "$TASK_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['task_id'])")
 log "Task created: $TASK_ID"
