@@ -157,9 +157,6 @@ class ExperimentRunner:
         llm_max_tokens: Optional[int] = None,
     ):
         """Setup simulator and controller."""
-        # Create coupler
-        self.coupler = SimulationCoupler(self.scenario_config, data_dir="data")
-
         # Create LLM config if using LLM controllers
         llm_config = None
         if controller_type in ("llm_agent", "llm_agent_verified"):
@@ -179,7 +176,7 @@ class ExperimentRunner:
             if llm_max_tokens is not None:
                 llm_config.max_tokens = llm_max_tokens
 
-        # Create controller
+        # Create controller FIRST (needed by coupler for grid loop re-dispatch)
         if controller_type == "rule_based":
             self.controller = RuleBasedController(self.scenario_config)
         elif controller_type == "multi_agent":
@@ -189,19 +186,16 @@ class ExperimentRunner:
         elif controller_type == "mpc":
             self.controller = MPCController(
                 self.scenario_config,
-                device_metadata=self.coupler.citylearn.get_device_metadata(),
+                device_metadata=None,  # Will be set after coupler creation
             )
         elif controller_type in ("rl", "rl_single"):
             if not rl_policy:
                 raise ValueError("--rl-policy is required for the rl controller")
-            # The LMP regime uses the 138-state LMP encoder; everything else uses
-            # the base 126-state encoder. The controller also resolves the encoder
-            # from policy metadata, so an LMP policy self-identifies.
             encoder = "lmp" if self.pricing_regime == "lmp" else "base"
             self.controller = QLearningController(
                 self.scenario_config,
                 policy_path=rl_policy,
-                device_metadata=self.coupler.citylearn.get_device_metadata(),
+                device_metadata=None,  # Will be set after coupler creation
                 encoder=encoder,
             )
         elif controller_type in ("llm_agent", "llm_agent_verified"):
@@ -212,11 +206,31 @@ class ExperimentRunner:
             )
             self.controller = controller_cls(
                 self.scenario_config,
-                device_metadata=self.coupler.citylearn.get_device_metadata(),
+                device_metadata=None,  # Will be set after coupler creation
                 llm_config=llm_config,
             )
         else:
             raise ValueError(f"Unknown controller type: {controller_type}")
+
+        # Create coupler (pass controller for grid loop re-dispatch)
+        self.coupler = SimulationCoupler(
+            self.scenario_config, data_dir="data", controller=self.controller
+        )
+
+        # Update controller with device metadata now that coupler exists
+        if controller_type == "mpc":
+            self.controller.device_metadata = (
+                self.coupler.citylearn.get_device_metadata()
+            )
+        elif controller_type in ("rl", "rl_single"):
+            encoder = "lmp" if self.pricing_regime == "lmp" else "base"
+            self.controller.device_metadata = (
+                self.coupler.citylearn.get_device_metadata()
+            )
+        elif controller_type in ("llm_agent", "llm_agent_verified"):
+            self.controller.device_metadata = (
+                self.coupler.citylearn.get_device_metadata()
+            )
 
     def run(self, max_steps: Optional[int] = None) -> ExperimentResult:
         """Run the experiment."""

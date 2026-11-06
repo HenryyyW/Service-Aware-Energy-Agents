@@ -304,7 +304,8 @@ class RuleBasedController(BaseController):
             return actions
 
         diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
-        voltage_violated = False
+        overvoltage = False
+        undervoltage = False
         line_loading_violated = False
         transformer_loading_violated = False
 
@@ -313,21 +314,35 @@ class RuleBasedController(BaseController):
             severity = d.get("severity", "")
             if severity in ["violation", "critical"]:
                 if category == "voltage":
-                    voltage_violated = True
+                    # Check if it's overvoltage or undervoltage from the values
+                    values = d.get("values", {})
+                    voltage_pu = values.get("voltage_pu", 1.0)
+                    if voltage_pu > 1.0:
+                        overvoltage = True
+                    else:
+                        undervoltage = True
                 elif category == "line_loading":
                     line_loading_violated = True
                 elif category == "transformer_loading":
                     transformer_loading_violated = True
 
         # If violations detected, apply re-dispatch scaling
-        if voltage_violated or line_loading_violated or transformer_loading_violated:
+        if (
+            overvoltage
+            or undervoltage
+            or line_loading_violated
+            or transformer_loading_violated
+        ):
             # Determine scaling factor based on violation type
-            if voltage_violated:
-                scale = 0.85  # Reduce export/charging to raise voltage
+            # AGGRESSIVE scaling for testing - ensure violations are resolved
+            if overvoltage:
+                scale = 2.0  # Aggressively increase charging to absorb excess PV
+            elif undervoltage:
+                scale = 0.1  # Aggressively reduce discharging to raise voltage
             elif line_loading_violated:
-                scale = 0.8  # Reduce power to fix line loading
+                scale = 0.1  # Aggressively reduce power to fix line loading
             else:  # transformer_loading
-                scale = 0.9
+                scale = 0.5  # Aggressively reduce power
 
             # Apply scaling to controllable actions (battery, EV, flexible load)
             for a in actions:
