@@ -707,6 +707,8 @@ class CityLearnAdapter:
                     if episode_steps is not None and len(df) > episode_steps:
                         # Keep only the first episode_steps rows (simulation period)
                         df = df.iloc[:episode_steps]
+                    # CRITICAL: Ensure solar_generation column is preserved for PV generation
+                    # The stock dataset has solar_generation in W/kW (watts per kW of PV capacity)
                     df.to_csv(schema_dir / energy_file, index=False)
                 except Exception as e:
                     raise RuntimeError(
