@@ -111,8 +111,14 @@ def compute_energy_metrics(
                     building_cost = energy_kwh * price
                     step_cost += building_cost
                 else:
-                    # Fall back to step.costs for this building
-                    building_cost = step.costs.get(bid, 0.0)
+                    # Fallback to SettlementEngine default tariff ($0.30/kWh import, $0.05/kWh export)
+                    if energy_kwh > 0:
+                        # importing
+                        price = 0.30
+                    else:
+                        # exporting
+                        price = 0.05
+                    building_cost = energy_kwh * price
                     step_cost += building_cost
             else:
                 # If we don't have the net demand observation, we fall back to step.costs for this building
