@@ -51,19 +51,6 @@ from src.schemas.action import (
     LimitedActions,
     AppliedActions,
     Action,
-    ActionType,
-    SimulationStepResult,
-)
-from src.simulation.coupling import SimulationCoupler
-from src.controllers import RuleBasedControllerWithGrid
-from src.evaluation.metrics import compute_service_metrics
-from src.evaluation.fairness import FairnessAnalyzer
-from src.schemas.action import (
-    RequestedActions,
-    LimitedActions,
-    AppliedActions,
-    Action,
-    ActionType,
     SimulationStepResult,
 )
 
@@ -490,7 +477,6 @@ class TestGridClosedLoop:
         violation_start, violation_end = _extract_violation_window(treatment_history)
 
         # Run COUNTERFACTUAL: same seed, same everything, but re-dispatch disabled
-        import unittest.mock as mock
 
         with tempfile.TemporaryDirectory() as tmpdir:
             with mock.patch.object(
@@ -716,7 +702,6 @@ class TestGridClosedLoop:
         treatment_scenario_dict = _scenario_to_dict(scenario)
 
         # Run control (counterfactual)
-        import unittest.mock as mock
 
         with tempfile.TemporaryDirectory() as tmpdir:
             with mock.patch.object(
