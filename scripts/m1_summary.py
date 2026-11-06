@@ -2,13 +2,16 @@
 """Generate M1 pricing-matrix summary for paper table."""
 
 import json
+import os
 import pathlib
 import statistics
 from collections import defaultdict
 
-BASE = pathlib.Path(
-    "/home/box/OpenBot/Agents/agent-31967172-0aa5-4163-9600-8d9fd8c2fd98/Service-Aware-Energy-Agents/experiments/m1"
+# Resolve project root: env var PROJECT_ROOT, or walk up from this file (scripts/ is one level below repo root)
+PROJECT_ROOT = pathlib.Path(
+    os.environ.get("PROJECT_ROOT", str(pathlib.Path(__file__).resolve().parents[1]))
 )
+BASE = PROJECT_ROOT / "experiments" / "m1"
 REGIMES = ["pool_tou", "lmp"]
 
 
