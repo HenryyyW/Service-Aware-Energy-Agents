@@ -75,6 +75,7 @@ done
 # No stock scenario ships a pandapower config, so inject one with tight limits
 # to guarantee deterministic grid violations.
 log "Creating violation-prone scenario (smoke_violation)..."
+mkdir -p data/schemas
 rm -rf data/schemas/smoke_violation
 cp -r experiments/reference/scenario_c_test data/schemas/smoke_violation
 python3 - <<'EOF'
