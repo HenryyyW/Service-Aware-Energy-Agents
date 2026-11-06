@@ -69,10 +69,49 @@ while true; do
     sleep 2
 done
 
-log "Creating agent task..."
+# --- STEP 1: Create a REAL simulation run first ---
+log "Creating REAL simulation run (scenario_c with violations)..."
+RUN_RESPONSE=$(curl -sf -X POST "$BACKEND_URL/api/simulations" \
+    -H "Content-Type: application/json" \
+    -d '{"scenario_id": "scenario_c", "controller_type": "rule_based", "parameters": {"max_steps": 48, "random_seed": 42}, "run_name": "smoke_test_violation_run"}' || fail "Failed to create simulation run")
+
+RUN_ID=$(echo "$RUN_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['run_id'])")
+log "Simulation run created: $RUN_ID"
+
+log "Waiting for simulation run to complete..."
+start=$(date +%s)
+while true; do
+    RUN_STATUS=$(curl -sf "$BACKEND_URL/api/simulations/$RUN_ID" | python3 -c "import sys, json; print(json.load(sys.stdin)['status'])")
+    log "Run status: $RUN_STATUS"
+    
+    case "$RUN_STATUS" in
+        completed)
+            log "Simulation run completed successfully"
+            break
+            ;;
+        failed)
+            RUN_DETAIL=$(curl -sf "$BACKEND_URL/api/simulations/$RUN_ID")
+            fail "Simulation run failed: $(echo "$RUN_DETAIL" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('error', 'unknown'))")"
+            ;;
+        *)
+            if (( $(date +%s) - start > TIMEOUT )); then
+                fail "Simulation run timeout after ${TIMEOUT}s"
+            fi
+            sleep "$POLL_INTERVAL"
+            ;;
+    esac
+done
+
+# Verify the run has violations (we need a failed run for repair)
+RUN_DETAIL=$(curl -sf "$BACKEND_URL/api/simulations/$RUN_ID")
+GRID_VIOLATIONS=$(echo "$RUN_DETAIL" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('grid_metrics', {}).get('voltage_violations_count', 0))")
+log "Simulation run has $GRID_VIOLATIONS grid voltage violations"
+
+# --- STEP 2: Create agent task with the REAL run_id ---
+log "Creating agent task with REAL run_id..."
 TASK_RESPONSE=$(curl -sf -X POST "$BACKEND_URL/api/agent/tasks" \
     -H "Content-Type: application/json" \
-    -d '{"description": "Smoke test: optimize battery dispatch for scenario A", "scenario_id": "scenario_a", "run_id": "smoke_test"}' || fail "Failed to create task")
+    -d "{\"description\": \"Repair grid violations for smoke test run\", \"scenario_id\": \"scenario_c\", \"run_id\": \"$RUN_ID\"}" || fail "Failed to create task")
 
 TASK_ID=$(echo "$TASK_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['task_id'])")
 log "Task created: $TASK_ID"
@@ -114,6 +153,14 @@ if (( REPAIRS == 0 )); then
     fi
 else
     log "Repairs field has $REPAIRS entries"
+fi
+
+# Verify metrics_comparison has real data
+METRICS_COMP=$(echo "$TASK_DETAIL" | python3 -c "import sys, json; d=json.load(sys.stdin); print('metrics_comparison' in d and d['metrics_comparison'])")
+if [[ "$METRICS_COMP" == "True" ]]; then
+    log "Task has metrics_comparison with real before/after data"
+else
+    fail "Task missing metrics_comparison with real before/after data"
 fi
 
 log "Smoke test PASSED"

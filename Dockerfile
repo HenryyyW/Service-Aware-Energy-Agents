@@ -31,6 +31,8 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 COPY src/ ./src/
 COPY configs/ ./configs/
 COPY experiments/ ./experiments/
+COPY tests/ ./tests/
+COPY backend/ ./backend/
 
 # Create necessary directories
 RUN mkdir -p /app/logs /app/data /app/results && \
