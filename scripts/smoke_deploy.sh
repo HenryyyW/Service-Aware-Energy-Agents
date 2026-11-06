@@ -76,7 +76,7 @@ done
 # to guarantee deterministic grid violations.
 log "Creating violation-prone scenario (smoke_violation)..."
 rm -rf data/schemas/smoke_violation
-cp -r data/schemas/scenario_c_test data/schemas/smoke_violation
+cp -r experiments/reference/scenario_c_test data/schemas/smoke_violation
 python3 - <<'EOF'
 import json
 
