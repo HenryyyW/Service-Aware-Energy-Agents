@@ -38,9 +38,15 @@ TASK_TIMEOUT_SECONDS = 30 * 60  # 30 minutes
 _task_persisted: Dict[str, dict] = {}
 
 
+def _agent_runs_dir() -> Path:
+    """Directory for persisted agent tasks (repo-local, env-overridable)."""
+    root = os.environ.get("PROJECT_ROOT", str(Path(__file__).resolve().parents[3]))
+    return Path(root) / "data" / "agent_runs"
+
+
 def _persist_task(task_id: str, task_data: dict) -> None:
     """Persist task to disk for durability."""
-    persist_dir = Path("/app/data/agent_runs")
+    persist_dir = _agent_runs_dir()
     persist_dir.mkdir(parents=True, exist_ok=True)
     persist_file = persist_dir / f"{task_id}.json"
     try:
@@ -52,7 +58,7 @@ def _persist_task(task_id: str, task_data: dict) -> None:
 
 def _load_persisted_task(task_id: str) -> Optional[dict]:
     """Load persisted task from disk."""
-    persist_file = Path("/app/data/agent_runs") / f"{task_id}.json"
+    persist_file = _agent_runs_dir() / f"{task_id}.json"
     if persist_file.exists():
         try:
             with open(persist_file, "r") as f:
