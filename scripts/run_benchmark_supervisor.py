@@ -123,6 +123,8 @@ def build_command(
     module: str,
     rl_policy: Optional[str] = None,
     regime: Optional[str] = None,
+    llm_backend: Optional[str] = None,
+    llm_model: Optional[str] = None,
 ) -> list[str]:
     cmd = [
         python,
@@ -145,6 +147,13 @@ def build_command(
         cmd.extend(["--rl-policy", rl_policy])
     if regime:
         cmd.extend(["--regime", regime])
+    if spec.controller in ("llm_agent", "llm_agent_verified"):
+        # Hosted-API arms: the backend/model come from the operator's plan, the
+        # key from the environment only.
+        if llm_backend:
+            cmd.extend(["--llm-backend", llm_backend])
+        if llm_model:
+            cmd.extend(["--llm-model", llm_model])
     return cmd
 
 
@@ -284,6 +293,8 @@ def run_matrix(args: argparse.Namespace) -> int:
             args.experiment_module,
             rl_policy=rl_policies.get(spec.run_id),
             regime=regime,
+            llm_backend=getattr(args, "llm_backend", None),
+            llm_model=getattr(args, "llm_model", None),
         )
         print(f"[supervisor] ({index}/{total}) {spec.run_id}")
 
@@ -419,7 +430,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--controllers",
         nargs="+",
         required=True,
-        choices=["rule_based", "multi_agent", "centralized", "mpc", "rl"],
+        choices=[
+            "rule_based",
+            "multi_agent",
+            "centralized",
+            "mpc",
+            "rl",
+            "llm_agent",
+            "llm_agent_verified",
+        ],
     )
 
     parser.add_argument("--seeds", nargs="+", type=int, required=True)
@@ -483,6 +502,23 @@ def build_parser() -> argparse.ArgumentParser:
         "--regime (applies pricing overrides and records "
         "pricing_regime/cost_basis in result.json; p2p is "
         "SCHEDULE-LATER)",
+    )
+    parser.add_argument(
+        "--llm-backend",
+        type=str,
+        default=None,
+        help="Hosted LLM backend for the llm_agent/llm_agent_verified "
+        "arms, e.g. api:kimi-k2.7-code (passed to run_experiment "
+        "--llm-backend). The API key stays in the environment "
+        "(LLM_API_KEY / DASHSCOPE_API_KEY); it is never written to a "
+        "command line, log, or manifest.",
+    )
+    parser.add_argument(
+        "--llm-model",
+        type=str,
+        default=None,
+        help="Model name recorded with the LLM arms (run_experiment "
+        "--llm-model); defaults to the backend's model.",
     )
     parser.add_argument(
         "--workers",
