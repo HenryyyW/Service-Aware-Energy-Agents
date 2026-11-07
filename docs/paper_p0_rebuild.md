@@ -199,3 +199,34 @@ matrix -> `raw_results.json`) and `experiments/make_figures.py`. Because D's
 cost basis is settlement-inclusive (§10.4), D's bars sit ~5x higher than A/B/C/E
 on the same axis; either annotate D in the figure caption or add a panel-level
 note -- do not silently mix bases in one axis.
+
+---
+
+## 11. Service-metrics honesty: thermal comfort is UNMEASURABLE (PM decision 2026-11-07)
+
+Add to the service-metrics section of the paper (and mirror in Limitations):
+
+> ``service.comfort_violation_degree_hours`` is **0.0 in every run of this
+> study -- a data-availability artefact, not evidence of comfort
+> satisfaction.** The stock CityLearn 2022 dataset ships
+> ``indoor_dry_bulb_temperature`` entirely NaN, so the [20, 25] degC band
+> check in ``src/evaluation/metrics.py`` cannot accumulate a violation. EV
+> service is fully reported (completion rate and average/worst SOC at
+> departure, per scenario and controller, 10 seeds); thermal comfort is out of
+> scope on this dataset and we make no comfort claim. A dataset with real
+> indoor temperature (or a CityLearn thermal building model) is required
+> before any comfort statement.
+
+Rules that follow from it:
+
+* no table, figure, caption, or sentence may present `comfort_violation_degree_hours = 0`
+  as "no comfort violations" or as a controller property;
+* the 22.0 degC comfort fill (commit `705923481`) exists only so gymnasium >= 1.1 can
+  build the observation space; it is not comfort data and changes no reported number
+  (comfort stays exactly 0.0, as in every pre-fix run);
+* the EV trade-off already reported for `multi_agent` (0.057 vs 1.000 for MPC) stays the
+  service headline; comfort is listed as unmeasurable in the Limitations.
+
+Source of the claim: `docs/item7_service_and_failures/comfort_report.md` and
+`ev_report.md` (`docs/item7_analysis.py`), computed from the 250-run pool-TOU
+matrix `experiments/matrix_full_postfix`.

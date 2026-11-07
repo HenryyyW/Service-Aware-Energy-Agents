@@ -77,6 +77,20 @@ config hash 卻不同）——D 的能源共享配置未在模擬中生效，屬
 已列待 Backend 查證。修復並重跑 D（~50 runs）之前，Table 2/3 的 D 列不重建。
 這同時回應「Table 2 缺 D 數字」與「D comfort 未報告」兩點。
 
+### 服務指標可測性：thermal comfort（P2）【接受，已查證】
+審稿人要求完整報告 EV 與熱舒適。EV 已完整報告（見 `docs/item7_service_and_failures/`：
+completion、avg/worst SOC at departure，逐場景 x 控制器，10 seeds）。**熱舒適在
+本資料集上不可測**：CityLearn 2022 stock dataset 的
+`indoor_dry_bulb_temperature` 整欄為 NaN，`src/evaluation/metrics.py` 的
+comfort band 判定因此恆為 0——750-run B-axis + 150-run D 重跑中
+`comfort_violation_degree_hours` 皆為 0.0（250 個場景/控制器單元，min = max）。
+這是**資料可得性結果，不是「沒有熱舒適違規」**。論文必須明講：
+(a) comfort_violation_degree_hours = 0.0 標註為資料缺失（all-NaN 序列）的產物；
+(b) 不得宣稱「no comfort violations」；(c) 22.0 °C 的填補（commit `705923481`）
+只是讓 gymnasium ≥ 1.1 能建構 observation space 的環境必要性，不是舒適資料，
+不改變任何已報告數字（comfort 仍為 0.0，與修復前一致）。若要有舒適主張，
+需要含室內溫度的資料集或 CityLearn 建築熱模型——在此之前舒適列為超出範圍。
+
 ### 作者資訊（P0）【接受，屬用戶決定】
 `OpenBot Platform`/`.local` email 需替換為真實可識別的作者與聯絡方式——這是
 用戶層面的決定，我們無法代填，將在清單中標記為用戶動作。
