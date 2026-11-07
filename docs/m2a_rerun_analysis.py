@@ -132,8 +132,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--matrix", default="experiments/m2a_rerun")
     parser.add_argument("--out", default="docs/m2a_rerun")
+    parser.add_argument(
+        "--reference-matrix",
+        default=None,
+        help="Matrix holding the paired multi_agent reference runs. Defaults to "
+        "--matrix; set it when the LLM-arm matrix omits the deterministic "
+        "reference controller (its runs are a function of scenario + seed + "
+        "commit, so the reference can be shared across model arms).",
+    )
     args = parser.parse_args()
     matrix = ROOT / args.matrix
+    reference = ROOT / (args.reference_matrix or args.matrix)
     out = ROOT / args.out
     out.mkdir(parents=True, exist_ok=True)
 
@@ -233,7 +242,7 @@ def main() -> None:
         for scenario in SCENARIOS:
             for seed in SEEDS:
                 run = load(matrix, scenario, arm, seed)
-                ref = load(matrix, scenario, BASELINE, seed)
+                ref = load(reference, scenario, BASELINE, seed)
                 if not run or not ref:
                     continue
                 if run["energy"].get("total_cost") is not None:
