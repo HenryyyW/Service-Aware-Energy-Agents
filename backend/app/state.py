@@ -324,18 +324,27 @@ def get_trajectories(run_id: str) -> Optional[list]:
 
 
 def set_trajectories(run_id: str, data: list) -> None:
-    """Set trajectory data in Redis or in-memory fallback."""
+    """Set trajectory data in Redis or in-memory fallback.
+
+    Args:
+        run_id: Run identifier
+        data: Pre-converted JSON-serializable trajectory list (use _convert_trajectories_to_json)
+
+    Raises:
+        TypeError: If data is not JSON-serializable
+    """
+    import json
+
+    # Verify data is JSON-serializable before attempting to store
+    # This catches serialization errors early instead of silently falling back
+    json.dumps(data)
+
     r = _get_redis()
     if r:
-        try:
-            import json
-
-            pipe = r.pipeline()
-            pipe.set(_trajectories_key(run_id), json.dumps(data))
-            # Set TTL for 7 days (same as runs)
-            pipe.expire(_trajectories_key(run_id), 604800)
-            pipe.execute()
-            return
-        except Exception:
-            pass
+        pipe = r.pipeline()
+        pipe.set(_trajectories_key(run_id), json.dumps(data))
+        # Set TTL for 7 days (same as runs)
+        pipe.expire(_trajectories_key(run_id), 604800)
+        pipe.execute()
+        return
     _trajectories[run_id] = data

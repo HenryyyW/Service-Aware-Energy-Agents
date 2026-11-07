@@ -498,3 +498,19 @@ class TestRunDataCrossProcess:
             assert "grid_diagnostics" in step
             assert isinstance(step["observations"], dict)
             assert isinstance(step["grid_diagnostics"], dict)
+
+    def test_set_trajectories_rejects_unserializable(self):
+        """set_trajectories should raise on unserializable data (dataclasses, etc.)."""
+        from backend.app.state import set_trajectories
+        from dataclasses import dataclass
+
+        @dataclass
+        class StepResult:
+            timestep: int
+            observations: dict
+
+        # Dataclass instances are not JSON serializable by default
+        unserializable_data = [StepResult(timestep=0, observations={})]
+
+        with pytest.raises(TypeError):
+            set_trajectories("run_bad", unserializable_data)
