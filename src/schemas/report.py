@@ -22,6 +22,7 @@ class ControllerType(str, Enum):
     RL_MULTI = "rl_multi"
     LLM_AGENT = "llm_agent"
     LLM_AGENT_VERIFIED = "llm_agent_verified"
+    MULTI_AGENT = "multi_agent"
 
 
 class KPIResult(BaseModel):

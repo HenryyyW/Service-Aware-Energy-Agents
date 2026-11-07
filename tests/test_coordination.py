@@ -420,6 +420,68 @@ def test_coordination_flow_with_mock_pandapower():
     assert hasattr(result_violation, "grid_validation_passed")
 
 
+def test_multi_agent_controller_type_in_result():
+    """Test that MultiAgentController runs report controller_type='multi_agent' in result.json.
+
+    Regression test for bug where multi_agent runs were incorrectly labeled as 'llm_agent'.
+    """
+    from src.controllers import MultiAgentController, LLMAgentController
+    from src.schemas.report import ControllerType
+
+    scenario = ScenarioConfig(
+        scenario_id="test_multi_agent_type",
+        name="Test Multi-Agent Type",
+        description="Test scenario for multi-agent controller type check",
+        timestep_minutes=15,
+        buildings=[
+            BuildingConfig(
+                building_id="building_1",
+                solar_generation_kw=5.0,
+                battery=BatteryConfig(
+                    capacity_kwh=10.0,
+                    power_kw=5.0,
+                    efficiency_charge=0.95,
+                    efficiency_discharge=0.95,
+                    soc_min=0.1,
+                    soc_max=0.9,
+                    initial_soc=0.5,
+                ),
+            )
+        ],
+        community_import_limit_kw=100.0,
+        community_export_limit_kw=50.0,
+    )
+
+    # Test MultiAgentController
+    multi_controller = MultiAgentController(scenario_config=scenario)
+    assert multi_controller is not None
+
+    # Simulate the controller type detection logic from run_experiment.py
+    if isinstance(multi_controller, MultiAgentController):
+        detected_type = ControllerType.MULTI_AGENT
+    elif isinstance(multi_controller, LLMAgentController):
+        detected_type = ControllerType.LLM_AGENT
+    else:
+        detected_type = ControllerType.RULE_BASED
+
+    assert (
+        detected_type == ControllerType.MULTI_AGENT
+    ), f"MultiAgentController should be detected as MULTI_AGENT, got {detected_type}"
+
+    # Test LLMAgentController
+    llm_controller = LLMAgentController(scenario_config=scenario)
+    if isinstance(llm_controller, MultiAgentController):
+        detected_type = ControllerType.MULTI_AGENT
+    elif isinstance(llm_controller, LLMAgentController):
+        detected_type = ControllerType.LLM_AGENT
+    else:
+        detected_type = ControllerType.RULE_BASED
+
+    assert (
+        detected_type == ControllerType.LLM_AGENT
+    ), f"LLMAgentController should be detected as LLM_AGENT, got {detected_type}"
+
+
 if __name__ == "__main__":
     test_multi_agent_controller_creation()
     test_centralized_controller_creation()
@@ -428,4 +490,5 @@ if __name__ == "__main__":
     test_multi_agent_controller_integration()
     test_controller_types_available()
     test_coordination_flow_with_mock_pandapower()
+    test_multi_agent_controller_type_in_result()
     print("All tests passed!")

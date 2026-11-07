@@ -605,7 +605,7 @@ class ExperimentRunner:
             controller_type_enum = ControllerType.LLM_AGENT
             controller_config = {"type": "llm_agent", **self.controller.agent_stats()}
         elif isinstance(self.controller, MultiAgentController):
-            controller_type_enum = ControllerType.LLM_AGENT
+            controller_type_enum = ControllerType.MULTI_AGENT
             controller_config = {
                 "type": "multi_agent",
                 "workflow": "planner_coder_executor_verifier_reporter",
@@ -937,7 +937,7 @@ def main():
     if expected_controller == "rule_based":
         expected_enum = ControllerType.RULE_BASED
     elif expected_controller == "multi_agent":
-        expected_enum = ControllerType.LLM_AGENT
+        expected_enum = ControllerType.MULTI_AGENT
     elif expected_controller == "centralized":
         expected_enum = (
             ControllerType.RULE_BASED
