@@ -138,3 +138,13 @@ The LMP leg (`experiments/matrix_d_rerun_lmp`) and the P2P paired leg
 (`experiments/matrix_d_rerun_p2p`) run against the same commit; the D rows of
 the LMP table and the P2P paired comparison are rebuilt by
 `docs/d_table_rebuild.py` into `docs/d_table_rebuild/` when those legs finish.
+
+### 10.6 Figures f1-f3 (regenerated 2026-11-07)
+
+`experiments/figures/` is rebuilt from `experiments/matrix_full_postfix`
+(scenarios A/B/C/E symlinked from `experiments/matrix_full`, scenario D from
+`experiments/matrix_d_rerun`), via `docs/build_raw_results.py` (supervisor
+matrix -> `raw_results.json`) and `experiments/make_figures.py`. Because D's
+cost basis is settlement-inclusive (§10.4), D's bars sit ~5x higher than A/B/C/E
+on the same axis; either annotate D in the figure caption or add a panel-level
+note -- do not silently mix bases in one axis.
