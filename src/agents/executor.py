@@ -5,6 +5,9 @@ import time
 from typing import Dict, Any
 from src.agents.roles import AgentState, ExecutorOutput, AgentRole
 from src.agents.sandbox import Sandbox, SandboxResult, validate_controller_in_sandbox
+from src.agents.diff_classifier import (
+    classify_diff,
+)
 
 
 class ExecutorAgent:
@@ -32,6 +35,29 @@ class ExecutorAgent:
             return ExecutorOutput(success=False, error="No patched code to execute")
 
         start_time = time.time()
+
+        # Check if the patch is behavior-changing before running tests
+        # This rejects cosmetic patches (comments, docstrings, whitespace only)
+        if state.controller_code:
+            classification = classify_diff(state.controller_code, state.patched_code)
+            if not classification.is_behavior_changing:
+                return ExecutorOutput(
+                    success=False,
+                    error=f"Patch rejected: {classification.reason}",
+                    execution_time=time.time() - start_time,
+                    test_results={
+                        "syntax_valid": True,
+                        "unit_tests_passed": False,
+                        "patch_rejected": True,
+                        "rejection_reason": "cosmetic_only",
+                        "classification": {
+                            "is_behavior_changing": classification.is_behavior_changing,
+                            "reason": classification.reason,
+                            "behavior_changes": classification.behavior_changes,
+                            "cosmetic_changes": classification.cosmetic_changes,
+                        },
+                    },
+                )
 
         try:
             # Create sandbox
