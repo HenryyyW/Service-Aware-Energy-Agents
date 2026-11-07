@@ -175,7 +175,7 @@ price). Re-word RQ3 as: *P2P clearing is cost-transparent where no community
 settlement is active, and adds a further redistribution on top of an already
 settled community (D)* -- and keep the gini/measurement-gap caveat from §6.
 
-### 10.6 Figures f1-f3 (regenerated 2026-11-07)
+### 10.7 Figures f1-f3 (regenerated 2026-11-07)
 
 `experiments/figures/` is rebuilt from `experiments/matrix_full_postfix`
 (scenarios A/B/C/E symlinked from `experiments/matrix_full`, scenario D from
