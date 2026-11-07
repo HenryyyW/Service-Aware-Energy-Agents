@@ -47,6 +47,12 @@ SCENARIO_LABELS = {
     "scenario_e": "E",
 }
 
+# Cost basis is not uniform across scenarios: only scenario D enables energy
+# sharing, so its total_cost is the community bill *including* settlement,
+# while A/B/C/E report the grid-only bill. Per PM decision 2026-11-07 the
+# label must say so wherever D's cost appears next to the others.
+COST_BASIS_NOTE = "Scenario D: community bill incl. settlement; A/B/C/E: grid-only bill"
+
 CONTROLLER_LABELS = {
     "rule_based": "Rule-based",
     "multi_agent": "Multi-agent",
@@ -200,6 +206,14 @@ def plot_metric_bars(summary, metric: str, out_dir: Path) -> List[Path]:
     axes.set_xticklabels([f"Scenario {scenario_label(s)}" for s in scenarios])
     axes.set_ylabel(metric_label(metric))
     axes.set_title(f"{metric_label(metric)} by scenario (mean, 95% CI)")
+    if metric == "total_cost":
+        axes.annotate(
+            COST_BASIS_NOTE,
+            xy=(0.0, -0.18),
+            xycoords="axes fraction",
+            fontsize=6.5,
+            color="#666666",
+        )
     axes.grid(axis="y", linewidth=0.4, alpha=0.4)
     axes.set_axisbelow(True)
     if len(controllers) > 1:
@@ -350,6 +364,13 @@ def plot_pareto(summary, out_dir: Path) -> List[Path]:
     axis.set_xlabel("Total cost (USD, mean)")
     axis.set_ylabel("EV completion rate (mean)")
     axis.set_title("Cost vs EV service (marker area = peak demand)")
+    axis.annotate(
+        COST_BASIS_NOTE,
+        xy=(0.0, -0.16),
+        xycoords="axes fraction",
+        fontsize=6.5,
+        color="#666666",
+    )
     axis.grid(linewidth=0.4, alpha=0.4)
     axis.set_axisbelow(True)
     axis.legend(frameon=False, fontsize=8, ncol=2)

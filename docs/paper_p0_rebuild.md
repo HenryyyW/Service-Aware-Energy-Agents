@@ -139,6 +139,13 @@ A/B/C/E report the grid-only cost, because only D enables sharing. Cross
 is higher by construction); every cost comparison in the paper is
 **within-scenario** (paired deltas vs. `rule_based`), which is unaffected.
 State this explicitly rather than leaving the level shift unexplained.
+**Label requirement (PM decision 2026-11-07):** every axis and table that
+shows D's cost beside A/B/C/E must carry the basis note —
+"Scenario D: community bill incl. settlement; A/B/C/E: grid-only bill". The
+figure generator now prints exactly this string on the cost panels
+(`experiments/make_figures.py`, `COST_BASIS_NOTE`: `f1_total_cost` and
+`f3_cost_vs_ev_completion`); the same sentence goes into the Table 2/3
+captions.
 
 ### 10.5 LMP scenario-D rows (`experiments/matrix_d_rerun_lmp`)
 
