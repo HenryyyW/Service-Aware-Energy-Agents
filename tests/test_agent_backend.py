@@ -131,7 +131,7 @@ class TestLLMConfig:
     def test_default_config(self):
         config = LLMConfig()
         assert config.backend == "fallback"
-        assert config.model == "gpt-4-turbo"
+        assert config.model == "kimi-k2.7-code"
         assert config.max_usd == 1.0
         assert config.max_latency_ms == 5000
 

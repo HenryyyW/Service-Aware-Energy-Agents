@@ -38,7 +38,11 @@ from src.controllers import (
     RuleBasedController,
 )
 from src.agents.backend.config import LLMConfig
-from src.agents.backend.api import ApiPromptCallable, api_prompt_callable
+from src.agents.backend.api import (
+    ApiPromptCallable,
+    api_prompt_callable,
+    DEFAULT_BASE_URL,
+)
 
 DUMMY_KEY = "dummy-key-for-tests-only"
 MODEL_ID = "gpt-4o-mini-2024-07-18"
@@ -427,11 +431,9 @@ def test_api_callable_no_content_no_reasoning_raises(monkeypatch):
 def test_api_callable_default_base_url(monkeypatch):
     monkeypatch.delenv("LLM_BASE_URL", raising=False)
     captured = _install_fake_urlopen(monkeypatch, [_chat_body(CLEAN_ACTIONS)])
-    backend = ApiPromptCallable(model="gpt-4o-mini", api_key=DUMMY_KEY)
+    backend = ApiPromptCallable(model="kimi-k2.7-code", api_key=DUMMY_KEY)
     backend("prompt")
-    assert (
-        captured["requests"][0]["url"] == "https://api.openai.com/v1/chat/completions"
-    )
+    assert captured["requests"][0]["url"] == f"{DEFAULT_BASE_URL}/chat/completions"
 
 
 def test_api_callable_base_url_from_env(monkeypatch):

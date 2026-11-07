@@ -8,8 +8,9 @@ changes. Selected with ``AGENT_BACKEND=api:<model>`` (or
 
 The secret never enters code, configs, or logs: the Bearer token is read from
 the ``LLM_API_KEY`` environment variable at call time, and ``LLM_BASE_URL``
-(default ``https://api.openai.com/v1``) selects the OpenAI-compatible
-endpoint.
+(default ``https://dashscope-intl.aliyuncs.com/compatible-mode/v1`` for
+DashScope/Kimi, fallback to OpenAI) selects the OpenAI-compatible
+endpoint. Also supports ``DASHSCOPE_API_KEY`` for Alibaba Cloud Model Studio.
 """
 
 import json
@@ -22,8 +23,8 @@ from typing import List, Optional
 # Transient server-side failures worth a retry; everything else (401, 400,
 # 404, ...) fails fast because retrying cannot fix an auth or request error.
 RETRYABLE_HTTP_STATUSES = frozenset({429, 500, 502, 503, 504})
-DEFAULT_BASE_URL = "https://api.openai.com/v1"
-DEFAULT_API_MODEL = "gpt-4o-mini"
+DEFAULT_BASE_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+DEFAULT_API_MODEL = "kimi-k2.7-code"
 
 
 class ApiPromptCallable:
@@ -96,10 +97,15 @@ class ApiPromptCallable:
         self.model_digest: Optional[str] = None
 
     def _resolve_api_key(self) -> str:
-        key = self.api_key or os.getenv("LLM_API_KEY", "")
+        # Support both LLM_API_KEY (generic) and DASHSCOPE_API_KEY (Alibaba Cloud)
+        key = (
+            self.api_key
+            or os.getenv("LLM_API_KEY", "")
+            or os.getenv("DASHSCOPE_API_KEY", "")
+        )
         if not key:
             raise RuntimeError(
-                "LLM_API_KEY is not set: refusing to call the hosted LLM API "
+                "LLM_API_KEY or DASHSCOPE_API_KEY is not set: refusing to call the hosted LLM API "
                 "without credentials (set the env var; never hardcode keys)."
             )
         return key
