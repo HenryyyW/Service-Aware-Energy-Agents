@@ -132,12 +132,48 @@ is higher by construction); every cost comparison in the paper is
 **within-scenario** (paired deltas vs. `rule_based`), which is unaffected.
 State this explicitly rather than leaving the level shift unexplained.
 
-### 10.5 LMP and P2P scenario-D rows
+### 10.5 LMP scenario-D rows (`experiments/matrix_d_rerun_lmp`)
 
-The LMP leg (`experiments/matrix_d_rerun_lmp`) and the P2P paired leg
-(`experiments/matrix_d_rerun_p2p`) run against the same commit; the D rows of
-the LMP table and the P2P paired comparison are rebuilt by
-`docs/d_table_rebuild.py` into `docs/d_table_rebuild/` when those legs finish.
+Settlement-inclusive cost basis (§10.4); EV completion shown to 3 dp.
+
+| Controller | Cost TOU (USD) | Cost LMP (USD) | $\Delta$ | EV TOU | EV LMP |
+|---|---|---|---|---|---|
+| rule\_based | $190.81 \pm 0.03$ | $165.03 \pm 0.00$ | $-25.79$ | 0.154 | 0.154 |
+| multi\_agent | $112.26 \pm 0.00$ | $94.32 \pm 0.00$ | $-17.94$ | 0.057 | 0.057 |
+| centralized | $194.80 \pm 0.25$ | $173.31 \pm 0.00$ | $-21.49$ | 0.160 | 0.160 |
+| mpc | $433.44 \pm 18.93$ | $424.17 \pm 9.03$ | $-9.27$ | 1.000 | 0.971 |
+| rl | $565.15 \pm 14.41$ | $310.29 \pm 8.23$ | $-254.86$ | 0.977 | 0.411 |
+
+The price-awareness split (§5) holds in D as in A/B/C/E: the three
+price-insensitive heuristics keep identical dispatch and EV completion under
+both regimes (cost moves only with the price signal), while MPC ($-9.27$ USD,
+EV $1.000 \to 0.971$) and RL ($-254.86$ USD, EV $0.977 \to 0.411$) respond.
+
+### 10.6 P2P scenario-D rows (`experiments/matrix_d_rerun_p2p`) -- claim revision
+
+Paired against the new pool-TOU D runs, D is **not** aggregate-identical under
+P2P (unlike A/B/C/E, which the 750-run matrices showed to be bit-identical):
+
+| Controller | $\Delta$ cost P2P$-$TOU (USD) | $\Delta$ peak (kW) | $\Delta$ EV | community volume (kWh) |
+|---|---|---|---|---|
+| rule\_based | $+9.58 \pm 0.91$ | $+0.00 \pm 0.00$ | $+0.0000$ | $312.1 \pm 2.7$ |
+| multi\_agent | $-24.10 \pm 0.00$ | $+0.00 \pm 0.00$ | $+0.0000$ | $252.1 \pm 0.0$ |
+| centralized | $+12.08 \pm 1.04$ | $+0.00 \pm 0.00$ | $+0.0000$ | $283.8 \pm 3.3$ |
+| mpc | $+29.06 \pm 4.63$ | $+0.00 \pm 0.00$ | $+0.0000$ | $320.4 \pm 8.9$ |
+| rl | $+34.02 \pm 0.91$ | $+0.00 \pm 0.00$ | $+0.0000$ | $520.4 \pm 12.7$ |
+
+Peak and EV completion stay exactly zero-change in every controller. Member
+settlement bills redistribute as before (rule\_based, $n{=}10$: building\_2
+$-5.65 \pm 0.37$, building\_3 $+7.08 \pm 0.54$, building\_1 $+5.76 \pm
+0.23$, building\_0 $+1.53 \pm 0.46$, building\_4 $+0.86 \pm 0.16$ USD).
+
+**Paper consequence:** the RQ3 statement "community aggregates are
+bit-identical under P2P" is now true for the 160 A/B/C/E paired runs only.
+With community settlement already active in D, bilateral clearing also moves
+the aggregate (the residual pool price is no longer the uniform settlement
+price). Re-word RQ3 as: *P2P clearing is cost-transparent where no community
+settlement is active, and adds a further redistribution on top of an already
+settled community (D)* -- and keep the gini/measurement-gap caveat from §6.
 
 ### 10.6 Figures f1-f3 (regenerated 2026-11-07)
 
