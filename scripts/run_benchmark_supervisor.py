@@ -220,6 +220,55 @@ def read_metrics(output_dir: Path, spec: RunSpec) -> dict:
     return metrics
 
 
+LLM_ARMS = ("llm_agent", "llm_agent_verified")
+
+
+def llm_preflight(
+    llm_backend: Optional[str],
+    llm_model: Optional[str],
+    timeout_s: int = 60,
+) -> Optional[str]:
+    """Probe the hosted LLM backend with ONE 1-token call before scheduling.
+
+    Returns None when the probe succeeds or the backend needs no credential
+    (``fallback``/``ollama``), otherwise a short error string.
+
+    Why: a quota- or auth-exhausted key (HTTP 402/403) makes every step of
+    every run fail, and the controller silently falls back to the deterministic
+    proposer. Observed 2026-11-07: kimi-k2.7-code's free quota ran out mid-queue
+    and 60 cells recorded ``llm_backend_errors=24`` with
+    ``first_attempt_validity=0.0`` and ~18 s wall clock -- a matrix that had to
+    be quarantined. A one-token probe turns that into an immediate, explicit
+    abort instead of 100 runs of wasted retries.
+    """
+    if not llm_backend or not llm_backend.startswith("api:"):
+        return None
+    model = llm_model or llm_backend.split(":", 1)[1].strip()
+    probe = (
+        "import sys;"
+        "from src.agents.backend.api import ApiPromptCallable;"
+        f"call = ApiPromptCallable({model!r}, timeout_s={timeout_s}, max_tokens=1);"
+        "call('ping');"
+        "print(call.model_digest or '')"
+    )
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", probe],
+            capture_output=True,
+            text=True,
+            timeout=timeout_s + 30,
+        )
+    except subprocess.TimeoutExpired:
+        return f"pre-flight probe timed out after {timeout_s + 30}s (model={model})"
+    except OSError as exc:  # pragma: no cover - launch failure
+        return f"pre-flight probe could not start: {exc}"
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip().splitlines()
+        tail = detail[-1] if detail else "no output"
+        return f"model={model} probe failed: {tail[:300]}"
+    return None
+
+
 def run_matrix(args: argparse.Namespace) -> int:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -536,6 +585,22 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = build_parser().parse_args(argv)
+    if any(controller in LLM_ARMS for controller in args.controllers) and str(
+        getattr(args, "llm_backend", "") or ""
+    ).startswith("api:"):
+        failure = llm_preflight(
+            getattr(args, "llm_backend", None),
+            getattr(args, "llm_model", None),
+        )
+        if failure:
+            print(f"[supervisor] LLM pre-flight FAILED: {failure}")
+            print(
+                "[supervisor] refusing to schedule runs: a quota/auth failure "
+                "degrades every arm to the deterministic fallback and produces "
+                "runs that must not enter the paper"
+            )
+            return 3
+        print("[supervisor] LLM pre-flight OK (1 token)")
     return run_matrix(args)
 
 
