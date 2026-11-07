@@ -34,6 +34,8 @@ __all__ = [
     "increment_task_retries",
     "get_run",
     "set_run",
+    "get_trajectories",
+    "set_trajectories",
 ]
 
 # Prometheus metrics
@@ -127,6 +129,7 @@ TASK_KEY_PREFIX = "saea:task:"
 IDEMPOTENCY_KEY_PREFIX = "saea:idempotency:"
 TASK_RETRIES_KEY_PREFIX = "saea:retries:"
 RUN_KEY_PREFIX = "saea:run:"
+TRAJECTORIES_KEY_PREFIX = "saea:traj:"
 
 
 def _get_redis():
@@ -295,3 +298,44 @@ def set_run(run_id: str, data: dict) -> None:
         except Exception:
             pass
     _runs[run_id] = data
+
+
+def _trajectories_key(run_id: str) -> str:
+    return f"{TRAJECTORIES_KEY_PREFIX}{run_id}"
+
+
+# In-memory fallback for trajectories (when Redis not available)
+_trajectories: Dict[str, list] = {}
+
+
+def get_trajectories(run_id: str) -> Optional[list]:
+    """Get trajectory data from Redis or in-memory fallback."""
+    r = _get_redis()
+    if r:
+        try:
+            import json
+
+            data = r.get(_trajectories_key(run_id))
+            if data:
+                return json.loads(data)
+        except Exception:
+            pass
+    return _trajectories.get(run_id)
+
+
+def set_trajectories(run_id: str, data: list) -> None:
+    """Set trajectory data in Redis or in-memory fallback."""
+    r = _get_redis()
+    if r:
+        try:
+            import json
+
+            pipe = r.pipeline()
+            pipe.set(_trajectories_key(run_id), json.dumps(data))
+            # Set TTL for 7 days (same as runs)
+            pipe.expire(_trajectories_key(run_id), 604800)
+            pipe.execute()
+            return
+        except Exception:
+            pass
+    _trajectories[run_id] = data

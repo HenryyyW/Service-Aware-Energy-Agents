@@ -60,7 +60,7 @@ from backend.app.routers.scenarios import (
     _load_scenario_from_disk,
     get_scenario_data_dir,
 )
-from backend.app.state import set_run
+from backend.app.state import set_run, set_trajectories
 
 router = APIRouter()
 
@@ -317,6 +317,10 @@ async def _run_simulation_background(
         # Persist run data for cross-process access (RQ workers, etc.)
         set_run(run_id, _runs[run_id])
 
+        # Persist trajectories for cross-process access (verifier needs them)
+        if hasattr(coupler, "co_sim_history") and coupler.co_sim_history:
+            set_trajectories(run_id, coupler.co_sim_history)
+
     except Exception as e:
         _runs[run_id]["status"] = "failed"
         _runs[run_id]["error"] = str(e)
@@ -327,6 +331,10 @@ async def _run_simulation_background(
 
         # Persist failed run data for cross-process access
         set_run(run_id, _runs[run_id])
+
+        # Persist trajectories even on failure if available
+        if hasattr(coupler, "co_sim_history") and coupler.co_sim_history:
+            set_trajectories(run_id, coupler.co_sim_history)
 
 
 @router.post("/simulations", response_model=SimulationRun, status_code=201)

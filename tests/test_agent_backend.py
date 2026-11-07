@@ -407,3 +407,94 @@ class TestRunDataCrossProcess:
 
         assert get_task("task_1") == task_data
         assert get_run("run_1") == run_data
+
+    def test_trajectories_set_get_in_memory_fallback(self):
+        """Trajectory data can be set and retrieved via in-memory fallback."""
+        from backend.app.state import set_trajectories, get_trajectories
+
+        traj_data = [
+            {
+                "timestep": 0,
+                "observations": {"Building_1": {"voltage": 1.0}},
+                "grid_diagnostics": {},
+            },
+            {
+                "timestep": 1,
+                "observations": {"Building_1": {"voltage": 1.02}},
+                "grid_diagnostics": {"voltage": "ok"},
+            },
+        ]
+
+        set_trajectories("run_traj_1", traj_data)
+        retrieved = get_trajectories("run_traj_1")
+
+        assert retrieved is not None
+        assert len(retrieved) == 2
+        assert retrieved[0]["timestep"] == 0
+        assert retrieved[1]["grid_diagnostics"].get("voltage") == "ok"
+
+    def test_trajectories_not_found_returns_none(self):
+        """Getting non-existent trajectories returns None."""
+        from backend.app.state import get_trajectories
+
+        result = get_trajectories("nonexistent_run")
+        assert result is None
+
+    def test_load_run_trajectories_uses_durable_storage(self, monkeypatch):
+        """_load_run_trajectories reads from durable storage, not in-memory couplers."""
+        from backend.app.routers.agent import _load_run_trajectories
+        from backend.app.state import set_trajectories
+
+        # Simulate the simulations router's in-memory dict being empty (different process)
+        import backend.app.routers.simulations as sim_module
+
+        monkeypatch.setattr(sim_module, "_couplers", {})
+
+        # But durable storage has the trajectories
+        traj_data = [
+            {
+                "timestep": 0,
+                "observations": {"Building_1": {"voltage": 1.0}},
+                "grid_diagnostics": {},
+            },
+            {
+                "timestep": 1,
+                "observations": {"Building_1": {"voltage": 1.02}},
+                "grid_diagnostics": {"voltage": "ok"},
+            },
+        ]
+        set_trajectories("run_traj_cross", traj_data)
+
+        # _load_run_trajectories should still find it via durable storage
+        loaded = _load_run_trajectories("run_traj_cross")
+        assert loaded is not None
+        assert len(loaded) == 2
+        assert loaded[0]["timestep"] == 0
+        assert loaded[1]["grid_diagnostics"].get("voltage") == "ok"
+
+    def test_trajectory_step_has_observations_and_grid_diagnostics(self):
+        """Verify trajectory step has required fields for verifier."""
+        from backend.app.state import set_trajectories, get_trajectories
+
+        traj_data = [
+            {
+                "timestep": 0,
+                "observations": {"Building_1": {"voltage": 1.0}},
+                "grid_diagnostics": {},
+            },
+            {
+                "timestep": 1,
+                "observations": {"Building_1": {"voltage": 1.02}},
+                "grid_diagnostics": {"voltage": "ok"},
+            },
+        ]
+        set_trajectories("run_step_test", traj_data)
+        retrieved = get_trajectories("run_step_test")
+
+        assert retrieved is not None
+        for step in retrieved:
+            assert "timestep" in step
+            assert "observations" in step
+            assert "grid_diagnostics" in step
+            assert isinstance(step["observations"], dict)
+            assert isinstance(step["grid_diagnostics"], dict)

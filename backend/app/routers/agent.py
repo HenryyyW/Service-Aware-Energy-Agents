@@ -24,6 +24,7 @@ from backend.app.state import (
     set_task_retries,
     increment_task_retries,
     get_run,
+    get_trajectories,
 )
 from src.schemas.report import (
     AgentMetrics,
@@ -75,14 +76,24 @@ def _load_run_data(run_id: str) -> Optional[dict]:
 
 
 def _load_run_trajectories(run_id: str) -> Optional[list]:
-    """Load trajectory data from a completed run."""
+    """Load trajectory data from a completed run using durable storage."""
+    # Try durable storage first (works across processes: RQ worker, gunicorn, etc.)
+    trajectories = get_trajectories(run_id)
+    if trajectories:
+        return trajectories
+
+    # Fallback: in-memory couplers (only works in same process as simulations router)
     try:
         from backend.app.routers.simulations import _couplers
 
         coupler = _couplers.get(run_id)
         if coupler:
             return coupler.co_sim_history
-        # Try to load from exported results
+    except Exception:
+        pass
+
+    # Fallback: load from exported results on disk
+    try:
         import os
 
         output_dir = f"results/{run_id}"
@@ -94,9 +105,10 @@ def _load_run_trajectories(run_id: str) -> Optional[list]:
                     if line.strip():
                         trajectories.append(json.loads(line))
             return trajectories
-        return None
     except Exception:
-        return None
+        pass
+
+    return None
 
 
 class AgentTaskCreate(BaseModel):
