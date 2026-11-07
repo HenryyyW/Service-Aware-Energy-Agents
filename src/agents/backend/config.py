@@ -13,7 +13,7 @@ from typing import Optional, Dict, Any, List
 class LLMConfig:
     """Configuration for LLM backend from environment variables."""
 
-    # Backend selection - supports AGENT_BACKEND=ollama:<model>
+    # Backend selection - supports AGENT_BACKEND=ollama:<model> or api:<model>
     _backend_raw: str = field(
         default_factory=lambda: os.getenv(
             "AGENT_BACKEND", os.getenv("LLM_BACKEND", "fallback")
@@ -22,10 +22,12 @@ class LLMConfig:
 
     @property
     def backend(self) -> str:
-        """Parse backend from AGENT_BACKEND env var (supports ollama:<model>)."""
+        """Parse backend from AGENT_BACKEND env var (supports ollama:<model>, api:<model>)."""
         raw = self._backend_raw
         if raw.startswith("ollama:"):
             return "ollama"
+        if raw.startswith("api:"):
+            return "api"
         return raw
 
     @backend.setter
@@ -40,7 +42,15 @@ class LLMConfig:
             return raw.split(":", 1)[1]
         return None
 
-    model: str = field(default_factory=lambda: os.getenv("LLM_MODEL", "gpt-4-turbo"))
+    @property
+    def api_model(self) -> Optional[str]:
+        """Extract model from AGENT_BACKEND=api:<model> format."""
+        raw = self._backend_raw
+        if raw.startswith("api:"):
+            return raw.split(":", 1)[1]
+        return None
+
+    model: str = field(default_factory=lambda: os.getenv("LLM_MODEL", "kimi-k2.7-code"))
     prompt_template_id: str = field(
         default_factory=lambda: os.getenv("LLM_PROMPT_TEMPLATE", "llm_agent_v1")
     )
@@ -51,6 +61,9 @@ class LLMConfig:
     )
     anthropic_api_key: Optional[str] = field(
         default_factory=lambda: os.getenv("ANTHROPIC_API_KEY")
+    )
+    dashscope_api_key: Optional[str] = field(
+        default_factory=lambda: os.getenv("DASHSCOPE_API_KEY")
     )
 
     # Local LLM settings
@@ -75,7 +88,9 @@ class LLMConfig:
     )
 
     # Provider-specific settings
-    provider: str = field(default_factory=lambda: os.getenv("LLM_PROVIDER", "openai"))
+    provider: str = field(
+        default_factory=lambda: os.getenv("LLM_PROVIDER", "dashscope")
+    )
     endpoint: Optional[str] = field(default_factory=lambda: os.getenv("LLM_ENDPOINT"))
 
     # Fallback behavior
@@ -109,7 +124,19 @@ class LLMConfig:
         """Return list of validation errors."""
         errors = []
 
-        valid_backends = ["fallback", "ollama", "openai_gpt4", "anthropic_claude"]
+        valid_backends = [
+            "fallback",
+            "ollama",
+            "api",
+            "openai_gpt4",
+            "openai_gpt4_turbo",
+            "openai_gpt4o",
+            "openai_gpt4o_mini",
+            "anthropic_claude",
+            "anthropic_claude_sonnet",
+            "anthropic_claude_opus",
+            "anthropic_claude_haiku",
+        ]
         if self.backend not in valid_backends:
             errors.append(
                 f"Invalid backend: {self.backend}. Must be one of {valid_backends}"
@@ -133,6 +160,11 @@ class LLMConfig:
             and not self.anthropic_api_key
         ):
             errors.append("ANTHROPIC_API_KEY required for Anthropic backend")
+
+        if self.backend == "api" and not (
+            self.dashscope_api_key or self.openai_api_key
+        ):
+            errors.append("DASHSCOPE_API_KEY or LLM_API_KEY required for API backend")
 
         if self.backend == "ollama":
             # Ollama backend doesn't require API key
@@ -172,6 +204,7 @@ class LLMConfig:
             "local_model": self.local_model,
             "openai_api_key": self.openai_api_key,
             "anthropic_api_key": self.anthropic_api_key,
+            "dashscope_api_key": self.dashscope_api_key,
             "max_usd": self.max_usd,
             "max_latency_ms": self.max_latency_ms,
             "max_tokens": self.max_tokens,

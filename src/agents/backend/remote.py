@@ -1,4 +1,4 @@
-"""Remote API backend - for OpenAI, Anthropic, and other cloud LLM providers."""
+"""Remote API backend - for OpenAI, Anthropic, DashScope, and other cloud LLM providers."""
 
 import os
 import time
@@ -10,7 +10,7 @@ from src.schemas.scenario import ScenarioConfig
 
 
 class RemoteAPIBackend(AgentBackend):
-    """Remote API backend for cloud LLM providers (OpenAI, Anthropic, etc.)."""
+    """Remote API backend for cloud LLM providers (OpenAI, Anthropic, DashScope, etc.)."""
 
     # Model pricing in USD per 1M tokens
     MODEL_PRICING = {
@@ -22,6 +22,7 @@ class RemoteAPIBackend(AgentBackend):
         "claude-3-sonnet": {"input": 3.0, "output": 15.0},
         "claude-3-haiku": {"input": 0.25, "output": 1.25},
         "claude-3.5-sonnet": {"input": 3.0, "output": 15.0},
+        "kimi-k2.7-code": {"input": 1.0, "output": 2.0},
     }
 
     def __init__(
@@ -45,6 +46,13 @@ class RemoteAPIBackend(AgentBackend):
         elif self.provider == "anthropic":
             self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
             self.endpoint = endpoint or "https://api.anthropic.com/v1"
+        elif self.provider == "dashscope":
+            self.api_key = (
+                api_key or os.getenv("DASHSCOPE_API_KEY") or os.getenv("LLM_API_KEY")
+            )
+            self.endpoint = (
+                endpoint or "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+            )
         else:
             raise ValueError(f"Unsupported provider: {provider}")
 
@@ -110,6 +118,10 @@ class RemoteAPIBackend(AgentBackend):
             )
         elif self.provider == "anthropic":
             response = await self._call_anthropic(
+                prompt_template.system_prompt, user_prompt
+            )
+        elif self.provider == "dashscope":
+            response = await self._call_dashscope(
                 prompt_template.system_prompt, user_prompt
             )
         else:
@@ -215,15 +227,45 @@ class RemoteAPIBackend(AgentBackend):
             result = await response.json()
             return result if isinstance(result, dict) else {}
 
+    async def _call_dashscope(
+        self, system_prompt: str, user_prompt: str
+    ) -> Dict[str, Any]:
+        """Call DashScope (Alibaba Cloud) OpenAI-compatible API."""
+        session = await self._get_session()
+        url = f"{self.endpoint}/chat/completions"
+
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.2,
+            "max_tokens": 2048,
+        }
+
+        async with session.post(url, json=payload) as response:
+            if response.status != 200:
+                error_text = await response.text()
+                raise RuntimeError(
+                    f"DashScope API error {response.status}: {error_text}"
+                )
+            result = await response.json()
+            return result if isinstance(result, dict) else {}
+
     def _extract_response(self, response: Dict[str, Any]) -> str:
         """Extract text content from provider response."""
-        if self.provider == "openai":
+        if self.provider in ("openai", "dashscope"):
             choices = response.get("choices", [])
             if choices:
                 message = choices[0].get("message", {})
                 content = message.get("content")
                 if content and isinstance(content, str):
                     return content
+                # Handle reasoning models that put answer in reasoning_content
+                reasoning = message.get("reasoning_content")
+                if reasoning and isinstance(reasoning, str):
+                    return reasoning
         elif self.provider == "anthropic":
             content_list = response.get("content", [])
             if content_list:

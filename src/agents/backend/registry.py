@@ -5,6 +5,7 @@ from src.agents.backend.interface import AgentBackend
 from src.agents.backend.fallback import FallbackBackend
 from src.agents.backend.local import OllamaBackend
 from src.agents.backend.remote import RemoteAPIBackend
+from src.agents.backend.api import ApiPromptCallable
 
 
 class BackendRegistry:
@@ -13,6 +14,7 @@ class BackendRegistry:
     _backends: Dict[str, Any] = {
         "fallback": FallbackBackend,
         "ollama": OllamaBackend,
+        "api": ApiPromptCallable,
         "openai_gpt4": RemoteAPIBackend,  # type: ignore[name-defined]
         "anthropic_claude": RemoteAPIBackend,  # type: ignore[name-defined]
     }
@@ -65,8 +67,8 @@ def create_backend_from_config(config: Dict[str, Any]) -> "AgentBackend":
 
     Expected config format:
     {
-        "backend": "fallback|ollama|openai_gpt4|anthropic_claude",
-        "model": "gpt-4-turbo",  # for remote
+        "backend": "fallback|ollama|api|openai_gpt4|anthropic_claude",
+        "model": "kimi-k2.7-code",  # for api
         "endpoint": "http://localhost:11434",  # for local
         "model": "llama3.2:3b",  # for local
         "prompt_template": "llm_agent_v1",
@@ -93,6 +95,31 @@ def create_backend_from_config(config: Dict[str, Any]) -> "AgentBackend":
         # OllamaBackend only accepts: endpoint, model, prompt_template_id
         allowed_keys = {"endpoint", "model", "prompt_template_id"}
         backend_config = {k: v for k, v in backend_config.items() if k in allowed_keys}
+    elif backend_type == "api":
+        # ApiPromptCallable accepts: model, base_url, api_key, temperature, seed, timeout_s, max_tokens, max_retries, retry_backoff_s
+        allowed_keys = {
+            "model",
+            "base_url",
+            "api_key",
+            "temperature",
+            "seed",
+            "timeout_s",
+            "max_tokens",
+            "max_retries",
+            "retry_backoff_s",
+            "dashscope_api_key",
+            "endpoint",  # alias for base_url
+            "openai_api_key",  # fallback
+        }
+        backend_config = {k: v for k, v in backend_config.items() if k in allowed_keys}
+        # Map dashscope_api_key to api_key for ApiPromptCallable
+        if "dashscope_api_key" in backend_config:
+            backend_config["api_key"] = backend_config.pop("dashscope_api_key")
+        elif "openai_api_key" in backend_config:
+            backend_config["api_key"] = backend_config.pop("openai_api_key")
+        # Map endpoint to base_url
+        if "endpoint" in backend_config:
+            backend_config["base_url"] = backend_config.pop("endpoint")
     elif backend_type in (
         "openai_gpt4",
         "openai_gpt4_turbo",
