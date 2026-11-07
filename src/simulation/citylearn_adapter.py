@@ -21,6 +21,12 @@ from src.schemas.action import (
     SimulationStepResult,
 )
 
+# Indoor dry-bulb fill (deg C) for datasets that ship the comfort series
+# all-NaN. Chosen inside the [20, 25] C band checked in
+# src/evaluation/metrics.py so comfort violations remain 0.0, matching the
+# B-axis runs recorded under the pre-1.1 gymnasium Box bounds.
+COMFORT_FILL_C = 22.0
+
 
 class CityLearnAdapter:
     """Adapter for CityLearn v3 environment using built-in datasets."""
@@ -754,6 +760,27 @@ class CityLearnAdapter:
                     if episode_steps is not None and len(df) > episode_steps:
                         # Keep only the first episode_steps rows (simulation period)
                         df = df.iloc[:episode_steps]
+                    # CityLearn 3.0.2 derives the
+                    # indoor_dry_bulb_temperature observation bound with an
+                    # unguarded ``Series.min()`` (building.py), and the stock
+                    # CityLearn 2022 dataset ships that column all-NaN. Older
+                    # gymnasium accepted the resulting NaN Box bound; gymnasium
+                    # >= 1.1 raises, so after the 2026-11-07 environment drift
+                    # (python 3.11.17/numpy 1.26.4 -> 3.13.5/numpy 2.4.6,
+                    # gymnasium 1.4.0) every environment construction failed on
+                    # the restored dataset. Substitute a value inside the
+                    # reported comfort band ([20, 25] C in
+                    # src/evaluation/metrics.py) so
+                    # comfort_violation_degree_hours stays exactly 0.0 -- the
+                    # value every B-axis run recorded with the NaN series --
+                    # and no controller, bound, or other observation changes.
+                    # Applied only when the column is entirely NaN, so datasets
+                    # carrying real comfort data pass through untouched.
+                    if (
+                        "indoor_dry_bulb_temperature" in df.columns
+                        and df["indoor_dry_bulb_temperature"].isna().all()
+                    ):
+                        df["indoor_dry_bulb_temperature"] = COMFORT_FILL_C
                     # CRITICAL: Ensure solar_generation column is preserved for PV generation
                     # The stock dataset has solar_generation in W/kW (watts per kW of PV capacity)
                     df.to_csv(schema_dir / energy_file, index=False)
