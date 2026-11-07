@@ -23,6 +23,7 @@ from backend.app.state import (
     get_task_retries,
     set_task_retries,
     increment_task_retries,
+    get_run,
 )
 from src.schemas.report import (
     AgentMetrics,
@@ -69,13 +70,8 @@ def _load_persisted_task(task_id: str) -> Optional[dict]:
 
 
 def _load_run_data(run_id: str) -> Optional[dict]:
-    """Load simulation run data from the simulations router."""
-    try:
-        from backend.app.routers.simulations import _runs
-
-        return _runs.get(run_id)
-    except Exception:
-        return None
+    """Load simulation run data from persistent storage (Redis or disk fallback)."""
+    return get_run(run_id)
 
 
 def _load_run_trajectories(run_id: str) -> Optional[list]:

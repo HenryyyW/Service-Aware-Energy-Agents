@@ -60,6 +60,7 @@ from backend.app.routers.scenarios import (
     _load_scenario_from_disk,
     get_scenario_data_dir,
 )
+from backend.app.state import set_run
 
 router = APIRouter()
 
@@ -313,6 +314,9 @@ async def _run_simulation_background(
                 "metadata": settlement.metadata,
             }
 
+        # Persist run data for cross-process access (RQ workers, etc.)
+        set_run(run_id, _runs[run_id])
+
     except Exception as e:
         _runs[run_id]["status"] = "failed"
         _runs[run_id]["error"] = str(e)
@@ -320,6 +324,9 @@ async def _run_simulation_background(
         _runs[run_id]["stage"] = "error"
         _runs[run_id]["generation_status"] = "failed"
         _runs[run_id]["outcome_sentence"] = f"Simulation failed: {str(e)}"
+
+        # Persist failed run data for cross-process access
+        set_run(run_id, _runs[run_id])
 
 
 @router.post("/simulations", response_model=SimulationRun, status_code=201)
