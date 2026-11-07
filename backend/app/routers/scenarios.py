@@ -39,12 +39,22 @@ def _get_scenario_data_dir() -> Path:
     return Path(__file__).parent.parent.parent.parent.parent / "data" / "schemas"
 
 
+def get_scenario_data_dir() -> Path:
+    """Resolve the scenario data dir at call time.
+
+    Import-time resolution breaks in containers where the mounted data dir
+    only appears after startup (docker creates the host dir on first mount).
+    """
+    return _get_scenario_data_dir()
+
+
+# Kept for backward compatibility; prefer get_scenario_data_dir().
 SCENARIO_DATA_DIR = _get_scenario_data_dir()
 
 
 def _load_scenario_from_disk(scenario_id: str) -> Optional[ScenarioConfig]:
     """Load a scenario from disk."""
-    schema_path = SCENARIO_DATA_DIR / scenario_id / "schema.json"
+    schema_path = get_scenario_data_dir() / scenario_id / "schema.json"
     if schema_path.exists():
         with open(schema_path) as f:
             data = json.load(f)
@@ -177,8 +187,9 @@ def _scenario_to_dict(scenario: ScenarioConfig) -> dict:
 async def get_scenarios():
     """Get all scenarios."""
     # Load from disk first
-    if SCENARIO_DATA_DIR.exists():
-        for scenario_dir in SCENARIO_DATA_DIR.iterdir():
+    scenario_root = get_scenario_data_dir()
+    if scenario_root.exists():
+        for scenario_dir in scenario_root.iterdir():
             if scenario_dir.is_dir() and scenario_dir.name not in _scenarios:
                 scenario = _load_scenario_from_disk(scenario_dir.name)
                 if scenario:
@@ -227,7 +238,7 @@ async def create_scenario(scenario_data: dict):
     _scenarios[scenario_id] = scenario
 
     # Save to disk
-    scenario_dir = SCENARIO_DATA_DIR / scenario_id
+    scenario_dir = get_scenario_data_dir() / scenario_id
     scenario_dir.mkdir(parents=True, exist_ok=True)
 
     # Save a minimal schema.json
@@ -252,7 +263,7 @@ async def update_scenario(scenario_id: str, updates: dict):
             setattr(scenario, key, value)
 
     # Save to disk
-    scenario_dir = SCENARIO_DATA_DIR / scenario_id
+    scenario_dir = get_scenario_data_dir() / scenario_id
     scenario_dir.mkdir(parents=True, exist_ok=True)
     schema_data = _scenario_to_dict(scenario)
     with open(scenario_dir / "schema.json", "w") as f:
@@ -272,7 +283,7 @@ async def delete_scenario(scenario_id: str):
     # Also remove from disk
     import shutil
 
-    scenario_dir = SCENARIO_DATA_DIR / scenario_id
+    scenario_dir = get_scenario_data_dir() / scenario_id
     if scenario_dir.exists():
         shutil.rmtree(scenario_dir)
 

@@ -58,7 +58,7 @@ from src.controllers import (
 from backend.app.routers.scenarios import (
     _scenarios,
     _load_scenario_from_disk,
-    SCENARIO_DATA_DIR,
+    get_scenario_data_dir,
 )
 
 router = APIRouter()
@@ -129,7 +129,7 @@ async def _run_simulation_background(
         _runs[run_id]["progress"] = 0.0
 
         # Use the same data directory resolution as scenarios router
-        data_dir = str(SCENARIO_DATA_DIR.parent)
+        data_dir = str(get_scenario_data_dir().parent)
 
         # Disable colorama to prevent stdout flush issues in background task
         import colorama
