@@ -391,6 +391,7 @@ jobs:
         env:
           BACKEND_URL: http://localhost:8000
           TIMEOUT: 180
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
         run: |
           # Tag pulled images for docker-compose
           docker tag ${{ needs.build-backend.outputs.image-tag }} sea-backend:latest
@@ -513,11 +514,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: staging
+    env:
+      DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Deploy to staging
+        env:
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
         run: |
           echo "Deploying to staging..."
           echo "Backend: ${{ needs.build-backend.outputs.image-tag }}"
