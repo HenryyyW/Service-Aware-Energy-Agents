@@ -77,7 +77,11 @@ done
 log "Creating violation-prone scenario (smoke_violation)..."
 mkdir -p data/schemas
 rm -rf data/schemas/smoke_violation
-cp -r experiments/reference/scenario_c_test data/schemas/smoke_violation
+# Copy ONLY schema.json — adapter re-synthesizes CSVs from baked dataset.
+# Copying CSV files would leave them owned by runner uid; appuser (different
+# uid) then gets EPERM on copystat/chmod. Adapter synthesizes CSVs as appuser.
+mkdir -p data/schemas/smoke_violation
+cp experiments/reference/scenario_c_test/schema.json data/schemas/smoke_violation/schema.json
 python3 - <<'EOF'
 import json
 
@@ -96,9 +100,9 @@ with open(path, "w") as f:
     json.dump(schema, f, indent=2)
 print("smoke_violation scenario ready (tight voltage/trafo limits)")
 EOF
-# The api container runs as appuser (different uid): allow it to write the
-# per-run synthesized files the adapter creates inside this directory.
-chmod -R a+rwX data/schemas/smoke_violation
+# schema.json is READ-ONLY for appuser — read for others suffices.
+# No CSVs copied: adapter synthesizes them as appuser (no cross-uid files).
+chmod a+rX data/schemas/smoke_violation data/schemas/smoke_violation/schema.json
 
 log "Creating REAL simulation run (smoke_violation with violations)..."
 RUN_RESPONSE=$(curl -sf -X POST "$BACKEND_URL/api/simulations" \
