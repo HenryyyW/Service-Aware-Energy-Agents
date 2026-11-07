@@ -96,6 +96,9 @@ with open(path, "w") as f:
     json.dump(schema, f, indent=2)
 print("smoke_violation scenario ready (tight voltage/trafo limits)")
 EOF
+# The api container runs as appuser (different uid): allow it to write the
+# per-run synthesized files the adapter creates inside this directory.
+chmod -R a+rwX data/schemas/smoke_violation
 
 log "Creating REAL simulation run (smoke_violation with violations)..."
 RUN_RESPONSE=$(curl -sf -X POST "$BACKEND_URL/api/simulations" \
