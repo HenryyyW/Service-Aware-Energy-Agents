@@ -76,6 +76,8 @@ done
 # to guarantee deterministic grid violations.
 log "Creating violation-prone scenario (smoke_violation)..."
 mkdir -p data/schemas
+# chmod the data root so appuser can create agent_runs/ (docker creates data/ as root)
+chmod a+rwX data
 rm -rf data/schemas/smoke_violation
 # Copy ONLY schema.json — adapter re-synthesizes CSVs from baked dataset.
 # Copying CSV files would leave them owned by runner uid; appuser (different
