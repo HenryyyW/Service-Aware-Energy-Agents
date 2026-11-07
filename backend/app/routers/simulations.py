@@ -318,8 +318,11 @@ async def _run_simulation_background(
         set_run(run_id, _runs[run_id])
 
         # Persist trajectories for cross-process access (verifier needs them)
+        # Use the shared converter so stored format matches GET /trajectories endpoint
         if hasattr(coupler, "co_sim_history") and coupler.co_sim_history:
-            set_trajectories(run_id, coupler.co_sim_history)
+            set_trajectories(
+                run_id, _convert_trajectories_to_json(coupler.co_sim_history)
+            )
 
     except Exception as e:
         _runs[run_id]["status"] = "failed"
@@ -419,6 +422,37 @@ async def get_simulation(run_id: str):
     return _runs[run_id]
 
 
+def _convert_trajectories_to_json(co_sim_history) -> list:
+    """Convert co-simulation history to JSON-serializable trajectory list.
+
+    This is the canonical converter used by both:
+    - GET /api/simulations/{run_id}/trajectories endpoint
+    - set_trajectories() for cross-process persistence
+
+    Args:
+        co_sim_history: List of CoSimulationStepResult objects
+
+    Returns:
+        List of JSON-serializable trajectory dicts
+    """
+    trajectories = []
+    for h in co_sim_history:
+        traj = {
+            "timestep": h.timestep,
+            "timestamp": f"2023-01-01T{h.timestep * 0.25:02.0f}:00:00",
+            "observations": _convert_numpy(h.citylearn_result.observations),
+            "applied_actions": [
+                _convert_numpy(a.model_dump())
+                for a in h.citylearn_result.applied_actions.actions
+            ],
+            "costs": _convert_numpy(h.citylearn_result.costs),
+            "grid_diagnostics": _convert_numpy(h.citylearn_result.grid_diagnostics),
+        }
+        trajectories.append(traj)
+
+    return _convert_numpy(trajectories)
+
+
 @router.get("/simulations/{run_id}/trajectories")
 async def get_trajectories(run_id: str):
     """Get trajectories for a simulation run."""
@@ -440,22 +474,7 @@ async def get_trajectories(run_id: str):
         )
 
     coupler = _couplers[run_id]
-    trajectories = []
-    for h in coupler.co_sim_history:
-        traj = {
-            "timestep": h.timestep,
-            "timestamp": f"2023-01-01T{h.timestep * 0.25:02.0f}:00:00",  # Convert 15-min steps to timestamps
-            "observations": _convert_numpy(h.citylearn_result.observations),
-            "applied_actions": [
-                _convert_numpy(a.model_dump())
-                for a in h.citylearn_result.applied_actions.actions
-            ],
-            "costs": _convert_numpy(h.citylearn_result.costs),
-            "grid_diagnostics": _convert_numpy(h.citylearn_result.grid_diagnostics),
-        }
-        trajectories.append(traj)
-
-    return _convert_numpy(trajectories)
+    return _convert_trajectories_to_json(coupler.co_sim_history)
 
 
 @router.get("/simulations/{run_id}/grid")
