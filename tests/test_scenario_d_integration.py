@@ -375,6 +375,45 @@ class TestScenarioDIntegration:
         assert "total_savings_vs_baseline" in community_metrics
         assert isinstance(community_metrics["total_savings_vs_baseline"], float)
 
+    def test_scenario_a_vs_d_divergence(self, tmp_path):
+        """Test that Scenario A and D produce different total costs on same seed.
+
+        This is a regression test for the bug where energy_sharing config was
+        not propagating, making D bit-identical to A.
+        """
+        import yaml
+        from experiments.run_experiment import ExperimentRunner
+
+        # Load both scenarios
+        config_path_a = Path(__file__).parent.parent / "configs" / "scenario_a.yaml"
+        config_path_d = Path(__file__).parent.parent / "configs" / "scenario_d.yaml"
+        with open(config_path_a, "r") as f:
+            data_a = yaml.safe_load(f)
+        with open(config_path_d, "r") as f:
+            data_d = yaml.safe_load(f)
+
+        scenario_a = ScenarioConfig(**data_a)
+        scenario_d = ScenarioConfig(**data_d)
+
+        # Run both with same seed (short run for test speed)
+        for scenario, label in [(scenario_a, "A"), (scenario_d, "D")]:
+            runner = ExperimentRunner(
+                scenario, str(tmp_path / label), run_id=f"divergence_test_{label}"
+            )
+            runner.setup("rule_based")
+            result = runner.run(20)  # Short run
+            if label == "A":
+                cost_a = result.energy.total_cost
+            else:
+                cost_d = result.energy.total_cost
+
+        # Costs must differ (D includes community settlement, A does not)
+        assert (
+            cost_a != cost_d
+        ), f"Scenario A cost ({cost_a}) == Scenario D cost ({cost_d}) - energy sharing not working!"
+        print(f"Scenario A total_cost: {cost_a:.2f}")
+        print(f"Scenario D total_cost: {cost_d:.2f}")
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

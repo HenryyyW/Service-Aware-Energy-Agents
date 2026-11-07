@@ -463,12 +463,20 @@ class ExperimentRunner:
                 total_savings_vs_baseline=sum(settlement_savings.values()),
                 per_member=settlement_members,
             )
+            # Update energy.total_cost to include community settlement costs
+            energy.total_cost = energy_sharing.actual_total_bill
 
         # Create KPI results
         kpi_results = []
 
+        # Use actual total bill from energy sharing (includes community settlement)
+        # when energy sharing is enabled; otherwise use grid-only cost
+        total_cost_value = energy.total_cost
+        if energy_sharing is not None:
+            total_cost_value = energy_sharing.actual_total_bill
+
         kpi_defs = [
-            ("total_cost", "Total Cost", "$", energy.total_cost, "minimize"),
+            ("total_cost", "Total Cost", "$", total_cost_value, "minimize"),
             (
                 "grid_import_kwh",
                 "Grid Import",
