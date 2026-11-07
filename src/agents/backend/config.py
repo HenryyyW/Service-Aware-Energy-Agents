@@ -65,6 +65,9 @@ class LLMConfig:
     dashscope_api_key: Optional[str] = field(
         default_factory=lambda: os.getenv("DASHSCOPE_API_KEY")
     )
+    nvidia_api_key: Optional[str] = field(
+        default_factory=lambda: os.getenv("NVIDIA_API_KEY")
+    )
 
     # Local LLM settings
     local_endpoint: str = field(
@@ -162,9 +165,11 @@ class LLMConfig:
             errors.append("ANTHROPIC_API_KEY required for Anthropic backend")
 
         if self.backend == "api" and not (
-            self.dashscope_api_key or self.openai_api_key
+            self.dashscope_api_key or self.openai_api_key or self.nvidia_api_key
         ):
-            errors.append("DASHSCOPE_API_KEY or LLM_API_KEY required for API backend")
+            errors.append(
+                "DASHSCOPE_API_KEY, LLM_API_KEY, or NVIDIA_API_KEY required for API backend"
+            )
 
         if self.backend == "ollama":
             # Ollama backend doesn't require API key
@@ -205,6 +210,7 @@ class LLMConfig:
             "openai_api_key": self.openai_api_key,
             "anthropic_api_key": self.anthropic_api_key,
             "dashscope_api_key": self.dashscope_api_key,
+            "nvidia_api_key": self.nvidia_api_key,
             "max_usd": self.max_usd,
             "max_latency_ms": self.max_latency_ms,
             "max_tokens": self.max_tokens,

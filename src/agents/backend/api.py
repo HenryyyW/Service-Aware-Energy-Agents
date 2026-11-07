@@ -11,6 +11,7 @@ the ``LLM_API_KEY`` environment variable at call time, and ``LLM_BASE_URL``
 (default ``https://dashscope-intl.aliyuncs.com/compatible-mode/v1`` for
 DashScope/Kimi, fallback to OpenAI) selects the OpenAI-compatible
 endpoint. Also supports ``DASHSCOPE_API_KEY`` for Alibaba Cloud Model Studio.
+For NVIDIA NIM, use ``NVIDIA_API_KEY`` with base URL ``https://integrate.api.nvidia.com/v1``.
 """
 
 import json

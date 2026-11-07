@@ -108,6 +108,7 @@ def create_backend_from_config(config: Dict[str, Any]) -> "AgentBackend":
             "max_retries",
             "retry_backoff_s",
             "dashscope_api_key",
+            "nvidia_api_key",
             "endpoint",  # alias for base_url
             "openai_api_key",  # fallback
         }
@@ -115,6 +116,8 @@ def create_backend_from_config(config: Dict[str, Any]) -> "AgentBackend":
         # Map dashscope_api_key to api_key for ApiPromptCallable
         if "dashscope_api_key" in backend_config:
             backend_config["api_key"] = backend_config.pop("dashscope_api_key")
+        elif "nvidia_api_key" in backend_config:
+            backend_config["api_key"] = backend_config.pop("nvidia_api_key")
         elif "openai_api_key" in backend_config:
             backend_config["api_key"] = backend_config.pop("openai_api_key")
         # Map endpoint to base_url
