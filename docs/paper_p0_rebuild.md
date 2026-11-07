@@ -95,6 +95,14 @@ Re-run: 5 controllers x 10 seeds x 3 regimes = 150 runs, all with
 A-vs-D now diverges at all 10 seeds (A 40.42--40.54 USD grid-only vs. D
 190.77--190.87 USD with community settlement).
 
+**Run provenance (final pass, 2026-11-07 14:01--14:22):** 150/150 runs completed,
+0 failed, every manifest `git_dirty: false` at one commit (`c326e177e`, which
+includes the `SAEA_RUN_ID` per-run schema isolation fix in the supervisor),
+`scenario_config_sha256` distinct per seed, Python 3.13.5 / citylearn 3.0.2 /
+pandapower 3.5.6 / numpy 2.4.6 recorded per run. Same-seed repeats across the
+interim and final passes are bit-identical (e.g. `scenario_d_rule_based_42`
+total_cost `190.77508188227625` both passes).
+
 ### 10.1 Remove the Scenario-D exclusion notes
 
 Delete the `\textbf{Scenario D exclusion.}` paragraph and the `Scenario D
