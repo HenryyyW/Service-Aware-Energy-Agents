@@ -67,7 +67,10 @@ services:
       - "8000:8000"
     volumes:
       - ./configs:/app/configs:ro
-      - ./data:/app/data:ro
+      # NOT read-only: CityLearnAdapter writes per-run synthesized schemas
+      # under data/schemas/<scenario_id|SAEA_RUN_ID>/ by design (same as the
+      # benchmark workers on the release machine).
+      - ./data:/app/data
       - ./experiments:/app/experiments:ro
     depends_on:
       db:
