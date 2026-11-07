@@ -306,11 +306,21 @@ def run_matrix(args: argparse.Namespace) -> int:
                 log.write(f"\n=== attempt {attempt} at {state.started_at} ===\n")
                 log.flush()
                 try:
+                    # Per-run CityLearn schema isolation: without SAEA_RUN_ID
+                    # every worker of one scenario writes
+                    # data/schemas/<scenario_id>/schema.json, so concurrent runs
+                    # race and one can read a partially-written schema (observed
+                    # 2026-11-07: scenario_d_centralized_2024 died with
+                    # simplejson "Extra data" in the p2p matrix).
+                    # experiments.run_benchmark sets the same variable (line 268).
+                    run_env = dict(os.environ)
+                    run_env["SAEA_RUN_ID"] = spec.run_id
                     completed = subprocess.run(
                         cmd,
                         stdout=log,
                         stderr=subprocess.STDOUT,
                         timeout=args.timeout or None,
+                        env=run_env,
                     )
                     exit_code = completed.returncode
                 except subprocess.TimeoutExpired:
