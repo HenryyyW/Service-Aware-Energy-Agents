@@ -36,14 +36,25 @@ SEEDS = [42, 123, 456, 789, 999, 1234, 2024, 3456, 5555, 8888]
 ARMS = ["llm_agent", "llm_agent_verified"]
 BASELINE = "multi_agent"
 
+# Field map: (label, result["agent"] key, controller_config key). Both
+# definitions are reported where they differ: first_attempt_validity is
+# per-run in the agent block and per-step in controller_config.
 AGENT_FIELDS = (
-    "first_attempt_validity",
-    "repair_iterations",
-    "fallback_share",
-    "unrepaired_violations",
-    "llm_call_count",
-    "llm_prompt_tokens",
-    "llm_completion_tokens",
+    ("first_attempt_validity_run", "first_attempt_validity", None),
+    ("first_attempt_validity_step", None, "first_attempt_validity"),
+    ("repair_iterations", None, "repair_iterations"),
+    ("fallback_step_share", None, "llm_fallback_step_share"),
+    ("fallback_steps", None, "llm_fallback_steps"),
+    ("unrepaired_violations", None, "llm_unrepaired_violations"),
+    ("llm_calls", None, "llm_calls"),
+    ("parse_failures", None, "llm_raw_parse_failures"),
+    ("fenced_outputs", None, "llm_fenced_outputs"),
+    ("backend_errors", None, "llm_backend_errors"),
+    ("verification_failures", None, "verification_failures"),
+    ("prompt_tokens", None, "llm_prompt_tokens"),
+    ("completion_tokens", None, "llm_completion_tokens"),
+    ("latency_p50_ms", None, "llm_latency_p50_ms"),
+    ("latency_p95_ms", None, "llm_latency_p95_ms"),
 )
 
 
@@ -103,21 +114,18 @@ def load(matrix: Path, scenario: str, controller: str, seed: int) -> Optional[di
 
 
 def agent_field(result: dict, field: str):
-    """Agent metrics live in result['agent']; fallback_share / call counts are
-    derived from the controller config when the summary field is absent."""
-    agent = result.get("agent") or {}
-    if field in agent:
-        return agent[field]
-    cfg = result.get("controller_config") or {}
-    if field == "fallback_share":
-        return cfg.get("fallback_share")
-    if field == "llm_call_count":
-        return cfg.get("llm_call_count")
-    if field == "unrepaired_violations":
-        return agent.get("unrepaired_violation_steps") or cfg.get(
-            "unrepaired_violations"
-        )
-    return cfg.get(field)
+    """Resolve an AGENT_FIELDS label against the run record.
+
+    ``first_attempt_validity`` exists twice with different meanings (per-run in
+    ``agent``, per-step in ``controller_config``); both are reported.
+    """
+    for label, agent_key, cfg_key in AGENT_FIELDS:
+        if label != field:
+            continue
+        if agent_key is not None:
+            return (result.get("agent") or {}).get(agent_key)
+        return (result.get("controller_config") or {}).get(cfg_key)
+    return None
 
 
 def main() -> None:
@@ -175,7 +183,7 @@ def main() -> None:
 
     # ---- gate check --------------------------------------------------------
     gate_rows = []
-    for field in ("unrepaired_violations", "fallback_share"):
+    for field in ("unrepaired_violations", "fallback_step_share"):
         values = [
             agent_field(load(matrix, sc, arm, s), field) or 0.0
             for arm in ARMS
@@ -186,7 +194,7 @@ def main() -> None:
     lines += ["", "## Gate check (M2a divergence gate)", ""]
     gate_met = False
     for field, worst in gate_rows:
-        if field == "fallback_share":
+        if field == "fallback_step_share":
             lines.append(
                 f"- `{field}`: max across both arms = {worst:.4f} "
                 f"({'>= 10 pp difference' if worst >= 0.10 else '< 10 pp'})"
