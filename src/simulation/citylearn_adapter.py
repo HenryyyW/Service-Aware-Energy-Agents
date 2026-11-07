@@ -605,13 +605,15 @@ class CityLearnAdapter:
         Resolution order:
         1. Schema's root_directory (from CityLearn's get_schema)
         2. Standard CityLearn 3.0.2 cache path (~/.cache/citylearn/v3.0.2/datasets/{dataset_name})
-        3. Hard failure
+        3. Docker-friendly path: /app/citylearn_datasets/{dataset_name} (baked at build time)
+        4. Docker-friendly path: /root/.cache/citylearn/v3.0.2/datasets/{dataset_name} (root cache)
+        5. Hard failure
         """
         # Try schema's root_directory first (set by CityLearn's get_schema)
         if schema_root_dir.exists():
             return schema_root_dir
 
-        # Fallback to standard CityLearn 3.0.2 cache location
+        # Fallback to standard CityLearn 3.0.2 cache location (current user)
         cache_path = (
             Path.home()
             / ".cache"
@@ -626,11 +628,32 @@ class CityLearnAdapter:
             )
             return cache_path
 
+        # Fallback: Docker build-time baked dataset location
+        docker_baked_path = Path("/app/citylearn_datasets") / self.dataset_name
+        if docker_baked_path.exists():
+            print(f"[INFO] Using Docker-baked dataset at: {docker_baked_path}")
+            return docker_baked_path
+
+        # Fallback: root user's cache (dataset downloaded during Docker build as root)
+        root_cache_path = (
+            Path("/root")
+            / ".cache"
+            / "citylearn"
+            / "v3.0.2"
+            / "datasets"
+            / self.dataset_name
+        )
+        if root_cache_path.exists():
+            print(f"[INFO] Using root user's CityLearn cache: {root_cache_path}")
+            return root_cache_path
+
         # Hard failure - no dataset found
         raise FileNotFoundError(
             f"CityLearn dataset not found. "
             f"Schema root_directory: {schema_root_dir} (not found). "
             f"CityLearn cache: {cache_path} (not found). "
+            f"Docker baked path: {docker_baked_path} (not found). "
+            f"Root cache: {root_cache_path} (not found). "
             f"Ensure the dataset '{self.dataset_name}' is downloaded "
             f"(run: python -c \"from citylearn.data import DataSet; DataSet().get_schema('{self.dataset_name}')\")"
         )
@@ -642,10 +665,34 @@ class CityLearnAdapter:
         of one scenario would write the same schema.json and race (corrupting
         each other). Both the schema writer and ``root_directory`` MUST use this
         method so a run reads back exactly the files it wrote.
+
+        Uses SAEA_SCHEMA_DIR env var if set. Otherwise defaults to data_dir/schemas,
+        but falls back to /app/schemas if the default is not writable (e.g.,
+        docker-compose mounts ./data:/app/data:ro).
         """
         run_suffix = os.environ.get("SAEA_RUN_ID", "").strip()
         dir_name = run_suffix or self.scenario_config.scenario_id
-        return Path(self.data_dir) / "schemas" / dir_name
+
+        # Allow explicit override via environment variable
+        if "SAEA_SCHEMA_DIR" in os.environ:
+            base_dir = os.environ["SAEA_SCHEMA_DIR"]
+            return Path(base_dir) / dir_name
+
+        # Default: data_dir/schemas (works for local dev and tests)
+        default_dir = Path(self.data_dir) / "schemas" / dir_name
+
+        # Check if default is writable; if not, fall back to /app/schemas
+        # This handles docker-compose read-only mounts (./data:/app/data:ro)
+        try:
+            default_dir.mkdir(parents=True, exist_ok=True)
+            test_file = default_dir / ".write_test"
+            test_file.touch()
+            test_file.unlink()
+            return default_dir
+        except (OSError, PermissionError):
+            fallback_dir = Path("/app/schemas") / dir_name
+            fallback_dir.mkdir(parents=True, exist_ok=True)
+            return fallback_dir
 
     def _copy_dataset_files(
         self, schema: Dict[str, Any], schema_dir: Path, source_dir: Path

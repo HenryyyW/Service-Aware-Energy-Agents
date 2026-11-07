@@ -39,8 +39,24 @@ COPY backend/ ./backend/
 # a network download (containers fail fast on missing data by design).
 COPY --chown=appuser:appuser experiments/reference/citylearn_challenge_2020_climate_zone_1 /home/appuser/.cache/citylearn/v3.0.2/datasets/citylearn_challenge_2020_climate_zone_1
 
-# Create necessary directories
-RUN mkdir -p /app/logs /app/data /app/results && \
+# Also bake the with_evs dataset (no curated fixture; download at build time)
+# Run as root so it lands in /root/.cache AND copy to /app/citylearn_datasets for the adapter's fallback chain.
+RUN python3 -c "
+from citylearn.data import DataSet
+dataset = DataSet()
+schema = dataset.get_schema('citylearn_challenge_2022_phase_all_plus_evs')
+import shutil, os
+src = schema['root_directory']
+dst = '/app/citylearn_datasets/citylearn_challenge_2022_phase_all_plus_evs'
+if os.path.exists(src):
+    shutil.copytree(src, dst, dirs_exist_ok=True)
+    print(f'Copied with_evs dataset from {src} to {dst}')
+else:
+    print(f'WARNING: with_evs dataset not found at {src}')
+"
+
+# Create necessary directories (including schemas for per-run CityLearn files)
+RUN mkdir -p /app/logs /app/data /app/results /app/schemas /app/citylearn_datasets && \
     chown -R appuser:appuser /app
 
 # Switch to non-root user
