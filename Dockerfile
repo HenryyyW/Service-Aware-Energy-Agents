@@ -34,6 +34,11 @@ COPY experiments/ ./experiments/
 COPY tests/ ./tests/
 COPY backend/ ./backend/
 
+# Bake the CityLearn dataset into the appuser cache so the adapter's
+# fallback chain (~/.cache/citylearn/v3.0.2/datasets/<name>) resolves without
+# a network download (containers fail fast on missing data by design).
+COPY --chown=appuser:appuser experiments/reference/citylearn_challenge_2020_climate_zone_1 /home/appuser/.cache/citylearn/v3.0.2/datasets/citylearn_challenge_2020_climate_zone_1
+
 # Create necessary directories
 RUN mkdir -p /app/logs /app/data /app/results && \
     chown -R appuser:appuser /app

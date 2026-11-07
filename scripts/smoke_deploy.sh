@@ -118,7 +118,7 @@ while true; do
             ;;
         failed)
             RUN_DETAIL=$(curl -sf "$BACKEND_URL/api/simulations/$RUN_ID")
-            fail "Simulation run failed: $(echo "$RUN_DETAIL" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('error', 'unknown'))")"
+            fail "Simulation run failed: $(echo "$RUN_DETAIL" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('error') or d.get('outcome_sentence') or 'unknown')")"
             ;;
         *)
             if (( $(date +%s) - start > TIMEOUT )); then
