@@ -308,3 +308,89 @@ class TestBackendResponse:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestRunDataCrossProcess:
+    """Tests for cross-process run data persistence (fixes run not found in RQ worker)."""
+
+    def test_run_set_get_in_memory_fallback(self):
+        """Run data can be set and retrieved via in-memory fallback."""
+        from backend.app.state import set_run, get_run, _runs
+
+        # Clear any existing data
+        _runs.clear()
+
+        run_data = {
+            "run_id": "run_test_123",
+            "status": "completed",
+            "scenario_id": "scenario_e",
+            "energy_metrics": {"total_cost": 123.45, "grid_import_kwh": 500},
+            "service_metrics": {"ev_completion_rate": 0.95},
+            "grid_metrics": {"voltage_violations_count": 0},
+        }
+
+        set_run("run_test_123", run_data)
+        retrieved = get_run("run_test_123")
+
+        assert retrieved is not None
+        assert retrieved["run_id"] == "run_test_123"
+        assert retrieved["status"] == "completed"
+        assert retrieved["energy_metrics"]["total_cost"] == 123.45
+
+    def test_run_not_found_returns_none(self):
+        """Getting a non-existent run returns None (not an exception)."""
+        from backend.app.state import get_run, _runs
+
+        _runs.clear()
+        result = get_run("nonexistent_run")
+        assert result is None
+
+    def test_load_run_data_uses_persistent_storage(self, monkeypatch):
+        """_load_run_data reads from persistent storage, not in-memory simulations dict."""
+        from backend.app.routers.agent import _load_run_data
+        from backend.app.state import set_run, _runs
+
+        # Clear in-memory fallbacks
+        _runs.clear()
+
+        # Simulate the simulations router's in-memory dict being empty (different process)
+        import backend.app.routers.simulations as sim_module
+
+        monkeypatch.setattr(sim_module, "_runs", {})
+
+        # But persistent storage has the run
+        run_data = {
+            "run_id": "run_cross_process",
+            "status": "completed",
+            "energy_metrics": {"total_cost": 200},
+        }
+        set_run("run_cross_process", run_data)
+
+        # _load_run_data should still find it via persistent storage
+        loaded = _load_run_data("run_cross_process")
+        assert loaded is not None
+        assert loaded["run_id"] == "run_cross_process"
+        assert loaded["energy_metrics"]["total_cost"] == 200
+
+    def test_task_storage_unaffected(self):
+        """Task storage still works independently of run storage."""
+        from backend.app.state import (
+            set_task,
+            get_task,
+            set_run,
+            get_run,
+            _tasks,
+            _runs,
+        )
+
+        _tasks.clear()
+        _runs.clear()
+
+        task_data = {"task_id": "task_1", "status": "planning"}
+        run_data = {"run_id": "run_1", "status": "completed"}
+
+        set_task("task_1", task_data)
+        set_run("run_1", run_data)
+
+        assert get_task("task_1") == task_data
+        assert get_run("run_1") == run_data

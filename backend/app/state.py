@@ -32,6 +32,8 @@ __all__ = [
     "get_task_retries",
     "set_task_retries",
     "increment_task_retries",
+    "get_run",
+    "set_run",
 ]
 
 # Prometheus metrics
@@ -124,6 +126,7 @@ _task_retries: Dict[str, int] = {}
 TASK_KEY_PREFIX = "saea:task:"
 IDEMPOTENCY_KEY_PREFIX = "saea:idempotency:"
 TASK_RETRIES_KEY_PREFIX = "saea:retries:"
+RUN_KEY_PREFIX = "saea:run:"
 
 
 def _get_redis():
@@ -250,3 +253,45 @@ def increment_task_retries(task_id: str) -> int:
     count = _task_retries.get(task_id, 0) + 1
     _task_retries[task_id] = count
     return count
+
+
+def _run_key(run_id: str) -> str:
+    return f"{RUN_KEY_PREFIX}{run_id}"
+
+
+# In-memory fallback for run data (when Redis not available)
+_runs: Dict[str, dict] = {}
+
+
+def get_run(run_id: str) -> Optional[dict]:
+    """Get run data from Redis or in-memory fallback."""
+    r = _get_redis()
+    if r:
+        try:
+            import json
+
+            data = r.hgetall(_run_key(run_id))
+            if data:
+                return {k: json.loads(v) for k, v in data.items()}
+        except Exception:
+            pass
+    return _runs.get(run_id)
+
+
+def set_run(run_id: str, data: dict) -> None:
+    """Set run data in Redis or in-memory fallback."""
+    r = _get_redis()
+    if r:
+        try:
+            import json
+
+            pipe = r.pipeline()
+            for k, v in data.items():
+                pipe.hset(_run_key(run_id), k, json.dumps(v))
+            # Set TTL for 7 days (longer than tasks since runs may be referenced later)
+            pipe.expire(_run_key(run_id), 604800)
+            pipe.execute()
+            return
+        except Exception:
+            pass
+    _runs[run_id] = data
