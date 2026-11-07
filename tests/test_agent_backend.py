@@ -17,6 +17,36 @@ from src.agents.backend.prompts import (
 )
 
 
+# Fixture to isolate module-level state between tests
+@pytest.fixture(autouse=True)
+def _isolate_state():
+    """Isolate module-level state (tasks, runs, idempotency keys) between tests."""
+    from backend.app.state import (
+        _tasks,
+        _idempotency_keys,
+        _task_retries,
+        _runs,
+    )
+
+    # Save original state
+    saved_tasks = dict(_tasks)
+    saved_idempotency = dict(_idempotency_keys)
+    saved_retries = dict(_task_retries)
+    saved_runs = dict(_runs)
+    try:
+        yield
+    finally:
+        # Restore original state
+        _tasks.clear()
+        _tasks.update(saved_tasks)
+        _idempotency_keys.clear()
+        _idempotency_keys.update(saved_idempotency)
+        _task_retries.clear()
+        _task_retries.update(saved_retries)
+        _runs.clear()
+        _runs.update(saved_runs)
+
+
 class TestCostBudget:
     """Tests for CostBudget dataclass."""
 
@@ -315,10 +345,7 @@ class TestRunDataCrossProcess:
 
     def test_run_set_get_in_memory_fallback(self):
         """Run data can be set and retrieved via in-memory fallback."""
-        from backend.app.state import set_run, get_run, _runs
-
-        # Clear any existing data
-        _runs.clear()
+        from backend.app.state import set_run, get_run
 
         run_data = {
             "run_id": "run_test_123",
@@ -339,19 +366,15 @@ class TestRunDataCrossProcess:
 
     def test_run_not_found_returns_none(self):
         """Getting a non-existent run returns None (not an exception)."""
-        from backend.app.state import get_run, _runs
+        from backend.app.state import get_run
 
-        _runs.clear()
         result = get_run("nonexistent_run")
         assert result is None
 
     def test_load_run_data_uses_persistent_storage(self, monkeypatch):
         """_load_run_data reads from persistent storage, not in-memory simulations dict."""
         from backend.app.routers.agent import _load_run_data
-        from backend.app.state import set_run, _runs
-
-        # Clear in-memory fallbacks
-        _runs.clear()
+        from backend.app.state import set_run
 
         # Simulate the simulations router's in-memory dict being empty (different process)
         import backend.app.routers.simulations as sim_module
@@ -374,17 +397,7 @@ class TestRunDataCrossProcess:
 
     def test_task_storage_unaffected(self):
         """Task storage still works independently of run storage."""
-        from backend.app.state import (
-            set_task,
-            get_task,
-            set_run,
-            get_run,
-            _tasks,
-            _runs,
-        )
-
-        _tasks.clear()
-        _runs.clear()
+        from backend.app.state import set_task, get_task, set_run, get_run
 
         task_data = {"task_id": "task_1", "status": "planning"}
         run_data = {"run_id": "run_1", "status": "completed"}
