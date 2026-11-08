@@ -216,6 +216,14 @@ def main() -> None:
         }
     )
 
+    # ---- keep rule (PM final): KEEP cells feed the headline stats ----------
+    keep_map = {
+        (sc, seed): keep_flags(cells["llm_agent_verified"][(sc, seed)])["keep"]
+        for sc in SCENARIOS
+        for seed in SEEDS
+    }
+    quarantined = [(sc, seed) for (sc, seed), ok in keep_map.items() if not ok]
+
     # ---- P1 unsafe acceptance ---------------------------------------------
     rows = []
     wins = 0
@@ -224,6 +232,8 @@ def main() -> None:
         for seed in SEEDS:
             unv = unsafe_acceptance_rate(cells["llm_agent"][(sc, seed)])
             ver = unsafe_acceptance_rate(cells["llm_agent_verified"][(sc, seed)])
+            if not keep_map[(sc, seed)]:
+                continue  # quarantined verified cell: excluded from headline stats
             unv_rates.append(unv or 0.0)
             ver_rates.append(ver or 0.0)
             win = (ver or 0.0) < (unv or 0.0)
@@ -349,9 +359,36 @@ def main() -> None:
             f"| {sc.replace('scenario_', '').upper()} | {seed} "
             f"| {unv:.4f} | {ver:.4f} | {'yes' if win else 'NO'} |"
         )
+    for sc, seed in quarantined:
+        unv = unsafe_acceptance_rate(cells["llm_agent"][(sc, seed)]) or 0.0
+        ver = unsafe_acceptance_rate(cells["llm_agent_verified"][(sc, seed)]) or 0.0
+        lines.append(
+            f"| {sc.replace('scenario_', '').upper()} | {seed} "
+            f"| {unv:.4f} | {ver:.4f} | EXCLUDED (verified cell QUARANTINED) |"
+        )
+    quar_lines = [
+        "",
+        "## Quarantine list (excluded from the headline stats)",
+        "",
+        "| Cell | llm_backend_errors | error share | reason |",
+        "|---|---|---|---|",
+    ]
+    for sc, seed in quarantined:
+        kf = keep_flags(cells["llm_agent_verified"][(sc, seed)])
+        quar_lines.append(
+            f"| {sc.replace('scenario_', '').upper()}/{seed} "
+            f"| {kf['llm_backend_errors']} | {kf['error_share']:.3f} "
+            f"| llm_backend_errors > 2 (endpoint degradation) |"
+        )
+    quar_lines += [
+        "",
+        f"- {len(quarantined)} of {len(keep_map)} verified cells quarantined; "
+        f"headline stats use the {len(keep_map) - len(quarantined)} KEEP cells.",
+    ]
+    lines += quar_lines
     lines += [
         "",
-        f"- Directional wins: **{wins}/{n_pairs}** (exact sign test for reference: "
+        f"- Directional wins: **{wins}/{len(rows)}** (KEEP cells only; exact sign test for reference: "
         f"two-sided p={p_value:.2g}; significance is the full-run criterion, not "
         f"the pilot's)",
         f"- Aggregate rates: unverified {agg_unv:.4f}, verified {agg_ver:.4f} "
@@ -499,7 +536,16 @@ def main() -> None:
             if cells["llm_agent_verified"][(sc, seed)]
         ],
         "verdict": verdict,
-        "p1": summary.get("p1"),
+        "p1": {
+            "wins": wins,
+            "pairs": len(rows),
+            "p_value": p_value,
+            "aggregate_unverified": agg_unv,
+            "aggregate_verified": agg_ver,
+            "ratio": ratio,
+            "pass": p1_directional and p1_ratio,
+        },
+        "quarantined": [f"{sc}/{seed}" for sc, seed in quarantined],
         "p2": engagement,
         "p2_success_measurable": success_measurable,
         "p3": {"pass": p3, "comfort_testable": comfort_testable},

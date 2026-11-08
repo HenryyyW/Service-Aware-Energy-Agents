@@ -1,0 +1,549 @@
+{
+ "keep_rule": "llm_backend_errors <= 2 AND llm_calls >= total_steps AND telemetry recorded (first_attempt_validity excluded: 0.0 by design under out_of_bounds)",
+ "per_cell": [
+  {
+   "cell": "scenario_a/42",
+   "epoch": "workers=1",
+   "llm_backend_errors": 1,
+   "error_share": 0.041666666666666664,
+   "fallback_steps": 1,
+   "fallback_share": 0.041666666666666664,
+   "llm_measured_share": 0.9583333333333334,
+   "first_attempt_validity": 0.0,
+   "repair_success_rate": 0.9565217391304348,
+   "llm_calls": 47,
+   "steps": 24.0,
+   "error_bound_ok": true,
+   "calls_bound_ok": true,
+   "telemetry_ok": true,
+   "keep": true
+  },
+  {
+   "cell": "scenario_a/123",
+   "epoch": "workers=1",
+   "llm_backend_errors": 1,
+   "error_share": 0.041666666666666664,
+   "fallback_steps": 1,
+   "fallback_share": 0.041666666666666664,
+   "llm_measured_share": 0.9583333333333334,
+   "first_attempt_validity": 0.0,
+   "repair_success_rate": 0.9565217391304348,
+   "llm_calls": 47,
+   "steps": 24.0,
+   "error_bound_ok": true,
+   "calls_bound_ok": true,
+   "telemetry_ok": true,
+   "keep": true
+  },
+  {
+   "cell": "scenario_a/456",
+   "epoch": "workers=1",
+   "llm_backend_errors": 0,
+   "error_share": 0.0,
+   "fallback_steps": 0,
+   "fallback_share": 0.0,
+   "llm_measured_share": 1.0,
+   "first_attempt_validity": 0.0,
+   "repair_success_rate": 1.0,
+   "llm_calls": 48,
+   "steps": 24.0,
+   "error_bound_ok": true,
+   "calls_bound_ok": true,
+   "telemetry_ok": true,
+   "keep": true
+  },
+  {
+   "cell": "scenario_b/42",
+   "epoch": "workers=1",
+   "llm_backend_errors": 0,
+   "error_share": 0.0,
+   "fallback_steps": 0,
+   "fallback_share": 0.0,
+   "llm_measured_share": 1.0,
+   "first_attempt_validity": 0.0,
+   "repair_success_rate": 1.0,
+   "llm_calls": 48,
+   "steps": 24.0,
+   "error_bound_ok": true,
+   "calls_bound_ok": true,
+   "telemetry_ok": true,
+   "keep": true
+  },
+  {
+   "cell": "scenario_b/123",
+   "epoch": "workers=1",
+   "llm_backend_errors": 0,
+   "error_share": 0.0,
+   "fallback_steps": 0,
+   "fallback_share": 0.0,
+   "llm_measured_share": 1.0,
+   "first_attempt_validity": 0.0,
+   "repair_success_rate": 1.0,
+   "llm_calls": 48,
+   "steps": 24.0,
+   "error_bound_ok": true,
+   "calls_bound_ok": true,
+   "telemetry_ok": true,
+   "keep": true
+  },
+  {
+   "cell": "scenario_b/456",
+   "epoch": "workers=1",
+   "llm_backend_errors": 2,
+   "error_share": 0.08333333333333333,
+   "fallback_steps": 2,
+   "fallback_share": 0.08333333333333333,
+   "llm_measured_share": 0.9166666666666666,
+   "first_attempt_validity": 0.0,
+   "repair_success_rate": 0.9166666666666666,
+   "llm_calls": 47,
+   "steps": 24.0,
+   "error_bound_ok": true,
+   "calls_bound_ok": true,
+   "telemetry_ok": true,
+   "keep": true
+  },
+  {
+   "cell": "scenario_c/42",
+   "epoch": "workers=1",
+   "llm_backend_errors": 3,
+   "error_share": 0.125,
+   "fallback_steps": 3,
+   "fallback_share": 0.125,
+   "llm_measured_share": 0.875,
+   "first_attempt_validity": 0.0,
+   "repair_success_rate": 0.88,
+   "llm_calls": 47,
+   "steps": 24.0,
+   "error_bound_ok": false,
+   "calls_bound_ok": true,
+   "telemetry_ok": true,
+   "keep": false
+  },
+  {
+   "cell": "scenario_c/123",
+   "epoch": "workers=1",
+   "llm_backend_errors": 3,
+   "error_share": 0.125,
+   "fallback_steps": 3,
+   "fallback_share": 0.125,
+   "llm_measured_share": 0.875,
+   "first_attempt_validity": 0.0,
+   "repair_success_rate": 0.8571428571428571,
+   "llm_calls": 45,
+   "steps": 24.0,
+   "error_bound_ok": false,
+   "calls_bound_ok": true,
+   "telemetry_ok": true,
+   "keep": false
+  },
+  {
+   "cell": "scenario_c/456",
+   "epoch": "workers=1",
+   "llm_backend_errors": 2,
+   "error_share": 0.08333333333333333,
+   "fallback_steps": 2,
+   "fallback_share": 0.08333333333333333,
+   "llm_measured_share": 0.9166666666666666,
+   "first_attempt_validity": 0.0,
+   "repair_success_rate": 0.9090909090909091,
+   "llm_calls": 46,
+   "steps": 24.0,
+   "error_bound_ok": true,
+   "calls_bound_ok": true,
+   "telemetry_ok": true,
+   "keep": true
+  },
+  {
+   "cell": "scenario_d/42",
+   "epoch": "workers=1",
+   "llm_backend_errors": 0,
+   "error_share": 0.0,
+   "fallback_steps": 0,
+   "fallback_share": 0.0,
+   "llm_measured_share": 1.0,
+   "first_attempt_validity": 0.0,
+   "repair_success_rate": 1.0,
+   "llm_calls": 48,
+   "steps": 24.0,
+   "error_bound_ok": true,
+   "calls_bound_ok": true,
+   "telemetry_ok": true,
+   "keep": true
+  },
+  {
+   "cell": "scenario_d/123",
+   "epoch": "workers=1",
+   "llm_backend_errors": 1,
+   "error_share": 0.041666666666666664,
+   "fallback_steps": 1,
+   "fallback_share": 0.041666666666666664,
+   "llm_measured_share": 0.9583333333333334,
+   "first_attempt_validity": 0.0,
+   "repair_success_rate": 0.9565217391304348,
+   "llm_calls": 47,
+   "steps": 24.0,
+   "error_bound_ok": true,
+   "calls_bound_ok": true,
+   "telemetry_ok": true,
+   "keep": true
+  },
+  {
+   "cell": "scenario_d/456",
+   "epoch": "workers=1",
+   "llm_backend_errors": 0,
+   "error_share": 0.0,
+   "fallback_steps": 0,
+   "fallback_share": 0.0,
+   "llm_measured_share": 1.0,
+   "first_attempt_validity": 0.0,
+   "repair_success_rate": 1.0,
+   "llm_calls": 48,
+   "steps": 24.0,
+   "error_bound_ok": true,
+   "calls_bound_ok": true,
+   "telemetry_ok": true,
+   "keep": true
+  },
+  {
+   "cell": "scenario_e/42",
+   "epoch": "workers=1",
+   "llm_backend_errors": 3,
+   "error_share": 0.125,
+   "fallback_steps": 3,
+   "fallback_share": 0.125,
+   "llm_measured_share": 0.875,
+   "first_attempt_validity": 0.0,
+   "repair_success_rate": 0.88,
+   "llm_calls": 47,
+   "steps": 24.0,
+   "error_bound_ok": false,
+   "calls_bound_ok": true,
+   "telemetry_ok": true,
+   "keep": false
+  },
+  {
+   "cell": "scenario_e/123",
+   "epoch": "workers=1",
+   "llm_backend_errors": 0,
+   "error_share": 0.0,
+   "fallback_steps": 0,
+   "fallback_share": 0.0,
+   "llm_measured_share": 1.0,
+   "first_attempt_validity": 0.0,
+   "repair_success_rate": 1.0,
+   "llm_calls": 48,
+   "steps": 24.0,
+   "error_bound_ok": true,
+   "calls_bound_ok": true,
+   "telemetry_ok": true,
+   "keep": true
+  },
+  {
+   "cell": "scenario_e/456",
+   "epoch": "workers=1",
+   "llm_backend_errors": 2,
+   "error_share": 0.08333333333333333,
+   "fallback_steps": 2,
+   "fallback_share": 0.08333333333333333,
+   "llm_measured_share": 0.9166666666666666,
+   "first_attempt_validity": 0.0,
+   "repair_success_rate": 0.9166666666666666,
+   "llm_calls": 47,
+   "steps": 24.0,
+   "error_bound_ok": true,
+   "calls_bound_ok": true,
+   "telemetry_ok": true,
+   "keep": true
+  }
+ ],
+ "verdict": true,
+ "p1": {
+  "wins": 12,
+  "pairs": 12,
+  "p_value": 0.00048828125,
+  "aggregate_unverified": 10.32638888888889,
+  "aggregate_verified": 0.0,
+  "ratio": 0.0,
+  "pass": true
+ },
+ "quarantined": [
+  "scenario_c/42",
+  "scenario_c/123",
+  "scenario_e/42"
+ ],
+ "p2": {
+  "scenario_a": {
+   "repair_iterations": [
+    23,
+    23,
+    24
+   ],
+   "bound_violations_detected": [
+    24,
+    24,
+    24
+   ],
+   "deterministic_replacements": [
+    1,
+    1,
+    0
+   ],
+   "repair_success_rate": [
+    0.9565217391304348,
+    0.9565217391304348,
+    1.0
+   ],
+   "engaged": true
+  },
+  "scenario_b": {
+   "repair_iterations": [
+    24,
+    24,
+    24
+   ],
+   "bound_violations_detected": [
+    24,
+    24,
+    24
+   ],
+   "deterministic_replacements": [
+    0,
+    0,
+    2
+   ],
+   "repair_success_rate": [
+    1.0,
+    1.0,
+    0.9166666666666666
+   ],
+   "engaged": true
+  },
+  "scenario_c": {
+   "repair_iterations": [
+    25,
+    21,
+    22
+   ],
+   "bound_violations_detected": [
+    24,
+    24,
+    24
+   ],
+   "deterministic_replacements": [
+    3,
+    3,
+    2
+   ],
+   "repair_success_rate": [
+    0.88,
+    0.8571428571428571,
+    0.9090909090909091
+   ],
+   "engaged": true
+  },
+  "scenario_d": {
+   "repair_iterations": [
+    24,
+    23,
+    24
+   ],
+   "bound_violations_detected": [
+    24,
+    24,
+    24
+   ],
+   "deterministic_replacements": [
+    0,
+    1,
+    0
+   ],
+   "repair_success_rate": [
+    1.0,
+    0.9565217391304348,
+    1.0
+   ],
+   "engaged": true
+  },
+  "scenario_e": {
+   "repair_iterations": [
+    25,
+    24,
+    24
+   ],
+   "bound_violations_detected": [
+    24,
+    24,
+    24
+   ],
+   "deterministic_replacements": [
+    3,
+    0,
+    2
+   ],
+   "repair_success_rate": [
+    0.88,
+    1.0,
+    0.9166666666666666
+   ],
+   "engaged": true
+  }
+ },
+ "p2_success_measurable": true,
+ "p3": {
+  "pass": true,
+  "comfort_testable": false
+ },
+ "p4": [
+  [
+   "scenario_a",
+   42,
+   24,
+   47,
+   27231,
+   63360,
+   3612.541651003994,
+   4192.432836003718
+  ],
+  [
+   "scenario_a",
+   123,
+   24,
+   47,
+   28489,
+   63390,
+   4638.878917001421,
+   4458.081125994795
+  ],
+  [
+   "scenario_a",
+   456,
+   24,
+   48,
+   28518,
+   66188,
+   4459.855309003615,
+   4538.9208599954145
+  ],
+  [
+   "scenario_b",
+   42,
+   24,
+   48,
+   27972,
+   69984,
+   4470.354587989277,
+   5086.459472993738
+  ],
+  [
+   "scenario_b",
+   123,
+   24,
+   48,
+   30530,
+   69980,
+   5396.446721002576,
+   4526.103119002073
+  ],
+  [
+   "scenario_b",
+   456,
+   24,
+   47,
+   27990,
+   65451,
+   4852.488517004531,
+   5065.40560600115
+  ],
+  [
+   "scenario_c",
+   42,
+   24,
+   47,
+   29725,
+   60339,
+   4066.361320001306,
+   4955.921264991048
+  ],
+  [
+   "scenario_c",
+   123,
+   24,
+   45,
+   29721,
+   57818,
+   4363.8491869933205,
+   4154.494442002033
+  ],
+  [
+   "scenario_c",
+   456,
+   24,
+   46,
+   29763,
+   60686,
+   5425.6688360037515,
+   4389.960772998165
+  ],
+  [
+   "scenario_d",
+   42,
+   24,
+   48,
+   28497,
+   66112,
+   4068.936586001655,
+   5472.077972997795
+  ],
+  [
+   "scenario_d",
+   123,
+   24,
+   47,
+   29712,
+   63348,
+   4107.370145007735,
+   4361.878828000044
+  ],
+  [
+   "scenario_d",
+   456,
+   24,
+   48,
+   29751,
+   66194,
+   4150.1431509968825,
+   4679.516246993444
+  ],
+  [
+   "scenario_e",
+   42,
+   24,
+   47,
+   29725,
+   60348,
+   4939.9840160040185,
+   3721.1491979978746
+  ],
+  [
+   "scenario_e",
+   123,
+   24,
+   48,
+   29716,
+   66080,
+   4434.963653999148,
+   4275.911632998032
+  ],
+  [
+   "scenario_e",
+   456,
+   24,
+   47,
+   28526,
+   61921,
+   4238.457194005605,
+   4257.889920991147
+  ]
+ ]
+}
