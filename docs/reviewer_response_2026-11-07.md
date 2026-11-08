@@ -91,9 +91,13 @@ comfort band 判定因此恆為 0——750-run B-axis + 150-run D 重跑中
 不改變任何已報告數字（comfort 仍為 0.0，與修復前一致）。若要有舒適主張，
 需要含室內溫度的資料集或 CityLearn 建築熱模型——在此之前舒適列為超出範圍。
 
-### 作者資訊（P0）【接受，屬用戶決定】
-`OpenBot Platform`/`.local` email 需替換為真實可識別的作者與聯絡方式——這是
-用戶層面的決定，我們無法代填，將在清單中標記為用戶動作。
+### 作者資訊（P0）【接受，已解決 2026-11-08】
+`OpenBot Platform`/`.local` email 的 placeholder 已由用戶提供真實作者資訊取代：
+第一作者 Wong Wah Cheng（The Hong Kong Polytechnic University）、第二作者
+OpenBot，無 author roles（無 `\thanks`、無 corresponding-author 標記，依用戶
+裁定）。Paste-ready LaTeX 在 `docs/author_block.md`（main @ `42327f4085`）：
+以單次貼上取代 `arxiv_submission/arxiv_main.tex` 第 38-42 行的 author block。
+本團隊不編輯 `arxiv_submission/`（用戶擁有），此檔只提供確切文字。
 
 ### 寫作與結構（P3）【接受】
 Intro 重複合併、移除內部開發紀錄措辭、補系統架構圖、dual decomposition
