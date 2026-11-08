@@ -1,8 +1,6 @@
 """Community aggregator agent for multi-agent coordination."""
 
 from typing import Optional, List, Dict, Any
-import os
-import random
 
 from src.coordination.base import (
     CoordinationAgent,
@@ -15,191 +13,6 @@ from src.coordination.base import (
     Proposal,
 )
 from src.schemas.scenario import ScenarioConfig
-
-
-class ProposerCorruption:
-    """Handles hostile proposer injection for M2b experiment.
-
-    Injects deterministic out-of-bounds corruptions into parsed proposals
-    when SAEA_LLM_HOSTILE=out_of_bounds is set.
-    """
-
-    def __init__(self, timestep: int, seed: int = 42):
-        self.enabled = os.environ.get("SAEA_LLM_HOSTILE") == "out_of_bounds"
-        self.mode = "out_of_bounds"  # only mode for now
-        self.timestep = timestep
-        self.seed = seed
-
-        # Deterministic RNG per timestep
-        self.rng = random.Random(seed + timestep)
-
-        # Corruption factor: scale beyond device limits (ensure exceeding limit)
-        # Use a factor that guarantees exceeding max limit: (max/requested) + buffer
-        self.corruption_factor = 2.5
-
-        # Measurement tracking
-        self.stats = {
-            "total_proposals_corrupted": 0,
-            "battery_corrupted": 0,
-            "ev_corrupted": 0,
-            "flexible_load_corrupted": 0,
-            "total_power_increase_kw": 0.0,
-        }
-
-        # Repair tracking (populated by verifier/repair loop)
-        self.repair_success_count = 0
-        self.repair_total_count = 0
-        self.unsafe_patch_accepted = 0
-        self.post_repair_regressions = []
-        self.execution_cost_usd = 0.0
-
-    def corrupt_proposal(self, proposal: Proposal) -> Proposal:
-        """Corrupt a proposal by scaling its power beyond device limits.
-
-        Returns a new corrupted proposal (original unchanged).
-        """
-        if not self.enabled:
-            return proposal
-
-        # Check if this proposal type has limits we can exceed
-        max_limit = self._get_max_limit(proposal)
-        if max_limit is None or max_limit <= 0:
-            return proposal
-
-        requested = proposal.requested_power_kw
-
-        # Determine direction and limit
-        if requested > 0:
-            # Positive: charging/consuming - limit is max_charge_kw
-            limit = max_limit
-            min_corrupted = limit * 1.2
-            corrupted_power = max(requested * self.corruption_factor, min_corrupted)
-        elif requested < 0:
-            # Negative: discharging/generating - limit is max_discharge_kw
-            limit = max_limit
-            min_corrupted = -limit * 1.2  # more negative
-            corrupted_power = min(requested * self.corruption_factor, min_corrupted)
-        else:
-            return proposal  # zero power, nothing to corrupt
-
-        # Track stats
-        self.stats["total_proposals_corrupted"] += 1
-        self.stats["total_power_increase_kw"] += abs(corrupted_power - requested)
-
-        if isinstance(proposal, BatteryProposal):
-            self.stats["battery_corrupted"] += 1
-        elif isinstance(proposal, EVProposal):
-            self.stats["ev_corrupted"] += 1
-        elif isinstance(proposal, Proposal) and "max_power" in proposal.constraints:
-            self.stats["flexible_load_corrupted"] += 1
-
-        # Create corrupted copy
-        corrupted = Proposal(
-            agent_id=proposal.agent_id,
-            asset_id=proposal.asset_id,
-            requested_power_kw=corrupted_power,
-            priority=proposal.priority,
-            constraints=proposal.constraints.copy(),
-            metadata={
-                **proposal.metadata,
-                "corrupted": True,
-                "original_power_kw": requested,
-            },
-        )
-        return corrupted
-
-    def _get_max_limit(self, proposal: Proposal) -> Optional[float]:
-        """Get the device max limit from proposal constraints."""
-        if isinstance(proposal, BatteryProposal):
-            return (
-                proposal.max_charge_kw
-                or proposal.max_discharge_kw
-                or proposal.constraints.get("power_kw")
-            )
-        elif isinstance(proposal, EVProposal):
-            return proposal.max_charge_kw or proposal.constraints.get("max_charge_kw")
-        elif isinstance(proposal, Proposal):
-            return proposal.constraints.get("max_power") or proposal.constraints.get(
-                "power_kw"
-            )
-        return None
-
-    def corrupt_building_proposal(self, proposal: BuildingProposal) -> BuildingProposal:
-        """Corrupt all sub-proposals in a building proposal."""
-        if not self.enabled:
-            return proposal
-
-        # Corrupt battery proposal
-        battery_corrupted = proposal.battery_proposal
-        if battery_corrupted:
-            battery_corrupted = self.corrupt_proposal(battery_corrupted)
-
-        # Corrupt EV proposals
-        ev_corrupted = [self.corrupt_proposal(ev) for ev in proposal.ev_proposals]
-
-        # Corrupt flexible load proposals
-        fl_corrupted = [
-            self.corrupt_proposal(fl) for fl in proposal.flexible_load_proposals
-        ]
-
-        # Create corrupted building proposal
-        return BuildingProposal(
-            agent_id=proposal.agent_id,
-            asset_id=proposal.asset_id,
-            building_id=proposal.building_id,
-            requested_power_kw=proposal.requested_power_kw,  # building total not corrupted here
-            priority=proposal.priority,
-            constraints=proposal.constraints.copy(),
-            battery_proposal=battery_corrupted,
-            ev_proposals=ev_corrupted,
-            flexible_load_proposals=fl_corrupted,
-            net_demand_kw=proposal.net_demand_kw,
-            pv_generation_kw=proposal.pv_generation_kw,
-            metadata={**proposal.metadata, "corrupted": True},
-        )
-
-    def record_repair_result(
-        self,
-        success: bool,
-        unsafe_patch: bool = False,
-        regression: Optional[Dict] = None,
-        cost_usd: float = 0.0,
-    ):
-        """Record repair loop outcome for measurement hooks."""
-        self.repair_total_count += 1
-        if success:
-            self.repair_success_count += 1
-        if unsafe_patch:
-            self.unsafe_patch_accepted += 1
-        if regression:
-            self.post_repair_regressions.append(regression)
-        self.execution_cost_usd += cost_usd
-
-    def get_metrics(self) -> Dict[str, Any]:
-        """Get all measurement hooks for result.json."""
-        return {
-            "hostile_mode": self.enabled,
-            "hostile_mode_type": self.mode if self.enabled else None,
-            "corruption_factor": self.corruption_factor if self.enabled else None,
-            "total_proposals_corrupted": self.stats["total_proposals_corrupted"],
-            "battery_corrupted": self.stats["battery_corrupted"],
-            "ev_corrupted": self.stats["ev_corrupted"],
-            "flexible_load_corrupted": self.stats["flexible_load_corrupted"],
-            "total_power_increase_kw": self.stats["total_power_increase_kw"],
-            "repair_success_rate": (
-                self.repair_success_count / self.repair_total_count
-                if self.repair_total_count > 0
-                else None
-            ),
-            "unsafe_patch_acceptance": (
-                self.unsafe_patch_accepted / self.repair_total_count
-                if self.repair_total_count > 0
-                else None
-            ),
-            "post_repair_regressions_count": len(self.post_repair_regressions),
-            "post_repair_regressions": self.post_repair_regressions,
-            "execution_cost_usd": self.execution_cost_usd,
-        }
 
 
 class CommunityAggregator(CoordinationAgent):
@@ -231,9 +44,6 @@ class CommunityAggregator(CoordinationAgent):
             scenario_config.community_export_limit_kw or float("inf")
         )
 
-        # Hostile mode tracking
-        self._last_corruptor: Optional[ProposerCorruption] = None
-
     def propose(self, context: Dict[str, Any]) -> CoordinationMessage:
         """Not used for aggregator - it receives proposals instead."""
         return self.send_message(
@@ -264,23 +74,9 @@ class CommunityAggregator(CoordinationAgent):
     def _reconcile_proposals(self, timestep: int = 0) -> Optional[CoordinationMessage]:
         """Reconcile building proposals with community limits."""
 
-        # Apply hostile proposer corruption if enabled
-        corruptor = ProposerCorruption(
-            timestep=timestep, seed=self.scenario_config.random_seed
-        )
-        corrupted_proposals = {}
-        for building_id, proposal in self.building_proposals.items():
-            corrupted_proposals[building_id] = corruptor.corrupt_building_proposal(
-                proposal
-            )
-
-        # Store corruptor for metrics collection
-        self._last_corruptor = corruptor
-
-        # Use corrupted proposals for reconciliation
-        proposals_to_use = (
-            corrupted_proposals if corruptor.enabled else self.building_proposals
-        )
+        # Use original proposals for reconciliation (hostile corruption is now
+        # applied at the LLM parsed-proposal path for both arms)
+        proposals_to_use = self.building_proposals
 
         # Calculate total import/export
         total_import = sum(
