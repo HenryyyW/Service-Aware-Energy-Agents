@@ -20,16 +20,22 @@ paste-ready text is unambiguous.
 \author{
     Wong Wah Cheng \\
     The Hong Kong Polytechnic University \\
-    \texttt{service-aware-energy-agents@openbot.local}
+    \texttt{...}
     \and
     OpenBot
 }
 ```
 
+Contact line: use the email the user supplied in chat on 2026-11-08 (their personal
+gmail address) — replace `...` in the `\texttt{...}` line with it verbatim. It is
+deliberately NOT committed here (keep credentials out of repo files); it is in the
+conversation record only.
+
 Note: surname is Wong; given names Wah Cheung are kept as supplied
 ("Wong Wah Cheung"). No \thanks, no corresponding-author markers — the user ruled
-no role differentiation. The existing \texttt contact line is kept so reviewers
-have a channel; replace it if the user prefers a personal address.
+no role differentiation. Contact email: the user supplied their personal gmail
+address in chat on 2026-11-08 — paste it into the `\texttt{...}` line verbatim
+(it is intentionally not committed to this file).
 
 ## Not done by the team
 
