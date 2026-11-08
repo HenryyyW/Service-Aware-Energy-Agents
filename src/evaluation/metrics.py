@@ -526,7 +526,15 @@ def compute_service_metrics(
 
 
 def compute_grid_metrics(
-    history: List[SimulationStepResult], timestep_minutes: int = 15
+    history: List[SimulationStepResult],
+    timestep_minutes: int = 15,
+    re_dispatch_count: int = 0,
+    voltage_violations_detected: int = 0,
+    voltage_violations_resolved: int = 0,
+    loading_violations_detected: int = 0,
+    loading_violations_resolved: int = 0,
+    resolution_rate: float = 0.0,
+    avg_resolution_steps: float = 0.0,
 ) -> GridMetrics:
     """Compute grid feasibility metrics."""
     metrics = GridMetrics()
@@ -577,6 +585,15 @@ def compute_grid_metrics(
     metrics.max_line_loading_pct = max_line_loading
     metrics.max_transformer_loading_pct = max_trafo_loading
     metrics.nodal_power_balance_violations = 0
+
+    # M3.4 re-dispatch recovery metrics
+    metrics.re_dispatch_count = re_dispatch_count
+    metrics.voltage_violations_detected = voltage_violations_detected
+    metrics.voltage_violations_resolved = voltage_violations_resolved
+    metrics.loading_violations_detected = loading_violations_detected
+    metrics.loading_violations_resolved = loading_violations_resolved
+    metrics.resolution_rate = resolution_rate
+    metrics.avg_resolution_steps = avg_resolution_steps
 
     return metrics
 
@@ -637,6 +654,13 @@ def compute_all_metrics(
     repair_history: Optional[List[Dict[str, Any]]] = None,
     token_usage: int = 0,
     wall_clock_seconds: float = 0.0,
+    re_dispatch_count: int = 0,
+    voltage_violations_detected: int = 0,
+    voltage_violations_resolved: int = 0,
+    loading_violations_detected: int = 0,
+    loading_violations_resolved: int = 0,
+    resolution_rate: float = 0.0,
+    avg_resolution_steps: float = 0.0,
 ) -> Dict[str, Any]:
     """Compute all metrics at once."""
     # Local import: fairness imports tariff helpers from this module.
@@ -662,7 +686,15 @@ def compute_all_metrics(
         "energy": compute_energy_metrics(history, scenario_config, carbon_intensity),
         "service": service,
         "grid": compute_grid_metrics(
-            history, scenario_config.get("timestep_minutes", 15)
+            history,
+            scenario_config.get("timestep_minutes", 15),
+            re_dispatch_count=re_dispatch_count,
+            voltage_violations_detected=voltage_violations_detected,
+            voltage_violations_resolved=voltage_violations_resolved,
+            loading_violations_detected=loading_violations_detected,
+            loading_violations_resolved=loading_violations_resolved,
+            resolution_rate=resolution_rate,
+            avg_resolution_steps=avg_resolution_steps,
         ),
         "agent": compute_agent_metrics(
             history, repair_history or [], token_usage, wall_clock_seconds
