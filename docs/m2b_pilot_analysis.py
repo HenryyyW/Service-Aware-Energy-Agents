@@ -104,12 +104,18 @@ def keep_flags(result: dict) -> dict:
         # signal. It is still reported as an honest zero.
         "error_bound_ok": errs <= 2,
         "calls_bound_ok": (cfg.get("llm_calls") or 0) >= steps,
-        "telemetry_ok": bool(cfg.get("repair_success_rate") is not None
-                             or cfg.get("verification_failures") is not None),
-        "keep": (errs <= 2
-                 and (cfg.get("llm_calls") or 0) >= steps
-                 and bool(cfg.get("repair_success_rate") is not None
-                          or cfg.get("verification_failures") is not None)),
+        "telemetry_ok": bool(
+            cfg.get("repair_success_rate") is not None
+            or cfg.get("verification_failures") is not None
+        ),
+        "keep": (
+            errs <= 2
+            and (cfg.get("llm_calls") or 0) >= steps
+            and bool(
+                cfg.get("repair_success_rate") is not None
+                or cfg.get("verification_failures") is not None
+            )
+        ),
     }
 
 
@@ -483,44 +489,23 @@ def main() -> None:
     summary_out = {
         "keep_rule": "llm_backend_errors <= 2 AND llm_calls >= total_steps AND telemetry recorded (first_attempt_validity excluded: 0.0 by design under out_of_bounds)",
         "per_cell": [
-            {"cell": f"{sc}/{seed}", "epoch": epoch_of(cells['llm_agent_verified'][(sc, seed)]),
-             **keep_flags(cells['llm_agent_verified'][(sc, seed)])}
-            for sc in SCENARIOS for seed in SEEDS
-            if cells['llm_agent_verified'][(sc, seed)]
+            {
+                "cell": f"{sc}/{seed}",
+                "epoch": epoch_of(cells["llm_agent_verified"][(sc, seed)]),
+                **keep_flags(cells["llm_agent_verified"][(sc, seed)]),
+            }
+            for sc in SCENARIOS
+            for seed in SEEDS
+            if cells["llm_agent_verified"][(sc, seed)]
         ],
         "verdict": verdict,
-        "p1": summary.get('p1'),
+        "p1": summary.get("p1"),
         "p2": engagement,
         "p2_success_measurable": success_measurable,
         "p3": {"pass": p3, "comfort_testable": comfort_testable},
         "p4": cost_rows,
     }
-    (out / "summary.json").write_text(
-        json.dumps(summary_out, indent=1, default=float)
-            {
-                "matrix": str(matrix),
-                "reference": str(reference),
-                "modes": modes,
-                "model_digests": digests,
-                "p1": {
-                    "wins": wins,
-                    "pairs": n_pairs,
-                    "p_value": p_value,
-                    "aggregate_unverified": agg_unv,
-                    "aggregate_verified": agg_ver,
-                    "ratio": ratio,
-                    "pass": p1_directional and p1_ratio,
-                },
-                "p2": engagement,
-                "p2_success_measurable": success_measurable,
-                "p3": {"pass": p3, "comfort_testable": comfort_testable},
-                "p4": cost_rows,
-                "verdict": verdict,
-            },
-            indent=1,
-            default=float,
-        )
-    )
+    (out / "summary.json").write_text(json.dumps(summary_out, indent=1, default=float))
     print(f"wrote {out}/summary.md and summary.json")
 
 
