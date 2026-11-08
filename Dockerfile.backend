@@ -24,6 +24,9 @@ RUN pip install --no-cache-dir -e ".[api]" -r backend/requirements.txt
 COPY backend/ ./backend/
 COPY configs/ ./configs/
 COPY experiments/ ./experiments/
+# tests/ needed in-image: agent-task sandbox pipeline runs pytest
+# tests/test_baseline_controllers.py from PROJECT_ROOT (agent.py:563)
+COPY tests/ ./tests/
 # data/ is gitignored; mounted at runtime via docker-compose
 
 # Create non-root user
