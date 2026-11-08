@@ -357,6 +357,7 @@ class ExperimentRunner:
         cl_history = [h.citylearn_result for h in self.history]
 
         # Compute metrics
+        kpis = self.coupler.get_kpis()
         all_metrics = compute_all_metrics(
             history=cl_history,
             scenario_config=scenario_dict,
@@ -367,6 +368,13 @@ class ExperimentRunner:
                 if self.end_time and self.start_time
                 else 0
             ),
+            re_dispatch_count=kpis.get("re_dispatch_count", 0),
+            voltage_violations_detected=kpis.get("voltage_violations_detected", 0),
+            voltage_violations_resolved=kpis.get("voltage_violations_resolved", 0),
+            loading_violations_detected=kpis.get("loading_violations_detected", 0),
+            loading_violations_resolved=kpis.get("loading_violations_resolved", 0),
+            resolution_rate=kpis.get("resolution_rate", 0.0),
+            avg_resolution_steps=kpis.get("avg_resolution_steps", 0.0),
         )
         energy = all_metrics["energy"]
         service = all_metrics["service"]

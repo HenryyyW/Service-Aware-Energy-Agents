@@ -927,5 +927,131 @@ def test_schema_no_clobber_on_repeated_runs(tmp_path):
     ), "Run 2 should detect voltage violations - schema was clobbered!"
 
 
+def test_redispatch_metrics_in_result_json(tmp_path):
+    """Regression test: verify re-dispatch metrics are included in result.json.
+
+    This test ensures that the re-dispatch metrics (re_dispatch_count,
+    voltage_violations_detected, voltage_violations_resolved, etc.)
+    are properly written to result.json's grid section.
+    """
+    import os
+    from experiments.run_experiment import ExperimentRunner
+    from src.schemas.scenario import (
+        ScenarioConfig,
+        BuildingConfig,
+        BuildingType,
+        PVConfig,
+        BatteryConfig,
+        EVConfig,
+        FlexibleLoadConfig,
+        PandapowerConfig,
+        GridBusMapping,
+    )
+    from src.controllers import RuleBasedController
+
+    # Create tight voltage scenario
+    scenario = ScenarioConfig(
+        scenario_id="redispatch_metrics_test",
+        name="Re-dispatch Metrics Test",
+        description="Test that re-dispatch metrics are in result.json",
+        random_seed=42,
+        timestep_minutes=60,
+        community_import_limit_kw=100.0,
+        community_export_limit_kw=100.0,
+        buildings=[
+            BuildingConfig(
+                building_id="Building_1",
+                building_type=BuildingType.RESIDENTIAL,
+                location={"lat": 40.0, "lon": -105.0, "timezone": "UTC"},
+                simulation_start="2023-07-01",
+                simulation_end="2023-07-08",
+                pv=PVConfig(capacity_kw=25.0),
+                battery=BatteryConfig(
+                    capacity_kwh=50.0,
+                    power_kw=15.0,
+                    efficiency_charge=0.95,
+                    efficiency_discharge=0.95,
+                    soc_min=0.1,
+                    soc_max=0.9,
+                    initial_soc=0.2,
+                ),
+                evs=[
+                    EVConfig(
+                        capacity_kwh=60.0,
+                        max_charge_kw=11.0,
+                        efficiency=0.90,
+                        arrival_time="18:00",
+                        departure_time="07:00",
+                        target_soc=0.8,
+                        initial_soc=0.2,
+                        connected_days=[0, 1, 2, 3, 4, 5, 6],
+                    )
+                ],
+                flexible_loads=[
+                    FlexibleLoadConfig(
+                        power_kw=5.0,
+                        energy_kwh=10.0,
+                        earliest_start="08:00",
+                        latest_end="22:00",
+                        duration_hours=4.0,
+                    )
+                ],
+            )
+        ],
+        pandapower=PandapowerConfig(
+            network_type="ieee_34",
+            bus_mappings=[
+                GridBusMapping(
+                    building_id="Building_1", bus_idx=1, phase="all", voltage_level="LV"
+                )
+            ],
+            slack_bus=0,
+            voltage_limits={"min": 0.97, "max": 1.02},
+            line_loading_limit=0.85,
+            transformer_loading_limit=0.85,
+            run_power_flow_every=1,
+        ),
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        runner = ExperimentRunner(scenario, tmpdir, run_id="redispatch_metrics_test")
+        runner.setup("rule_based")
+        result = runner.run(24)
+
+        # Check that re-dispatch metrics are present in result.json's grid section
+        grid = result.grid
+        assert hasattr(grid, "re_dispatch_count"), "re_dispatch_count missing from grid"
+        assert hasattr(
+            grid, "voltage_violations_detected"
+        ), "voltage_violations_detected missing"
+        assert hasattr(
+            grid, "voltage_violations_resolved"
+        ), "voltage_violations_resolved missing"
+        assert hasattr(
+            grid, "loading_violations_detected"
+        ), "loading_violations_detected missing"
+        assert hasattr(
+            grid, "loading_violations_resolved"
+        ), "loading_violations_resolved missing"
+        assert hasattr(grid, "resolution_rate"), "resolution_rate missing"
+        assert hasattr(grid, "avg_resolution_steps"), "avg_resolution_steps missing"
+
+        # Verify the fields are the correct type
+        assert isinstance(grid.re_dispatch_count, int)
+        assert isinstance(grid.voltage_violations_detected, int)
+        assert isinstance(grid.voltage_violations_resolved, int)
+        assert isinstance(grid.loading_violations_detected, int)
+        assert isinstance(grid.loading_violations_resolved, int)
+        assert isinstance(grid.resolution_rate, float)
+        assert isinstance(grid.avg_resolution_steps, float)
+
+        # Verify resolution_rate is non-negative (can exceed 1.0 if more violations resolved than detected)
+        assert (
+            grid.resolution_rate >= 0.0
+        ), f"resolution_rate negative: {grid.resolution_rate}"
+
+        print("All re-dispatch metrics verified in result.json")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

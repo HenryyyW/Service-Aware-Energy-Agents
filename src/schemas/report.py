@@ -108,6 +108,15 @@ class GridMetrics(BaseModel):
     max_transformer_loading_pct: float = 0.0
     nodal_power_balance_violations: int = 0
 
+    # M3.4 re-dispatch recovery metrics
+    re_dispatch_count: int = 0
+    voltage_violations_detected: int = 0
+    voltage_violations_resolved: int = 0
+    loading_violations_detected: int = 0
+    loading_violations_resolved: int = 0
+    resolution_rate: float = 0.0
+    avg_resolution_steps: float = 0.0
+
 
 class AgentMetrics(BaseModel):
     """Code agent performance metrics."""
