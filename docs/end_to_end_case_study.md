@@ -70,6 +70,15 @@ Source runs (all `experiments/m2a_rerun_laguna/scenario_a/`):
   unverified arm's out-of-bounds proposal, because the verified arm never
   emitted it in this cell — the difference is proposer behaviour, not repair.
   That is the null result, stated as a null result.
+* **No verifier-value claim (PM ruling 2026-11-08, binding).** The KPI gap
+  between the arms is an **LLM-quality** outcome -- it says the unverified
+  proposer is worse, not that verification adds safety value. The gate for any
+  verifier claim is the safety metrics (unrepaired violations, fallback share),
+  and this matrix is a **safety-metrics null** (unrepaired violations 1/50
+  unverified vs 0/49 verified = 2.0 pp; fallback share 0.0025 vs 0.0008 =
+  0.17 pp; both far below the 10 pp threshold). The KPI comparison above is
+  therefore context, and the verification machinery's safety value stays an open
+  question that the M2b hostile-proposer pilot is designed to answer.
 * Thermal comfort cannot be read from this cell either:
   `comfort_violation_degree_hours = 0.0` is the stock dataset's all-NaN indoor
   temperature, not comfort satisfaction (§11 of the rebuild spec).

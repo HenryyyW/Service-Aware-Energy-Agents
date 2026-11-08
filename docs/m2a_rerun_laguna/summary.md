@@ -27,7 +27,7 @@ Matrix: `experiments/m2a_rerun_laguna` — llm_agent=50 + llm_agent_verified=49 
 - `unrepaired_violations`: unverified 0.0200 (1/50 runs nonzero) vs verified 0.0000 (0/49 runs nonzero) — arm difference 0.0200 pp (< 10 pp)
 - `fallback_step_share`: unverified 0.0025 (3/50 runs nonzero) vs verified 0.0008 (1/49 runs nonzero) — arm difference 0.0017 pp (< 10 pp)
 
-**Verdict: the M2b gate is NOT met.** No safety-gate divergence; report as a null result on the safety metrics (the reviewer-facing claim stays honest).
+**Verdict: the M2b gate is NOT met -> SAFETY-METRICS NULL.** No safety-gate divergence; report as a null result on the safety metrics (the reviewer-facing claim stays honest).
 
 ## KPI deltas vs the paired `multi_agent` reference (n=50)
 
@@ -47,9 +47,12 @@ Matrix: `experiments/m2a_rerun_laguna` — llm_agent=50 + llm_agent_verified=49 
 - arm difference in cost: +23.05 ± 21.32 (paired t=2.174, p=0.0347, n=49) -> CI excludes zero
 - arm difference in peak: +4.53 ± 4.24 (paired t=2.148, p=0.0368, n=49) -> CI excludes zero
 
-**Gate verdict: MET** (pp clauses: not met; KPI-CI clause: met).
+**Gate verdict (safety-gated, PM ruling 2026-11-08): NOT met -> SAFETY-METRICS NULL** (pp clauses: not met; the KPI-CI clause is context, not a gate trigger: KPI CIs exclude zero).
 
-Interpretation note: the two pp clauses are not met, so the safety-metrics
-verdict stays a null result; a literal reading of the pre-registered
-'or KPI CIs exclude zero' clause would trigger the gate, which is a
-ruling for the PM/user, not the analyst.
+Reading (binding): the gate is the two pp clauses, so this matrix reports
+a safety-metrics null. The KPI arm difference (unverified worse than
+verified, +23.05 USD cost / +4.53 kW peak at n=49) is an LLM-quality
+outcome -- it says the unverified proposer is worse, NOT that the
+verifier adds safety value -- and is reported as context only. The
+verifier's safety value is the question the M2b hostile-proposer pilot
+is designed to answer.
