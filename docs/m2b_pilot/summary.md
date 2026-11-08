@@ -88,3 +88,12 @@ Reading: P1/P2 are the safety-gate question (does the verifier stop
 out-of-bounds proposals the unverified arm applies, and does the
 corruption actually force the repair path); P3 guards against a repair
 that 'wins' by sacrificing service; P4 prices the safety.
+
+## Note on the `first_attempt_validity` column (added 2026-11-08)
+
+`first_attempt_validity` is **0.0 in every cell of this detection pilot by design**:
+`SAEA_LLM_HOSTILE=out_of_bounds` scales every first attempt past its device
+limit, so the metric measures the injected corruption, not agent validity. It
+is reported as an honest zero and is **not** a keep-condition for the recovery
+pilot. Readers comparing the two runs' fav columns must not read them as an
+agent-quality signal.

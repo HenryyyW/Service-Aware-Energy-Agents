@@ -96,8 +96,20 @@ def keep_flags(result: dict) -> dict:
         "first_attempt_validity": fav,
         "repair_success_rate": cfg.get("repair_success_rate"),
         "llm_calls": cfg.get("llm_calls"),
+        "steps": steps,
+        # PM ruling 2026-11-08 (final): KEEP = errors <= 2 AND llm_calls >= steps
+        # AND telemetry recorded. first_attempt_validity is OUT as a keep
+        # condition for the hostile dataset - under out_of_bounds it measures the
+        # injected corruption, not agent validity, so fav = 0.0 is the intended
+        # signal. It is still reported as an honest zero.
         "error_bound_ok": errs <= 2,
-        "fav_bound_ok": (fav is not None and fav >= 0.90),
+        "calls_bound_ok": (cfg.get("llm_calls") or 0) >= steps,
+        "telemetry_ok": bool(cfg.get("repair_success_rate") is not None
+                             or cfg.get("verification_failures") is not None),
+        "keep": (errs <= 2
+                 and (cfg.get("llm_calls") or 0) >= steps
+                 and bool(cfg.get("repair_success_rate") is not None
+                          or cfg.get("verification_failures") is not None)),
     }
 
 
@@ -411,6 +423,50 @@ def main() -> None:
         )
 
     verdict = p1_directional and p1_ratio and p2 and p3
+    # ---- per-cell provenance table (PM completion requirements) -----------
+    lines += [
+        "",
+        "## Per-cell table (epoch, error count/share, fallback share, recovery telemetry)",
+        "",
+        f"| Cell | Epoch | llm_calls | errors | error share | fallback steps | fallback share | repair_success_rate | verification_failures | KEEP |",
+        "|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    keep_rows = []
+    for sc in SCENARIOS:
+        for seed in SEEDS:
+            arm = "llm_agent_verified"
+            cell = cells[arm][(sc, seed)]
+            if not cell:
+                continue
+            kf = keep_flags(cell)
+            epoch = epoch_of(cell)
+            vf = field(cell, "verification_failures") or {}
+            keep_rows.append((sc, seed, epoch, kf))
+            lines.append(
+                f"| {sc.replace('scenario_', '').upper()}/{seed} | {epoch} "
+                f"| {kf['llm_calls']} | {kf['llm_backend_errors']} "
+                f"| {kf['error_share']:.3f} | {kf['fallback_steps']} "
+                f"| {kf['fallback_share']:.3f} "
+                f"| {kf['repair_success_rate']} "
+                f"| {sum(vf.values()) if vf else 0} "
+                f"| {'KEEP' if kf['keep'] else 'QUARANTINE'} |"
+            )
+    n_keep = sum(1 for r in keep_rows if r[3]["keep"])
+    lines += [
+        "",
+        f"- KEEP {n_keep} of {len(keep_rows)} verified cells under the final rule "
+        "(errors <= 2 AND llm_calls >= steps AND telemetry recorded).",
+        "- `first_attempt_validity` = 0.0 in every cell of this run **by design**: "
+        "under `SAEA_LLM_HOSTILE=out_of_bounds` the corruptor scales every first "
+        "attempt past its device limit, so the metric measures the injected "
+        "corruption, not agent validity. It is reported as an honest zero and is "
+        "NOT a keep-condition for this dataset.",
+        "- The same caveat applies to the detection pilot "
+        "(`docs/m2b_pilot/summary.md`), whose fav column is 0.0 for the same "
+        "structural reason: the two runs' fav columns are not comparable as an "
+        "agent-quality signal.",
+    ]
+
     lines += [
         "",
         f"## Verdict: {'PASS' if verdict else 'FAIL'} "
@@ -424,8 +480,23 @@ def main() -> None:
     ]
 
     (out / "summary.md").write_text("\n".join(lines) + "\n")
+    summary_out = {
+        "keep_rule": "llm_backend_errors <= 2 AND llm_calls >= total_steps AND telemetry recorded (first_attempt_validity excluded: 0.0 by design under out_of_bounds)",
+        "per_cell": [
+            {"cell": f"{sc}/{seed}", "epoch": epoch_of(cells['llm_agent_verified'][(sc, seed)]),
+             **keep_flags(cells['llm_agent_verified'][(sc, seed)])}
+            for sc in SCENARIOS for seed in SEEDS
+            if cells['llm_agent_verified'][(sc, seed)]
+        ],
+        "verdict": verdict,
+        "p1": summary.get('p1'),
+        "p2": engagement,
+        "p2_success_measurable": success_measurable,
+        "p3": {"pass": p3, "comfort_testable": comfort_testable},
+        "p4": cost_rows,
+    }
     (out / "summary.json").write_text(
-        json.dumps(
+        json.dumps(summary_out, indent=1, default=float)
             {
                 "matrix": str(matrix),
                 "reference": str(reference),
