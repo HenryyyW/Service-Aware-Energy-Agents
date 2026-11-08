@@ -325,8 +325,13 @@ async def _run_agent_task(
                 else []
             )
 
-            # For ExperimentResult, convert to dicts
-            diagnostic_reports = [dr.model_dump() for dr in diagnostic_reports_objects]
+            # ExperimentResult boundary: reports are dict-serialized there.
+            # The repair loop itself must receive the DiagnosticReport objects,
+            # because planner/repair_agent access report.diagnostics.
+            experiment_diagnostic_reports = [
+                dr.model_dump() for dr in diagnostic_reports_objects
+            ]
+            diagnostic_reports = diagnostic_reports_objects
 
             try:
                 experiment_result = ExperimentResult(
@@ -406,7 +411,7 @@ async def _run_agent_task(
                         max_line_loading_pct=110.0,
                         max_transformer_loading_pct=105.0,
                     ),
-                    diagnostic_reports=diagnostic_reports,
+                    diagnostic_reports=experiment_diagnostic_reports,
                 )
 
             # --- END REAL DATA LOADING ---
