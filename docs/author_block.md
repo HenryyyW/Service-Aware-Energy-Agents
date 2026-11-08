@@ -2,7 +2,7 @@
 
 Source of truth: user decision 2026-11-08 (updated same day): the `arxiv_submission/`
 no-fly rule is LIFTED - the PDF is team-owned again and the user directed the team to
-apply this block. APPLIED on origin/main at commit `a1b2c3d4e5` placeholder-sha
+apply this block. APPLIED on origin/main at commit `8f17c3c08a`
 (replaced the old Team/OpenBot block at arxiv_main.tex lines 38-42). One datum is
 still missing: the `\texttt{...}` line reads `TODO-email-supplied-by-user` until the
 user supplies their contact email in chat - it is deliberately never committed to
