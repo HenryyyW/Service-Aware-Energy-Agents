@@ -910,6 +910,13 @@ class PandapowerAdapter:
         Sets min_p_mw/max_p_mw on sgen and ext_grid, controllable flags,
         and a cost curve for the slack bus.
         """
+        # Ensure min_p_mw and max_p_mw columns exist for sgen (required for OPF)
+        if len(self.net.sgen) > 0:
+            if "min_p_mw" not in self.net.sgen.columns:
+                self.net.sgen["min_p_mw"] = 0.0
+            if "max_p_mw" not in self.net.sgen.columns:
+                self.net.sgen["max_p_mw"] = 10.0
+
         # Set cost curve for slack bus (ext_grid) - required for dual variables
         if len(self.net.ext_grid) > 0:
             for idx in self.net.ext_grid.index:
@@ -928,28 +935,14 @@ class PandapowerAdapter:
                     check=False,
                 )
 
-        # Set min/max power for controllable sgen (PV)
+        # Set PV as NON-controllable (fixed injection) - PV output is not dispatchable
+        # The actual PV output is updated each timestep via update_building_loads
         for building_id, sgen_idx in self.sgen_indices.items():
             if sgen_idx in self.net.sgen.index:
-                # PV can generate from 0 to installed capacity
-                # We don't know installed capacity here, so set reasonable bounds
-                # The actual PV output is updated each timestep via update_building_loads
-                self.net.sgen.at[sgen_idx, "controllable"] = True
-                self.net.sgen.at[sgen_idx, "min_p_mw"] = 0.0
-                # Max will be set based on installed capacity; default to 10 MW
-                self.net.sgen.at[sgen_idx, "max_p_mw"] = 10.0
+                self.net.sgen.at[sgen_idx, "controllable"] = False
+                # PV has fixed output, no cost curve needed
 
-                # Add cost curve for PV (zero marginal cost)
-                pp.create_poly_cost(
-                    self.net,
-                    sgen_idx,
-                    "sgen",
-                    cp1_eur_per_mw=0.0,
-                    cp2_eur_per_mw2=0.0,
-                    check=False,
-                )
-
-        # Set min/max power for storage (batteries)
+        # Set min/max power for storage (batteries) - these ARE dispatchable
         for building_id, storage_idx in self.storage_indices.items():
             if storage_idx in self.net.storage.index:
                 self.net.storage.at[storage_idx, "controllable"] = True
@@ -964,7 +957,7 @@ class PandapowerAdapter:
                     check=False,
                 )
 
-        # Set min/max for loads (they are not controllable in OPF, but we can set bounds)
+        # Set loads as non-controllable (fixed demand in OPF)
         for building_id, load_idx in self.load_indices.items():
             if load_idx in self.net.load.index:
                 self.net.load.at[load_idx, "controllable"] = False
@@ -1814,21 +1807,54 @@ class PandapowerAdapter:
                 )
 
         except Exception as e:
-            # OPF failed (e.g., KeyError for missing cost data), fall back to base price
+            # OPF failed (e.g., KeyError for missing cost data, OPFNotConverged), fall back to voltage approximation
             import logging
 
             logging.warning(
-                f"LMP OPF failed ({type(e).__name__}: {e}), falling back to base price. "
+                f"LMP OPF failed ({type(e).__name__}: {e}), falling back to voltage approximation. "
                 f"Fallback steps: {self.lmp_opf_fallback_steps + 1}"
             )
-            for bus_idx in self.net.bus.index:
-                lmp_prices[bus_idx] = base_energy_price
+            # Ensure power flow has been run to get voltage results
+            if not (
+                hasattr(self.net, "res_bus") and "vm_pu" in self.net.res_bus.columns
+            ):
+                try:
+                    pp.runpp(
+                        self.net,
+                        algorithm="bfsw",
+                        max_iteration=100,
+                        tolerance_mva=1e-6,
+                    )
+                except Exception:
+                    pass  # If power flow also fails, use ultimate fallback
+
+            # Use voltage approximation as fallback to maintain price differentiation
+            if hasattr(self.net, "res_bus") and "vm_pu" in self.net.res_bus.columns:
+                avg_voltage = self.net.res_bus.vm_pu.mean()
+                for bus_idx in self.net.res_bus.index:
+                    v = self.net.res_bus.at[bus_idx, "vm_pu"]
+                    # Higher loss factor to create meaningful LMP price differentiation
+                    # Distribution loss factors typically 3-8%, marginal loss factor can be higher
+                    loss_factor = 5.0
+                    price = base_energy_price * (
+                        1 + loss_factor * (1 - v / avg_voltage)
+                    )
+                    # Apply price cap if configured
+                    if price_cap_per_kwh is not None and price > price_cap_per_kwh:
+                        price = price_cap_per_kwh
+                        cap_hits += 1
+                    lmp_prices[bus_idx] = price
+            else:
+                # Ultimate fallback: base price for all buses
+                for bus_idx in self.net.bus.index:
+                    lmp_prices[bus_idx] = base_energy_price
+
             self.lmp_opf_fallback_steps += 1
             return LmpResult(
                 prices=lmp_prices,
                 status=LmpStatus.FALLBACK,
                 reason=f"opf_error: {type(e).__name__}",
-                cap_hits=0,
+                cap_hits=cap_hits,
             )
 
     def get_lmp_prices_for_buildings(

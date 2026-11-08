@@ -211,8 +211,7 @@ class SettlementEngine:
 
             # Determine cost basis and billing price
             is_lmp_regime = (
-                self.config.market_type == "lmp"
-                and self.config.dynamic_pricing is not None
+                self.config.dynamic_pricing is not None
                 and self.config.dynamic_pricing.enabled
             )
 
