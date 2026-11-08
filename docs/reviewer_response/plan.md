@@ -152,3 +152,21 @@ differences, not physical safety gains; missing deterministic-baseline compariso
   labelled settlement-inclusive; if it is a bug, D rows come out of the headline
   tables until fixed.
 - D-C: arXiv timing - publish the re-scoped version now, or hold until A1/E2 exist.
+
+## Decisions (user, 2026-11-08)
+
+- **D-A = re-scope AND build the benchmark.** The paper is re-scoped to what the
+  experiments measure (runtime verification of LLM dispatch proposals; code-repair
+  pipeline described as scaffolded/not-yet-demonstrated), AND a real code-repair
+  benchmark is commissioned as the evidence for the code-repair claim.
+  Benchmark envelope (authorized scope): model `poolside/laguna-xs-2.1`, provider
+  NVIDIA NIM, purpose = code-repair benchmark for the paper, count <= 10 seeded
+  repair tasks x <= 3 iterations each; same hostile-flag discipline and keep rule as
+  M2b; single matrix directory `experiments/m2b_code_repair/`. No other model, no
+  other provider. Gated on the coder fix (issue #59) landing first.
+- **D-B = decide by the accounting invariant.** If C1 (Backend B) shows the
+  settlement invariant holds, D's aggregate change keeps its settlement-inclusive
+  label with the mechanism stated; if it fails, D rows come out of the headline
+  tables until the engine is fixed and D is re-run.
+- **D-C = no arXiv upload.** No submission action is taken; the rebuild lands on
+  main only. (No scheduled upload, no deadline-driven shortcut.)
