@@ -591,7 +591,14 @@ class LLMAgentController(BaseController):
         ``actions`` is None when the call failed or the response did not
         parse; ``status`` is ``clean`` / ``fenced`` / ``invalid`` (fence
         stripping is recorded as a formatting violation, never hidden).
+
+        Hostile corruption (out_of_bounds) is applied ONLY to first-attempt
+        proposals (when repair_violations is None). Re-prompt proposals
+        (when repair_violations is not None) are left uncorrupted so the
+        verified arm's re-prompt can produce an in-bounds proposal and
+        achieve a measurable repair_success_rate.
         """
+        is_first_attempt = repair_violations is None
         response = self._call_backend(observations, timestep, repair_violations)
         if response is None:
             return None, "invalid"
@@ -609,7 +616,7 @@ class LLMAgentController(BaseController):
             self.llm_fenced_outputs += 1
         elif status == "invalid":
             self.llm_raw_parse_failures += 1
-        if actions and self.hostile_mode == "out_of_bounds":
+        if is_first_attempt and actions and self.hostile_mode == "out_of_bounds":
             actions = self._corrupt_out_of_bounds(actions)
             self.hostile_corrupted_proposals += 1
         return actions, status
