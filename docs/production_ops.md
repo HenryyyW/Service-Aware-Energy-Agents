@@ -269,6 +269,45 @@ alembic current
 - Annual penetration test
 - SOC2 compliance (in progress)
 
+## CityLearn Dataset Prefetching (CI determinism gate)
+
+The Seed Reproducibility job resolves CityLearn datasets from GitHub on cache
+miss; the GitHub API rate-limits that endpoint (HTTP 403), colouring the
+pipeline red for environmental (not determinism) reasons.
+
+**Fix: `scripts/prefetch_citylearn.py`** vendors datasets into CityLearn's
+cache (`~/.cache/citylearn/<tag>/datasets/`) BEFORE the job runs:
+
+- `citylearn_challenge_2020_climate_zone_1` (4.6 MB) — copied from the
+  repo-tracked copy at `experiments/reference/` (zero network; also the
+  dataset the smoke/agent path uses, baked into the API image at
+  `/app/citylearn_datasets/` by the Dockerfile).
+- `citylearn_challenge_2022_phase_all_plus_evs` (13 MB) — downloaded once via
+  CityLearn's own machinery with 3 retries + backoff, then cached by
+  `actions/cache` (key `citylearn-datasets-v1-*`) so subsequent runs make zero
+  GitHub API calls. 13 MB is ~30% over the ~10 MB artifact guideline; the
+  full (unpruned) dataset is required because the adapter derives
+  `building_ids` from the dataset schema — pruning it would change the
+  simulation and break determinism vs the paper's runs.
+
+Determinism gate: the CI job runs prefetch **twice** and asserts identical
+`DATASET_SHA256` values — proving the vendored cache is byte-stable whether
+sourced from the repo reference or a download. The reproducibility run then
+executes with `CITYLEARN_OFFLINE=1`, so any mid-run download attempt fails
+loudly instead of 403-flaking.
+
+Local usage:
+
+```bash
+python scripts/prefetch_citylearn.py --check          # exit 0 if cached
+python scripts/prefetch_citylearn.py                  # vendor the CI set
+python scripts/prefetch_citylearn.py --dataset <name> # one dataset
+```
+
+Exit codes: 0 = vendored/cached; 1 = vendoring failed after retries; 2 = unused.
+(The smoke path needs no prefetch: the api container ships the dataset baked
+in, so it never resolves from GitHub regardless of runner state.)
+
 ## Appendix: Useful Commands
 
 ```bash

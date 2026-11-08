@@ -219,12 +219,42 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
+      - name: Cache CityLearn datasets
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/citylearn
+          key: citylearn-datasets-v1-${{ env.PYTHON_VERSION }}
+          restore-keys: |
+            citylearn-datasets-v1-
+
       - name: Install package
         run: |
           python -m pip install --upgrade pip
           pip install -e .
 
+      # Vendored-cache determinism gate: run prefetch twice (first may
+      # download/vendor, second must be a pure cache hit) and assert the
+      # dataset hashes are identical — same bytes whether vendored from the
+      # repo reference or downloaded from GitHub.
+      - name: Prefetch CityLearn datasets (twice, assert stable hashes)
+        run: |
+          set -euo pipefail
+          HASH1=$(python scripts/prefetch_citylearn.py --dataset citylearn_challenge_2022_phase_all_plus_evs --dataset citylearn_challenge_2020_climate_zone_1 | tee /tmp/prefetch1.log | grep '^DATASET_SHA256' | sort | sha256sum | cut -d' ' -f1)
+          HASH2=$(python scripts/prefetch_citylearn.py --dataset citylearn_challenge_2022_phase_all_plus_evs --dataset citylearn_challenge_2020_climate_zone_1 | tee /tmp/prefetch2.log | grep '^DATASET_SHA256' | sort | sha256sum | cut -d' ' -f1)
+          echo "prefetch run 1 dataset-hash: $HASH1"
+          echo "prefetch run 2 dataset-hash: $HASH2"
+          if [ "$HASH1" != "$HASH2" ]; then
+            echo "FAIL: vendored dataset hashes differ between runs" >&2
+            diff /tmp/prefetch1.log /tmp/prefetch2.log || true
+            exit 2
+          fi
+
+      # CITYLEARN_OFFLINE=1 turns any mid-run download attempt into a hard,
+      # loud failure instead of a silent GitHub-API 403 flake. Safe because
+      # the prefetch step above guarantees a warm cache.
       - name: Same seed must produce identical outputs
+        env:
+          CITYLEARN_OFFLINE: "1"
         run: |
           python -m experiments.check_reproducibility \
             --config configs/scenario_a.yaml \
