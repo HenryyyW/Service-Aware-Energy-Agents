@@ -140,8 +140,14 @@ class ExecutorAgent:
 
             execution_time = time.time() - start_time
 
+            # Executor success = code runs without errors (syntax, unit tests, experiment execution)
+            # Repair effectiveness is judged by the verifier from violation_counts
+            executor_success = (
+                exp_result.error is None
+            )  # No exception during experiment run
+
             output = ExecutorOutput(
-                success=exp_result.success,
+                success=executor_success,
                 stdout=exp_result.stdout,
                 stderr=exp_result.stderr,
                 error=exp_result.error,
@@ -150,7 +156,7 @@ class ExecutorAgent:
                     "syntax_valid": True,
                     "unit_tests_passed": True,
                     "unit_test_time": test_result.execution_time,
-                    "experiment_passed": exp_result.success,
+                    "experiment_passed": exp_result.success,  # All violations resolved
                     "experiment_output": (
                         exp_result.stdout[-1000:] if exp_result.stdout else ""
                     ),
@@ -163,7 +169,7 @@ class ExecutorAgent:
             state.sandbox_result = exp_result
             state.add_message(
                 AgentRole.EXECUTOR,
-                f"Execution {'succeeded' if exp_result.success else 'failed'}",
+                f"Execution {'succeeded' if executor_success else 'failed'} (experiment_passed={exp_result.success})",
                 output.model_dump(),
             )
 
