@@ -50,11 +50,17 @@ analysis (they are a function of scenario + seed + commit, zero LLM calls).
 python3 docs/m2b_pilot_analysis.py      # -> docs/m2b_hostile_pilot/summary.{md,json}
 ```
 
-Pre-registered criteria (PM ruling, accepted): P1 verified arm's
-unsafe-acceptance rate lower than the unverified arm's in every paired cell
-(15/15 directional wins; exact sign test two-sided p = 6.1e-05) and aggregate
-ratio <= 0.25; P2 verifier engagement (`repair_iterations > 0` and
-`repair_success_rate > 0` in at least one verified cell per scenario); P3
-no-masking (held-harmless criteria from `repair_acceptance.evaluate_repair`,
-comfort clause reported as not testable on this dataset); P4 cost of safety
-reported, not thresholded.
+Pre-registered criteria (PM ruling 2026-11-08, operative): P1 verified arm's
+unsafe-acceptance rate lower than the unverified arm's in every one of the 15
+paired (scenario, seed) cells (15/15 directional wins) and aggregate ratio
+<= 0.25; the exact sign test is reported for reference only -- significance is
+the FULL-run criterion, not the pilot's. P2 verifier engagement
+(`repair_iterations > 0` and `repair_success_rate > 0` in at least one verified
+cell per scenario); P3 no-masking (held-harmless criteria from
+`repair_acceptance.evaluate_repair`, comfort clause reported as not testable on
+this dataset); P4 cost of safety reported, not thresholded.
+
+Scope ruling recorded: 30 cells = 5 scenarios x 2 arms x 3 seeds, mode
+`out_of_bounds` ONLY (L1). The 12-cell D-only/two-mode variant is superseded;
+`malformed` (L2) is pilot-2; `temperature_raised` deferred; `small_model`
+excluded (needs its own model authorization).

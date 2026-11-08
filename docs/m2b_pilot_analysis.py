@@ -10,9 +10,10 @@ M2a laguna matrix (15 deterministic ``multi_agent`` cells, zero LLM calls).
 Pre-registered criteria (PM ruling, accepted):
 * P1 unsafe acceptance: verified arm's unsafe-acceptance rate (out-of-bounds
   proposals applied as proposed per step) is LOWER than the unverified arm's in
-  every paired (scenario, seed) cell -- 15/15 directional wins, exact sign test
-  (two-sided p = 2 * 2^-15 = 6.1e-05) -- and the verified arm's aggregate rate
-  is <= 25% of the unverified arm's.
+  every paired (scenario, seed) cell -- 15/15 directional wins over the 15
+  (scenario, seed) pairs -- and the verified arm's aggregate rate is <= 25% of
+  the unverified arm's. PM ruling 2026-11-08: the exact sign test is reported
+  for reference only; SIGNIFICANCE is the FULL-run criterion, not the pilot's.
 * P2 verifier engagement: repair_iterations > 0 and repair_success_rate > 0 in
   at least one verified cell per scenario (the corruption must actually force
   the repair path the M2a matrices never reached).
@@ -266,8 +267,9 @@ def main() -> None:
         )
     lines += [
         "",
-        f"- Directional wins: **{wins}/{n_pairs}** (exact sign test, two-sided "
-        f"p={p_value:.2g})",
+        f"- Directional wins: **{wins}/{n_pairs}** (exact sign test for reference: "
+        f"two-sided p={p_value:.2g}; significance is the full-run criterion, not "
+        f"the pilot's)",
         f"- Aggregate rates: unverified {agg_unv:.4f}, verified {agg_ver:.4f} "
         f"(ratio {ratio:.3f}; pass requires <= 0.25)",
         f"- **P1: {'PASS' if p1_directional and p1_ratio else 'FAIL'}**",
