@@ -787,5 +787,144 @@ class TestGridClosedLoop:
         coupler_control.close()
 
 
+def test_schema_no_clobber_on_repeated_runs(tmp_path):
+    """Regression test for schema clobbering bug.
+
+    The CityLearn adapter was writing its template-derived schema back over
+    data/schemas/{scenario_id}/schema.json, clobbering scenario config.
+    First API-path run honored an injected pandapower block with tight limits;
+    subsequent runs saw default limits (clobbered).
+
+    This test runs the same tight-voltage scenario twice without SAEA_RUN_ID.
+    Both runs must detect violations (i.e., the tight limits must persist).
+    """
+    import os
+    from src.schemas.scenario import (
+        ScenarioConfig,
+        BuildingConfig,
+        BuildingType,
+        PVConfig,
+        BatteryConfig,
+        EVConfig,
+        FlexibleLoadConfig,
+        PandapowerConfig,
+        GridBusMapping,
+    )
+    from src.simulation.coupling import SimulationCoupler
+    from src.controllers import RuleBasedController
+
+    # Create tight voltage scenario
+    scenario = ScenarioConfig(
+        scenario_id="schema_clobber_test",
+        name="Schema Clobber Test",
+        description="Test that schema is not clobbered on repeated runs",
+        random_seed=42,
+        timestep_minutes=60,
+        community_import_limit_kw=100.0,
+        community_export_limit_kw=100.0,
+        buildings=[
+            BuildingConfig(
+                building_id="Building_1",
+                building_type=BuildingType.RESIDENTIAL,
+                location={"lat": 40.0, "lon": -105.0, "timezone": "UTC"},
+                simulation_start="2023-07-01",
+                simulation_end="2023-07-08",
+                pv=PVConfig(capacity_kw=25.0),
+                battery=BatteryConfig(
+                    capacity_kwh=50.0,
+                    power_kw=15.0,
+                    efficiency_charge=0.95,
+                    efficiency_discharge=0.95,
+                    soc_min=0.1,
+                    soc_max=0.9,
+                    initial_soc=0.2,
+                ),
+                evs=[
+                    EVConfig(
+                        capacity_kwh=60.0,
+                        max_charge_kw=11.0,
+                        efficiency=0.90,
+                        arrival_time="18:00",
+                        departure_time="07:00",
+                        target_soc=0.8,
+                        initial_soc=0.2,
+                        connected_days=[0, 1, 2, 3, 4, 5, 6],
+                    )
+                ],
+                flexible_loads=[
+                    FlexibleLoadConfig(
+                        power_kw=5.0,
+                        energy_kwh=10.0,
+                        earliest_start="08:00",
+                        latest_end="22:00",
+                        duration_hours=4.0,
+                    )
+                ],
+            )
+        ],
+        pandapower=PandapowerConfig(
+            network_type="ieee_34",
+            bus_mappings=[
+                GridBusMapping(
+                    building_id="Building_1", bus_idx=1, phase="all", voltage_level="LV"
+                )
+            ],
+            slack_bus=0,
+            voltage_limits={"min": 0.97, "max": 1.02},  # Tight limits
+            line_loading_limit=0.85,
+            transformer_loading_limit=0.85,
+            run_power_flow_every=1,
+        ),
+    )
+
+    # Ensure SAEA_RUN_ID is not set (simulate API path)
+    if "SAEA_RUN_ID" in os.environ:
+        del os.environ["SAEA_RUN_ID"]
+
+    # Run 1: First API-path run with tight limits
+    with tempfile.TemporaryDirectory() as tmpdir1:
+        controller = RuleBasedController(scenario)
+        coupler1 = SimulationCoupler(scenario, data_dir=tmpdir1, controller=None)
+        coupler1.controller = controller
+        observations = coupler1.reset(random_seed=42)
+
+        for step in range(24):
+            requested = controller.get_actions(observations, step)
+            result = coupler1.step(requested)
+            if result.terminated:
+                break
+            observations = result.citylearn_result.observations
+
+        kpis1 = coupler1.get_kpis()
+        violations1 = kpis1.get("voltage_violations_detected", 0)
+        print(f"Run 1 voltage violations: {violations1}")
+        coupler1.close()
+
+    # Run 2: Second API-path run - should ALSO see tight limits (not clobbered)
+    with tempfile.TemporaryDirectory() as tmpdir2:
+        controller = RuleBasedController(scenario)
+        coupler2 = SimulationCoupler(scenario, data_dir=tmpdir2, controller=None)
+        coupler2.controller = controller
+        observations = coupler2.reset(random_seed=42)
+
+        for step in range(24):
+            requested = controller.get_actions(observations, step)
+            result = coupler2.step(requested)
+            if result.terminated:
+                break
+            observations = result.citylearn_result.observations
+
+        kpis2 = coupler2.get_kpis()
+        violations2 = kpis2.get("voltage_violations_detected", 0)
+        print(f"Run 2 voltage violations: {violations2}")
+        coupler2.close()
+
+    # Both runs must detect violations (tight limits persisted, not clobbered)
+    assert violations1 > 0, "Run 1 should detect voltage violations with tight limits"
+    assert (
+        violations2 > 0
+    ), "Run 2 should detect voltage violations - schema was clobbered!"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

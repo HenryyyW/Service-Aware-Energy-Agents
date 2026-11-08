@@ -675,9 +675,22 @@ class CityLearnAdapter:
         Uses SAEA_SCHEMA_DIR env var if set. Otherwise defaults to data_dir/schemas,
         but falls back to /app/schemas if the default is not writable (e.g.,
         docker-compose mounts ./data:/app/data:ro).
+
+        CRITICAL: Never write to the bare scenario_id directory (data/schemas/{scenario_id}/)
+        as that clobbers the source scenario config. Always use a unique per-run directory.
         """
-        run_suffix = os.environ.get("SAEA_RUN_ID", "").strip()
-        dir_name = run_suffix or self.scenario_config.scenario_id
+        # Cache the run suffix to ensure consistent directory across calls
+        if not hasattr(self, "_cached_run_suffix"):
+            run_suffix = os.environ.get("SAEA_RUN_ID", "").strip()
+            if not run_suffix:
+                # Generate a unique run ID to avoid clobbering the source scenario directory
+                import uuid
+
+                run_suffix = (
+                    f"{self.scenario_config.scenario_id}_{uuid.uuid4().hex[:8]}"
+                )
+            self._cached_run_suffix = run_suffix
+        dir_name = self._cached_run_suffix
 
         # Allow explicit override via environment variable
         if "SAEA_SCHEMA_DIR" in os.environ:

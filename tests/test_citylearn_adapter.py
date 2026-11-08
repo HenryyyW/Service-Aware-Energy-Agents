@@ -74,12 +74,22 @@ def temp_data_dir():
     shutil.rmtree(tmpdir)
 
 
+@pytest.fixture
+def predictable_run_id(monkeypatch):
+    """Set a predictable SAEA_RUN_ID for tests."""
+    run_id = "test_run_predictable"
+    monkeypatch.setenv("SAEA_RUN_ID", run_id)
+    return run_id
+
+
 # ============================================================================
 # Basic functionality tests (original tests)
 # ============================================================================
 
 
-def test_citylearn_adapter_creation(minimal_scenario, temp_data_dir):
+def test_citylearn_adapter_creation(
+    minimal_scenario, temp_data_dir, predictable_run_id
+):
     """Test CityLearn adapter can be created."""
     adapter = create_citylearn_adapter(minimal_scenario, data_dir=temp_data_dir)
     assert adapter is not None
@@ -88,7 +98,7 @@ def test_citylearn_adapter_creation(minimal_scenario, temp_data_dir):
     adapter.close()
 
 
-def test_citylearn_adapter_reset(minimal_scenario, temp_data_dir):
+def test_citylearn_adapter_reset(minimal_scenario, temp_data_dir, predictable_run_id):
     """Test CityLearn adapter reset."""
     adapter = create_citylearn_adapter(minimal_scenario, data_dir=temp_data_dir)
     observations = adapter.reset(random_seed=42)
@@ -99,7 +109,7 @@ def test_citylearn_adapter_reset(minimal_scenario, temp_data_dir):
     adapter.close()
 
 
-def test_citylearn_adapter_step(minimal_scenario, temp_data_dir):
+def test_citylearn_adapter_step(minimal_scenario, temp_data_dir, predictable_run_id):
     """Test CityLearn adapter step with electrical_storage action."""
     adapter = create_citylearn_adapter(minimal_scenario, data_dir=temp_data_dir)
     adapter.reset(random_seed=42)
@@ -140,12 +150,14 @@ def test_citylearn_adapter_step(minimal_scenario, temp_data_dir):
     adapter.close()
 
 
-def test_citylearn_dummy_data_generation(minimal_scenario, temp_data_dir):
+def test_citylearn_dummy_data_generation(
+    minimal_scenario, temp_data_dir, predictable_run_id
+):
     """Test that dataset files are copied to schema directory."""
     adapter = create_citylearn_adapter(minimal_scenario, data_dir=temp_data_dir)
 
     # Check that schema directory was created with copied files
-    schema_dir = os.path.join(temp_data_dir, "schemas", "test_scenario")
+    schema_dir = os.path.join(temp_data_dir, "schemas", "test_run_predictable")
     assert os.path.exists(schema_dir)
     assert os.path.exists(os.path.join(schema_dir, "schema.json"))
     assert os.path.exists(os.path.join(schema_dir, "weather.csv"))
@@ -178,7 +190,7 @@ class TestStepConventionRegression:
         "seconds_per_timestep", [3600, 3600.0, 1800, 1800.0, 900, 900.0]
     )
     def test_schema_time_steps_are_integers(
-        self, seconds_per_timestep, minimal_scenario, temp_data_dir
+        self, seconds_per_timestep, minimal_scenario, temp_data_dir, predictable_run_id
     ):
         """Test that all schema time step fields are integers regardless of input type.
 
@@ -201,7 +213,7 @@ class TestStepConventionRegression:
             adapter = create_citylearn_adapter(minimal_scenario, data_dir=temp_data_dir)
 
             # Load the generated schema and verify all time step fields are integers
-            schema_dir = os.path.join(temp_data_dir, "schemas", "test_scenario")
+            schema_dir = os.path.join(temp_data_dir, "schemas", "test_run_predictable")
             schema_path = os.path.join(schema_dir, "schema.json")
 
             with open(schema_path, "r") as f:
@@ -237,7 +249,7 @@ class TestStepConventionRegression:
 
     @pytest.mark.parametrize("seconds_per_timestep", [3600, 3600.0, 1800, 1800.0])
     def test_csv_length_matches_episode_time_steps(
-        self, seconds_per_timestep, minimal_scenario, temp_data_dir
+        self, seconds_per_timestep, minimal_scenario, temp_data_dir, predictable_run_id
     ):
         """Test that dummy energy CSV files have exactly episode_time_steps rows.
 
@@ -259,7 +271,7 @@ class TestStepConventionRegression:
             adapter = create_citylearn_adapter(minimal_scenario, data_dir=temp_data_dir)
 
             # Load the generated schema
-            schema_dir = os.path.join(temp_data_dir, "schemas", "test_scenario")
+            schema_dir = os.path.join(temp_data_dir, "schemas", "test_run_predictable")
             schema_path = os.path.join(schema_dir, "schema.json")
 
             with open(schema_path, "r") as f:
@@ -286,7 +298,7 @@ class TestStepConventionRegression:
 
     @pytest.mark.parametrize("seconds_per_timestep", [3600, 3600.0, 1800, 1800.0])
     def test_no_float_slice_indexing_error(
-        self, seconds_per_timestep, minimal_scenario, temp_data_dir
+        self, seconds_per_timestep, minimal_scenario, temp_data_dir, predictable_run_id
     ):
         """Test that no TypeError occurs from float slice indices.
 
@@ -344,7 +356,7 @@ class TestStepConventionRegression:
             DataSet.get_schema = original_get_schema
 
     def test_episode_time_steps_calculation_consistency(
-        self, minimal_scenario, temp_data_dir
+        self, minimal_scenario, temp_data_dir, predictable_run_id
     ):
         """Test that episode_time_steps is calculated consistently across schema and CSV.
 
@@ -365,7 +377,7 @@ class TestStepConventionRegression:
         try:
             adapter = create_citylearn_adapter(minimal_scenario, data_dir=temp_data_dir)
 
-            schema_dir = os.path.join(temp_data_dir, "schemas", "test_scenario")
+            schema_dir = os.path.join(temp_data_dir, "schemas", "test_run_predictable")
             schema_path = os.path.join(schema_dir, "schema.json")
 
             with open(schema_path, "r") as f:
@@ -389,7 +401,7 @@ class TestStepConventionRegression:
             DataSet.get_schema = original_get_schema
 
     def test_dataset_seconds_per_step_stored_as_int(
-        self, minimal_scenario, temp_data_dir
+        self, minimal_scenario, temp_data_dir, predictable_run_id
     ):
         """Test that adapter stores dataset_seconds_per_step as integer."""
         from citylearn.data import DataSet
@@ -417,7 +429,9 @@ class TestStepConventionRegression:
 class TestMultiStepSimulation:
     """Test multi-step simulation to catch off-by-one errors."""
 
-    def test_full_episode_simulation(self, minimal_scenario, temp_data_dir):
+    def test_full_episode_simulation(
+        self, minimal_scenario, temp_data_dir, predictable_run_id
+    ):
         """Run a full episode simulation to verify no off-by-one errors."""
         adapter = create_citylearn_adapter(minimal_scenario, data_dir=temp_data_dir)
         adapter.reset(random_seed=42)
@@ -501,7 +515,9 @@ def test_saea_run_id_reads_back_its_own_schema_dir(
         adapter.close()
 
 
-def test_synthesized_chargers_reference_registered_ev_definitions(temp_data_dir):
+def test_synthesized_chargers_reference_registered_ev_definitions(
+    temp_data_dir, predictable_run_id
+):
     """Every synthesized charger schedule must name an EV in electric_vehicles_def.
 
     Regression: schedules spelled a fixed ``Electric_Vehicle_scenario`` that had
@@ -536,7 +552,7 @@ def test_synthesized_chargers_reference_registered_ev_definitions(temp_data_dir)
     )
     adapter = create_citylearn_adapter(scenario, data_dir=temp_data_dir)
     try:
-        schema_dir = os.path.join(temp_data_dir, "schemas", scenario.scenario_id)
+        schema_dir = os.path.join(temp_data_dir, "schemas", "test_run_predictable")
         with open(os.path.join(schema_dir, "schema.json"), encoding="utf-8") as handle:
             schema = json.load(handle)
 
