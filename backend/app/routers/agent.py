@@ -36,6 +36,29 @@ router = APIRouter()
 MAX_RETRIES = 3
 TASK_TIMEOUT_SECONDS = 30 * 60  # 30 minutes
 
+
+# Tolerant enum resolver: accepts value-form (e.g., "voltage"), name-form (e.g., "VOLTAGE"), or any case
+def _diag_enum(cls, raw: str):
+    """Parse enum from value-form (e.g., 'voltage') or name-form (e.g., 'VOLTAGE'), case-insensitive.
+    Returns None if unknown (caller should skip the diagnostic).
+    """
+    if raw is None:
+        return None
+    try:
+        # First try direct value match (e.g., 'voltage' -> VOLTAGE)
+        return cls(raw)
+    except ValueError:
+        pass
+    try:
+        # Then try name-form (e.g., 'VOLTAGE' -> VOLTAGE)
+        return cls[raw.upper()]
+    except (KeyError, ValueError):
+        return None
+
+
+MAX_RETRIES = 3
+TASK_TIMEOUT_SECONDS = 30 * 60  # 30 minutes
+
 # In-memory storage for task persistence (when Redis not available)
 _task_persisted: Dict[str, dict] = {}
 
@@ -335,8 +358,10 @@ async def _run_agent_task(
                             diagnostics=[
                                 Diagnostic(
                                     diagnostic_id=f"diag_{i}",
-                                    category=DiagnosticCategory(d["category"].upper()),
-                                    severity=Severity(d["severity"].upper()),
+                                    category=_diag_enum(
+                                        DiagnosticCategory, d["category"]
+                                    ),
+                                    severity=_diag_enum(Severity, d["severity"]),
                                     timestep=d["timestep"],
                                     message=d["message"],
                                     values=d.get("values", {}),
@@ -344,6 +369,9 @@ async def _run_agent_task(
                                     bus_indices=d.get("bus_indices", []),
                                 )
                                 for i, d in enumerate(vt_diags)
+                                if _diag_enum(DiagnosticCategory, d["category"])
+                                is not None
+                                and _diag_enum(Severity, d["severity"]) is not None
                             ],
                         )
                         for vt in set(violation_timesteps)
@@ -369,8 +397,10 @@ async def _run_agent_task(
                             diagnostics=[
                                 Diagnostic(
                                     diagnostic_id=f"diag_{i}",
-                                    category=DiagnosticCategory(d["category"].upper()),
-                                    severity=Severity(d["severity"].upper()),
+                                    category=_diag_enum(
+                                        DiagnosticCategory, d["category"]
+                                    ),
+                                    severity=_diag_enum(Severity, d["severity"]),
                                     timestep=d["timestep"],
                                     message=d["message"],
                                     values=d.get("values", {}),
@@ -378,6 +408,9 @@ async def _run_agent_task(
                                     bus_indices=d.get("bus_indices", []),
                                 )
                                 for i, d in enumerate(vt_diags)
+                                if _diag_enum(DiagnosticCategory, d["category"])
+                                is not None
+                                and _diag_enum(Severity, d["severity"]) is not None
                             ],
                         )
                     )

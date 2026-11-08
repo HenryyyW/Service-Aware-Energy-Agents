@@ -15,6 +15,8 @@ from src.agents.backend.prompts import (
     get_prompt,
     get_prompt_hash,
 )
+from src.schemas.diagnostics import DiagnosticCategory, Severity
+from backend.app.routers.agent import _diag_enum
 
 
 # Fixture to isolate module-level state between tests
@@ -514,3 +516,57 @@ class TestRunDataCrossProcess:
 
         with pytest.raises(TypeError):
             set_trajectories("run_bad", unserializable_data)
+
+
+class TestDiagEnumParsing:
+    """Tests for the tolerant diagnostic enum parser (_diag_enum)."""
+
+    def test_category_value_form(self):
+        """Value-form 'voltage' parses to DiagnosticCategory.VOLTAGE."""
+        result = _diag_enum(DiagnosticCategory, "voltage")
+        assert result == DiagnosticCategory.VOLTAGE
+
+    def test_category_name_form(self):
+        """Name-form 'VOLTAGE' parses to DiagnosticCategory.VOLTAGE."""
+        result = _diag_enum(DiagnosticCategory, "VOLTAGE")
+        assert result == DiagnosticCategory.VOLTAGE
+
+    def test_category_case_insensitive(self):
+        """Mixed case 'VoLtAgE' parses correctly."""
+        result = _diag_enum(DiagnosticCategory, "VoLtAgE")
+        assert result == DiagnosticCategory.VOLTAGE
+
+    def test_severity_value_form(self):
+        """Value-form 'warning' parses to Severity.WARNING."""
+        result = _diag_enum(Severity, "warning")
+        assert result == Severity.WARNING
+
+    def test_severity_name_form(self):
+        """Name-form 'WARNING' parses to Severity.WARNING."""
+        result = _diag_enum(Severity, "WARNING")
+        assert result == Severity.WARNING
+
+    def test_severity_case_insensitive(self):
+        """Mixed case 'WaRnInG' parses correctly."""
+        result = _diag_enum(Severity, "WaRnInG")
+        assert result == Severity.WARNING
+
+    def test_unknown_category_returns_none(self):
+        """Unknown category 'not_a_category' returns None (no crash)."""
+        result = _diag_enum(DiagnosticCategory, "not_a_category")
+        assert result is None
+
+    def test_unknown_severity_returns_none(self):
+        """Unknown severity 'not_a_severity' returns None (no crash)."""
+        result = _diag_enum(Severity, "not_a_severity")
+        assert result is None
+
+    def test_none_input_returns_none(self):
+        """None input returns None."""
+        result = _diag_enum(DiagnosticCategory, None)
+        assert result is None
+
+    def test_empty_string_returns_none(self):
+        """Empty string returns None."""
+        result = _diag_enum(DiagnosticCategory, "")
+        assert result is None
