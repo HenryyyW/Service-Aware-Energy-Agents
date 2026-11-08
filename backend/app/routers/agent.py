@@ -394,7 +394,7 @@ async def _run_agent_task(
                                     is not None
                                     and _diag_enum(Severity, d["severity"]) is not None
                                 ],
-                            )
+                            ).model_dump()
                             for vt in set(violation_timesteps)
                             for vt_diags in [
                                 [d for d in real_diagnostics if d["timestep"] == vt]
