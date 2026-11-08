@@ -766,6 +766,11 @@ class LLMAgentController(BaseController):
             "llm_fallback_step_share": (
                 self.fallback_steps / self.total_steps if self.total_steps else 0.0
             ),
+            "repair_success_rate": (
+                (self.repair_iterations - self.fallback_steps) / self.repair_iterations
+                if self.repair_iterations
+                else 0.0
+            ),
             "verification_failures": dict(self.verification_failures),
             "unparseable_outputs": self.unparseable_outputs,
             "hostile_mode": self.hostile_mode,
