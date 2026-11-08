@@ -174,6 +174,35 @@ class AgentTask(BaseModel):
     report: Optional[str] = None
 
 
+def _shape_repair_records(result) -> List[Dict[str, Any]]:
+    """Shape repair-loop iterations for the AgentTask response.
+
+    ``AgentTask.repairs`` is typed ``List[Dict[str, Any]]`` and the frontend's
+    ``RepairPatch`` expects ``file``/``description``/``diff`` per entry, so each
+    iteration becomes ONE dict. Passing ``coder_output.code_changes`` directly
+    produces ``List[List[dict]]`` and FastAPI rejects the whole
+    ``GET /api/agent/tasks/{id}`` response with a ResponseValidationError
+    (the Docker Compose smoke regression, run ee6e9d13d).
+    """
+    if not result or not getattr(result, "iterations", None):
+        return []
+    records = []
+    for iter_rec in result.iterations:
+        coder_output = iter_rec.coder_output
+        planner_output = iter_rec.planner_output
+        records.append(
+            {
+                "iteration": iter_rec.iteration,
+                "file": "src/controllers/__init__.py",
+                "description": getattr(planner_output, "repair_strategy", "") or "",
+                "diff": getattr(coder_output, "diff", "") or "",
+                "code_changes": list(getattr(coder_output, "code_changes", []) or []),
+                "success": bool(iter_rec.success),
+            }
+        )
+    return records
+
+
 async def _run_agent_task(
     task_id: str, description: str, scenario_id: Optional[str], run_id: Optional[str]
 ):
@@ -736,11 +765,7 @@ async def _run_agent_task(
                 if result and result.iterations
                 else ""
             )
-            task_data["repairs"] = (
-                [iter.coder_output.code_changes for iter in result.iterations]
-                if result and result.iterations
-                else []
-            )
+            task_data["repairs"] = _shape_repair_records(result)
             task_data["report"] = result.final_report if result else ""
             task_data["execution_log"].append(
                 f"Repair {'succeeded' if result and result.success else 'failed'} after {result.total_iterations if result else 0} iterations"
