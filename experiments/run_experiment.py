@@ -357,7 +357,7 @@ class ExperimentRunner:
         cl_history = [h.citylearn_result for h in self.history]
 
         # Compute metrics
-        kpis = self.coupler.get_kpis()
+        kpis = self.coupler.get_kpis() if hasattr(self.coupler, "get_kpis") else {}
         all_metrics = compute_all_metrics(
             history=cl_history,
             scenario_config=scenario_dict,
