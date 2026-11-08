@@ -213,6 +213,8 @@ class ExperimentRunner:
             )
         elif controller_type == "deterministic_safety":
             # For deterministic safety, we need a proposer. Default to rule_based.
+            # Proposer is passed as constructor arg (not env var only); env var
+            # SAEA_DET_SAFETY_PROPOSER selects the proposer type for the runner.
             proposer_type = os.environ.get("SAEA_DET_SAFETY_PROPOSER", "rule_based")
             proposer = self._create_proposer(proposer_type, llm_config)
             self.controller = DeterministicSafetyController(
@@ -734,11 +736,13 @@ class ExperimentRunner:
             controller_type_enum = (
                 ControllerType.RULE_BASED
             )  # Treat as deterministic baseline
+            # Proposer type is from constructor (not just env var)
+            proposer_type = "none"
+            if hasattr(self.controller, "proposer") and self.controller.proposer:
+                proposer_type = type(self.controller.proposer).__name__
             controller_config = {
                 "type": "deterministic_safety",
-                "proposer_type": os.environ.get(
-                    "SAEA_DET_SAFETY_PROPOSER", "rule_based"
-                ),
+                "proposer_type": proposer_type,
                 **self.controller.agent_stats(),
                 "stratification": self.controller.get_stratification_summary(),
                 "stratification_history": self.controller.get_stratification_history(),
