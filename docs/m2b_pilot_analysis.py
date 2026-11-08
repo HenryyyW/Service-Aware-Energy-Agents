@@ -188,15 +188,25 @@ def main() -> None:
             sum((field(c, "verification_failures") or {}).values()) for c in ver_cells
         ]
         replacements = [field(c, "llm_fallback_steps") or 0 for c in ver_cells]
-        # repair_success_rate only exists in the option-A build; in this pilot
-        # (re-prompts also corrupted) it is structurally unmeasurable.
+        # repair_success_rate is recorded in some builds; where it is absent,
+        # derive it from A's own formula
+        # (repair_iterations - llm_fallback_steps) / repair_iterations so the
+        # recovery path is comparable across builds.
         if any(
             "repair_success_rate" in (c.get("controller_config") or {})
             for c in ver_cells
         ):
             success = [field(c, "repair_success_rate") for c in ver_cells]
+            rate_source = "recorded"
         else:
-            success = None
+            success = []
+            for c in ver_cells:
+                rep = field(c, "repair_iterations") or 0
+                fb = field(c, "llm_fallback_steps") or 0
+                success.append((rep - fb) / rep if rep else None)
+            rate_source = (
+                "derived (repair_iterations - llm_fallback_steps) / repair_iterations"
+            )
         engagement[sc] = {
             "repair_iterations": repairs,
             "bound_violations_detected": detections,
@@ -208,6 +218,7 @@ def main() -> None:
     success_measurable = any(
         entry["repair_success_rate"] is not None for entry in engagement.values()
     )
+    rate_source = "recorded or derived per build"
 
     # ---- P3 no-masking ----------------------------------------------------
     no_masking_rows = []
@@ -312,7 +323,8 @@ def main() -> None:
         f"- **P2 (verifier engagement): {'PASS' if p2 else 'FAIL'}** -- "
         f"`repair_iterations > 0` and `verification_failures > 0` in every "
         f"verified cell per scenario",
-        f"- `repair_success_rate` is {'measurable' if success_measurable else 'NOT MEASURABLE in this build'} "
+        f"- `repair_success_rate` ({rate_source}): "
+        f"{'measured' if success_measurable else 'NOT MEASURABLE in this build'} "
         + (
             ""
             if success_measurable

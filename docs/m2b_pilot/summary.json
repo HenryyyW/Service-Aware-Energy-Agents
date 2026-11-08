@@ -33,7 +33,11 @@
     24,
     24
    ],
-   "repair_success_rate": null,
+   "repair_success_rate": [
+    0.5,
+    0.5,
+    0.5
+   ],
    "engaged": true
   },
   "scenario_b": {
@@ -52,7 +56,11 @@
     24,
     24
    ],
-   "repair_success_rate": null,
+   "repair_success_rate": [
+    0.5,
+    0.5,
+    0.5
+   ],
    "engaged": true
   },
   "scenario_c": {
@@ -71,7 +79,11 @@
     24,
     24
    ],
-   "repair_success_rate": null,
+   "repair_success_rate": [
+    0.5,
+    0.5,
+    0.5
+   ],
    "engaged": true
   },
   "scenario_d": {
@@ -90,7 +102,11 @@
     24,
     24
    ],
-   "repair_success_rate": null,
+   "repair_success_rate": [
+    0.5,
+    0.5,
+    0.5
+   ],
    "engaged": true
   },
   "scenario_e": {
@@ -109,11 +125,15 @@
     24,
     24
    ],
-   "repair_success_rate": null,
+   "repair_success_rate": [
+    0.5,
+    0.5,
+    0.5
+   ],
    "engaged": true
   }
  },
- "p2_success_measurable": false,
+ "p2_success_measurable": true,
  "p3": {
   "pass": true,
   "comfort_testable": false

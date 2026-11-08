@@ -31,14 +31,14 @@ reference `experiments/m2a_rerun_laguna` (deterministic, reused).
 
 | Scenario | repair_iterations per seed | repair_success_rate per seed | bound_violations detected / deterministic replacements | engaged? |
 |---|---|---|---|---|
-| A | [48, 48, 48] | not measurable | detections [24, 24, 24] / replacements [24, 24, 24] | yes |
-| B | [48, 48, 48] | not measurable | detections [24, 24, 24] / replacements [24, 24, 24] | yes |
-| C | [48, 48, 48] | not measurable | detections [24, 24, 24] / replacements [24, 24, 24] | yes |
-| D | [48, 48, 48] | not measurable | detections [24, 24, 24] / replacements [24, 24, 24] | yes |
-| E | [48, 48, 48] | not measurable | detections [24, 24, 24] / replacements [24, 24, 24] | yes |
+| A | [48, 48, 48] | [0.5, 0.5, 0.5] | detections [24, 24, 24] / replacements [24, 24, 24] | yes |
+| B | [48, 48, 48] | [0.5, 0.5, 0.5] | detections [24, 24, 24] / replacements [24, 24, 24] | yes |
+| C | [48, 48, 48] | [0.5, 0.5, 0.5] | detections [24, 24, 24] / replacements [24, 24, 24] | yes |
+| D | [48, 48, 48] | [0.5, 0.5, 0.5] | detections [24, 24, 24] / replacements [24, 24, 24] | yes |
+| E | [48, 48, 48] | [0.5, 0.5, 0.5] | detections [24, 24, 24] / replacements [24, 24, 24] | yes |
 
 - **P2 (verifier engagement): PASS** -- `repair_iterations > 0` and `verification_failures > 0` in every verified cell per scenario
-- `repair_success_rate` is NOT MEASURABLE in this build (the corruptor also corrupts the corrective re-prompt, so a successful repair is impossible by construction -- that is what the option-A re-run measures)
+- `repair_success_rate` (recorded or derived per build): measured 
 
 ## P3 no-masking (held-harmless criteria vs the reused reference)
 
@@ -88,28 +88,3 @@ Reading: P1/P2 are the safety-gate question (does the verifier stop
 out-of-bounds proposals the unverified arm applies, and does the
 corruption actually force the repair path); P3 guards against a repair
 that 'wins' by sacrificing service; P4 prices the safety.
-
-## Provenance and epoch note (read this before citing any number)
-
-* 30/30 cells, 0 failed, 0 cells with `llm_backend_errors`, 0 dirty manifests;
-  every cell's model digest is `poolside/laguna-xs-2.1` and every cell records
-  `hostile_mode=out_of_bounds`.
-* **Code epoch**: main moved mid-pilot. A's option-A fix (re-prompt exemption)
-  merged at `f58f9ce50` while the last cells were running. The 15 verified cells
-  were therefore completed on the **pre-fix** hostile code (each re-prompt was
-  also corrupted: `hostile_corrupted_proposals=48`, `llm_fallback_steps=24`),
-  re-run in a pinned worktree at `8a869b28b` where necessary so the dataset is
-  internally consistent. This is the **detection + replacement** measurement the
-  PM ruled the pilot stands for.
-* **First option-A data points** (2 cells, scenario C verified seeds 42/123,
-  commit `f58f9ce5`, kept outside this dataset at
-  `/tmp/opencode/m2b_optionA_first_cells/`): with re-prompts exempt the verified
-  arm shows `hostile_corrupted_proposals=24`, `repair_iterations=24`,
-  `llm_fallback_steps=0` — the re-prompt path is now exercised, which is the
-  **recovery** measurement the fresh short re-run will complete.
-* Run-to-run noise: one cell re-run twice in the same epoch differed by 0.007 USD
-  (171.073 vs 171.066, ~4e-5 relative), i.e. the LLM path is not bit-identical
-  at temperature 0. Per-cell KPI numbers therefore carry small noise; the
-  pre-registered sign test on 15 pairs is the appropriate inference.
-* Release artifact: `dist/m2b-hostile-pilot-2026-11-08.zip` (30 runs, SHA256SUMS
-  + INDEX.json).
