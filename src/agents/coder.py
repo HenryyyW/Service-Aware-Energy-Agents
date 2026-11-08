@@ -287,7 +287,12 @@ class CoderAgent:
             return ast.unparse(tree)
         except Exception as e:
             # If AST manipulation fails, fall back to original code with error comment
-            return f"{code}\n\n# ERROR APPLYING CHANGES: {str(e)}\n# Original changes requested: {chr(10).join([c['change'] for c in changes])}"
+            # Comment EVERY line to avoid syntax errors
+            error_lines = [f"# ERROR APPLYING CHANGES: {str(e)}"]
+            for c in changes:
+                for line in c["change"].split("\n"):
+                    error_lines.append(f"# {line}")
+            return code + "\n\n" + "\n".join(error_lines)
 
     def _apply_ast_transformation(
         self, func_node: ast.FunctionDef, change_desc: str
@@ -458,647 +463,69 @@ class CoderAgent:
 
         return None
 
-    # --- Voltage Transformation Implementations ---
-
-    def _add_voltage_monitoring_and_reduction(self, func_node: ast.FunctionDef) -> None:
-        """Add voltage monitoring and triggered load reduction for overvoltage/undervoltage."""
-        # Check if already has voltage monitoring
-        if self._has_voltage_monitoring(func_node):
-            return
-
-        # Build the voltage monitoring code
-        voltage_code = """
-        # Voltage monitoring and triggered load reduction
-        overvoltage = False
-        undervoltage = False
-        if self.last_grid_diagnostics:
-            diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
-            for d in diagnostics:
-                category = d.get("category", "")
-                severity = d.get("severity", "")
-                if severity in ["violation", "critical"] and category == "voltage":
-                    values = d.get("values", {})
-                    voltage_pu = values.get("voltage_pu", 1.0)
-                    if voltage_pu > 1.03:
-                        overvoltage = True
-                    elif voltage_pu < 0.97:
-                        undervoltage = True
+    def _apply_changes(self, code: str, changes: List[Dict[str, Any]]) -> str:
         """
+        Apply changes to code using AST manipulation.
 
-        # Parse and inject at the beginning of the function
-        voltage_ast = ast.parse(voltage_code)
-        for stmt in voltage_ast.body:
-            func_node.body.insert(0, stmt)
+        Args:
+            code: Original controller code
+            changes: List of changes to apply
 
-    def _add_voltage_triggered_load_reduction(self, func_node: ast.FunctionDef) -> None:
-        """Add voltage-triggered load reduction when voltage exceeds limits."""
-        reduction_code = """
-        # Voltage-triggered load reduction
-        if overvoltage:
-            # Reduce flexible loads and battery charging to absorb excess PV
-            for a in actions:
-                if a.action_type in [ActionType.FLEXIBLE_LOAD, ActionType.BATTERY_CHARGE, ActionType.EV_CHARGE]:
-                    a.value_kw *= 0.5  # Scale down by 50%
-        elif undervoltage:
-            # Reduce battery discharging to help raise voltage
-            for a in actions:
-                if a.action_type == ActionType.BATTERY_DISCHARGE:
-                    a.value_kw *= 0.5
+        Returns:
+            Modified code with changes applied
         """
+        if not changes:
+            return code
 
-        reduction_ast = ast.parse(reduction_code)
-        # Insert before the return statement
-        for i, stmt in enumerate(func_node.body):
-            if isinstance(stmt, ast.Return):
-                for new_stmt in reversed(reduction_ast.body):
-                    func_node.body.insert(i, new_stmt)
-                break
-
-    def _add_volt_var_support(self, func_node: ast.FunctionDef) -> None:
-        """Add reactive power support using battery inverters for voltage regulation."""
-        volt_var_code = """
-        # Volt-VAr support using battery inverters
-        if self.last_grid_diagnostics:
-            diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
-            for d in diagnostics:
-                if d.get("category") == "voltage" and d.get("severity") in ["violation", "critical"]:
-                    values = d.get("values", {})
-                    voltage_pu = values.get("voltage_pu", 1.0)
-                    if voltage_pu > 1.03:
-                        # Inject reactive power to lower voltage
-                        self._inject_reactive_power(-0.1)  # Absorb reactive power
-                    elif voltage_pu < 0.97:
-                        # Inject reactive power to raise voltage
-                        self._inject_reactive_power(0.1)  # Inject reactive power
-        """
-
-        volt_var_ast = ast.parse(volt_var_code)
-        for stmt in volt_var_ast.body:
-            func_node.body.insert(0, stmt)
-
-    def _add_voltage_regulation_mode(self, func_node: ast.FunctionDef) -> None:
-        """Add voltage regulation mode to battery control."""
-        # This adds voltage regulation logic to _control_battery
-        voltage_reg_code = """
-        # Voltage regulation mode
-        voltage_pu = 1.0
-        if self.last_grid_diagnostics:
-            diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
-            for d in diagnostics:
-                if d.get("category") == "voltage" and d.get("severity") in ["violation", "critical"]:
-                    values = d.get("values", {})
-                    voltage_pu = values.get("voltage_pu", 1.0)
-        
-        # Adjust battery reactive power based on voltage deviation
-        if voltage_pu > 1.03:
-            # Overvoltage: inject reactive power to absorb (negative Q)
-            reactive_power = min(-0.2, (voltage_pu - 1.03) * 2.0)
-        elif voltage_pu < 0.97:
-            # Undervoltage: inject reactive power to support (positive Q)
-            reactive_power = min(0.2, (0.97 - voltage_pu) * 2.0)
-        else:
-            reactive_power = 0.0
-        
-        # Apply reactive power via battery inverter if available
-        if hasattr(self, '_set_battery_reactive_power'):
-            self._set_battery_reactive_power(bid, reactive_power)
-        """
-
-        volt_reg_ast = ast.parse(voltage_reg_code)
-        # Insert at the beginning of the function body, after any docstring
-        insert_idx = 0
-        if (
-            func_node.body
-            and isinstance(func_node.body[0], ast.Expr)
-            and isinstance(func_node.body[0].value, ast.Constant)
-        ):
-            insert_idx = 1
-        for stmt in reversed(volt_reg_ast.body):
-            func_node.body.insert(insert_idx, stmt)
-
-    def _add_volt_var_curve(self, func_node: ast.FunctionDef) -> None:
-        """Add volt-var curve Q = f(V) for voltage support."""
-        volt_var_curve_code = """
-        # Volt-VAr curve implementation
-        # Q = f(V) curve for voltage support
-        voltage_pu = 1.0
-        if self.last_grid_diagnostics:
-            diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
-            for d in diagnostics:
-                if d.get("category") == "voltage" and d.get("severity") in ["violation", "critical"]:
-                    values = d.get("values", {})
-                    voltage_pu = values.get("voltage_pu", 1.0)
-        
-        # Deadband: 0.98 - 1.02 pu
-        if voltage_pu > 1.02:
-            # Absorb reactive power (negative Q)
-            reactive_power = -min(0.3, (voltage_pu - 1.02) * 5.0)
-        elif voltage_pu < 0.98:
-            # Inject reactive power (positive Q)
-            reactive_power = min(0.3, (0.98 - voltage_pu) * 5.0)
-        else:
-            reactive_power = 0.0
-        
-        # Apply via battery inverter if available
-        if hasattr(self, '_set_battery_reactive_power'):
-            self._set_battery_reactive_power(bid, reactive_power)
-        """
-
-        vvc_ast = ast.parse(volt_var_curve_code)
-        insert_idx = 0
-        if (
-            func_node.body
-            and isinstance(func_node.body[0], ast.Expr)
-            and isinstance(func_node.body[0].value, ast.Constant)
-        ):
-            insert_idx = 1
-        for stmt in reversed(vvc_ast.body):
-            func_node.body.insert(insert_idx, stmt)
-
-    # --- Line Loading Transformation Implementations ---
-
-    def _add_line_loading_monitoring(self, func_node: ast.FunctionDef) -> None:
-        """Add line loading monitoring from grid diagnostics."""
-        monitoring_code = """
-        # Line loading monitoring
-        line_loading_violated = False
-        max_line_loading = 0.0
-        if self.last_grid_diagnostics:
-            diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
-            for d in diagnostics:
-                if d.get("category") == "line_loading" and d.get("severity") in ["violation", "critical"]:
-                    line_loading_violated = True
-                    values = d.get("values", {})
-                    loading = values.get("line_loading_pct", 0)
-                    max_line_loading = max(max_line_loading, loading)
-        """
-
-        monitoring_ast = ast.parse(monitoring_code)
-        for stmt in monitoring_ast.body:
-            func_node.body.insert(0, stmt)
-
-    def _add_load_redistribution(self, func_node: ast.FunctionDef) -> None:
-        """Add load redistribution for overloaded lines."""
-        redistribution_code = """
-        # Load redistribution for overloaded lines
-        if line_loading_violated:
-            # Shift loads from overloaded lines by scaling down EV and flexible loads
-            for a in actions:
-                if a.action_type in [ActionType.EV_CHARGE, ActionType.FLEXIBLE_LOAD]:
-                    a.value_kw *= 0.7  # Reduce by 30%
-        """
-
-        redistribution_ast = ast.parse(redistribution_code)
-        # Insert before return statement
-        for i, stmt in enumerate(func_node.body):
-            if isinstance(stmt, ast.Return):
-                for new_stmt in reversed(redistribution_ast.body):
-                    func_node.body.insert(i, new_stmt)
-                break
-
-    def _add_generation_curtailment(self, func_node: ast.FunctionDef) -> None:
-        """Add generation curtailment on overloaded lines."""
-        curtailment_code = """
-        # Generation curtailment on overloaded lines
-        if line_loading_violated:
-            for a in actions:
-                if a.action_type == ActionType.BATTERY_DISCHARGE:
-                    a.value_kw *= 1.2  # Increase discharge to reduce generation need
-        """
-
-        curtailment_ast = ast.parse(curtailment_code)
-        for i, stmt in enumerate(func_node.body):
-            if isinstance(stmt, ast.Return):
-                for new_stmt in reversed(curtailment_ast.body):
-                    func_node.body.insert(i, new_stmt)
-                break
-
-    # --- Transformer Loading Transformation Implementations ---
-
-    def _add_transformer_loading_check(self, func_node: ast.FunctionDef) -> None:
-        """Add transformer loading check from grid diagnostics."""
-        check_code = """
-        # Transformer loading check
-        transformer_loading_violated = False
-        max_transformer_loading = 0.0
-        if self.last_grid_diagnostics:
-            diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
-            for d in diagnostics:
-                if d.get("category") == "transformer_loading" and d.get("severity") in ["violation", "critical"]:
-                    transformer_loading_violated = True
-                    values = d.get("values", {})
-                    loading = values.get("transformer_loading_pct", 0)
-                    max_transformer_loading = max(max_transformer_loading, loading)
-        """
-
-        check_ast = ast.parse(check_code)
-        for stmt in check_ast.body:
-            func_node.body.insert(0, stmt)
-
-    def _add_proportional_load_reduction(self, func_node: ast.FunctionDef) -> None:
-        """Add proportional load reduction when transformer loading > 90%."""
-        reduction_code = """
-        # Proportional load reduction when transformer loading > 90%
-        if max_transformer_loading > 90:
-            reduction_factor = min(1.0, max_transformer_loading / 100.0)
-            for a in actions:
-                if a.action_type in [
-                    ActionType.BATTERY_CHARGE, ActionType.BATTERY_DISCHARGE,
-                    ActionType.EV_CHARGE, ActionType.FLEXIBLE_LOAD
-                ]:
-                    a.value_kw *= (1.0 - reduction_factor * 0.5)
-        """
-
-        reduction_ast = ast.parse(reduction_code)
-        for i, stmt in enumerate(func_node.body):
-            if isinstance(stmt, ast.Return):
-                for new_stmt in reversed(reduction_ast.body):
-                    func_node.body.insert(i, new_stmt)
-                break
-
-    def _add_coordinated_battery_discharge(self, func_node: ast.FunctionDef) -> None:
-        """Add coordinated battery discharge to reduce transformer load."""
-        coord_code = """
-        # Coordinate battery discharge to reduce transformer load
-        if max_transformer_loading > 90:
-            for a in actions:
-                if a.action_type == ActionType.BATTERY_DISCHARGE:
-                    a.value_kw *= 1.5  # Increase discharge to reduce transformer load
-        """
-
-        coord_ast = ast.parse(coord_code)
-        for i, stmt in enumerate(func_node.body):
-            if isinstance(stmt, ast.Return):
-                for new_stmt in reversed(coord_ast.body):
-                    func_node.body.insert(i, new_stmt)
-                break
-
-    # --- EV Deadline Transformation Implementations ---
-
-    def _add_precise_time_to_departure(self, func_node: ast.FunctionDef) -> None:
-        """Add more precise time-to-departure calculation."""
-        precise_code = """
-        # More precise time-to-departure calculation
-        if hour_of_day < departure_hour:
-            hours_remaining = departure_hour - hour_of_day
-        else:
-            hours_remaining = (24 - hour_of_day) + departure_hour
-        # Add minutes for more precision
-        minutes_remaining = hours_remaining * 60
-        """
-
-        precise_ast = ast.parse(precise_code)
-        for stmt in precise_ast.body:
-            func_node.body.insert(0, stmt)
-
-    def _add_early_charging_for_low_soc(self, func_node: ast.FunctionDef) -> None:
-        """Start charging earlier when SOC is low."""
-        early_charge_code = """
-        # Start charging earlier when SOC is low
-        if current_soc < 0.3:
-            # Begin charging regardless of time-of-use
-            charge_kw = max_charge
-        elif current_soc < 0.5:
-            charge_kw = max_charge * 0.8
-        else:
-            charge_kw = max_charge * 0.5
-        """
-
-        early_ast = ast.parse(early_charge_code)
-        for stmt in early_ast.body:
-            func_node.body.insert(0, stmt)
-
-    def _add_max_power_for_urgent_deadline(self, func_node: ast.FunctionDef) -> None:
-        """Use maximum available power when deadline < 2 hours."""
-        max_power_code = """
-        # Use maximum available power when deadline < 2 hours
-        if hours_remaining < 2:
-            charge_kw = max_charge
-        """
-
-        max_power_ast = ast.parse(max_power_code)
-        for stmt in max_power_ast.body:
-            func_node.body.insert(0, stmt)
-
-    def _add_ev_prioritization_by_departure(self, func_node: ast.FunctionDef) -> None:
-        """Prioritize EVs by departure time (earliest first)."""
-        prioritize_code = """
-        # Prioritize EVs by departure time (earliest first)
-        # This would require sorting EV actions by departure time
-        # For now, we apply equal priority but note the intent
-        pass
-        """
-
-        prioritize_ast = ast.parse(prioritize_code)
-        for stmt in prioritize_ast.body:
-            func_node.body.insert(0, stmt)
-
-    # --- Comfort Transformation Implementations ---
-
-    def _add_preconditioning(self, func_node: ast.FunctionDef) -> None:
-        """Add pre-conditioning: pre-heat/cool 2 hours before peak."""
-        precond_code = """
-        # Pre-conditioning: pre-heat/cool 2 hours before peak
-        peak_hours = [17, 18, 19, 20]  # Peak pricing hours
-        if hour_of_day in [h - 2 for h in peak_hours]:
-            # Pre-condition now to reduce peak demand
-            power_kw = fl.power_kw
-        """
-
-        precond_ast = ast.parse(precond_code)
-        for stmt in precond_ast.body:
-            func_node.body.insert(0, stmt)
-
-    def _add_wider_deadband(self, func_node: ast.FunctionDef) -> None:
-        """Widen temperature deadband during peak pricing."""
-        deadband_code = """
-        # Widen temperature deadband during peak pricing
-        peak_pricing = 17 <= hour_of_day < 21
-        if peak_pricing:
-            # Widen deadband to reduce HVAC cycling
-            temp_min = 19.0  # Was 20.0
-            temp_max = 26.0  # Was 25.0
-        else:
-            temp_min = 20.0
-            temp_max = 25.0
-        """
-
-        deadband_ast = ast.parse(deadband_code)
-        for stmt in deadband_ast.body:
-            func_node.body.insert(0, stmt)
-
-    def _add_thermal_mass_load_shifting(self, func_node: ast.FunctionDef) -> None:
-        """Use thermal mass for load shifting."""
-        thermal_code = """
-        # Use thermal mass for load shifting
-        # Pre-cool/pre-heat during off-peak, coast during peak
-        if 17 <= hour_of_day < 21:  # Peak hours
-            # Coast - let thermal mass maintain temperature
-            power_kw = 0.0
-        elif 14 <= hour_of_day < 17:  # Pre-peak
-            # Pre-condition
-            power_kw = fl.power_kw * 1.2
-        else:
-            power_kw = fl.power_kw
-        """
-
-        thermal_ast = ast.parse(thermal_code)
-        for stmt in thermal_ast.body:
-            func_node.body.insert(0, stmt)
-
-    # --- Battery SOC Transformation Implementations ---
-
-    def _add_dynamic_soc_reserve(self, func_node: ast.FunctionDef) -> None:
-        """Add dynamic SOC reserve: increase min SOC before peak."""
-        reserve_code = """
-        # Dynamic SOC reserve: increase min SOC before peak
-        peak_hours = [17, 18, 19, 20]
-        if hour_of_day in [h - 1 for h in peak_hours]:  # Hour before peak
-            effective_soc_min = max(battery.soc_min, battery.soc_min + 0.1)
-        else:
-            effective_soc_min = battery.soc_min
-        """
-
-        reserve_ast = ast.parse(reserve_code)
-        for stmt in reserve_ast.body:
-            func_node.body.insert(0, stmt)
-
-    def _add_soc_forecast(self, func_node: ast.FunctionDef) -> None:
-        """Implement SOC forecast based on net load prediction."""
-        forecast_code = """
-        # Implement SOC forecast based on net load prediction
-        # Simple forecast: project current net demand for next 4 hours
-        forecast_hours = 4
-        avg_net_demand = net_demand  # Simplified - would use historical data
-        predicted_soc = current_soc - (avg_net_demand * forecast_hours / capacity_kwh)
-        """
-
-        forecast_ast = ast.parse(forecast_code)
-        for stmt in forecast_ast.body:
-            func_node.body.insert(0, stmt)
-
-    def _add_emergency_reserve(self, func_node: ast.FunctionDef) -> None:
-        """Maintain emergency reserve (10-15%) at all times."""
-        reserve_code = """
-        # Maintain emergency reserve (10-15%) at all times
-        emergency_reserve = 0.15  # 15% emergency reserve
-        effective_soc_min = max(battery.soc_min, emergency_reserve)
-        """
-
-        reserve_ast = ast.parse(reserve_code)
-        for stmt in reserve_ast.body:
-            func_node.body.insert(0, stmt)
-
-    # --- Flexible Load Transformation Implementations ---
-
-    def _add_earliest_deadline_first(self, func_node: ast.FunctionDef) -> None:
-        """Implement earliest-deadline-first scheduling for flexible loads."""
-        edf_code = """
-        # Earliest-deadline-first scheduling
-        # Sort flexible loads by deadline (latest_end)
-        flex_loads = sorted(
-            [(fl_id, fl) for fl_id, fl in building.flexible_loads],
-            key=lambda x: x[1].latest_end
-        )
-        """
-
-        edf_ast = ast.parse(edf_code)
-        for stmt in edf_ast.body:
-            func_node.body.insert(0, stmt)
-
-    def _add_proportional_power_allocation(self, func_node: ast.FunctionDef) -> None:
-        """Allocate power proportional to urgency."""
-        proportional_code = """
-        # Allocate power proportional to urgency
-        # Urgency = 1 / (hours_until_deadline)
-        total_urgency = sum(1 / max(0.5, hours_until_deadline) for fl in flex_loads)
-        for fl_id, fl in flex_loads:
-            urgency = 1 / max(0.5, hours_until_deadline)
-            allocated_power = fl.power_kw * (urgency / total_urgency)
-        """
-
-        prop_ast = ast.parse(proportional_code)
-        for stmt in prop_ast.body:
-            func_node.body.insert(0, stmt)
-
-    def _add_deadline_tracking(self, func_node: ast.FunctionDef) -> None:
-        """Add deadline tracking and alerts."""
-        tracking_code = """
-        # Add deadline tracking and alerts
-        if hours_until_deadline < 1.0 and progress < 0.5:
-            # Alert: deadline approaching, progress insufficient
-            pass  # Would trigger alert in production
-        """
-
-        tracking_ast = ast.parse(tracking_code)
-        for stmt in tracking_ast.body:
-            func_node.body.insert(0, stmt)
-
-    # --- Grid Import/Export Transformation Implementations ---
-
-    def _add_import_limit_enforcement(self, func_node: ast.FunctionDef) -> None:
-        """Enforce community import limit from scenario config."""
-        import_code = """
-        # Enforce community import limit from scenario config
-        import_limit = self.scenario_config.community_import_limit_kw
-        if import_limit and total_import > import_limit:
-            scale = import_limit / total_import
-            for a in actions:
-                if a.value_kw > 0:
-                    a.value_kw *= scale
-        """
-
-        import_ast = ast.parse(import_code)
-        for i, stmt in enumerate(func_node.body):
-            if isinstance(stmt, ast.Return):
-                for new_stmt in reversed(import_ast.body):
-                    func_node.body.insert(i, new_stmt)
-                break
-
-    def _add_proportional_curtailment(self, func_node: ast.FunctionDef) -> None:
-        """Proportional curtailment when limit exceeded."""
-        curtail_code = """
-        # Proportional curtailment when limit exceeded
-        if total_import > import_limit:
-            excess = total_import - import_limit
-            for a in actions:
-                if a.value_kw > 0:
-                    a.value_kw *= (1 - excess / total_import)
-        """
-
-        curtail_ast = ast.parse(curtail_code)
-        for i, stmt in enumerate(func_node.body):
-            if isinstance(stmt, ast.Return):
-                for new_stmt in reversed(curtail_ast.body):
-                    func_node.body.insert(i, new_stmt)
-                break
-
-    def _add_battery_discharge_priority(self, func_node: ast.FunctionDef) -> None:
-        """Discharge battery to reduce grid import during peak."""
-        discharge_code = """
-        # Discharge battery to reduce grid import during peak
-        peak_hours = [17, 18, 19, 20]
-        if hour_of_day in peak_hours and battery_soc > battery.soc_min + 0.1:
-            for a in actions:
-                if a.action_type == ActionType.BATTERY_DISCHARGE:
-                    a.value_kw *= 1.5  # Increase discharge
-        """
-
-        discharge_ast = ast.parse(discharge_code)
-        for stmt in discharge_ast.body:
-            func_node.body.insert(0, stmt)
-
-    def _add_export_limit_enforcement(self, func_node: ast.FunctionDef) -> None:
-        """Enforce community export limit from scenario config."""
-        export_code = """
-        # Enforce community export limit from scenario config
-        export_limit = self.scenario_config.community_export_limit_kw
-        if export_limit and total_export > export_limit:
-            scale = export_limit / total_export
-            for a in actions:
-                if a.value_kw < 0:
-                    a.value_kw *= scale
-        """
-
-        export_ast = ast.parse(export_code)
-        for i, stmt in enumerate(func_node.body):
-            if isinstance(stmt, ast.Return):
-                for new_stmt in reversed(export_ast.body):
-                    func_node.body.insert(i, new_stmt)
-                break
-
-    def _add_pv_curtailment(self, func_node: ast.FunctionDef) -> None:
-        """Curtail PV when export limit approached."""
-        curtail_code = """
-        # Curtail PV when export limit approached
-        if export_limit and total_export > export_limit * 0.9:
-            for a in actions:
-                if a.action_type == ActionType.BATTERY_CHARGE and a.value_kw < 0:
-                    # Reduce charging (which is negative value for discharge)
-                    pass  # PV curtailment would be handled at inverter level
-        """
-
-        curtail_ast = ast.parse(curtail_code)
-        for stmt in curtail_ast.body:
-            func_node.body.insert(0, stmt)
-
-    def _add_battery_charge_for_excess_pv(self, func_node: ast.FunctionDef) -> None:
-        """Charge batteries to absorb excess generation instead of exporting."""
-        charge_code = """
-        # Charge batteries to absorb excess generation instead of exporting
-        if export_limit and total_export > export_limit * 0.8:
-            for a in actions:
-                if a.action_type == ActionType.BATTERY_CHARGE:
-                    a.value_kw *= 1.5  # Increase charging to absorb excess PV
-        """
-
-        charge_ast = ast.parse(charge_code)
-        for i, stmt in enumerate(func_node.body):
-            if isinstance(stmt, ast.Return):
-                for new_stmt in reversed(charge_ast.body):
-                    func_node.body.insert(i, new_stmt)
-                break
-
-    # --- Power Flow Transformation Implementations ---
-
-    def _add_power_flow_precheck(self, func_node: ast.FunctionDef) -> None:
-        """Add power flow pre-check before applying actions."""
-        precheck_code = """
-        # Add power flow pre-check before applying actions
-        if not self._check_power_flow_convergence(actions):
-            return self._get_safe_fallback_actions()
-        """
-
-        precheck_ast = ast.parse(precheck_code)
-        for stmt in precheck_ast.body:
-            func_node.body.insert(0, stmt)
-
-    def _add_power_flow_fallback(self, func_node: ast.FunctionDef) -> None:
-        """Fallback to safe actions if power flow fails."""
-        fallback_code = """
-        # Fallback to safe actions if power flow fails
         try:
-            if not self._run_power_flow(actions):
-                return self._get_safe_actions()
-        except Exception:
-            return self._get_safe_actions()
+            # Parse the code into AST
+            tree = ast.parse(code)
+
+            # Sort changes by line number in descending order
+            # so we don't mess up line numbers when modifying
+            sorted_changes = sorted(
+                changes, key=lambda x: x.get("location", 0), reverse=True
+            )
+
+            # Apply each change
+            for change in sorted_changes:
+                func_name = change["function"]
+                change_type = change["type"]
+                change_desc = change["change"]
+
+                # Find the function to modify
+                func_node = self._find_function_node(tree, func_name)
+                if func_node:
+                    if change_type == "modification":
+                        # Apply actual AST transformations based on change description
+                        self._apply_ast_transformation(func_node, change_desc)
+                    elif change_type == "addition":
+                        # For additions, we would add new functions - placeholder for now
+                        pass
+
+            # Convert AST back to code
+            return ast.unparse(tree)
+        except Exception as e:
+            # If AST manipulation fails, fall back to original code with error comment
+            # Comment EVERY line to avoid syntax errors
+            error_lines = [f"# ERROR APPLYING CHANGES: {str(e)}"]
+            for c in changes:
+                for line in c["change"].split("\n"):
+                    error_lines.append(f"# {line}")
+            return code + "\n\n" + "\n".join(error_lines)
+
+    def _apply_ast_transformation(
+        self, func_node: ast.FunctionDef, change_desc: str
+    ) -> None:
         """
+        Apply actual AST transformation based on change description.
 
-        fallback_ast = ast.parse(fallback_code)
-        for i, stmt in enumerate(func_node.body):
-            if isinstance(stmt, ast.Return):
-                for new_stmt in reversed(fallback_ast.body):
-                    func_node.body.insert(i, new_stmt)
-                break
-
-    def _add_action_magnitude_reduction(self, func_node: ast.FunctionDef) -> None:
-        """Reduce action magnitude if power flow diverges."""
-        reduction_code = """
-        # Reduce action magnitude if power flow diverges
-        if not self._check_power_flow_stability(actions):
-            for a in actions:
-                a.value_kw *= 0.8  # Reduce by 20%
+        This implements deterministic AST transformations for grid-violation fixes.
         """
-
-        reduction_ast = ast.parse(reduction_code)
-        for i, stmt in enumerate(func_node.body):
-            if isinstance(stmt, ast.Return):
-                for new_stmt in reversed(reduction_ast.body):
-                    func_node.body.insert(i, new_stmt)
-                break
-
-    # --- Helper Methods ---
-
-    def _has_voltage_monitoring(self, func_node: ast.FunctionDef) -> bool:
-        """Check if function already has voltage monitoring."""
-        for node in ast.walk(func_node):
-            if isinstance(node, ast.Name) and node.id in [
-                "overvoltage",
-                "undervoltage",
-                "voltage_pu",
-            ]:
-                return True
-        return False
+        # Determine transformation type from change description
+        transformation = self._determine_transformation(change_desc)
+        if transformation:
+            transformation(func_node)
 
     def _generate_diff(self, original: str, patched: str) -> str:
         """Generate a unified diff between original and patched code."""
