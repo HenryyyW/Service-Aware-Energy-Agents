@@ -1,6 +1,6 @@
 # Service-Aware Energy Agents
 
-**English** | [蝞雿葉?(README.zh-CN.md)
+**English** | [简体中文](README.zh-CN.md)
 
 A research prototype for simulating renewable-energy communities and investigating whether code-generating agents can coordinate buildings, PV, batteries, EVs, and flexible loads while respecting participant service requirements and distribution-grid constraints.
 
