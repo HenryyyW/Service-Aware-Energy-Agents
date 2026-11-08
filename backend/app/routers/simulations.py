@@ -124,6 +124,11 @@ async def _run_simulation_background(
     start_step: int = 0,
 ):
     """Background task to run simulation."""
+    # Bound before the try: the except branch below inspects `coupler` to persist
+    # trajectories on failure, and an early constructor failure (data dir,
+    # scenario, dataset load) used to raise UnboundLocalError there instead of
+    # recording the original error - the smoke regression on run 402cdf4b8.
+    coupler = None
     try:
         _runs[run_id]["status"] = "running"
         _runs[run_id]["stage"] = "initializing"
