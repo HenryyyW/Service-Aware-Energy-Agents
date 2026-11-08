@@ -453,6 +453,8 @@ __all__ = [
     "QLearningController",
     "LLMAgentController",
     "LLMVerifiedController",
+    "DeterministicSafetyController",
 ]
 
 from src.controllers.llm_agent import LLMAgentController, LLMVerifiedController
+from src.controllers.deterministic_safety import DeterministicSafetyController
