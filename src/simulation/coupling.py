@@ -281,6 +281,14 @@ class SimulationCoupler:
                             base_price = sum(prices) / len(prices)
                             break
 
+                # Run power flow to get voltage profile for OPF
+                # This ensures OPF has converged power flow results for meaningful LMPs
+                if self.current_timestep % self.run_power_flow_every == 0:
+                    self.pandapower.update_building_loads(
+                        building_powers, building_pvs, building_battery_powers
+                    )
+                    self.pandapower.run_power_flow()
+
                 price_cap = (
                     dp_config.price_cap_per_kwh
                     if dp_config.price_cap_per_kwh is not None
