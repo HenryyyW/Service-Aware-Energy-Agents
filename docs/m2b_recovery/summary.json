@@ -106,19 +106,19 @@
   {
    "cell": "scenario_c/42",
    "epoch": "workers=1",
-   "llm_backend_errors": 3,
-   "error_share": 0.125,
-   "fallback_steps": 3,
-   "fallback_share": 0.125,
-   "llm_measured_share": 0.875,
+   "llm_backend_errors": 0,
+   "error_share": 0.0,
+   "fallback_steps": 0,
+   "fallback_share": 0.0,
+   "llm_measured_share": 1.0,
    "first_attempt_validity": 0.0,
-   "repair_success_rate": 0.88,
-   "llm_calls": 47,
+   "repair_success_rate": 1.0,
+   "llm_calls": 48,
    "steps": 24.0,
-   "error_bound_ok": false,
+   "error_bound_ok": true,
    "calls_bound_ok": true,
    "telemetry_ok": true,
-   "keep": false
+   "keep": true
   },
   {
    "cell": "scenario_c/123",
@@ -129,8 +129,8 @@
    "fallback_share": 0.125,
    "llm_measured_share": 0.875,
    "first_attempt_validity": 0.0,
-   "repair_success_rate": 0.8571428571428571,
-   "llm_calls": 45,
+   "repair_success_rate": 0.88,
+   "llm_calls": 47,
    "steps": 24.0,
    "error_bound_ok": false,
    "calls_bound_ok": true,
@@ -214,8 +214,8 @@
    "fallback_share": 0.125,
    "llm_measured_share": 0.875,
    "first_attempt_validity": 0.0,
-   "repair_success_rate": 0.88,
-   "llm_calls": 47,
+   "repair_success_rate": 0.8888888888888888,
+   "llm_calls": 48,
    "steps": 24.0,
    "error_bound_ok": false,
    "calls_bound_ok": true,
@@ -259,16 +259,15 @@
  ],
  "verdict": true,
  "p1": {
-  "wins": 12,
-  "pairs": 12,
-  "p_value": 0.00048828125,
-  "aggregate_unverified": 10.32638888888889,
+  "wins": 13,
+  "pairs": 13,
+  "p_value": 0.000244140625,
+  "aggregate_unverified": 10.301282051282051,
   "aggregate_verified": 0.0,
   "ratio": 0.0,
   "pass": true
  },
  "quarantined": [
-  "scenario_c/42",
   "scenario_c/123",
   "scenario_e/42"
  ],
@@ -321,8 +320,8 @@
   },
   "scenario_c": {
    "repair_iterations": [
+    24,
     25,
-    21,
     22
    ],
    "bound_violations_detected": [
@@ -331,13 +330,13 @@
     24
    ],
    "deterministic_replacements": [
-    3,
+    0,
     3,
     2
    ],
    "repair_success_rate": [
+    1.0,
     0.88,
-    0.8571428571428571,
     0.9090909090909091
    ],
    "engaged": true
@@ -367,7 +366,7 @@
   },
   "scenario_e": {
    "repair_iterations": [
-    25,
+    27,
     24,
     24
    ],
@@ -382,7 +381,7 @@
     2
    ],
    "repair_success_rate": [
-    0.88,
+    0.8888888888888888,
     1.0,
     0.9166666666666666
    ],
@@ -459,21 +458,21 @@
    "scenario_c",
    42,
    24,
-   47,
+   48,
    29725,
-   60339,
+   66118,
    4066.361320001306,
-   4955.921264991048
+   6129.172598011792
   ],
   [
    "scenario_c",
    123,
    24,
-   45,
+   47,
    29721,
-   57818,
+   60333,
    4363.8491869933205,
-   4154.494442002033
+   5121.622219012352
   ],
   [
    "scenario_c",
@@ -519,11 +518,11 @@
    "scenario_e",
    42,
    24,
-   47,
+   48,
    29725,
-   60348,
+   61572,
    4939.9840160040185,
-   3721.1491979978746
+   5371.8843960086815
   ],
   [
    "scenario_e",

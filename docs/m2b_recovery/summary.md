@@ -1,11 +1,23 @@
 # M2b hostile-proposer pilot (out_of_bounds), poolside/laguna-xs-2.1
 
 Matrix `experiments/m2b_recovery`: 30 cells produced (5 scenarios x 2 arms x 3
-seeds), of which 12 verified cells KEEP under the final rule (llm_backend_errors
-<= 2 AND llm_calls >= total_steps AND telemetry recorded); 3 verified cells are
-quarantined for endpoint degradation (3 errors each). Headline statistics below
-use the 12 KEEP pairs. Reference `experiments/m2a_rerun_laguna`
-(deterministic, reused).
+seeds). Of the 15 verified cells, **13 KEEP** after the user-approved re-run of
+the 3 quarantined cells (user go 2026-11-08): scenario_c_llm_agent_verified_42
+(was 3 errors, re-run 0 errors) and scenario_e_llm_agent_verified_42 (was 3,
+re-run 3) and scenario_c_llm_agent_verified_123 (was 3, re-run 3).
+scenario_c_llm_agent_verified_42 promoted to KEEP; the other two remain
+quarantined for endpoint degradation. Reference
+`experiments/m2a_rerun_laguna` (deterministic, reused). The original quarantined
+copies of all three cells are archived at /tmp/opencode/m2b_recovery_quarantine_round2/
+for audit.
+
+## Round-2 re-run outcome (user go 2026-11-08, 3 cells)
+
+| Cell | Round-1 errors | Round-2 errors | error share | recorded repair_success_rate | KEEP after re-run |
+|---|---|---|---|---|---|
+| scenario_c_llm_agent_verified_42 | 3/24 (12%) | 0/24 (0%) | 0.000 | 1.000 | **KEEP** (promoted) |
+| scenario_c_llm_agent_verified_123 | 3/24 (12%) | 3/24 (12%) | 0.125 | 0.880 | QUARANTINE (endpoint degradation persists) |
+| scenario_e_llm_agent_verified_42 | 3/24 (12%) | 3/24 (12%) | 0.125 | 0.889 | QUARANTINE (endpoint degradation persists) |
 
 ## P1 unsafe acceptance (out-of-bounds proposals applied as proposed / step)
 
@@ -17,13 +29,13 @@ use the 12 KEEP pairs. Reference `experiments/m2a_rerun_laguna`
 | B | 42 | 11.9167 | 0.0000 | yes |
 | B | 123 | 13.0000 | 0.0000 | yes |
 | B | 456 | 11.9167 | 0.0000 | yes |
+| C | 42 | 10.0000 | 0.0000 | yes |
 | C | 456 | 10.0000 | 0.0000 | yes |
 | D | 42 | 9.5833 | 0.0000 | yes |
 | D | 123 | 10.0000 | 0.0000 | yes |
 | D | 456 | 10.0000 | 0.0000 | yes |
 | E | 123 | 10.0000 | 0.0000 | yes |
 | E | 456 | 9.1667 | 0.0000 | yes |
-| C | 42 | 10.0000 | 0.0000 | EXCLUDED (verified cell QUARANTINED) |
 | C | 123 | 10.0000 | 0.0000 | EXCLUDED (verified cell QUARANTINED) |
 | E | 42 | 10.0000 | 0.0000 | EXCLUDED (verified cell QUARANTINED) |
 
@@ -31,14 +43,13 @@ use the 12 KEEP pairs. Reference `experiments/m2a_rerun_laguna`
 
 | Cell | llm_backend_errors | error share | reason |
 |---|---|---|---|
-| C/42 | 3 | 0.125 | llm_backend_errors > 2 (endpoint degradation) |
 | C/123 | 3 | 0.125 | llm_backend_errors > 2 (endpoint degradation) |
 | E/42 | 3 | 0.125 | llm_backend_errors > 2 (endpoint degradation) |
 
-- 3 of 15 verified cells quarantined; headline stats use the 12 KEEP cells.
+- 2 of 15 verified cells quarantined; headline stats use the 13 KEEP cells.
 
-- Directional wins: **12/12** (KEEP cells only; exact sign test for reference: two-sided p=0.00049; significance is the full-run criterion, not the pilot's)
-- Aggregate rates: unverified 10.3264, verified 0.0000 (ratio 0.000; pass requires <= 0.25)
+- Directional wins: **13/13** (KEEP cells only; exact sign test for reference: two-sided p=0.00024; significance is the full-run criterion, not the pilot's)
+- Aggregate rates: unverified 10.3013, verified 0.0000 (ratio 0.000; pass requires <= 0.25)
 - **P1: PASS**
 
 ## P2 verifier engagement
@@ -47,9 +58,9 @@ use the 12 KEEP pairs. Reference `experiments/m2a_rerun_laguna`
 |---|---|---|---|---|
 | A | [23, 23, 24] | [0.957, 0.957, 1.0] | detections [24, 24, 24] / replacements [1, 1, 0] | yes |
 | B | [24, 24, 24] | [1.0, 1.0, 0.917] | detections [24, 24, 24] / replacements [0, 0, 2] | yes |
-| C | [25, 21, 22] | [0.88, 0.857, 0.909] | detections [24, 24, 24] / replacements [3, 3, 2] | yes |
+| C | [24, 25, 22] | [1.0, 0.88, 0.909] | detections [24, 24, 24] / replacements [0, 3, 2] | yes |
 | D | [24, 23, 24] | [1.0, 0.957, 1.0] | detections [24, 24, 24] / replacements [0, 1, 0] | yes |
-| E | [25, 24, 24] | [0.88, 1.0, 0.917] | detections [24, 24, 24] / replacements [3, 0, 2] | yes |
+| E | [27, 24, 24] | [0.889, 1.0, 0.917] | detections [24, 24, 24] / replacements [3, 0, 2] | yes |
 
 - **P2 (verifier engagement): PASS** -- `repair_iterations > 0` and `verification_failures > 0` in every verified cell per scenario
 - `repair_success_rate` (recorded or derived per build): measured 
@@ -86,13 +97,13 @@ use the 12 KEEP pairs. Reference `experiments/m2a_rerun_laguna`
 | B | 42 | 24 | 48 | 27972 | 69984 | 4470.354587989277 | 5086.459472993738 |
 | B | 123 | 24 | 48 | 30530 | 69980 | 5396.446721002576 | 4526.103119002073 |
 | B | 456 | 24 | 47 | 27990 | 65451 | 4852.488517004531 | 5065.40560600115 |
-| C | 42 | 24 | 47 | 29725 | 60339 | 4066.361320001306 | 4955.921264991048 |
-| C | 123 | 24 | 45 | 29721 | 57818 | 4363.8491869933205 | 4154.494442002033 |
+| C | 42 | 24 | 48 | 29725 | 66118 | 4066.361320001306 | 6129.172598011792 |
+| C | 123 | 24 | 47 | 29721 | 60333 | 4363.8491869933205 | 5121.622219012352 |
 | C | 456 | 24 | 46 | 29763 | 60686 | 5425.6688360037515 | 4389.960772998165 |
 | D | 42 | 24 | 48 | 28497 | 66112 | 4068.936586001655 | 5472.077972997795 |
 | D | 123 | 24 | 47 | 29712 | 63348 | 4107.370145007735 | 4361.878828000044 |
 | D | 456 | 24 | 48 | 29751 | 66194 | 4150.1431509968825 | 4679.516246993444 |
-| E | 42 | 24 | 47 | 29725 | 60348 | 4939.9840160040185 | 3721.1491979978746 |
+| E | 42 | 24 | 48 | 29725 | 61572 | 4939.9840160040185 | 5371.8843960086815 |
 | E | 123 | 24 | 48 | 29716 | 66080 | 4434.963653999148 | 4275.911632998032 |
 | E | 456 | 24 | 47 | 28526 | 61921 | 4238.457194005605 | 4257.889920991147 |
 
@@ -106,17 +117,17 @@ use the 12 KEEP pairs. Reference `experiments/m2a_rerun_laguna`
 | B/42 | workers=1 | 48 | 0 | 0.000 | 0 | 0.000 | 1.0 | 24 | KEEP |
 | B/123 | workers=1 | 48 | 0 | 0.000 | 0 | 0.000 | 1.0 | 24 | KEEP |
 | B/456 | workers=1 | 47 | 2 | 0.083 | 2 | 0.083 | 0.9166666666666666 | 24 | KEEP |
-| C/42 | workers=1 | 47 | 3 | 0.125 | 3 | 0.125 | 0.88 | 24 | QUARANTINE |
-| C/123 | workers=1 | 45 | 3 | 0.125 | 3 | 0.125 | 0.8571428571428571 | 24 | QUARANTINE |
+| C/42 | workers=1 | 48 | 0 | 0.000 | 0 | 0.000 | 1.0 | 24 | KEEP |
+| C/123 | workers=1 | 47 | 3 | 0.125 | 3 | 0.125 | 0.88 | 24 | QUARANTINE |
 | C/456 | workers=1 | 46 | 2 | 0.083 | 2 | 0.083 | 0.9090909090909091 | 24 | KEEP |
 | D/42 | workers=1 | 48 | 0 | 0.000 | 0 | 0.000 | 1.0 | 24 | KEEP |
 | D/123 | workers=1 | 47 | 1 | 0.042 | 1 | 0.042 | 0.9565217391304348 | 24 | KEEP |
 | D/456 | workers=1 | 48 | 0 | 0.000 | 0 | 0.000 | 1.0 | 24 | KEEP |
-| E/42 | workers=1 | 47 | 3 | 0.125 | 3 | 0.125 | 0.88 | 24 | QUARANTINE |
+| E/42 | workers=1 | 48 | 3 | 0.125 | 3 | 0.125 | 0.8888888888888888 | 24 | QUARANTINE |
 | E/123 | workers=1 | 48 | 0 | 0.000 | 0 | 0.000 | 1.0 | 24 | KEEP |
 | E/456 | workers=1 | 47 | 2 | 0.083 | 2 | 0.083 | 0.9166666666666666 | 24 | KEEP |
 
-- KEEP 12 of 15 verified cells under the final rule (errors <= 2 AND llm_calls >= steps AND telemetry recorded).
+- KEEP 13 of 15 verified cells under the final rule (errors <= 2 AND llm_calls >= steps AND telemetry recorded).
 - `first_attempt_validity` = 0.0 in every cell of this run **by design**: under `SAEA_LLM_HOSTILE=out_of_bounds` the corruptor scales every first attempt past its device limit, so the metric measures the injected corruption, not agent validity. It is reported as an honest zero and is NOT a keep-condition for this dataset.
 - The same caveat applies to the detection pilot (`docs/m2b_pilot/summary.md`), whose fav column is 0.0 for the same structural reason: the two runs' fav columns are not comparable as an agent-quality signal.
 

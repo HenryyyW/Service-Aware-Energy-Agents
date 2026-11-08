@@ -83,8 +83,9 @@ points against a 10-point gate), with KPI differences reported as context only.
 The hostile-proposer study then forces verifier engagement: under a
 deterministic out-of-bounds proposer the verified arm accepted zero
 out-of-bounds proposals in every kept cell while the unverified arm accepted
-9.2--13.0 per step, with corrective re-prompt recovering 0.857--1.000 of
-corrupted proposals --- while the accepted dispatch stayed the LLM's repaired
+9.2--13.0 per step, with corrective re-prompt recovering 0.880--1.000 of
+corrupted proposals (13 kept cells after a user-approved re-run of the three
+quarantined cells) --- while the accepted dispatch stayed the LLM's repaired
 proposal (cost 442.62 vs.\ 441.08 USD unverified, 67.13 deterministic
 reference), which we report as the cost of recovery. All artifacts are
 reproducible: manifests throughout, bit-identical same-seed repeats, and a
@@ -490,18 +491,18 @@ corrupted proposals, so verification is the only difference between them.
 
 \begin{table}[htbp]
 \centering
-\caption{M2b hostile-proposer study (per-cell values; 12 of 15 verified cells kept per pilot under the rule \texttt{llm\_backend\_errors} $\leq 2$ AND \texttt{llm\_calls} $\geq$ steps AND telemetry recorded).}
+\caption{M2b hostile-proposer study (per-cell values; 13 of 15 verified cells kept in the recovery epoch after the user-approved re-run of the three quarantined cells, under the rule \texttt{llm\_backend\_errors} $\leq 2$ AND \texttt{llm\_calls} $\geq$ steps AND telemetry recorded).}
 \label{tab:m2b}
 \begin{tabular}{lccc}
 \toprule
  & Detection epoch & Recovery epoch & Reference \\
 \midrule
-Cells (verified arm) & 12 keep / 3 quarantined & 12 keep / 3 quarantined & --- \\
+Cells (verified arm) & --- & 13 keep / 2 quarantined & --- \\
 Unsafe acceptance, unverified (per step) & 10.33 & 10.33 & --- \\
 Unsafe acceptance, verified (per step) & 0.0000 & 0.0000 & --- \\
-Paired directional wins & 12/12 & 12/12 & --- \\
+Paired directional wins & 12/12 & 13/13 & --- \\
 Bound-violation detections (per cell) & 24/24 & 24/24 & --- \\
-Repair success rate (recorded) & not measurable & 0.857--1.000 & --- \\
+Repair success rate (recorded) & not measurable & 0.880--1.000 (mean 0.974) & --- \\
 Fallback steps (verified total) & 18/360 & 18/360 & --- \\
 Cost (USD, mean) & 442.62 & 442.62 & 67.13 \\
 \bottomrule
@@ -513,15 +514,18 @@ out-of-bounds, the unverified arm applies the corrupted proposal and the
 adapter clamps it downstream --- an unsafe acceptance rate of 9.2--13.0
 out-of-bounds values per step, in every kept cell of both pilots. The verified
 arm accepted zero out-of-bounds proposals in every kept cell (12/12 paired
-directional wins in each epoch; exact sign test on the 12 pairs,
-two-sided $p = 4.9 \times 10^{-4}$, reported for reference only). In the
+directional wins in the detection epoch; 13/13 after the user-approved re-run of
+the three quarantined cells promoted one cell to keep, two remaining
+quarantined for endpoint degradation; exact sign test on the 13 pairs,
+two-sided $p = 2.4 \times 10^{-4}$, reported for reference only). In the
 recovery epoch, where re-prompts are exempt from corruption, the corrective
-re-prompt returned an in-bounds proposal that was applied in 0.857--1.000 of
-attempts (recorded \texttt{repair\_success\_rate}), so the loop demonstrably
-repairs rather than only rejects. The detection epoch --- whose re-prompts were
+re-prompt returned an in-bounds proposal that was applied in 0.880--1.000 of
+attempts (recorded \texttt{repair\_success\_rate}; mean 0.974 over the 13 kept
+cells), so the loop demonstrably repairs rather than only rejects. The detection epoch --- whose re-prompts were
 themselves corrupted --- could not repair by construction and ended every
 attempt on the deterministic replacement dispatch; we report that epoch as
-detection-plus-replacement, not recovery.
+detection-plus-replacement, not recovery, with 12 of 15 verified cells kept
+(before the re-run).
 
 \textbf{The cost of recovery.} The verified arm's KPIs track the unverified
 arm rather than the deterministic reference: cost 442.62 USD vs.\ 441.08
@@ -644,7 +648,7 @@ grid-limit reductions, component failures. Attacks limited to failure-injection 
     \item \textbf{Controller scope}: RL is evaluated per regime with the regime-matching policy; LMP policies are trained separately.
     \item \textbf{LLM proposer}: the screens use a single hosted model at temperature 0 on a 24-step horizon; model identity is withheld per operator policy, manifests retain full provenance. The M2a null and the M2b results are specific to this model--prompt--horizon combination.
     \item \textbf{Horizon and seeds}: 24-step (one-day) horizons and 3-seed pilots; the pre-registered significance criterion is reserved for the full-length run.
-    \item \textbf{Endpoint degradation}: 16 of 30 recovery-epoch cells and one M2a cell took 1--3 transient endpoint errors; cells are quarantined under a published rule (errors $\leq 2$ AND calls $\geq$ steps AND telemetry) and error/fallback shares are reported per cell.
+    \item \textbf{Endpoint degradation}: 16 of 30 recovery-epoch cells and one M2a cell took 1--3 transient endpoint errors; cells are quarantined under a published rule (errors $\leq 2$ AND calls $\geq$ steps AND telemetry) and error/fallback shares are reported per cell. A user-approved re-run of the three quarantined verified cells promoted one to keep (0 errors of 24 steps); the other two still show 3 of 24 and remain quarantined.
     \item \textbf{Gini measurement gap}: the fairness coefficient does not reflect settlement redistribution; inequality claims are deferred until a settlement-aware metric exists.
     \item \textbf{Aggressive config}: 95\% grid limit does not produce import curtailment; tests violation detection, not curtailment path.
 \end{enumerate}
@@ -681,7 +685,8 @@ among members without aggregate benefit for A/B/C/E while scenario D diverges
 once its settlement is correctly propagated. The verification machinery is a
 no-op under an in-bounds proposer (a safety-metrics null that we report as
 such), and under a deliberately out-of-bounds proposer it stops every
-corrupted proposal and repairs 0.857--1.000 of them, at the measured cost that
+corrupted proposal and repairs 0.880--1.000 of them (13 of 15 verified cells
+kept), at the measured cost that
 the accepted dispatch remains the LLM's repaired proposal. Thermal comfort is
 unmeasurable on this dataset and no comfort claim is made. All artifacts are
 reproducible from manifests, committed summaries, and checksummed release
