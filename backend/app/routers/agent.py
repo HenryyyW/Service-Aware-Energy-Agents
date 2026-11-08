@@ -203,6 +203,71 @@ def _shape_repair_records(result) -> List[Dict[str, Any]]:
     return records
 
 
+def _render_repair_report_markdown(report) -> str:
+    """Render the repair loop's structured final report as markdown text.
+
+    ``AgentTask.report`` (and the frontend ``ReportView``) are string-typed,
+    but ``MultiAgentRepairResult.final_report`` is a dict
+    (``repair_session``/``iteration_history``/``final_recommendations``/
+    ``lessons_learned``). Assigning the dict made FastAPI reject the whole
+    ``GET /api/agent/tasks/{id}`` response with a ``ResponseValidationError``
+    (the Docker Compose smoke regression on run 01ce700c3,
+    ``loc: ('response', 'report')``). Render to markdown instead.
+    """
+    if not isinstance(report, dict):
+        return ""
+    if not report.get("repair_session") and not report.get("iteration_history"):
+        return ""
+    session = report.get("repair_session") or {}
+    lines = [
+        "# Multi-Agent Repair Report",
+        "",
+        f"- Run: `{session.get('run_id', 'unknown')}`",
+        f"- Scenario: `{session.get('scenario_id', 'unknown')}`",
+        f"- Iterations: {session.get('total_iterations', 0)}",
+        f"- Final status: **{session.get('final_status', 'UNKNOWN')}**",
+        f"- Completed: {session.get('completed_at', 'unknown')}",
+        "",
+        "## Iterations",
+        "",
+    ]
+    for iteration in report.get("iteration_history") or []:
+        if not isinstance(iteration, dict):
+            continue
+        planner = iteration.get("planner") or {}
+        verifier = iteration.get("verifier") or {}
+        number = iteration.get("iteration", 0)
+        if isinstance(number, int):
+            number += 1
+        lines.append(
+            f"### Iteration {number} "
+            f"({'SUCCESS' if iteration.get('success') else 'FAILED'})"
+        )
+        lines.append("")
+        lines.append(f"- Primary issue: {planner.get('primary_issue', 'unknown')}")
+        lines.append(f"- Strategy: {planner.get('repair_strategy', 'n/a')}")
+        lines.append(
+            f"- Verifier: resolved={verifier.get('violations_resolved')}, "
+            f"confidence={verifier.get('confidence')}, "
+            f"recommendation={verifier.get('recommendation', 'n/a')}"
+        )
+        lines.append(f"- Duration: {iteration.get('duration', 0):.2f}s")
+        lines.append("")
+    recommendations = report.get("final_recommendations") or []
+    if recommendations:
+        lines.append("## Recommendations")
+        lines.append("")
+        lines.extend(f"- {item}" for item in recommendations)
+        lines.append("")
+    lessons = report.get("lessons_learned") or []
+    if lessons:
+        lines.append("## Lessons learned")
+        lines.append("")
+        lines.extend(f"- {item}" for item in lessons)
+        lines.append("")
+    return "\n".join(lines)
+
+
 async def _run_agent_task(
     task_id: str, description: str, scenario_id: Optional[str], run_id: Optional[str]
 ):
@@ -766,7 +831,11 @@ async def _run_agent_task(
                 else ""
             )
             task_data["repairs"] = _shape_repair_records(result)
-            task_data["report"] = result.final_report if result else ""
+            task_data["report"] = (
+                _render_repair_report_markdown(result.final_report)
+                if result and result.final_report
+                else ""
+            )
             task_data["execution_log"].append(
                 f"Repair {'succeeded' if result and result.success else 'failed'} after {result.total_iterations if result else 0} iterations"
             )
