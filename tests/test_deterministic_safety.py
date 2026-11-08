@@ -12,7 +12,13 @@ from src.schemas.scenario import (
     EVConfig,
     EnergySharingConfig,
 )
-from src.schemas.action import Action, ActionType, RequestedActions, LimitedActions, AppliedActions
+from src.schemas.action import (
+    Action,
+    ActionType,
+    RequestedActions,
+    LimitedActions,
+    AppliedActions,
+)
 
 
 @pytest.fixture
@@ -31,14 +37,24 @@ def scenario_config():
                 simulation_start="2023-07-01T00:00:00",
                 simulation_end="2023-07-02T00:00:00",
                 battery=BatteryConfig(
-                    capacity_kwh=100, power_kw=50, efficiency_charge=0.95,
-                    efficiency_discharge=0.95, initial_soc=0.5, soc_min=0.1, soc_max=0.9
+                    capacity_kwh=100,
+                    power_kw=50,
+                    efficiency_charge=0.95,
+                    efficiency_discharge=0.95,
+                    initial_soc=0.5,
+                    soc_min=0.1,
+                    soc_max=0.9,
                 ),
                 evs=[
                     EVConfig(
-                        capacity_kwh=40, max_charge_kw=7.2, efficiency=0.95,
-                        arrival_time="18:00", departure_time="07:00",
-                        initial_soc=0.2, target_soc=0.8, connected_days=[0,1,2,3,4,5,6]
+                        capacity_kwh=40,
+                        max_charge_kw=7.2,
+                        efficiency=0.95,
+                        arrival_time="18:00",
+                        departure_time="07:00",
+                        initial_soc=0.2,
+                        target_soc=0.8,
+                        connected_days=[0, 1, 2, 3, 4, 5, 6],
                     )
                 ],
                 flexible_loads=[],
@@ -54,8 +70,13 @@ def device_metadata():
         "Building_1": {
             "battery": {"capacity_kwh": 100.0, "power_kw": 50.0, "efficiency": 0.95},
             "chargers": [
-                {"charger_id": "charger_0", "max_charge_kw": 7.2, "min_charge_kw": 0.0,
-                 "max_discharge_kw": 0.0, "efficiency": 0.95}
+                {
+                    "charger_id": "charger_0",
+                    "max_charge_kw": 7.2,
+                    "min_charge_kw": 0.0,
+                    "max_discharge_kw": 0.0,
+                    "efficiency": 0.95,
+                }
             ],
             "deferrable": [],
             "pv_kw": 12.0,
@@ -105,18 +126,24 @@ class TestDeterministicSafetyController:
 
         # Verify clamping to exact device bounds
         battery_charge = next(
-            a for a in requested.actions if a.asset_id == "Building_1_battery" and a.value_kw > 0
+            a
+            for a in requested.actions
+            if a.asset_id == "Building_1_battery" and a.value_kw > 0
         )
         ev_charge = next(
             a for a in requested.actions if a.asset_id == "Building_1_ev_0"
         )
         battery_discharge = next(
-            a for a in requested.actions if a.asset_id == "Building_1_battery" and a.value_kw < 0
+            a
+            for a in requested.actions
+            if a.asset_id == "Building_1_battery" and a.value_kw < 0
         )
 
         assert battery_charge.value_kw == 50.0, "Battery charge clamped to 50kW limit"
         assert ev_charge.value_kw == 7.2, "EV charge clamped to 7.2kW limit"
-        assert battery_discharge.value_kw == -50.0, "Battery discharge clamped to -50kW limit"
+        assert (
+            battery_discharge.value_kw == -50.0
+        ), "Battery discharge clamped to -50kW limit"
 
         # Verify Level 1 counter: 3 raw violations (one per action)
         summary = controller.get_stratification_summary()
@@ -169,19 +196,34 @@ class TestDeterministicSafetyController:
             requested = controller.get_actions({}, step)
 
             # Simulate adapter clamping (in this case, no additional clamping needed since we already clamped)
-            limited = LimitedActions(timestep=step, actions=[
-                Action(asset_id=a.asset_id, action_type=a.action_type, value_kw=a.value_kw, timestep=step)
-                for a in requested.actions
-            ])
-            applied = AppliedActions(timestep=step, actions=[
-                Action(asset_id=a.asset_id, action_type=a.action_type, value_kw=a.value_kw, timestep=step)
-                for a in requested.actions
-            ])
+            limited = LimitedActions(
+                timestep=step,
+                actions=[
+                    Action(
+                        asset_id=a.asset_id,
+                        action_type=a.action_type,
+                        value_kw=a.value_kw,
+                        timestep=step,
+                    )
+                    for a in requested.actions
+                ],
+            )
+            applied = AppliedActions(
+                timestep=step,
+                actions=[
+                    Action(
+                        asset_id=a.asset_id,
+                        action_type=a.action_type,
+                        value_kw=a.value_kw,
+                        timestep=step,
+                    )
+                    for a in requested.actions
+                ],
+            )
 
             controller.record_adapter_interventions(requested, limited, applied)
             controller.record_post_execution_violations(
-                {"diagnostics": []},  # No grid violations
-                {}  # No observations
+                {"diagnostics": []}, {}  # No grid violations  # No observations
             )
 
         summary = controller.get_stratification_summary()
@@ -328,7 +370,10 @@ class TestDeterministicSafetyController:
         summary = controller.get_stratification_summary()
         # Level 3 should record 1 intervention
         assert summary["level3_adapter_interventions"]["total"] == 1
-        assert summary["level3_adapter_interventions"]["by_asset"]["Building_1_battery"] == 1
+        assert (
+            summary["level3_adapter_interventions"]["by_asset"]["Building_1_battery"]
+            == 1
+        )
 
     def test_final_applied_violations_detection(self, scenario_config, device_metadata):
         """Test Level 4 detection of final applied violations."""
@@ -352,29 +397,38 @@ class TestDeterministicSafetyController:
         requested = controller.get_actions({}, 0)
 
         # Simulate applied actions that VIOLATE bounds (buggy adapter)
-        limited = LimitedActions(timestep=0, actions=[
-            Action(
-                asset_id="Building_1_battery",
-                action_type=ActionType.BATTERY_CHARGE,
-                value_kw=25.0,
-                timestep=0,
-            ),
-        ])
-        applied = AppliedActions(timestep=0, actions=[
-            Action(
-                asset_id="Building_1_battery",
-                action_type=ActionType.BATTERY_CHARGE,
-                value_kw=75.0,  # VIOLATION: exceeds 50kW limit!
-                timestep=0,
-            ),
-        ])
+        limited = LimitedActions(
+            timestep=0,
+            actions=[
+                Action(
+                    asset_id="Building_1_battery",
+                    action_type=ActionType.BATTERY_CHARGE,
+                    value_kw=25.0,
+                    timestep=0,
+                ),
+            ],
+        )
+        applied = AppliedActions(
+            timestep=0,
+            actions=[
+                Action(
+                    asset_id="Building_1_battery",
+                    action_type=ActionType.BATTERY_CHARGE,
+                    value_kw=75.0,  # VIOLATION: exceeds 50kW limit!
+                    timestep=0,
+                ),
+            ],
+        )
 
         controller.record_adapter_interventions(requested, limited, applied)
 
         summary = controller.get_stratification_summary()
         # Level 4 should detect 1 final violation
         assert summary["level4_final_applied_violations"]["total"] == 1
-        assert summary["level4_final_applied_violations"]["by_asset"]["Building_1_battery"] == 1
+        assert (
+            summary["level4_final_applied_violations"]["by_asset"]["Building_1_battery"]
+            == 1
+        )
 
     def test_post_execution_grid_violations(self, scenario_config, device_metadata):
         """Test Level 5 post-execution grid violation recording."""
@@ -415,7 +469,9 @@ class TestDeterministicSafetyController:
         assert "Bus_1" in summary["level5_post_execution_violations"]["by_asset"]
         assert "Line_1-2" in summary["level5_post_execution_violations"]["by_asset"]
 
-    def test_post_execution_ev_deadline_violations(self, scenario_config, device_metadata):
+    def test_post_execution_ev_deadline_violations(
+        self, scenario_config, device_metadata
+    ):
         """Test Level 5 EV deadline violation recording from observations."""
         mock_proposer = MagicMock()
         mock_proposer.get_actions.return_value = RequestedActions(
@@ -441,4 +497,7 @@ class TestDeterministicSafetyController:
         summary = controller.get_stratification_summary()
         # Level 5 should record 1 service violation (EV deadline)
         assert summary["level5_post_execution_violations"]["total"] == 1
-        assert "Building_1_ev_0_deadline" in summary["level5_post_execution_violations"]["by_asset"]
+        assert (
+            "Building_1_ev_0_deadline"
+            in summary["level5_post_execution_violations"]["by_asset"]
+        )
