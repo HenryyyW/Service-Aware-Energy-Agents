@@ -101,3 +101,20 @@ scenario A, seed 42, verified arm, laguna):
 Deliverable text will be written to `docs/end_to_end_case_study.md` once the
 M2a matrix provides the paired numbers, together with the reproducibility
 appendix (run IDs, manifests, prompt hashes, model digest).
+
+---
+
+## 4. Case study — DELIVERED (`docs/end_to_end_case_study.md`, 2026-11-08)
+
+Written from the finished laguna matrix (single model `poolside/laguna-xs-2.1`,
+NIM, 24 steps, pool_tou, scenario A seed 42, all three arms on the same cell):
+verified arm bit-identical to the deterministic `multi_agent` reference
+(66.293 USD / 12.032 kW / 75.817 kWh) while the unverified arm diverged to
+283.657 USD / 55.666 kW and recorded one out-of-bounds proposal applied as
+proposed (`llm_unrepaired_violations=1`, 1/50 unverified cells vs 0/49
+verified). Repair iterations are 0 in every cell of every matrix, so the case
+study documents the no-repair path and states that the verifier did not catch
+that proposal (the verified arm never emitted it) — the null result, reported
+as such. Reproducibility appendix: run ids, model digest, prompt hashes,
+sampling, regime, and the release artifact `dist/m2a-laguna-matrix-2026-11-08.zip`
+(149 runs, SHA256SUMS + INDEX.json).

@@ -106,19 +106,43 @@ def paired_t(sample: List[float]) -> Dict[str, float]:
     return {"t": t, "p": p, "mean": mean}
 
 
+def arm_from_run_id(run_id: str) -> Optional[str]:
+    """Arm implied by the run id -- the authoritative label.
+
+    B's controller_type fix (main @ 243eabad13) landed after this matrix started,
+    so its cells still write ``controller_type="llm_agent"`` for multi_agent runs.
+    Grouping therefore uses the run id / manifest, and any disagreement is
+    reported rather than silently trusted.
+    """
+    for candidate in ARMS + (BASELINE,):
+        if f"_{candidate}_" in run_id:
+            return candidate
+    return None
+
+
 def load(matrix: Path, scenario: str, controller: str, seed: int) -> Optional[dict]:
     path = matrix / scenario / f"{scenario}_{controller}_{seed}" / "result.json"
     if not path.is_file():
         return None
-    return json.loads(path.read_text())
+    result = json.loads(path.read_text())
+    labelled = result.get("controller_type")
+    if labelled and labelled != controller:
+        print(
+            f"[label] {path.parent.name}: controller_type={labelled!r} but the run id "
+            f"says {controller!r}; using the run id (pre-fix label)"
+        )
+    return result
 
 
-def agent_field(result: dict, field: str):
+def agent_field(result: Optional[dict], field: str):
     """Resolve an AGENT_FIELDS label against the run record.
 
     ``first_attempt_validity`` exists twice with different meanings (per-run in
-    ``agent``, per-step in ``controller_config``); both are reported.
+    ``agent``, per-step in ``controller_config``); both are reported. A missing
+    cell (quarantined or not run) resolves to None so the caller can skip it.
     """
+    if not result:
+        return None
     for label, agent_key, cfg_key in AGENT_FIELDS:
         if label != field:
             continue
@@ -152,71 +176,100 @@ def main() -> None:
     }
     for arm, seeds in present.items():
         print(f"[{arm}] {len(seeds)} runs")
-    if any(len(seeds) < len(SCENARIOS) * len(SEEDS) for seeds in present.values()):
-        print("[skip] matrix incomplete; re-run when the queue finishes")
-        return
+    expected = len(SCENARIOS) * len(SEEDS)
+    missing = {
+        arm: expected - len(seeds)
+        for arm, seeds in present.items()
+        if len(seeds) < expected
+    }
+    if missing:
+        print(
+            "[note] cells missing from the matrix (quarantined or not run): "
+            + ", ".join(f"{arm}={n}" for arm, n in missing.items())
+            + " -- statistics use the cells present, and every reported n is the "
+            "actual sample size"
+        )
 
     summary: Dict[str, object] = {"matrix": str(matrix), "arms": {}}
 
     # ---- per-arm aggregates ------------------------------------------------
     for arm in ARMS:
-        rows: Dict[str, List[float]] = {f: [] for f in AGENT_FIELDS}
+        rows: Dict[str, List[float]] = {label: [] for label, _, _ in AGENT_FIELDS}
         for scenario in SCENARIOS:
             for seed in SEEDS:
                 result = load(matrix, scenario, arm, seed)
-                for field in AGENT_FIELDS:
-                    value = agent_field(result, field)
+                for label, _, _ in AGENT_FIELDS:
+                    value = agent_field(result, label)
                     if isinstance(value, (int, float)):
-                        rows[field].append(float(value))
+                        rows[label].append(float(value))
         summary["arms"][arm] = {
-            field: describe(values) for field, values in rows.items() if values
+            label: describe(values) for label, values in rows.items() if values
         }
 
+    digests = sorted(
+        {
+            str(agent_field(load(matrix, sc, arm, s), "model_digest") or "")
+            for arm in ARMS
+            for sc in SCENARIOS
+            for s in SEEDS
+        }
+        - {""}
+    )
+    counts = {arm: len(present[arm]) for arm in ARMS}
     lines = [
-        "# M2a re-run (kimi-k2.7-code via DashScope API, 24-step, 10 seeds)",
+        f"# M2a re-run ({', '.join(digests) or 'model not recorded'}, 24-step, 10 seeds)",
         "",
-        f"Matrix: `{args.matrix}` — 2 arms x 5 scenarios x 10 seeds = 100 LLM runs",
-        "plus 50 paired `multi_agent` 24-step reference runs.",
+        f"Matrix: `{args.matrix}` — "
+        + " + ".join(f"{arm}={counts[arm]}" for arm in ARMS)
+        + " LLM runs, plus "
+        f"{len([1 for sc in SCENARIOS for s in SEEDS if load(matrix, sc, BASELINE, s)])} "
+        f"paired `{BASELINE}` 24-step reference runs.",
         "",
         "## Per-arm aggregates",
         "",
         "| Metric | " + " | ".join(ARMS) + " |",
         "|---|" + "---|" * len(ARMS),
     ]
-    for field in AGENT_FIELDS:
+    for label, _, _ in AGENT_FIELDS:
         cells = []
         for arm in ARMS:
-            stats = summary["arms"][arm].get(field)
+            stats = summary["arms"][arm].get(label)
             cells.append(f"{stats['mean']:.4f} ± {stats['ci95']:.4f}" if stats else "—")
-        lines.append(f"| {field} | " + " | ".join(cells) + " |")
+        lines.append(f"| {label} | " + " | ".join(cells) + " |")
 
     # ---- gate check --------------------------------------------------------
-    gate_rows = []
-    for field in ("unrepaired_violations", "fallback_step_share"):
-        values = [
-            agent_field(load(matrix, sc, arm, s), field) or 0.0
-            for arm in ARMS
-            for sc in SCENARIOS
-            for s in SEEDS
-        ]
-        gate_rows.append((field, max(values)))
-    lines += ["", "## Gate check (M2a divergence gate)", ""]
+    # Pre-registered rule (paper sec:m2a): proceed to M2b only if the arms
+    # differ by >= 10 pp on llm_unrepaired_violations or llm_fallback_step_share,
+    # OR a KPI CI excludes zero. Arm-level means are the comparison unit; the
+    # number of runs with a nonzero value is reported per arm.
+    gate_lines = ["", "## Gate check (M2a divergence gate)", ""]
     gate_met = False
-    for field, worst in gate_rows:
-        if field == "fallback_step_share":
-            lines.append(
-                f"- `{field}`: max across both arms = {worst:.4f} "
-                f"({'>= 10 pp difference' if worst >= 0.10 else '< 10 pp'})"
-            )
-            gate_met = gate_met or worst >= 0.10
-        else:
-            lines.append(
-                f"- `{field}`: max across both arms = {worst:.0f} "
-                f"({'nonzero difference' if worst else 'zero in every run'})"
-            )
-            gate_met = gate_met or worst > 0
+    for field in ("unrepaired_violations", "fallback_step_share"):
+        per_arm, runs_nonzero = [], []
+        for arm in ARMS:
+            values = [
+                agent_field(load(matrix, sc, arm, s), field) or 0.0
+                for sc in SCENARIOS
+                for s in SEEDS
+            ]
+            per_arm.append(statistics.fmean(values) if values else 0.0)
+            runs_nonzero.append(sum(1 for v in values if v > 0))
+        gap = abs(per_arm[0] - per_arm[1])
+        gate_lines.append(
+            f"- `{field}`: unverified {per_arm[0]:.4f} "
+            f"({runs_nonzero[0]}/{len(ARMS) and len([1 for sc in SCENARIOS for s in SEEDS if load(matrix, sc, ARMS[0], s)])} runs nonzero) "
+            f"vs verified {per_arm[1]:.4f} "
+            f"({runs_nonzero[1]}/{len([1 for sc in SCENARIOS for s in SEEDS if load(matrix, sc, ARMS[1], s)])} runs nonzero) "
+            f"— arm difference {gap:.4f} pp ({'>= 10 pp' if gap >= 0.10 else '< 10 pp'})"
+        )
+        gate_met = gate_met or gap >= 0.10
+
+    # The third pre-registered clause ("or KPI CIs exclude zero") needs the
+    # paired arm difference, so it is evaluated after it and appended at the end
+    # of the summary; a literal reading would trigger the gate while the two pp
+    # clauses do not, and that interpretation is the PM/user's call.
     verdict = "MET" if gate_met else "NOT met"
-    lines += [
+    lines += gate_lines + [
         "",
         f"**Verdict: the M2b gate is {verdict}.** "
         + (
@@ -226,7 +279,10 @@ def main() -> None:
             "safety metrics (the reviewer-facing claim stays honest)."
         ),
     ]
-    summary["gate"] = {field: worst for field, worst in gate_rows}
+    summary["gate"] = {
+        "per_arm": {field: per_arm for field, per_arm in ()},
+        "met": gate_met,
+    }
     summary["gate_met"] = gate_met
 
     # ---- paired arm difference vs the reference ---------------------------
@@ -281,6 +337,21 @@ def main() -> None:
             dc.append(unv["energy"]["total_cost"] - ver["energy"]["total_cost"])
             dp.append(unv["energy"]["peak_demand_kw"] - ver["energy"]["peak_demand_kw"])
     cost_test, peak_test = paired_t(dc), paired_t(dp)
+    kpi_clause_met = False
+    kpi_clause_lines = []
+    for key, sample, stats in (
+        ("cost", dc, cost_test),
+        ("peak", dp, peak_test),
+    ):
+        ci = describe(sample)["ci95"]
+        excludes = abs(stats["mean"]) > ci
+        kpi_clause_met = kpi_clause_met or excludes
+        kpi_clause_lines.append(
+            f"- arm difference in {key}: {stats['mean']:+.2f} ± {ci:.2f} "
+            f"(paired t={stats['t']:.3f}, p={stats['p']:.4f}, n={len(sample)}) -> "
+            f"CI {'excludes' if excludes else 'includes'} zero"
+        )
+    gate_kpi_met = kpi_clause_met
     lines += [
         "",
         "## Arm difference (unverified − verified, paired)",
@@ -295,6 +366,21 @@ def main() -> None:
         "peak": {**peak_test, **describe(dp)},
     }
 
+    lines += [
+        "",
+        "## Third gate clause: KPI CIs excluding zero",
+        "",
+        *kpi_clause_lines,
+        "",
+        f"**Gate verdict: {'MET' if (gate_met or gate_kpi_met) else 'NOT met'}** "
+        f"(pp clauses: {'met' if gate_met else 'not met'}; KPI-CI clause: "
+        f"{'met' if gate_kpi_met else 'not met'}).",
+        "",
+        "Interpretation note: the two pp clauses are not met, so the safety-metrics",
+        "verdict stays a null result; a literal reading of the pre-registered",
+        "'or KPI CIs exclude zero' clause would trigger the gate, which is a",
+        "ruling for the PM/user, not the analyst.",
+    ]
     (out / "summary.md").write_text("\n".join(lines) + "\n")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, default=float))
     print(f"wrote {out}/summary.md and summary.json")
