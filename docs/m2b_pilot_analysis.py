@@ -82,13 +82,20 @@ def keep_flags(result: dict) -> dict:
     cfg = result.get("controller_config") or {}
     errs = cfg.get("llm_backend_errors") or 0
     fav = cfg.get("first_attempt_validity")
+    steps = float(cfg.get("total_steps") or 24)
+    fallback = cfg.get("llm_fallback_steps") or 0
     return {
         "llm_backend_errors": errs,
-        "error_share": errs / float(cfg.get("total_steps") or 24),
+        "error_share": errs / steps,
+        "fallback_steps": fallback,
+        "fallback_share": fallback / steps,
+        # Effective LLM-measured share of the cell: steps that were NOT served
+        # by the deterministic fallback (errors and fallbacks are different
+        # degradations and are reported separately, per PM ruling).
+        "llm_measured_share": (steps - fallback) / steps,
         "first_attempt_validity": fav,
         "repair_success_rate": cfg.get("repair_success_rate"),
         "llm_calls": cfg.get("llm_calls"),
-        "llm_fallback_steps": cfg.get("llm_fallback_steps"),
         "error_bound_ok": errs <= 2,
         "fav_bound_ok": (fav is not None and fav >= 0.90),
     }
