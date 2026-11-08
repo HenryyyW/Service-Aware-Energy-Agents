@@ -67,11 +67,14 @@ def load(root: Path, scenario: str, controller: str, seed: int) -> Optional[dict
 
 
 def field(result: Optional[dict], key: str, default=None):
+    """Diagnostic fields live in controller_config; the agent block carries the
+    *successful* repair count (0 when every re-prompt was itself corrupted), so
+    controller_config is authoritative for M2b counters."""
     if not result:
         return default
     cfg = result.get("controller_config") or {}
     agent = result.get("agent") or {}
-    for source in (agent, cfg):
+    for source in (cfg, agent):
         if key in source:
             return source[key]
     return default
@@ -100,9 +103,9 @@ def paired_sign_test(wins: int, total: int) -> float:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--matrix", default="experiments/m2b_hostile_pilot")
+    parser.add_argument("--matrix", default="experiments/m2b_pilot")
     parser.add_argument("--reference", default="experiments/m2a_rerun_laguna")
-    parser.add_argument("--out", default="docs/m2b_hostile_pilot")
+    parser.add_argument("--out", default="docs/m2b_pilot")
     args = parser.parse_args()
     matrix = ROOT / args.matrix
     reference = ROOT / args.reference
@@ -179,20 +182,32 @@ def main() -> None:
     # ---- P2 verifier engagement -------------------------------------------
     engagement = {}
     for sc in SCENARIOS:
-        repairs = [
-            field(cells["llm_agent_verified"][(sc, seed)], "repair_iterations") or 0
-            for seed in SEEDS
+        ver_cells = [cells["llm_agent_verified"][(sc, seed)] for seed in SEEDS]
+        repairs = [field(c, "repair_iterations") or 0 for c in ver_cells]
+        detections = [
+            sum((field(c, "verification_failures") or {}).values()) for c in ver_cells
         ]
-        success = [
-            field(cells["llm_agent_verified"][(sc, seed)], "repair_success_rate") or 0.0
-            for seed in SEEDS
-        ]
+        replacements = [field(c, "llm_fallback_steps") or 0 for c in ver_cells]
+        # repair_success_rate only exists in the option-A build; in this pilot
+        # (re-prompts also corrupted) it is structurally unmeasurable.
+        if any(
+            "repair_success_rate" in (c.get("controller_config") or {})
+            for c in ver_cells
+        ):
+            success = [field(c, "repair_success_rate") for c in ver_cells]
+        else:
+            success = None
         engagement[sc] = {
             "repair_iterations": repairs,
+            "bound_violations_detected": detections,
+            "deterministic_replacements": replacements,
             "repair_success_rate": success,
-            "engaged": max(repairs) > 0 and max(success) > 0,
+            "engaged": max(repairs) > 0 and max(detections) > 0,
         }
     p2 = all(entry["engaged"] for entry in engagement.values())
+    success_measurable = any(
+        entry["repair_success_rate"] is not None for entry in engagement.values()
+    )
 
     # ---- P3 no-masking ----------------------------------------------------
     no_masking_rows = []
@@ -276,16 +291,37 @@ def main() -> None:
         "",
         "## P2 verifier engagement",
         "",
-        "| Scenario | repair_iterations per seed | repair_success_rate per seed | engaged? |",
-        "|---|---|---|---|",
+        "| Scenario | repair_iterations per seed | repair_success_rate per seed "
+        "| bound_violations detected / deterministic replacements | engaged? |",
+        "|---|---|---|---|---|",
     ]
     for sc, entry in engagement.items():
+        rate = entry["repair_success_rate"]
+        rate_txt = (
+            "not measurable" if rate is None else str([round(v, 3) for v in rate])
+        )
         lines.append(
             f"| {sc.replace('scenario_', '').upper()} | {entry['repair_iterations']} "
-            f"| {[round(v, 3) for v in entry['repair_success_rate']]} "
+            f"| {rate_txt} "
+            f"| detections {entry['bound_violations_detected']} / "
+            f"replacements {entry['deterministic_replacements']} "
             f"| {'yes' if entry['engaged'] else 'NO'} |"
         )
-    lines += ["", f"- **P2: {'PASS' if p2 else 'FAIL'}**", ""]
+    lines += [
+        "",
+        f"- **P2 (verifier engagement): {'PASS' if p2 else 'FAIL'}** -- "
+        f"`repair_iterations > 0` and `verification_failures > 0` in every "
+        f"verified cell per scenario",
+        f"- `repair_success_rate` is {'measurable' if success_measurable else 'NOT MEASURABLE in this build'} "
+        + (
+            ""
+            if success_measurable
+            else "(the corruptor also corrupts the corrective re-prompt, so a "
+            "successful repair is impossible by construction -- that is what "
+            "the option-A re-run measures)"
+        ),
+        "",
+    ]
 
     lines += [
         "## P3 no-masking (held-harmless criteria vs the reused reference)",
@@ -353,6 +389,7 @@ def main() -> None:
                     "pass": p1_directional and p1_ratio,
                 },
                 "p2": engagement,
+                "p2_success_measurable": success_measurable,
                 "p3": {"pass": p3, "comfort_testable": comfort_testable},
                 "p4": cost_rows,
                 "verdict": verdict,
