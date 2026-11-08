@@ -9,16 +9,31 @@ from `experiments/m2a_rerun_laguna` (15 deterministic `multi_agent` cells,
 zero LLM calls). Sequence: B's hostile-mode branch merged -> pre-flight probe
 -> this queue -> analysis.
 
+## Observable contract (PM ruling 2026-11-08)
+
+The queue config is the **environment variable** `SAEA_LLM_HOSTILE=out_of_bounds`.
+B's `ProposerCorruption` class may be the internal mechanism, but the flag is the
+required observable surface. If a merged build exposes only a class and ignores
+the env var, that is an **incomplete delivery**: do not launch 30 cells against
+it -- report it back to the PM instead.
+
 ## Pre-conditions checked before launch (all must hold)
 
 1. The hostile-mode code is on main and its tests pass locally
    (`pytest tests/ -k hostile or corruption`, plus
-   `pytest tests/test_grid_closed_loop.py -q` green).
-2. Pre-flight probe passes (the supervisor runs it automatically and aborts on
+   `pytest tests/test_grid_closed_loop.py -q` green -- 8 tests).
+2. **Flag smoke before the queue**: run ONE cell with `SAEA_LLM_HOSTILE=out_of_bounds`
+   and confirm from its `result.json` that (a) the mode is recorded in
+   `controller_config`/manifest, and (b) the unverified arm applied out-of-bounds
+   proposals (`llm_unrepaired_violations > 0`) while the verified arm's bounds
+   check fired (`verification_failures` non-empty, `repair_iterations > 0`). If
+   (a) or (b) fails, the flag is not honored: stop and report an incomplete
+   delivery -- do not proceed to 30 cells.
+3. Pre-flight probe passes (the supervisor runs it automatically and aborts on
    402/403/404): one 1-token call to laguna on NIM.
-3. `git status --porcelain` is empty, so every manifest records
+4. `git status --porcelain` is empty, so every manifest records
    `git_dirty: false`.
-4. The corruption mode is recorded per run (manifest/controller_config), so a
+5. The corruption mode is recorded per run (manifest/controller_config), so a
    corrupted cell can never be mistaken for a clean one.
 
 ## Command
