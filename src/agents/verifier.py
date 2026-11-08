@@ -28,13 +28,18 @@ class VerifierAgent:
         Returns:
             VerifierOutput with verification results
         """
-        if not state.sandbox_result or not state.sandbox_result.success:
+        # Check if executor itself failed (code errors, syntax, unit tests)
+        if not state.sandbox_result or state.sandbox_result.error:
             output = VerifierOutput(
                 violations_resolved=False,
                 remaining_violations=[
                     {
                         "issue": "execution_failed",
-                        "details": executor_output.get("error", "Unknown error"),
+                        "details": (
+                            state.sandbox_result.error
+                            if state.sandbox_result
+                            else executor_output.get("error", "Unknown error")
+                        ),
                     }
                 ],
                 confidence=0.0,
@@ -43,7 +48,7 @@ class VerifierAgent:
             state.verification_result = output.model_dump()
             state.add_message(
                 AgentRole.VERIFIER,
-                f"Verification: FAILED (execution failed: {executor_output.get('error', 'Unknown error')})",
+                f"Verification: FAILED (execution failed: {state.sandbox_result.error if state.sandbox_result else executor_output.get('error', 'Unknown error')})",
                 output.model_dump(),
             )
             return output
