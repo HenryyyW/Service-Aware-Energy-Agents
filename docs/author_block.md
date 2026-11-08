@@ -3,10 +3,10 @@
 Source of truth: user decision 2026-11-08 (updated same day): the `arxiv_submission/`
 no-fly rule is LIFTED - the PDF is team-owned again and the user directed the team to
 apply this block. APPLIED on origin/main at commit `8f17c3c08a`
-(replaced the old Team/OpenBot block at arxiv_main.tex lines 38-42). One datum is
-still missing: the `\texttt{...}` line reads `TODO-email-supplied-by-user` until the
-user supplies their contact email in chat - it is deliberately never committed to
-this file or the repo.
+(replaced the old Team/OpenBot block at arxiv_main.tex lines 38-42) and COMPLETED
+by the user's 2026-11-08 correction: given name is Cheung (not Cheng), and the
+contact email is the user's PolyU connect address. arxiv_main.tex now carries the
+final block verbatim; the email is intentionally NOT duplicated into this file.
 
 ## Current block in arxiv_submission/arxiv_main.tex (lines 38-42)
 
@@ -22,9 +22,9 @@ this file or the repo.
 
 ```latex
 \author{
-    Wong Wah Cheng \\
+    Wong Wah Cheung \\
     The Hong Kong Polytechnic University \\
-    \texttt{...}
+    \texttt{09900645r@connect.polyu.hk}
     \and
     OpenBot
 }
