@@ -113,13 +113,24 @@ def count_audit() -> List[Dict[str, str]]:
     rows = []
 
     full = load_manifests("matrix_full")
-    p2p = load_manifests("matrix_p2p")
-    m52 = load_manifests("m52_benchmark")
+    p2p = load_manifests("matrix_p2p")  # leg of record for the p2p regime
+    m52 = load_manifests("m52_benchmark")  # leg of record for the lmp regime
     seeds_full = sorted({m.get("random_seed") for m in full})
-    ctrls_full = sorted({m.get("controller", {}).get("type") for m in full})
-    scens_full = Counter(m.get("scenario_id") for m in full)
-    m52_scens = Counter(m.get("scenario_id") for m in m52)
-    m52_regimes = Counter(m.get("pricing_regime") for m in m52)
+    assert seeds_full == [
+        42,
+        123,
+        456,
+        789,
+        999,
+        1234,
+        2024,
+        3456,
+        5555,
+        8888,
+    ], "unexpected seed set in matrix_full"
+    assert (
+        len(full) == 250 and len(m52) == 250 and len(p2p) == 250
+    ), "regime matrices must hold 250 manifests each"
 
     rows.append(
         {
@@ -128,27 +139,32 @@ def count_audit() -> List[Dict[str, str]]:
                 "(5 controllers x 5 scenarios x 10 seeds)"
             ),
             "source": (
-                "experiments/matrix_full + matrix_p2p + m52_benchmark manifests "
-                "(all three matrix dirs swept)"
+                "manifests in matrix_full, matrix_full_postfix, matrix_d_rerun, "
+                "m52_benchmark, matrix_p2p + git ancestry of the D settlement "
+                "fix 9f62e027f"
             ),
             "value": (
-                f"matrix_full={len(full)} (pool_tou), matrix_p2p={len(p2p)} "
-                f"(p2p), m52_benchmark={len(m52)} "
-                f"(lmp; regimes={dict(m52_regimes)}, "
-                f"per-scenario={dict(sorted(m52_scens.items()))}, commit "
-                f"0e584b74f0); seeds={seeds_full}; "
-                f"controllers={ctrls_full}; per-scenario={dict(sorted(scens_full.items()))}"
+                "Legs of record: pool_tou = matrix_full A/B/C/E (200) + "
+                "matrix_d_rerun D (50); lmp = m52_benchmark A/B/C/E (200) + "
+                "matrix_d_rerun_lmp D (50); p2p = matrix_p2p A/B/C/E (200) + "
+                "matrix_d_rerun_p2p D (50) = 750. D-fix ancestry: fix 9f62e027f "
+                "NOT in matrix_full (0911a6f5ce) nor m52_benchmark (0e584b74f0) "
+                "lineages -> their D blocks are pre-fix; fix IS in "
+                "matrix_d_rerun (c326e177e). matrix_full_postfix = 50 D-only "
+                "rows (not 250), bit-identical to matrix_d_rerun pool_tou "
+                "(40/40 costs compared)."
             ),
             "verdict": (
-                "CONFIRMED — all three regime legs exist on disk: pool_tou "
-                "(matrix_full), lmp (m52_benchmark — the name is a misnomer; it "
-                "began as the M5.2 LMP benchmark and was extended to the full "
-                "5x5x10 LMP leg by the B2 LMP+RL arm and B3 seed expansion per "
-                "docs/benchmark_expansion_plan.md), and p2p (matrix_p2p). "
-                "750 = 250 + 250 + 250, fully manifest-backed. Caveat to "
-                "disclose: within the LMP leg, scenario E carries the "
-                "aggressive failure config (b152037: EV severity 1.0, grid "
-                "limit 0.95) while A/B/C/D use the standard config."
+                "CONFIRMED WITH COMPOSITION CORRECTION: 750 is right, but the "
+                "paper must cite D from the 150-run post-fix re-run "
+                "(matrix_d_rerun{,_lmp,_p2p}) in ALL THREE regimes — "
+                "matrix_full's AND m52_benchmark's D blocks are pre-fix "
+                "(settlement defect; llm_agent D cost 22.39 pre-fix vs 112.26 "
+                "post-fix) and are superseded. Do NOT add matrix_d_rerun* or "
+                "matrix_full_postfix on top of the 750 — they REPLACE the D "
+                "blocks. (Correction to this row's earlier draft and to the "
+                "Partner's sweep: matrix_full_postfix holds 50 D-only rows in "
+                "the shared tree, not 250.)"
             ),
         }
     )
