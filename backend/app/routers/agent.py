@@ -37,7 +37,7 @@ MAX_RETRIES = 3
 TASK_TIMEOUT_SECONDS = 30 * 60  # 30 minutes
 
 
-# Tolerant enum resolver: accepts value-form (e.g., "voltage"), name-form (e.g., "VOLTAGE"), or any case
+# Tolerant enum resolver: accepts value-form ('voltage'), name-form ('VOLTAGE'), or any case
 def _diag_enum(cls, raw: str):
     """Parse enum from value-form (e.g., 'voltage') or name-form (e.g., 'VOLTAGE'), case-insensitive.
     Returns None if unknown (caller should skip the diagnostic).
@@ -56,8 +56,24 @@ def _diag_enum(cls, raw: str):
         return None
 
 
-MAX_RETRIES = 3
-TASK_TIMEOUT_SECONDS = 30 * 60  # 30 minutes
+# Tolerant enum resolver: accepts value-form (e.g., "voltage"), name-form (e.g., "VOLTAGE"), or any case
+def _diag_enum(cls, raw: str):
+    """Parse enum from value-form (e.g., 'voltage') or name-form (e.g., 'VOLTAGE'), case-insensitive.
+    Returns None if unknown (caller should skip the diagnostic).
+    """
+    if raw is None:
+        return None
+    try:
+        # First try direct value match (e.g., 'voltage' -> VOLTAGE)
+        return cls(raw)
+    except ValueError:
+        pass
+    try:
+        # Then try name-form (e.g., 'VOLTAGE' -> VOLTAGE)
+        return cls[raw.upper()]
+    except (KeyError, ValueError):
+        return None
+
 
 # In-memory storage for task persistence (when Redis not available)
 _task_persisted: Dict[str, dict] = {}
@@ -276,145 +292,130 @@ async def _run_agent_task(
                 run_data.get("grid_metrics", {}) if isinstance(run_data, dict) else {}
             )
 
-            experiment_result = ExperimentResult(
-                run_id=run_id or f"repair_{uuid4().hex[:8]}",
-                scenario_id=scenario_id or "scenario_e",
-                controller_type=ControllerType.RULE_BASED,
-                controller_config={},
-                status=ExperimentStatus.FAILED,
-                random_seed=42,
-                energy=EnergyMetrics(
-                    total_cost=run_data.get("energy_metrics", {}).get(
-                        "total_cost", 100.0
+            try:
+                experiment_result = ExperimentResult(
+                    run_id=run_id or f"repair_{uuid4().hex[:8]}",
+                    scenario_id=scenario_id or "scenario_e",
+                    controller_type=ControllerType.RULE_BASED,
+                    controller_config={},
+                    status=ExperimentStatus.FAILED,
+                    random_seed=42,
+                    energy=EnergyMetrics(
+                        total_cost=run_data.get("energy_metrics", {}).get(
+                            "total_cost", 100.0
+                        ),
+                        grid_import_kwh=run_data.get("energy_metrics", {}).get(
+                            "grid_import_kwh", 1000
+                        ),
+                        grid_export_kwh=run_data.get("energy_metrics", {}).get(
+                            "grid_export_kwh", 500
+                        ),
+                        peak_demand_kw=run_data.get("energy_metrics", {}).get(
+                            "peak_demand_kw", 50.0
+                        ),
+                        pv_self_consumption_kwh=run_data.get("energy_metrics", {}).get(
+                            "pv_self_consumption", 200.0
+                        ),
+                        load_factor=run_data.get("energy_metrics", {}).get(
+                            "load_factor", 0.5
+                        ),
+                        pv_curtailment_kwh=run_data.get("energy_metrics", {}).get(
+                            "pv_curtailment", 0.0
+                        ),
+                        battery_throughput_kwh=run_data.get("energy_metrics", {}).get(
+                            "battery_throughput_kwh", 100.0
+                        ),
+                        carbon_emissions_kg=run_data.get("energy_metrics", {}).get(
+                            "carbon_emissions_kg", 50.0
+                        ),
                     ),
-                    grid_import_kwh=run_data.get("energy_metrics", {}).get(
-                        "grid_import_kwh", 1000
+                    service=ServiceMetrics(
+                        ev_completion_rate=run_data.get("service_metrics", {}).get(
+                            "ev_completion_rate", 0.5
+                        ),
+                        comfort_violation_degree_hours=run_data.get(
+                            "service_metrics", {}
+                        ).get("comfort_violation_degree_hours", 10.0),
+                        flexible_load_completion_rate=run_data.get(
+                            "service_metrics", {}
+                        ).get("flexible_load_completion_rate", 0.5),
+                        dr_delivered_kw=run_data.get("service_metrics", {}).get(
+                            "dr_delivered_kw", 100.0
+                        ),
+                        dr_requested_kw=run_data.get("service_metrics", {}).get(
+                            "dr_requested_kw", 200.0
+                        ),
                     ),
-                    grid_export_kwh=run_data.get("energy_metrics", {}).get(
-                        "grid_export_kwh", 500
+                    grid=GridMetrics(
+                        voltage_violations_count=len(
+                            [d for d in real_diagnostics if d["category"] == "voltage"]
+                        ),
+                        line_loading_violations=len(
+                            [
+                                d
+                                for d in real_diagnostics
+                                if d["category"] == "line_loading"
+                            ]
+                        ),
+                        transformer_loading_violations=len(
+                            [
+                                d
+                                for d in real_diagnostics
+                                if d["category"] == "transformer_loading"
+                            ]
+                        ),
+                        power_flow_convergence_rate=0.95,
+                        max_voltage_pu=1.08,
+                        min_voltage_pu=0.92,
+                        max_line_loading_pct=110.0,
+                        max_transformer_loading_pct=105.0,
                     ),
-                    peak_demand_kw=run_data.get("energy_metrics", {}).get(
-                        "peak_demand_kw", 50.0
-                    ),
-                    pv_self_consumption_kwh=run_data.get("energy_metrics", {}).get(
-                        "pv_self_consumption", 200.0
-                    ),
-                    load_factor=run_data.get("energy_metrics", {}).get(
-                        "load_factor", 0.5
-                    ),
-                    pv_curtailment_kwh=run_data.get("energy_metrics", {}).get(
-                        "pv_curtailment", 0.0
-                    ),
-                    battery_throughput_kwh=run_data.get("energy_metrics", {}).get(
-                        "battery_throughput_kwh", 100.0
-                    ),
-                    carbon_emissions_kg=run_data.get("energy_metrics", {}).get(
-                        "carbon_emissions_kg", 50.0
-                    ),
-                ),
-                service=ServiceMetrics(
-                    ev_completion_rate=run_data.get("service_metrics", {}).get(
-                        "ev_completion_rate", 0.5
-                    ),
-                    comfort_violation_degree_hours=run_data.get(
-                        "service_metrics", {}
-                    ).get("comfort_violation_degree_hours", 10.0),
-                    flexible_load_completion_rate=run_data.get(
-                        "service_metrics", {}
-                    ).get("flexible_load_completion_rate", 0.5),
-                    dr_delivered_kw=run_data.get("service_metrics", {}).get(
-                        "dr_delivered_kw", 100.0
-                    ),
-                    dr_requested_kw=run_data.get("service_metrics", {}).get(
-                        "dr_requested_kw", 200.0
-                    ),
-                ),
-                grid=GridMetrics(
-                    voltage_violations_count=len(
-                        [d for d in real_diagnostics if d["category"] == "voltage"]
-                    ),
-                    line_loading_violations=len(
-                        [d for d in real_diagnostics if d["category"] == "line_loading"]
-                    ),
-                    transformer_loading_violations=len(
+                    diagnostic_reports=(
                         [
-                            d
-                            for d in real_diagnostics
-                            if d["category"] == "transformer_loading"
+                            DiagnosticReport(
+                                scenario_id=scenario_id or "scenario_e",
+                                run_id=f"repair_{uuid4().hex[:8]}",
+                                timestep=vt,
+                                diagnostics=[
+                                    Diagnostic(
+                                        diagnostic_id=f"diag_{i}",
+                                        category=_diag_enum(
+                                            DiagnosticCategory, d["category"]
+                                        ),
+                                        severity=_diag_enum(Severity, d["severity"]),
+                                        timestep=d["timestep"],
+                                        message=d["message"],
+                                        values=d.get("values", {}),
+                                        limits=d.get("limits", {}),
+                                        bus_indices=d.get("bus_indices", []),
+                                    )
+                                    for i, d in enumerate(vt_diags)
+                                    if _diag_enum(DiagnosticCategory, d["category"])
+                                    is not None
+                                    and _diag_enum(Severity, d["severity"]) is not None
+                                ],
+                            )
+                            for vt in set(violation_timesteps)
+                            for vt_diags in [
+                                [d for d in real_diagnostics if d["timestep"] == vt]
+                            ]
                         ]
+                        if real_diagnostics
+                        else []
                     ),
-                    power_flow_convergence_rate=0.95,
-                    max_voltage_pu=1.08,
-                    min_voltage_pu=0.92,
-                    max_line_loading_pct=110.0,
-                    max_transformer_loading_pct=105.0,
-                ),
-                diagnostic_reports=(
-                    [
-                        DiagnosticReport(
-                            scenario_id=scenario_id or "scenario_e",
-                            run_id=f"repair_{uuid4().hex[:8]}",
-                            timestep=vt,
-                            diagnostics=[
-                                Diagnostic(
-                                    diagnostic_id=f"diag_{i}",
-                                    category=_diag_enum(
-                                        DiagnosticCategory, d["category"]
-                                    ),
-                                    severity=_diag_enum(Severity, d["severity"]),
-                                    timestep=d["timestep"],
-                                    message=d["message"],
-                                    values=d.get("values", {}),
-                                    limits=d.get("limits", {}),
-                                    bus_indices=d.get("bus_indices", []),
-                                )
-                                for i, d in enumerate(vt_diags)
-                                if _diag_enum(DiagnosticCategory, d["category"])
-                                is not None
-                                and _diag_enum(Severity, d["severity"]) is not None
-                            ],
-                        )
-                        for vt in set(violation_timesteps)
-                        for vt_diags in [
-                            [d for d in real_diagnostics if d["timestep"] == vt]
-                        ]
-                    ]
-                    if real_diagnostics
-                    else []
-                ),
-            )
+                )
 
-            # Create diagnostic reports from REAL violations
-            diagnostic_reports = []
-            if real_diagnostics:
-                for vt in set(violation_timesteps):
-                    vt_diags = [d for d in real_diagnostics if d["timestep"] == vt]
-                    diagnostic_reports.append(
-                        DiagnosticReport(
-                            scenario_id=scenario_id or "scenario_e",
-                            run_id=f"repair_{uuid4().hex[:8]}",
-                            timestep=vt,
-                            diagnostics=[
-                                Diagnostic(
-                                    diagnostic_id=f"diag_{i}",
-                                    category=_diag_enum(
-                                        DiagnosticCategory, d["category"]
-                                    ),
-                                    severity=_diag_enum(Severity, d["severity"]),
-                                    timestep=d["timestep"],
-                                    message=d["message"],
-                                    values=d.get("values", {}),
-                                    limits=d.get("limits", {}),
-                                    bus_indices=d.get("bus_indices", []),
-                                )
-                                for i, d in enumerate(vt_diags)
-                                if _diag_enum(DiagnosticCategory, d["category"])
-                                is not None
-                                and _diag_enum(Severity, d["severity"]) is not None
-                            ],
-                        )
-                    )
             # --- END REAL DATA LOADING ---
+            except Exception as e:
+                # Record assembly failure in task data for telemetry
+                task_data["status"] = "failed"
+                task_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+                task_data.setdefault("execution_log", []).append(
+                    f"ExperimentResult assembly failed: {type(e).__name__}: {e}"
+                )
+                set_task(task_id, task_data)
+                raise
+
         else:
             # Fallback: no run_id provided, use synthetic data (for backward compat)
             # This path is deprecated but kept for backward compatibility
