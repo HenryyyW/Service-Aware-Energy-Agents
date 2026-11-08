@@ -292,6 +292,38 @@ async def _run_agent_task(
                 run_data.get("grid_metrics", {}) if isinstance(run_data, dict) else {}
             )
 
+            # Build diagnostic_reports from real_diagnostics (for both ExperimentResult and later use in repair loop)
+            diagnostic_reports = (
+                [
+                    DiagnosticReport(
+                        scenario_id=scenario_id or "scenario_e",
+                        run_id=f"repair_{uuid4().hex[:8]}",
+                        timestep=vt,
+                        diagnostics=[
+                            Diagnostic(
+                                diagnostic_id=f"diag_{i}",
+                                category=_diag_enum(DiagnosticCategory, d["category"]),
+                                severity=_diag_enum(Severity, d["severity"]),
+                                timestep=d["timestep"],
+                                message=d["message"],
+                                values=d.get("values", {}),
+                                limits=d.get("limits", {}),
+                                bus_indices=d.get("bus_indices", []),
+                            )
+                            for i, d in enumerate(vt_diags)
+                            if _diag_enum(DiagnosticCategory, d["category"]) is not None
+                            and _diag_enum(Severity, d["severity"]) is not None
+                        ],
+                    ).model_dump()
+                    for vt in set(violation_timesteps)
+                    for vt_diags in [
+                        [d for d in real_diagnostics if d["timestep"] == vt]
+                    ]
+                ]
+                if real_diagnostics
+                else []
+            )
+
             try:
                 experiment_result = ExperimentResult(
                     run_id=run_id or f"repair_{uuid4().hex[:8]}",
@@ -370,39 +402,7 @@ async def _run_agent_task(
                         max_line_loading_pct=110.0,
                         max_transformer_loading_pct=105.0,
                     ),
-                    diagnostic_reports=(
-                        [
-                            DiagnosticReport(
-                                scenario_id=scenario_id or "scenario_e",
-                                run_id=f"repair_{uuid4().hex[:8]}",
-                                timestep=vt,
-                                diagnostics=[
-                                    Diagnostic(
-                                        diagnostic_id=f"diag_{i}",
-                                        category=_diag_enum(
-                                            DiagnosticCategory, d["category"]
-                                        ),
-                                        severity=_diag_enum(Severity, d["severity"]),
-                                        timestep=d["timestep"],
-                                        message=d["message"],
-                                        values=d.get("values", {}),
-                                        limits=d.get("limits", {}),
-                                        bus_indices=d.get("bus_indices", []),
-                                    )
-                                    for i, d in enumerate(vt_diags)
-                                    if _diag_enum(DiagnosticCategory, d["category"])
-                                    is not None
-                                    and _diag_enum(Severity, d["severity"]) is not None
-                                ],
-                            ).model_dump()
-                            for vt in set(violation_timesteps)
-                            for vt_diags in [
-                                [d for d in real_diagnostics if d["timestep"] == vt]
-                            ]
-                        ]
-                        if real_diagnostics
-                        else []
-                    ),
+                    diagnostic_reports=diagnostic_reports,
                 )
 
             # --- END REAL DATA LOADING ---
