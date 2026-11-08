@@ -496,7 +496,21 @@ class CoderAgent:
         for i, stmt in enumerate(func_node.body):
             if isinstance(stmt, ast.Return):
                 snippet = textwrap.dedent("""
-                # Voltage-triggered load reduction
+                # Voltage-triggered load reduction (self-contained)
+                overvoltage = False
+                undervoltage = False
+                if self.last_grid_diagnostics:
+                    diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
+                    for d in diagnostics:
+                        category = d.get("category", "")
+                        severity = d.get("severity", "")
+                        if severity in ["violation", "critical"] and category == "voltage":
+                            values = d.get("values", {})
+                            voltage_pu = values.get("voltage_pu", 1.0)
+                            if voltage_pu > 1.03:
+                                overvoltage = True
+                            elif voltage_pu < 0.97:
+                                undervoltage = True
                 if overvoltage:
                     for a in actions:
                         if a.action_type in [ActionType.FLEXIBLE_LOAD, ActionType.BATTERY_CHARGE, ActionType.EV_CHARGE]:
@@ -549,7 +563,14 @@ class CoderAgent:
         for i, stmt in enumerate(func_node.body):
             if isinstance(stmt, ast.Return):
                 snippet = textwrap.dedent("""
-                # Load redistribution for overloaded lines
+                # Load redistribution for overloaded lines (self-contained)
+                line_loading_violated = False
+                if self.last_grid_diagnostics:
+                    diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
+                    for d in diagnostics:
+                        if d.get("category") == "line_loading" and d.get("severity") in ["violation", "critical"]:
+                            line_loading_violated = True
+                            break
                 if line_loading_violated:
                     for a in actions:
                         if a.action_type in [ActionType.EV_CHARGE, ActionType.FLEXIBLE_LOAD]:
@@ -565,7 +586,14 @@ class CoderAgent:
         for i, stmt in enumerate(func_node.body):
             if isinstance(stmt, ast.Return):
                 snippet = textwrap.dedent("""
-                # Generation curtailment on overloaded lines
+                # Generation curtailment on overloaded lines (self-contained)
+                line_loading_violated = False
+                if self.last_grid_diagnostics:
+                    diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
+                    for d in diagnostics:
+                        if d.get("category") == "line_loading" and d.get("severity") in ["violation", "critical"]:
+                            line_loading_violated = True
+                            break
                 if line_loading_violated:
                     for a in actions:
                         if a.action_type == ActionType.BATTERY_DISCHARGE:
@@ -602,7 +630,15 @@ class CoderAgent:
         for i, stmt in enumerate(func_node.body):
             if isinstance(stmt, ast.Return):
                 snippet = textwrap.dedent("""
-                # Proportional load reduction when transformer loading > 90%
+                # Proportional load reduction when transformer loading > 90% (self-contained)
+                max_transformer_loading = 0.0
+                if self.last_grid_diagnostics:
+                    diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
+                    for d in diagnostics:
+                        if d.get("category") == "transformer_loading" and d.get("severity") in ["violation", "critical"]:
+                            values = d.get("values", {})
+                            loading = values.get("transformer_loading_pct", 0)
+                            max_transformer_loading = max(max_transformer_loading, loading)
                 if max_transformer_loading > 90:
                     reduction_factor = min(1.0, max_transformer_loading / 100.0)
                     for a in actions:
@@ -619,7 +655,15 @@ class CoderAgent:
         for i, stmt in enumerate(func_node.body):
             if isinstance(stmt, ast.Return):
                 snippet = textwrap.dedent("""
-                # Coordinate battery discharge to reduce transformer load
+                # Coordinate battery discharge to reduce transformer load (self-contained)
+                max_transformer_loading = 0.0
+                if self.last_grid_diagnostics:
+                    diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
+                    for d in diagnostics:
+                        if d.get("category") == "transformer_loading" and d.get("severity") in ["violation", "critical"]:
+                            values = d.get("values", {})
+                            loading = values.get("transformer_loading_pct", 0)
+                            max_transformer_loading = max(max_transformer_loading, loading)
                 if max_transformer_loading > 90:
                     for a in actions:
                         if a.action_type == ActionType.BATTERY_DISCHARGE:
