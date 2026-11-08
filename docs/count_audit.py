@@ -114,10 +114,12 @@ def count_audit() -> List[Dict[str, str]]:
 
     full = load_manifests("matrix_full")
     p2p = load_manifests("matrix_p2p")
-    regimes_full = Counter(m.get("pricing_regime") for m in full)
+    m52 = load_manifests("m52_benchmark")
     seeds_full = sorted({m.get("random_seed") for m in full})
     ctrls_full = sorted({m.get("controller", {}).get("type") for m in full})
     scens_full = Counter(m.get("scenario_id") for m in full)
+    m52_scens = Counter(m.get("scenario_id") for m in m52)
+    m52_regimes = Counter(m.get("pricing_regime") for m in m52)
 
     rows.append(
         {
@@ -125,17 +127,28 @@ def count_audit() -> List[Dict[str, str]]:
                 "Paper abstract/§3: 750 runs = 3 regimes x 250 "
                 "(5 controllers x 5 scenarios x 10 seeds)"
             ),
-            "source": "experiments/matrix_full + matrix_p2p manifests",
+            "source": (
+                "experiments/matrix_full + matrix_p2p + m52_benchmark manifests "
+                "(all three matrix dirs swept)"
+            ),
             "value": (
-                f"matrix_full={len(full)} (regimes={dict(regimes_full)}), "
-                f"matrix_p2p={len(p2p)}; seeds={seeds_full}; "
+                f"matrix_full={len(full)} (pool_tou), matrix_p2p={len(p2p)} "
+                f"(p2p), m52_benchmark={len(m52)} "
+                f"(lmp; regimes={dict(m52_regimes)}, "
+                f"per-scenario={dict(sorted(m52_scens.items()))}, commit "
+                f"0e584b74f0); seeds={seeds_full}; "
                 f"controllers={ctrls_full}; per-scenario={dict(sorted(scens_full.items()))}"
             ),
             "verdict": (
-                "CONFIRMED for the two on-disk regime matrices: 250 runs each, "
-                "50 per scenario, 10 per controller. LMP regime per §4.3 = "
-                "matrix_d_rerun_lmp (scenario D) + ...; the 750 figure assumes "
-                "an LMP matrix of 250 total exists — see LMP row below."
+                "CONFIRMED — all three regime legs exist on disk: pool_tou "
+                "(matrix_full), lmp (m52_benchmark — the name is a misnomer; it "
+                "began as the M5.2 LMP benchmark and was extended to the full "
+                "5x5x10 LMP leg by the B2 LMP+RL arm and B3 seed expansion per "
+                "docs/benchmark_expansion_plan.md), and p2p (matrix_p2p). "
+                "750 = 250 + 250 + 250, fully manifest-backed. Caveat to "
+                "disclose: within the LMP leg, scenario E carries the "
+                "aggressive failure config (b152037: EV severity 1.0, grid "
+                "limit 0.95) while A/B/C/D use the standard config."
             ),
         }
     )
@@ -239,12 +252,15 @@ def count_audit() -> List[Dict[str, str]]:
                 "PAPER WRONG twice over. (a) No matrix has 50 runs per "
                 "controller for scenario E — each matrix holds 50 TOTAL = 10 "
                 "per controller (5 controllers x 10 seeds); the paper conflated "
-                "a matrix total with a per-controller count. (b) The "
-                "aggressive-config stress test is a SEPARATE matrix "
-                "(m52_benchmark: scenario E under LMP with the aggressive "
-                "failure config) and must be labelled as such. RL IS present in "
-                "the stress data (internal type rl_single, 10 runs) — the "
-                "paper's aggressive table silently omits the RL row."
+                "a matrix total with a per-controller count. (b) The 50-run "
+                "aggressive set is part of m52_benchmark — which is NOT a "
+                "scenario-E stress matrix but the complete LMP-leg matrix (all "
+                "5 scenarios x 5 controllers x 10 seeds; see row 1); within it, "
+                "scenario E carries the aggressive failure config (b152037: EV "
+                "severity 1.0, grid limit 0.95) while A/B/C/D use the standard "
+                "config — a within-matrix asymmetry the paper must disclose. "
+                "RL IS present in the stress data (internal type rl_single, 10 "
+                "runs) — the paper's aggressive table silently omits the RL row."
             ),
         }
     )
@@ -270,6 +286,35 @@ def count_audit() -> List[Dict[str, str]]:
                 f"(total {sum(d_counts.values())})"
             ),
             "verdict": "CONFIRMED: 150 scenario-D re-run manifests across 3 regimes.",
+        }
+    )
+    rows.append(
+        {
+            "claim": (
+                "Follow-up (Partner, post-audit): M2a screen — cite 149 "
+                "manifests or re-run the quarantined "
+                "scenario_d_llm_agent_verified_1234 cell?"
+            ),
+            "source": (
+                "docs/m2a_rerun_laguna/quarantine.md; m2a_rerun_laguna "
+                "status.json (total=150 planned); paper claims from M2a are "
+                "aggregate safety-metrics nulls"
+            ),
+            "value": (
+                "Coverage 149/150 (99.3%); quarantined cell documented (1/24 "
+                "steps backend-error-degraded, FAV 0.958); re-run cost ~24 LLM "
+                "calls (~2-4 min) on the laguna/NIM pipeline"
+            ),
+            "verdict": (
+                "RECOMMEND CITE 149 with the quarantine note — zero cost, "
+                "already documented, and the M2a claims are aggregate (a single "
+                "cell cannot flip a 100-cell null). A re-run is optional "
+                "polish: worth it only if the paper needs a clean 5x2x10 "
+                "per-cell grid for a paired test. If Research wants it, the "
+                "re-run is an LLM run on the user-approved laguna pipeline "
+                "(Research owns the key) — single-cell launch with "
+                "skip-existing, then re-package the release."
+            ),
         }
     )
     return rows
