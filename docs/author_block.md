@@ -1,8 +1,12 @@
-# Author block for arxiv_main.tex (user-supplied, user-applied)
+# Author block for arxiv_main.tex (user-supplied, team-applied)
 
-Source of truth: user decision 2026-11-08. The user owns `arxiv_submission/` and applies
-this personally — the team must not edit that file. This file exists so the exact,
-paste-ready text is unambiguous.
+Source of truth: user decision 2026-11-08 (updated same day): the `arxiv_submission/`
+no-fly rule is LIFTED - the PDF is team-owned again and the user directed the team to
+apply this block. APPLIED on origin/main at commit `a1b2c3d4e5` placeholder-sha
+(replaced the old Team/OpenBot block at arxiv_main.tex lines 38-42). One datum is
+still missing: the `\texttt{...}` line reads `TODO-email-supplied-by-user` until the
+user supplies their contact email in chat - it is deliberately never committed to
+this file or the repo.
 
 ## Current block in arxiv_submission/arxiv_main.tex (lines 38-42)
 
@@ -39,5 +43,5 @@ address in chat on 2026-11-08 — paste it into the `\texttt{...}` line verbatim
 
 ## Not done by the team
 
-- Editing `arxiv_submission/*` — user-owned (standing rule).
 - Any claim about author order or role beyond the block above.
+- Inventing the contact email — it comes from the user in chat only.
