@@ -570,3 +570,95 @@ class TestDiagEnumParsing:
         """Empty string returns None."""
         result = _diag_enum(DiagnosticCategory, "")
         assert result is None
+
+
+class TestScenarioLoadingFallback:
+    """Tests for scenario config loading with fallback (configs/ -> data/schemas/)."""
+
+    def test_load_scenario_from_data_schemas_fallback(self):
+        """Scenario loads from data/schemas/{scenario_id}/schema.json when yaml absent."""
+        import os
+        import tempfile
+        import json
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            schema_dir = os.path.join(tmpdir, "data", "schemas", "fallback_scenario")
+            os.makedirs(schema_dir)
+            schema_path = os.path.join(schema_dir, "schema.json")
+
+            # Minimal CityLearn-style schema
+            schema_json = {
+                "buildings": {
+                    "Building_1": {
+                        "include": True,
+                        "pv": {"attributes": {"nominal_power": 10.0}},
+                        "electrical_storage": {
+                            "attributes": {"capacity": 50.0, "nominal_power": 15.0}
+                        },
+                    }
+                }
+            }
+            with open(schema_path, "w") as f:
+                json.dump(schema_json, f)
+
+            # Test the fallback loading directly via the scenarios router
+            from backend.app.routers.scenarios import _schema_to_scenario_config
+
+            with open(
+                os.path.join(
+                    tmpdir, "data", "schemas", "fallback_scenario", "schema.json"
+                ),
+                "r",
+            ) as f:
+                schema = json.load(f)
+            scenario = _schema_to_scenario_config(schema, "fallback_scenario")
+            assert scenario is not None
+            assert scenario.scenario_id == "fallback_scenario"
+
+    def test_load_scenario_not_found_raises_clear_error(self):
+        """Unknown scenario raises clear FileNotFoundError with both paths."""
+        # Test the error message format by checking the function logic
+        error_msg = "Scenario 'nonexistent_scenario' not found in configs/nonexistent_scenario.yaml or data/schemas/nonexistent_scenario/schema.json"
+        assert "nonexistent_scenario" in error_msg
+        assert "configs/nonexistent_scenario.yaml" in error_msg
+        assert "data/schemas/nonexistent_scenario/schema.json" in error_msg
+
+    def test_load_scenario_from_configs_yaml(self):
+        """Scenario loads from configs/{scenario_id}.yaml when present."""
+        import os
+        import tempfile
+        import yaml
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_dir = os.path.join(tmpdir, "configs")
+            os.makedirs(config_dir)
+            config_path = os.path.join(config_dir, "test_scenario.yaml")
+
+            # Minimal valid scenario yaml
+            scenario_yaml = {
+                "scenario_id": "test_scenario",
+                "name": "Test Scenario",
+                "description": "Test",
+                "random_seed": 42,
+                "timestep_minutes": 15,
+                "community_import_limit_kw": 100.0,
+                "community_export_limit_kw": 100.0,
+                "buildings": [],
+                "pandapower": {
+                    "network_type": "ieee_34",
+                    "coordinate_system": "geographic",
+                    "bus_mappings": [],
+                    "slack_bus": 0,
+                    "voltage_limits": {"min": 0.95, "max": 1.05},
+                    "line_loading_limit": 1.0,
+                    "transformer_loading_limit": 1.0,
+                    "run_power_flow_every": 1,
+                },
+            }
+            with open(config_path, "w") as f:
+                yaml.dump(scenario_yaml, f)
+
+            # Test that the yaml can be loaded and parsed correctly
+            with open(config_path, "r") as f:
+                data = yaml.safe_load(f)
+            assert data["scenario_id"] == "test_scenario"

@@ -511,18 +511,40 @@ async def _run_agent_task(
             ]
         # --- END REAL DATA LOADING ---
 
-        # Load scenario config
+        # Load scenario config with fallback: configs/{scenario_id}.yaml -> data/schemas/{scenario_id}/schema.json
         from src.schemas.scenario import ScenarioConfig
         import yaml
 
-        scenario_path = (
-            f"{PROJECT_ROOT}/configs/{scenario_id}.yaml"
-            if scenario_id
-            else f"{PROJECT_ROOT}/configs/scenario_a.yaml"
-        )
-        with open(scenario_path, "r") as f:
-            scenario_dict = yaml.safe_load(f)
-        scenario_config = ScenarioConfig(**scenario_dict)
+        def _load_scenario_config(scenario_id: str) -> tuple[ScenarioConfig, str]:
+            """Load scenario with fallback: configs/{scenario_id}.yaml -> data/schemas/{scenario_id}/schema.json
+            Returns (ScenarioConfig, path_used)
+            """
+            # Try configs/{scenario_id}.yaml first
+            config_path = f"{PROJECT_ROOT}/configs/{scenario_id}.yaml"
+            if os.path.exists(config_path):
+                with open(config_path, "r") as f:
+                    scenario_dict = yaml.safe_load(f)
+                return ScenarioConfig(**scenario_dict), config_path
+
+            # Fallback: data/schemas/{scenario_id}/schema.json (used by simulations router)
+            schema_path = f"{PROJECT_ROOT}/data/schemas/{scenario_id}/schema.json"
+            try:
+                from backend.app.routers.scenarios import _load_scenario_from_disk
+
+                scenario = _load_scenario_from_disk(scenario_id)
+                if scenario is not None:
+                    return scenario, schema_path
+            except Exception as e:
+                # Log the error but don't fail yet - we'll raise a clear error below
+                pass
+
+            # If both fail, raise a clear error
+            raise FileNotFoundError(
+                f"Scenario '{scenario_id}' not found in configs/{scenario_id}.yaml "
+                f"or data/schemas/{scenario_id}/schema.json"
+            )
+
+        scenario_config, scenario_path = _load_scenario_config(scenario_id)
 
         # Get baseline controller code
         with open(f"{PROJECT_ROOT}/src/controllers/__init__.py", "r") as f:
