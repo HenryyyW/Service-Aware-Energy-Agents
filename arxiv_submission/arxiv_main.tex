@@ -83,13 +83,14 @@ points against a 10-point gate), with KPI differences reported as context only.
 The hostile-proposer study then forces verifier engagement: under a
 deterministic out-of-bounds proposer the verified arm accepted zero
 out-of-bounds proposals in every kept cell while the unverified arm accepted
-9.2--13.0 per step, with corrective re-prompt recovering 0.880--1.000 of
-corrupted proposals (13 kept cells after a user-approved re-run of the three
-quarantined cells) --- while the accepted dispatch stayed the LLM's repaired
-proposal (cost 442.62 vs.\ 441.08 USD unverified, 67.13 deterministic
-reference), which we report as the cost of recovery. All artifacts are
-reproducible: manifests throughout, bit-identical same-seed repeats, and a
-measured 0.539 median CI half-width ratio from five to ten seeds.
+9.2--13.0 per step, with corrective re-prompt recovering 0.909--1.000 of
+corrupted proposals (mean 0.970; 13 kept cells after a user-approved re-run of
+the three quarantined cells) --- while the accepted dispatch stayed the LLM's
+repaired proposal (cost 440.85 vs.\ 437.15 USD unverified on the kept cells,
+65.52 deterministic reference), which we report as the cost of recovery. All
+artifacts are reproducible: manifests throughout, bit-identical same-seed
+repeats, and a measured 0.539 median CI half-width ratio from five to ten
+seeds.
 \end{abstract}
 
 \keywords{Multi-agent systems, renewable energy communities, LLM code agents, power system simulation, failure injection, pricing regimes}
@@ -491,20 +492,32 @@ corrupted proposals, so verification is the only difference between them.
 
 \begin{table}[htbp]
 \centering
-\caption{M2b hostile-proposer study (per-cell values; 13 of 15 verified cells kept in the recovery epoch after the user-approved re-run of the three quarantined cells, under the rule \texttt{llm\_backend\_errors} $\leq 2$ AND \texttt{llm\_calls} $\geq$ steps AND telemetry recorded).}
+\caption{M2b hostile-proposer study, recomputed from run manifests and
+\texttt{result.json} (provenance: \texttt{docs/count\_audit/table7\_rebuilt.md};
+per-cell values: \texttt{docs/reviewer\_response/e1\_cells.csv}). Headline =
+KEEP cells under the rule \texttt{llm\_backend\_errors} $\leq 2$ AND
+\texttt{llm\_calls} $\geq$ steps AND telemetry recorded, per epoch and never
+pooled (detection 15/15; recovery 13/15 after the user-approved re-run of the
+three quarantined cells was applied in place: C/42 promoted at 0 errors, C/123
+and E/42 remain quarantined at 3 endpoint errors and are published per cell, not
+pooled). Repair success in the detection epoch is derived (720 repair iterations
+minus 360 deterministic replacements; the recorded field is null in that build).
+Reference = the 15 deterministic \texttt{multi\_agent} cells at the M2b seeds
+reused from the M2a screen.}
 \label{tab:m2b}
 \begin{tabular}{lccc}
 \toprule
  & Detection epoch & Recovery epoch & Reference \\
 \midrule
-Cells (verified arm) & --- & 13 keep / 2 quarantined & --- \\
-Unsafe acceptance, unverified (per step) & 10.33 & 10.33 & --- \\
+Cells (verified arm) & 15 keep / 0 quarantined & 13 keep / 2 quarantined & --- \\
+Unsafe acceptance, unverified (per step) & 10.60 & 10.30 & --- \\
 Unsafe acceptance, verified (per step) & 0.0000 & 0.0000 & --- \\
-Paired directional wins & 12/12 & 13/13 & --- \\
+Paired directional wins & 15/15 & 13/13 & --- \\
 Bound-violation detections (per cell) & 24/24 & 24/24 & --- \\
-Repair success rate (recorded) & not measurable & 0.880--1.000 (mean 0.974) & --- \\
-Fallback steps (verified total) & 18/360 & 18/360 & --- \\
-Cost (USD, mean) & 442.62 & 442.62 & 67.13 \\
+Repair success rate (verified) & 0.500 (derived) & 0.909--1.000 (mean 0.970) & --- \\
+Fallback steps (verified total) & 360/360 & 9/312 & --- \\
+Cost, verified (USD, mean) & 203.44 & 440.85 & 65.52 \\
+Cost, unverified (USD, mean) & 440.79 & 437.15 & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -512,28 +525,31 @@ Cost (USD, mean) & 442.62 & 442.62 & 67.13 \\
 \textbf{What the study shows.} Under a proposer that is deliberately
 out-of-bounds, the unverified arm applies the corrupted proposal and the
 adapter clamps it downstream --- an unsafe acceptance rate of 9.2--13.0
-out-of-bounds values per step, in every kept cell of both pilots. The verified
-arm accepted zero out-of-bounds proposals in every kept cell (12/12 paired
-directional wins in the detection epoch; 13/13 after the user-approved re-run of
-the three quarantined cells promoted one cell to keep, two remaining
-quarantined for endpoint degradation; exact sign test on the 13 pairs,
-two-sided $p = 2.4 \times 10^{-4}$, reported for reference only). In the
-recovery epoch, where re-prompts are exempt from corruption, the corrective
-re-prompt returned an in-bounds proposal that was applied in 0.880--1.000 of
-attempts (recorded \texttt{repair\_success\_rate}; mean 0.974 over the 13 kept
-cells), so the loop demonstrably repairs rather than only rejects. The detection epoch --- whose re-prompts were
-themselves corrupted --- could not repair by construction and ended every
-attempt on the deterministic replacement dispatch; we report that epoch as
-detection-plus-replacement, not recovery, with 12 of 15 verified cells kept
-(before the re-run).
+out-of-bounds values per step across cells (mean 10.60 detection, 10.30
+recovery over the kept pairs), while the verified arm accepted zero
+out-of-bounds proposals in every kept cell (15/15 paired directional wins in
+the detection epoch; 13/13 after the user-approved re-run of the three
+quarantined cells promoted one cell to keep, two remaining quarantined for
+endpoint degradation; exact sign test on the 13 pairs, two-sided $p = 2.4
+\times 10^{-4}$, reported for reference only). In the recovery epoch, where
+re-prompts are exempt from corruption, the corrective re-prompt returned an
+in-bounds proposal that was applied in 0.909--1.000 of attempts (recorded
+\texttt{repair\_success\_rate}; mean 0.970 over the 13 kept cells; the 0.880
+floor belongs to the two quarantined cells), so the loop demonstrably repairs
+rather than only rejects. The detection epoch --- whose re-prompts were
+themselves corrupted --- could not repair by construction (derived repair
+success 0.500) and ended every attempt on the deterministic replacement
+dispatch (360/360 steps); we report that epoch as detection-plus-replacement,
+not recovery, with 15 of 15 verified cells kept.
 
 \textbf{The cost of recovery.} The verified arm's KPIs track the unverified
-arm rather than the deterministic reference: cost 442.62 USD vs.\ 441.08
-unverified and 67.13 for the reference (peak 76.12 vs.\ 76.01 vs.\ 12.03 kW).
-Per-step verification restores in-bounds dispatch, but the accepted dispatch
-remains the LLM's repaired proposal, so the safety gain is not a KPI gain. We
-report this as the cost of recovery, not as a verifier-value claim, and it is
-the finding a longer-horizon confirmation should test.
+arm rather than the deterministic reference: cost 440.85 USD vs.\ 437.15
+unverified (13 kept cells) and 65.52 for the reference (peak 75.14 vs.\ 74.88
+vs.\ 12.03 kW). Per-step verification restores in-bounds dispatch, but the
+accepted dispatch remains the LLM's repaired proposal, so the safety gain is
+not a KPI gain. We report this as the cost of recovery, not as a
+verifier-value claim, and it is the finding a longer-horizon confirmation
+should test.
 
 \textbf{Provenance and degradation.} \texttt{first\_attempt\_validity} is 0.0
 in every cell of both pilots \emph{by design}: the corruptor scales every
