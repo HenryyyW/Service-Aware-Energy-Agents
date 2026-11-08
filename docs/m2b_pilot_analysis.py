@@ -61,6 +61,39 @@ NO_MASKING = {
 }
 
 
+EPOCH_BOUNDARY_ISO = "2026-11-08T08:37:00"  # 3-worker leg stopped here (queue killed)
+
+
+def epoch_of(result: dict) -> str:
+    """workers=3 (before the kill) vs workers=1 (after) -- per PM ruling the two
+    epochs are never pooled, so the column is derived from the run's start time."""
+    started = str(result.get("start_time") or "")
+    return "workers=3" if started and started < EPOCH_BOUNDARY_ISO else "workers=1"
+
+
+def keep_flags(result: dict) -> dict:
+    """PM keep rule (2026-11-08 final): llm_backend_errors <= 2 AND
+    first_attempt_validity >= 0.90. NOTE: under SAEA_LLM_HOSTILE=out_of_bounds the
+    corruptor breaks every first attempt by construction, so first_attempt_validity
+    is 0.0 in BOTH arms and that condition cannot be satisfied by any cell of this
+    run; the equivalent "proposer was actually consulted" signal is
+    llm_calls / llm_backend_errors / llm_fallback_steps, which the error bound
+    already covers. The cell reports both conditions so the threshold is auditable."""
+    cfg = result.get("controller_config") or {}
+    errs = cfg.get("llm_backend_errors") or 0
+    fav = cfg.get("first_attempt_validity")
+    return {
+        "llm_backend_errors": errs,
+        "error_share": errs / float(cfg.get("total_steps") or 24),
+        "first_attempt_validity": fav,
+        "repair_success_rate": cfg.get("repair_success_rate"),
+        "llm_calls": cfg.get("llm_calls"),
+        "llm_fallback_steps": cfg.get("llm_fallback_steps"),
+        "error_bound_ok": errs <= 2,
+        "fav_bound_ok": (fav is not None and fav >= 0.90),
+    }
+
+
 def load(root: Path, scenario: str, controller: str, seed: int) -> Optional[dict]:
     path = root / scenario / f"{scenario}_{controller}_{seed}" / "result.json"
     return json.loads(path.read_text()) if path.is_file() else None
