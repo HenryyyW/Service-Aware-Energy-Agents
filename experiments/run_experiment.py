@@ -466,6 +466,18 @@ class ExperimentRunner:
             # Update energy.total_cost to include community settlement costs
             energy.total_cost = energy_sharing.actual_total_bill
 
+        # Collect hostile proposer metrics from aggregator (M2b experiment)
+        hostile_metrics = None
+        if (
+            self.controller
+            and hasattr(self.controller, "coordinator")
+            and hasattr(self.controller.coordinator, "aggregator")
+            and hasattr(self.controller.coordinator.aggregator, "_last_corruptor")
+        ):
+            corruptor = self.controller.coordinator.aggregator._last_corruptor
+            if corruptor:
+                hostile_metrics = corruptor.get_metrics()
+
         # Create KPI results
         kpi_results = []
 
@@ -669,6 +681,7 @@ class ExperimentRunner:
             ],
             trajectories_file=str(self.run_dir / "trajectories.jsonl"),
             logs_file=str(self.run_dir / "experiment.log"),
+            hostile_metrics=hostile_metrics,
         )
 
         return result

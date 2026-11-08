@@ -209,6 +209,8 @@ class ExperimentResult(BaseModel):
     trajectories_file: Optional[str] = None
     logs_file: Optional[str] = None
     plots_dir: Optional[str] = None
+    # Hostile proposer metrics (M2b experiment)
+    hostile_metrics: Optional[Dict[str, Any]] = None
 
     def duration_seconds(self) -> float:
         if self.end_time:

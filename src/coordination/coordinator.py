@@ -141,8 +141,8 @@ class MultiAgentCoordinator:
             )
             self.aggregator.receive(msg)
 
-        # Trigger reconciliation
-        self.aggregator._reconcile_proposals()
+        # Trigger reconciliation with current timestep for hostile mode
+        self.aggregator._reconcile_proposals(timestep=self.current_timestep)
 
         return AggregationResult(
             building_allocations=self.aggregator.final_allocations,
