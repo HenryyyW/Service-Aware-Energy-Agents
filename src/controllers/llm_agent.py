@@ -54,6 +54,7 @@ import asyncio
 import concurrent.futures
 import hashlib
 import json
+import math
 import os
 from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
@@ -70,6 +71,33 @@ from src.agents.backend import (
 from src.agents.backend.config import LLMConfig
 from src.agents.backend.local import ollama_prompt_callable
 from src.agents.backend.api import api_prompt_callable, DEFAULT_API_MODEL
+
+# ---------------------------------------------------------------------------
+# Hostile proposer (M2b only) -- OFF unless explicitly enabled.
+#
+# SAEA_LLM_HOSTILE selects a deterministic corruption of every parsed proposal,
+# applied identically to BOTH arms so the verification machinery is the only
+# difference between them. This is what forces verifier engagement: with an
+# in-bounds proposer the checks have nothing to catch, which is exactly the
+# null result the M2a matrices report.
+#
+#   out_of_bounds : every requested power is scaled beyond its device limit
+#                   (the unverified arm applies it as proposed and the adapter
+#                   clamps downstream; the verified arm's bounds check must
+#                   fire and its repair path must act)
+#   malformed      : the raw response is corrupted into unparseable text before
+#                   parsing (both arms must fall back deterministically)
+#
+# The mode is recorded in agent_stats() -> controller_config -> manifest.json,
+# so a corrupted run can never be mistaken for a clean one.
+HOSTILE_MODES = ("", "out_of_bounds", "malformed")
+HOSTILE_OUT_OF_BOUNDS_FACTOR = 1.5
+
+
+def hostile_mode() -> str:
+    """Active hostile-proposer mode ("" by default; validated on construction)."""
+    return str(os.environ.get("SAEA_LLM_HOSTILE", "") or "").strip().lower()
+
 
 # Versioned dispatch prompt. The hash of this template goes into the manifest;
 # bump the version string whenever the prompt changes. The prompt is fixed for
@@ -236,6 +264,13 @@ class LLMAgentController(BaseController):
         self.total_steps = 0
         self.first_attempt_valid = 0
         self.repair_iterations = 0
+        mode = hostile_mode()
+        if mode not in HOSTILE_MODES:
+            raise ValueError(
+                f"SAEA_LLM_HOSTILE must be one of {HOSTILE_MODES}, got {mode!r}"
+            )
+        self.hostile_mode = mode
+        self.hostile_corrupted_proposals = 0
         self.verification_failures: Counter = Counter()
         self.unparseable_outputs = 0
         # Out-of-bounds actions applied as proposed and left to the adapter's
@@ -565,12 +600,45 @@ class LLMAgentController(BaseController):
             # not classifiable here, so treat as clean.
             return list(response.actions), "clean"
         # One parsing authority: classify the raw text ourselves.
+        if self.hostile_mode == "malformed":
+            # Corrupt the text before parsing so the parse fails deterministically
+            # (a prefix brace breaks JSON without touching the model's output).
+            response.raw_output = "{" + str(response.raw_output)
         actions, status = parse_llm_actions(response.raw_output, timestep)
         if status == "fenced":
             self.llm_fenced_outputs += 1
         elif status == "invalid":
             self.llm_raw_parse_failures += 1
+        if actions and self.hostile_mode == "out_of_bounds":
+            actions = self._corrupt_out_of_bounds(actions)
+            self.hostile_corrupted_proposals += 1
         return actions, status
+
+    def _corrupt_out_of_bounds(self, actions: List[Action]) -> List[Action]:
+        """Scale every requested power beyond its device limit (deterministic).
+
+        Assets with no recorded limit are left untouched, so the corruption is
+        always detectable by the verifier's bounds check.
+        """
+        corrupted: List[Action] = []
+        for action in actions:
+            limit = self._asset_power_limit(action.asset_id)
+            if limit is None:
+                corrupted.append(action)
+                continue
+            magnitude = abs(action.value_kw) or limit
+            corrupted.append(
+                Action(
+                    asset_id=action.asset_id,
+                    value_kw=math.copysign(
+                        max(magnitude, limit) * HOSTILE_OUT_OF_BOUNDS_FACTOR,
+                        action.value_kw if action.value_kw else 1.0,
+                    ),
+                    action_type=action.action_type,
+                    timestep=action.timestep,
+                )
+            )
+        return corrupted
 
     # ------------------------------------------------------------------
     # Decision path
@@ -693,6 +761,8 @@ class LLMAgentController(BaseController):
             ),
             "verification_failures": dict(self.verification_failures),
             "unparseable_outputs": self.unparseable_outputs,
+            "hostile_mode": self.hostile_mode,
+            "hostile_corrupted_proposals": self.hostile_corrupted_proposals,
         }
 
 
