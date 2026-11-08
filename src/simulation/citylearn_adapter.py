@@ -676,19 +676,16 @@ class CityLearnAdapter:
         but falls back to /app/schemas if the default is not writable (e.g.,
         docker-compose mounts ./data:/app/data:ro).
 
-        CRITICAL: Never write to the bare scenario_id directory (data/schemas/{scenario_id}/)
-        as that clobbers the source scenario config. Always use a unique per-run directory.
+        Resolution:
+        - SAEA_RUN_ID set → per-run isolation (concurrent benchmarks)
+        - SAEA_RUN_ID not set → scenario_id (stable path for tests/API)
         """
         # Cache the run suffix to ensure consistent directory across calls
         if not hasattr(self, "_cached_run_suffix"):
             run_suffix = os.environ.get("SAEA_RUN_ID", "").strip()
+            # Use scenario_id when no run ID provided (stable path for single-instance usage)
             if not run_suffix:
-                # Generate a unique run ID to avoid clobbering the source scenario directory
-                import uuid
-
-                run_suffix = (
-                    f"{self.scenario_config.scenario_id}_{uuid.uuid4().hex[:8]}"
-                )
+                run_suffix = self.scenario_config.scenario_id
             self._cached_run_suffix = run_suffix
         dir_name = self._cached_run_suffix
 

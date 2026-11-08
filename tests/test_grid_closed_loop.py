@@ -877,14 +877,16 @@ def test_schema_no_clobber_on_repeated_runs(tmp_path):
         ),
     )
 
-    # Ensure SAEA_RUN_ID is not set (simulate API path)
+    # Ensure SAEA_RUN_ID is not set (simulate API path where runs don't set run ID)
     if "SAEA_RUN_ID" in os.environ:
         del os.environ["SAEA_RUN_ID"]
 
-    # Run 1: First API-path run with tight limits
-    with tempfile.TemporaryDirectory() as tmpdir1:
+    # Use SAME tmpdir to simulate the real clobbering scenario:
+    # multiple API requests in the same data directory without run ID
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Run 1: First API-path run with tight limits
         controller = RuleBasedController(scenario)
-        coupler1 = SimulationCoupler(scenario, data_dir=tmpdir1, controller=None)
+        coupler1 = SimulationCoupler(scenario, data_dir=tmpdir, controller=None)
         coupler1.controller = controller
         observations = coupler1.reset(random_seed=42)
 
@@ -900,10 +902,9 @@ def test_schema_no_clobber_on_repeated_runs(tmp_path):
         print(f"Run 1 voltage violations: {violations1}")
         coupler1.close()
 
-    # Run 2: Second API-path run - should ALSO see tight limits (not clobbered)
-    with tempfile.TemporaryDirectory() as tmpdir2:
+        # Run 2: Second API-path run in SAME data dir - should ALSO see tight limits (not clobbered)
         controller = RuleBasedController(scenario)
-        coupler2 = SimulationCoupler(scenario, data_dir=tmpdir2, controller=None)
+        coupler2 = SimulationCoupler(scenario, data_dir=tmpdir, controller=None)
         coupler2.controller = controller
         observations = coupler2.reset(random_seed=42)
 
