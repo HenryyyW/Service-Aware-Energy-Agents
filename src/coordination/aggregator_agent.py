@@ -8,9 +8,6 @@ from src.coordination.base import (
     CoordinationPhase,
     BuildingProposal,
     AggregationResult,
-    BatteryProposal,
-    EVProposal,
-    Proposal,
 )
 from src.schemas.scenario import ScenarioConfig
 
