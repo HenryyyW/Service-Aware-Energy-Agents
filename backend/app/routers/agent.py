@@ -293,7 +293,8 @@ async def _run_agent_task(
             )
 
             # Build diagnostic_reports from real_diagnostics (for both ExperimentResult and later use in repair loop)
-            diagnostic_reports = (
+            # Build diagnostic_reports from real_diagnostics (as objects for repair loop)
+            diagnostic_reports_objects = (
                 [
                     DiagnosticReport(
                         scenario_id=scenario_id or "scenario_e",
@@ -314,7 +315,7 @@ async def _run_agent_task(
                             if _diag_enum(DiagnosticCategory, d["category"]) is not None
                             and _diag_enum(Severity, d["severity"]) is not None
                         ],
-                    ).model_dump()
+                    )
                     for vt in set(violation_timesteps)
                     for vt_diags in [
                         [d for d in real_diagnostics if d["timestep"] == vt]
@@ -323,6 +324,9 @@ async def _run_agent_task(
                 if real_diagnostics
                 else []
             )
+
+            # For ExperimentResult, convert to dicts
+            diagnostic_reports = [dr.model_dump() for dr in diagnostic_reports_objects]
 
             try:
                 experiment_result = ExperimentResult(
