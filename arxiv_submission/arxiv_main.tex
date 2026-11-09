@@ -108,7 +108,7 @@ Renewable energy communities (RECs) require coordinated control of distributed e
 We address three gaps:
 \begin{enumerate}
     \item \textbf{Pricing regime diversity}: most benchmarks fix a single tariff structure; we evaluate the full controller matrix under pool TOU, LMP, and bilateral P2P regimes, and separate dispatch sensitivity from billing sensitivity --- only price-aware controllers change dispatch across regimes, while cost is a function of prices on any fixed trajectory.
-    \item \textbf{Failure injection}: scenario E injects PV inverter, battery, EV charger, and sensor failures at severity 1.0 mid-run, and we report oracle-side detection, grid-level detection, and recovery separately for the failure types as configured.
+    \item \textbf{Failure injection}: scenario E injects PV inverter, battery, EV charger, and sensor failures at severity 1.0 mid-run plus a grid-service limit reduction to 95\% of the import limit (the paper's aggressive configuration, identical in all three regime legs), and we report oracle-side detection, grid-level detection, and recovery separately for the failure types as configured.
     \item \textbf{Verified LLM dispatch agents}: a per-step verification layer (asset-shape and device-power bounds) with one corrective re-prompt and a deterministic replacement guards LLM dispatch proposals. We ablate verified vs.\ unverified arms under a deterministic proposer, a hosted LLM, and a deliberately out-of-bounds ``hostile'' proposer, so that verification is measured where it can actually engage. The five-agent code-repair loop (Planner$\rightarrow$Coder$\rightarrow$Executor$\rightarrow$Verifier$\rightarrow$Reporter) is implemented and instrumented, but its behaviour-changing code patches are scaffolded rather than demonstrated; a code-repair benchmark is future work.
 \end{enumerate}
 
@@ -185,14 +185,19 @@ policy.
 Five scenarios (Table~\ref{tab:scenarios}) differ in device mix and stressors.
 Each runs ten seeds (42, 123, 456, 789, 999, 1234, 2024, 3456, 5555,
 8888) $\times$ five controllers $= 250$ runs per regime, under three regimes
-(pool TOU, LMP, bilateral P2P) for 750 runs. A further 50-run fallback-mode
+(pool TOU, LMP, bilateral P2P) for 750 runs; the legs of record are
+\texttt{matrix\_full} (pool TOU, A/B/C/E), \texttt{m52\_benchmark} (LMP,
+A/B/C/E; the directory name is a legacy of its M5.2 origin), and
+\texttt{matrix\_p2p} (P2P, A/B/C/E), with scenario D's 150 rows cited from the
+dedicated re-run (\texttt{matrix\_d\_rerun}$\{$,\_lmp,\_p2p$\}$) in all three
+regimes, because an energy-sharing configuration defect was found and fixed and
+the matrix legs' D blocks predate that fix. D's rows are settlement-inclusive
+on the re-run basis; A/B/C/E report grid-only cost. A
+further 50-run fallback-mode
 ablation and a 150-cell real-LLM screen (100 LLM-arm and 50 reference cells,
 24 simulated steps) isolate verification machinery from proposer quality, and a
 60-cell hostile-proposer study in two 30-cell pilots forces verifier
-engagement. Scenario D was re-run in full (150 runs: 5 controllers $\times$ 10
-seeds $\times$ 3 regimes) after an energy-sharing configuration defect was
-found and fixed; its rows are cited from the re-run and are settlement-inclusive,
-while A/B/C/E report grid-only cost. All cost comparisons in this paper are
+engagement. All cost comparisons in this paper are
 therefore within-scenario.
 
 \textbf{Cost basis.} Only scenario D enables community energy sharing, so its
@@ -391,8 +396,9 @@ zero differing): those scenarios run without community settlement, so the
 billed series does not change with the regime --- a property of the billing
 configuration in these builds, not a consequence of dispatch identity.
 Scenario D, where settlement and dynamic pricing are active, does bill the LMP
-series, and its regime rows are cited from the dedicated re-run matrices (the
-LMP and P2P matrix legs still carry D's pre-re-run rows): e.g.\ rule\_based
+series, and its regime rows are cited from the dedicated re-run matrices (all
+three matrix legs --- pool TOU, LMP, and P2P --- still carry D's pre-re-run
+rows in their D blocks): e.g.\ rule\_based
 190.81 USD (TOU) vs.\ 165.03 (LMP) on the settlement-inclusive basis.
 
 \textbf{LMP construction, stated as built.} ``LMP'' here is not a network-dual
@@ -466,25 +472,28 @@ invariant.
 \subsection{Scenario E: Failure Injection}
 \label{sec:scenarioe}
 
-Scenario E injects PV inverter, battery, EV charger, and sensor failures at
-severity 1.0 mid-run, plus a temporary grid-service limit reduction; every
-configured failure activates and deactivates on schedule. The matrix covers
-150 runs (5 controllers $\times$ 10 seeds, identical injection under each of the
-three pricing regimes; \agent{rl} included --- 10 runs per controller per
-regime, 30 per controller across regimes). All 150 runs show
+Scenario E is the paper's aggressive failure configuration: it injects PV
+inverter, battery, EV charger, and sensor failures at severity 1.0 mid-run (the
+EV charger is completely unavailable during its window) plus a temporary
+grid-service limit reduction to 95\% of the community import limit; every
+configured failure activates and deactivates on schedule. This configuration is
+identical in all three pricing-regime legs, so the aggressive parameters are a
+scenario-level asymmetry (A/B/C/D use the standard configuration in every leg),
+not a regime-specific one. The matrix covers 150 runs (5 controllers $\times$ 10
+seeds under each of the three regimes; \agent{rl} included --- 10 runs per
+controller per regime, 30 per controller across regimes). All 150 runs show
 \texttt{members\_interrupted = [building\_3]} and \texttt{member\_cost\_coverage
-= 0.80}: the failure window blanks one member's cost data, which is reported
-as an interruption, never scored as zero cost.
+= 0.80}: the sensor-failure window blanks one member's cost data, which is
+reported as an interruption, never scored as zero cost.
 
 At the grid level, none of the injected failures is detectable from the
 simulation in these runs: power flow converges in every step of all 150 runs,
 voltage and loading stay inside limits (zero voltage/line/transformer
-violations), and no re-dispatch is ever triggered. Detection of the four asset
-failures is therefore configuration-oracle only --- no controller observes
-them --- and we make no detection or recovery claim for them. A variant
-configuration that reduces the export limit to 7.5\,kW was exercised in an
-earlier 20-run stress set that is superseded and not part of the reported
-matrices; its detection statistics are not reported here.
+violations), and no re-dispatch is ever triggered --- for \agent{rl} exactly as
+for the four other controllers. Detection of the failures is therefore
+configuration-oracle only --- no controller observes them --- and we make no
+detection or recovery claim for any failure type, the aggressive grid-service
+limit reduction included.
 
 \subsection{Ablation: Verified vs. Unverified Agents}
 \label{sec:ablation}
@@ -692,8 +701,9 @@ against $0.154$ for rule-based and $1.000$ for MPC (Table~\ref{tab:d-kpis}).
 
 \textbf{Failure-injection results (scenario E).} Across all 150 scenario-E runs
 (3 regimes $\times$ 5 controllers $\times$ 10 seeds) the injected failures ---
-PV inverter, battery, EV charger, sensor, and the temporary grid-service limit
-reduction --- produce \emph{zero} grid-level violations: power flow converges in
+PV inverter, battery, EV charger at severity 1.0 (charger unavailable), sensor,
+and the temporary grid-service limit reduction to 95\% of the import limit ---
+produce \emph{zero} grid-level violations: power flow converges in
 every step, voltage and loading stay inside limits, and no re-dispatch is
 triggered. Detection at the grid level is therefore empty for every failure
 type: removing an inverter, a battery, or a charger, blanking one building's
@@ -776,7 +786,7 @@ grid-limit reductions, component failures. Attacks limited to failure-injection 
     \item \textbf{Horizon and seeds}: 24-step (one-day) horizons and 3-seed pilots; the pre-registered significance criterion is reserved for the full-length run.
     \item \textbf{Endpoint degradation}: 16 of 30 recovery-epoch cells and one M2a cell took 1--3 transient endpoint errors; cells are quarantined under a published rule (errors $\leq 2$ AND calls $\geq$ steps AND telemetry) and error/fallback shares are reported per cell (Appendix~\ref{app:cells}). A confirmation re-run of the three quarantined verified cells promoted one to keep (0 errors of 24 steps); the other two still show 3 of 24 and remain quarantined.
     \item \textbf{Gini measurement gap}: the fairness coefficient does not reflect settlement redistribution; inequality claims are deferred until a settlement-aware metric exists.
-    \item \textbf{Failure-injection coverage}: the reported scenario-E runs inject the configured failure set at severity 1.0 with the stock community limits; no injected failure produces a grid-level violation, so detection/recovery are reported empty. A separate aggressive grid-limit configuration was exercised in an earlier superseded run set and is not reported here.
+    \item \textbf{Failure-injection coverage}: the reported scenario-E runs use the paper's aggressive failure configuration (EV charger severity 1.0, grid-service limit reduced to 95\% of the import limit, identical in all three regime legs; A/B/C/D use the standard configuration). No injected failure produces a grid-level violation in any of the 150 runs, so detection and recovery are reported as empty rather than claimed.
 \end{enumerate}
 
 \subsection{Case Study: Verified Repair Under a Corrupted Proposer}
