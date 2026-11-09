@@ -731,6 +731,7 @@ class Sandbox:
             return SandboxResult(
                 success=False,
                 error=f"Experiment failed: {str(e)}\n{traceback.format_exc()}",
+                stderr=traceback.format_exc(),
                 execution_time=time.time() - start_time,
             )
 
