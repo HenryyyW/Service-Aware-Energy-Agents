@@ -354,19 +354,14 @@ def table7() -> Dict:
     det_u = unverified_cells(det_all)
     rec_v = verified_cells(rec_all)
     rec_u = unverified_cells(rec_all)
-    q2_v = verified_cells(q2_all)
+    # q2 archive cells are round-1 degraded copies — loaded for provenance
+    # documentation only, never substituted into the recovery set.
+    q2_v = verified_cells(q2_all)  # noqa: F841 (provenance reference)
 
-    # Recovery epoch as the paper computed it: 15 cells with the three
-    # round-2 re-run cells substituted for their degraded originals.
-    rec_sub_v = dict(rec_v)
-    rec_sub_v.update(q2_v)
-
-    def agg(sel: Dict[str, dict], arm: str) -> dict:
-        s = summarize(label=arm, sel=sel)
-        return s
-
-    rec_v_keep = {k: m for k, m in rec_sub_v.items() if m["keep"]}
-    rec_v_drop = {k: m for k, m in rec_sub_v.items() if not m["keep"]}
+    # Recovery epoch as executed: the on-disk matrix carries the in-place
+    # re-run (C/42 promoted); archive dirs hold round-1 degraded copies.
+    rec_v_keep = {k: m for k, m in rec_v.items() if m["keep"]}
+    rec_v_drop = {k: m for k, m in rec_v.items() if not m["keep"]}
     det_v_drop = {k: m for k, m in det_v.items() if not m["keep"]}
 
     def paired_wins(unverified, verified):
@@ -416,14 +411,21 @@ def table7() -> Dict:
         "provenance": {
             "detection_raw": "experiments/m2b_pilot (30 result.json)",
             "recovery_raw": "experiments/m2b_recovery (30 result.json)",
-            "recovery_rerun_cells": (
-                "3 verified cells in /tmp/opencode/m2b_recovery_quarantine_round2 "
-                "(scenario_c_llm_agent_verified_{42,123}, scenario_e_llm_agent_verified_42)"
+            "archive_correction": (
+                "/tmp/opencode/m2b_recovery_quarantine_round2 holds the ROUND-1 "
+                "DEGRADED copies (llm_backend_errors=3, fallback=3, rsr "
+                "0.857-0.880 each), NOT round-2 re-runs. The on-disk matrix "
+                "carries the in-place re-run (C/42: errs=0, fallback=0, "
+                "rsr=1.000, promoted to keep). Verified by Research against "
+                "the archive + docs/m2b-recovery-close-out."
             ),
-            "paper_recovery_column_reconstruction": (
-                "fallback 18/360 and cost 442.62 reproduce EXACTLY as: recovery "
-                "matrix over ALL 15 verified cells with the round-2 re-run cells "
-                "substituted (no keep-rule filter on the denominator)"
+            "untraceable_paper_numbers": (
+                "The paper's 18/360 fallback and 442.62 cost trace to NO cell "
+                "set: not as-run all-15 (15/360), not keep-13 (9/312), and "
+                "substituting the archived degraded cells re-degrades C/42 "
+                "(a promoted cell), so that construction is invalid. The "
+                "detection column (18/360, 442.62) is a copy of the recovery "
+                "column; the recovery numbers as printed also do not trace."
             ),
         },
         "rows": {
@@ -431,27 +433,44 @@ def table7() -> Dict:
                 "paper_detection": "18/360",
                 "paper_recovery": "18/360",
                 "raw_detection": fallback(det_v),
-                "raw_recovery": fallback(rec_sub_v),
+                "raw_recovery_as_run_all15": fallback(rec_v),
                 "raw_recovery_keep13": fallback(rec_v_keep),
                 "verdict": (
-                    "DETECTION COLUMN UNTRACEABLE: raw detection = 360/360 "
-                    "(every step fell back — re-prompts were corrupted, matching "
-                    "the paper's own prose); the table's 18/360 for detection is "
-                    "a copy of the recovery column. Recovery 18/360 traces to "
-                    "all-15-cells-with-substitutions."
+                    "DETECTION COLUMN UNTRACEABLE (copy of the recovery "
+                    "column): raw detection = 360/360 — every step fell back "
+                    "(re-prompts corrupted), matching the paper's own prose. "
+                    "RECOVERY TRACEABLE ONLY AS: as-run all-15 = 15/360 or "
+                    "keep-13 = 9/312. The printed 18/360 traces to no set."
                 ),
             },
             "cost_mean_verified": {
                 "paper_detection": 442.62,
                 "paper_recovery": 442.62,
                 "raw_detection": cost(det_v),
-                "raw_recovery": cost(rec_sub_v),
+                "raw_recovery_as_run_all15": cost(rec_v),
                 "raw_recovery_keep13": cost(rec_v_keep),
                 "verdict": (
                     "DETECTION COLUMN UNTRACEABLE: raw detection verified-arm "
                     "mean cost = "
-                    f"{cost(det_v)} USD (per cell 171-301), not 442.62. Recovery "
-                    "442.62 traces to the substituted 15-cell set."
+                    f"{cost(det_v)} USD (per cell 171-301), not 442.62. "
+                    "RECOVERY TRACEABLE ONLY AS keep-13 = "
+                    f"{cost(rec_v_keep)} USD (or as-run all-15 = "
+                    f"{cost(rec_v)}); the printed 442.62 traces to no set."
+                ),
+            },
+            "cost_reference_multi_agent": {
+                "paper": 67.13,
+                "partner_corrected": 65.52,
+                "computed_m2a_laguna_all_28_cells": 64.47,
+                "computed_m2a_laguna_seeds_42_123_456_n7": 65.38,
+                "verdict": (
+                    "UNTRACEABLE ON DISK: 67.13 matches no artifact subset; "
+                    "65.52 (Partner-corrected) does not reproduce from "
+                    "m2a_rerun_laguna multi_agent 24-step cells either (64.47 "
+                    "over all 28; 65.38 over the 7 cells at M2b seeds 42/123/"
+                    "456 — only 7 of the expected 15 reference cells exist at "
+                    "the M2b seed set). Research must state the exact "
+                    "reference cell list before this row is citable."
                 ),
             },
             "repair_success_rate": {
@@ -461,15 +480,11 @@ def table7() -> Dict:
                     f"{max(m['repair_sr'] for m in rec_v_keep.values()):.3f} "
                     f"(mean {statistics.mean([m['repair_sr'] for m in rec_v_keep.values()]):.3f})"
                 ),
-                "raw_recovery_sub15": (
-                    f"{min(m['repair_sr'] for m in rec_sub_v.values()):.3f}-"
-                    f"{max(m['repair_sr'] for m in rec_sub_v.values()):.3f} "
-                    f"(mean {statistics.mean([m['repair_sr'] for m in rec_sub_v.values()]):.3f})"
-                ),
                 "verdict": (
-                    "PARTIALLY UNTRACEABLE: paper mixes the keep-13 mean (~0.97) "
-                    "with an all-15 range (0.88 floor comes from a quarantined "
-                    "cell). State the cell set for both numbers."
+                    "PAPER RANGE UNTRACEABLE: keep-13 range is 0.909-1.000 "
+                    "(mean 0.970); the 0.880 floor belongs to a degraded "
+                    "round-1 copy in the archive, not to any kept cell. State "
+                    "the cell set."
                 ),
             },
             "unsafe_acceptance_per_step": {
@@ -549,8 +564,8 @@ def main() -> None:
         "Headline (see `rows` for full verdicts):\n"
         f"- DETECTION raw: verified fallback {t7['rows']['fallback_steps_verified']['raw_detection']}, "
         f"cost mean {t7['rows']['cost_mean_verified']['raw_detection']} USD\n"
-        f"- RECOVERY raw (15 cells, q2 substituted): fallback {t7['rows']['fallback_steps_verified']['raw_recovery']}, "
-        f"cost mean {t7['rows']['cost_mean_verified']['raw_recovery']} USD\n"
+        f"- RECOVERY as-run all-15: fallback {t7['rows']['fallback_steps_verified']['raw_recovery_as_run_all15']}, "
+        f"cost mean {t7['rows']['cost_mean_verified']['raw_recovery_as_run_all15']} USD\n"
         f"- RECOVERY keep-13: fallback {t7['rows']['fallback_steps_verified']['raw_recovery_keep13']}, "
         f"cost mean {t7['rows']['cost_mean_verified']['raw_recovery_keep13']} USD\n"
         "\n```json\n" + json.dumps(t7, indent=1, default=str) + "\n```\n"
