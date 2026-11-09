@@ -75,3 +75,60 @@ set; task 10 is reported separately.
 - Paper update only on the user's word: the A2 "scaffolded, not demonstrated" sentence becomes a pilot-demonstrated claim with this benchmark's numbers and caveats.
 
 **This document is the pre-run task list; nothing runs until the Project Partner approves it.**
+
+## Wiring design for the LLM arm (user decision 2026-11-09: WIRE THE LLM)
+
+The user ruled that the benchmark must measure real LLM repair, so the
+authorized envelope is now the actual budget: model `poolside/laguna-xs-2.1`,
+provider NVIDIA NIM, count <= 10 tasks x <= 3 iterations x (planner + coder) =
+**<= 60 LLM calls**, single output dir `experiments/m2b_code_repair/`, no other
+model or provider. The deterministic run documented in
+`code_repair_dryrun_report.md` / `code_repair_results.md` is the **comparator
+arm's baseline**.
+
+### Where the LLM enters
+
+- Only the **Coder stage** gets the backend: `CoderAgent` receives a prompt
+  callable built from `src/agents/backend/` (`AGENT_BACKEND=api:<model>`,
+  `LLM_MODEL`, endpoint/base URL, temperature, per-call timeout) and maps the
+  model's change description onto the AST transformation vocabulary. The
+  Planner/Executor/Verifier stay deterministic - the plan is not model-generated
+  in this design, so the call count is bounded by iterations x tasks.
+- **Deterministic fallback**: if the backend is unavailable (402/403/404/429/5xx
+  after the transport's retries, or an unparseable response), the cell falls
+  back to the template coder and is **labelled `agent_backend: fallback`** -
+  published as comparator-arm evidence, never pooled with LLM cells, and
+  excluded from the LLM-arm headline.
+- Calls are made only after A's gate items land: (1) the LLM-backed coder path
+  inside the envelope with per-cell backend recording; (2) per-task planner
+  targeting verification (the task_1 finding is a formal gate); (3) the sandbox
+  unit-test resource fix. Pre-flight 1-token probe first, as in the M2b queues.
+
+### Per-cell manifest fields for the LLM arm (recording contract)
+
+Each cell's `manifest.json` (in addition to the fields already written) must
+record, per iteration:
+
+| Field | Meaning |
+|---|---|
+| `agent_backend` | `api` (LLM) or `fallback` (deterministic template coder) |
+| `agent_model`, `agent_model_digest` | model id and digest as configured |
+| `endpoint` | base URL (host only in the paper-facing text) |
+| `prompt_version`, `prompt_hash` | coder prompt version/hash |
+| `sampling_temperature`, `sampling_seed` | decode settings |
+| `llm_calls` (per iteration and total) | planner+coder call count |
+| `llm_prompt_tokens`, `llm_completion_tokens` | token accounting |
+| `llm_latency_p50_ms`, `llm_latency_p95_ms` | latency |
+| `llm_backend_errors` | failed calls before fallback (M2b quarantine rule: > 2 -> quarantine) |
+| `hostile_mode` | not used in this benchmark (dispatch-proposer corruption only) |
+
+### Comparator rule (binding)
+
+- Two arms per task: `llm` (backend coder) and `deterministic` (template
+  coder). Both are reported; **they are never pooled** - separate per-task
+  tables, separate headline rates, and the deterministic arm's numbers are the
+  comparator baseline established by the runs above.
+- A cell that falls back mid-run is published as a fallback cell with its
+  partial LLM telemetry, not converted into an LLM success.
+- The pre-registered demonstration threshold (>= 7 of 9 measured tasks) applies
+  to the **LLM arm only**; the deterministic arm is reported as the comparator.
