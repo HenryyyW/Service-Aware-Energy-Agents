@@ -628,6 +628,12 @@ class Sandbox:
             controller_code = f.read()
 
         start_time = time.time()
+        # Track action execution for absent-execution detection
+        action_counts = {
+            "total_steps": 0,
+            "steps_with_actions": 0,
+            "total_actions": 0,
+        }
         try:
             # Import required modules
             from src.simulation import SimulationCoupler
@@ -672,16 +678,17 @@ class Sandbox:
                     or ["voltage", "line_loading", "transformer_loading"]
                 )
             }
-            # Track action execution for absent-execution detection
-            action_counts = {
-                "total_steps": 0,
-                "steps_with_actions": 0,
-                "total_actions": 0,
-            }
 
             for step in range(max_steps):
                 # Get actions from controller
-                requested = controller.get_actions(observations, step)
+                try:
+                    requested = controller.get_actions(observations, step)
+                except Exception as e:
+                    # Controller crashed - track this as absent execution and re-raise
+                    action_counts["total_steps"] += 1
+                    action_counts["controller_crashed"] = True
+                    action_counts["crash_error"] = str(e)
+                    raise RuntimeError(f"Controller crashed at step {step}: {e}") from e
 
                 # Track action execution
                 action_counts["total_steps"] += 1
@@ -750,7 +757,7 @@ class Sandbox:
                 error=f"Experiment failed: {str(e)}\n{traceback.format_exc()}",
                 stderr=traceback.format_exc(),
                 execution_time=time.time() - start_time,
-                action_counts={},
+                action_counts=action_counts,
             )
 
     def _create_dynamic_controller(self, controller_code: str, scenario) -> type:
