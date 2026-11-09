@@ -206,7 +206,7 @@ class TestController(RuleBasedController):
         controller_file="src/controllers/test_controller.py",
         scenario_config=scenario_config,
         iteration=0,
-        max_iterations=3,
+        max_iterations=5,
     )
 
     agent = RepairAgent()

@@ -37,7 +37,7 @@ class RepairContext:
     controller_file: str
     scenario_config: Dict[str, Any]
     iteration: int = 0
-    max_iterations: int = 3
+    max_iterations: int = 5
 
 
 class RepairAgent:

@@ -41,7 +41,7 @@ class AgentState:
     verification_result: Optional[Dict[str, Any]] = None
     final_report: Optional[Dict[str, Any]] = None
     iteration: int = 0
-    max_iterations: int = 3
+    max_iterations: int = 5
     messages: List[Message] = field(default_factory=list)
 
     def add_message(

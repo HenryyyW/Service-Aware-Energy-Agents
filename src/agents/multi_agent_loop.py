@@ -56,7 +56,7 @@ class MultiAgentRepairLoop:
         executor: ExecutorAgent = None,
         verifier: VerifierAgent = None,
         reporter: ReporterAgent = None,
-        max_iterations: int = 3,
+        max_iterations: int = 5,
         project_root: str = None,
         coder_config: Optional[Dict[str, Any]] = None,
     ):

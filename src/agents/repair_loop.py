@@ -53,7 +53,7 @@ class RepairLoop:
         self,
         repair_agent: RepairAgent = None,
         sandbox: Sandbox = None,
-        max_iterations: int = 3,
+        max_iterations: int = 5,
         project_root: str = None,
     ):
         self.repair_agent = repair_agent or RepairAgent()
