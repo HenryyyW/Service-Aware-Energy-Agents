@@ -407,43 +407,30 @@ Return ONLY the unified diff. NO additional text."""
             return None
 
     def _reindent_diff_to_target(self, diff_text: str, target_indent: int) -> str:
-        """Re-indent diff lines to match target file's indentation level.
+        """Normalize diff indentation by stripping leading whitespace uniformly.
 
-        Adjusts the indentation of added/removed/context lines in the diff
-        to match the target file's indentation level (e.g., 4 spaces per level).
+        Only strips the minimum common indentation from all lines (de-indent).
+        Does NOT re-indent individual lines - the hunk context already carries
+        the file's true indentation which the applier copies verbatim.
         """
-        diff_lines = diff_text.splitlines(keepends=True)
-        adjusted_lines = []
+        if not diff_text:
+            return diff_text
 
-        for line in diff_lines:
-            if line.startswith(("+", "-", " ")):
-                # This is a diff line (added, removed, or context)
-                # Extract the content after the diff marker
-                marker = line[0]
-                content = line[1:] if len(line) > 1 else ""
+        lines = diff_text.splitlines(keepends=True)
 
-                # Calculate the current indentation of the content
-                content_indent = len(content) - len(content.lstrip())
-                content_stripped = content.lstrip()
+        # Find minimum indentation of non-empty lines (de-indent whole block)
+        min_indent = min(
+            (len(line) - len(line.lstrip()) for line in lines if line.strip()),
+            default=0,
+        )
+        if min_indent > 0:
+            # Strip the common indentation from all lines
+            lines = [line[min_indent:] for line in lines]
 
-                # Determine the expected indentation based on diff context
-                # For diff lines, we want to maintain the relative indentation
-                # but ensure it's aligned with target_indent
-                if content_stripped:
-                    # Adjust to target_indent while preserving relative indentation
-                    adjusted_content = " " * target_indent + content_stripped
-                else:
-                    adjusted_content = ""
-
-                adjusted_line = marker + adjusted_content
-                adjusted_lines.append(
-                    adjusted_line + ("\n" if line.endswith("\n") else "")
-                )
-            else:
-                # Hunk header or other diff metadata - keep as-is
-                adjusted_lines.append(line)
-
-        return "".join(adjusted_lines)
+        # Ensure no trailing newlines are duplicated
+        result = "".join(lines)
+        # Strip trailing whitespace but preserve final newline if present
+        return result.rstrip() + ("\n" if diff_text.endswith("\n") else "")
 
     def _replace_function(
         self, original_code: str, func_name: str, new_func_code: str
@@ -474,22 +461,37 @@ Return ONLY the unified diff. NO additional text."""
         """Extract change metadata from diff."""
         changes = []
         func_names = set()
+        hunk_count = 0
         for line in diff_text.splitlines():
             if line.startswith("@@"):
+                hunk_count += 1
                 match = re.search(r"@@ -\d+,\d+ \+\d+,\d+ @@.*?def (\w+)", line)
                 if match:
                     func_names.add(match.group(1))
 
-        for fn in func_names:
-            changes.append(
-                {
-                    "file": controller_file,
-                    "function": fn,
-                    "change": f"Modified {fn} via unified diff",
-                    "type": "modification",
-                    "location": "function_body",
-                }
-            )
+        if func_names:
+            for fn in func_names:
+                changes.append(
+                    {
+                        "file": controller_file,
+                        "function": fn,
+                        "change": f"Modified {fn} via unified diff",
+                        "type": "modification",
+                        "location": "function_body",
+                    }
+                )
+        else:
+            # Fallback: report changes based on hunk position when no function name found
+            for i in range(hunk_count):
+                changes.append(
+                    {
+                        "file": controller_file,
+                        "function": f"hunk_{i+1}",
+                        "change": f"Modified code in hunk {i+1} via unified diff",
+                        "type": "modification",
+                        "location": "function_body",
+                    }
+                )
         return changes
 
     def _generate_deterministic_changes(

@@ -280,8 +280,8 @@ class RepairLoop:
                 after_result = runner.run(max_steps=200)
 
                 # Set detector on harness if available
-                if hasattr(self, "detector_fn") and self.detector_fn:
-                    verification_harness.set_detector(self.detector_fn)
+                if detector_fn:
+                    verification_harness.set_detector(detector_fn)
 
                 # Verify with harness - pass controller code for detector
                 verification_report = verification_harness.verify_repair(
