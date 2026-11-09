@@ -354,6 +354,10 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
             and criteria["d_not_cosmetic"] is not False
         )
 
+    loop_claimed_success = bool(
+        result is not None
+        and any(it.success for it in result.iterations)
+    )
     manifest = {
         "run_id": run_id,
         "task_id": task.task_id,
@@ -376,6 +380,16 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
         "llm_backend_errors": 0,
         "sandbox_memory_limit_mb": 4096,
         "keep": keep,
+        # acceptance of record = the driver-level criteria (a)-(f); the loop's
+        # own success flag is recorded beside it, never as the verdict (the
+        # false-positive finding of the first two runs)
+        "acceptance_of_record": "driver criteria (a)-(f)",
+        "loop_claimed_success": loop_claimed_success,
+        "verdict": (
+            "driver-keep" if keep else
+            ("loop-claims-success / driver rejects" if loop_claimed_success
+             else "driver-reject")
+        ),
     }
     persist(cell_dir, "manifest.json", manifest)
     persist(cell_dir, "repair_audit.json", {

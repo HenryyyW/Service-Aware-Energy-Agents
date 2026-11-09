@@ -33,6 +33,14 @@ fields under a `code_repair` key inside `manifest.json`):
 | `stratification` (L1..L5 counts) | for the deterministic_safety comparator cells |
 | `git_commit`, `git_dirty`, `scenario_config_sha256` | provenance (already standard) |
 
+## Acceptance of record
+
+`manifest.json` records, per cell: `keep` and `verdict` computed from the
+driver-level criteria (a)-(f) only, plus `loop_claimed_success` (the pipeline's
+own success flag) beside them as a **recorded claim, never the verdict** - the
+first two runs proved the loop's flag untrustworthy (it claims success on
+patches that crash), so no analysis or paper number may use it as acceptance.
+
 ## Analysis script
 
 `docs/reviewer_response/code_repair_analysis.py` (read-only, no LLM calls):
