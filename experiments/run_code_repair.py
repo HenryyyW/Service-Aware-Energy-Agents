@@ -113,13 +113,18 @@ def build_nim_backend():
 
 def _configured_backend_ok() -> bool:
     """True when the product path (LLMConfig.create_backend from env) builds a
-    usable, authenticated backend for the configured model/endpoint."""
+    usable backend for the configured model/endpoint (A's registry fix)."""
     try:
         from src.agents.backend.config import LLMConfig
 
         backend = LLMConfig().create_backend()
+        # the registry still maps the present-but-None dashscope key first, so
+        # the built backend can carry api_key=None -> unusable for NIM
         if backend is not None and not getattr(backend, "api_key", None):
-            print("configured backend path unusable (backend built with api_key=None)")
+            print(
+                "configured backend path unusable (backend built with api_key=None: "
+                "registry maps the None-valued dashscope key before nvidia)"
+            )
             return False
         return backend is not None
     except Exception as exc:  # noqa: BLE001
@@ -364,14 +369,14 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
             "preflight_probe": True,
             "temperature": 0.2,
             # preferred: the product path (AGENT_BACKEND / LLM_* env) - A's
-            # registry truthiness fix (e1e709db3) makes it authenticate on NIM;
-            # explicit injection only as a recorded fallback
+            # registry fix (origin/main a08a1fdd1) made it reach NIM; the
+            # explicit injection stays only as a recorded fallback
             **(
                 {}
                 if _configured_backend_ok()
                 else {
                     "backend": build_nim_backend(),
-                    "wiring_workaround": "explicit backend injection (configured path unusable)",
+                    "wiring_workaround": "explicit backend injection (configured path failed)",
                 }
             ),
         }
@@ -447,18 +452,14 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
     try:
         patched_cls = _load_controller(patched_final, f"patched_{run_id}")
         patched_load_error = None
-    except (
-        Exception
-    ) as exc:  # noqa: BLE001 - an unparsable patch is criterion (a)=False, not a crash
+    except Exception as exc:  # noqa: BLE001 - an unparsable patch is criterion (a)=False, not a crash
         patched_cls = None
         patched_load_error = f"{type(exc).__name__}: {exc}"
         print(f"  patched controller does not parse: {patched_load_error}", flush=True)
     if patched_cls is None:
-        patched_ok, patched_detail, patched_exc = (
-            None,
-            (f"patched controller does not parse: {patched_load_error}"),
-            patched_load_error,
-        )
+        patched_ok, patched_detail, patched_exc = None, (
+            f"patched controller does not parse: {patched_load_error}"
+        ), patched_load_error
     else:
         patched_ok, patched_detail, patched_exc = run_detector_safe(
             task.detector_fn(), patched_cls, config
@@ -497,8 +498,7 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
     )
     l1_patched = (
         proposal_bound_violations(patched_cls, config)
-        if patched_cls is not None
-        else (0, 0)
+        if patched_cls is not None else (0, 0)
     )
     telemetry = {
         "l1_broken": {
@@ -515,11 +515,8 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
         telemetry["l5_after"] = (
             sandbox_run(patched_final, cell_dir, "after")
             if patched_cls is not None
-            else {
-                "success": False,
-                "error": f"patch does not parse: {patched_load_error}",
-                "violation_counts": {},
-            }
+            else {"success": False, "error": f"patch does not parse: {patched_load_error}",
+                  "violation_counts": {}}
         )
 
     criteria = {
