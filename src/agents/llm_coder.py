@@ -108,6 +108,7 @@ class LLMCoderAgent:
 
         LLM returns unified diff or full function replacement.
         Safe applier enforces all validation gates.
+        NO SILENT FALLBACK - if LLM fails, return failure so loop can retry/escalate.
         """
         controller_file = (
             controller_file or state.controller_file or "controllers/rule_based.py"
@@ -125,11 +126,13 @@ class LLMCoderAgent:
             patched_code, diff, changes, notes = llm_result
             implementation_notes = f"LLM REAL-CODE PATH: {notes}"
         else:
-            # Fallback to deterministic AST-based changes
-            patched_code, diff, changes, notes = self._generate_deterministic_changes(
-                plan, controller_file, state.controller_code
+            # NO SILENT FALLBACK - return failure so loop can retry/escalate
+            implementation_notes = (
+                "LLM REAL-CODE PATH FAILED: no valid unified diff produced"
             )
-            implementation_notes = f"Deterministic AST fallback: {notes}"
+            changes = []
+            patched_code = state.controller_code  # Return original code unchanged
+            diff = ""
 
         output = CoderOutput(
             code_changes=changes,
@@ -142,7 +145,7 @@ class LLMCoderAgent:
         state.patched_code = patched_code
         state.add_message(
             AgentRole.CODER,
-            f"Implemented {len(changes)} code changes ({'LLM real-code' if llm_result else 'deterministic'})",
+            f"Implemented {len(changes)} code changes ({'LLM real-code' if changes else 'LLM FAILED'})",
             output.model_dump(),
         )
 
@@ -158,6 +161,7 @@ class LLMCoderAgent:
 
         Returns (patched_code, diff, changes, notes) or None if failed.
         Failures are recorded in self.previous_failures for next iteration.
+        NO SILENT FALLBACK - if LLM fails, return None so loop can retry/escalate.
         """
         backend = self._get_backend()
         if backend is None:
@@ -196,6 +200,7 @@ class LLMCoderAgent:
                 return patched_code, diff, changes, notes
 
             # If we reach here, parsing failed - failure already recorded in _parse_llm_response_real_code
+            # DO NOT fall back to deterministic - return None so loop can retry/escalate
             return None
 
         except Exception as e:
@@ -280,8 +285,8 @@ Return ONLY the unified diff. NO additional text."""
     ) -> Optional[tuple]:
         """Parse LLM response expecting unified diff.
 
-        Attempts light repair (strip markdown fences, fix indentation) before rejecting.
-        Returns (patched_code, diff, changes, notes) or None if failed.
+        Attempts light repair (strip markdown fences, fix indentation, re-indent to target file's leading whitespace)
+        before rejecting. Returns (patched_code, diff, changes, notes) or None if failed.
         """
         # Try to extract diff from markdown fences first (light repair)
         diff_text = None
@@ -298,7 +303,7 @@ Return ONLY the unified diff. NO additional text."""
             if diff_match:
                 diff_text = diff_match.group(1).strip()
 
-        # Light repair: strip any remaining markdown fences, fix common issues
+        # Light repair: strip markdown fences, fix indentation, re-indent to target file's leading whitespace
         if diff_text:
             # Remove any remaining markdown fences
             diff_text = re.sub(r"^```(?:diff)?\n", "", diff_text)
@@ -312,6 +317,10 @@ Return ONLY the unified diff. NO additional text."""
             )
             if min_indent > 0:
                 diff_text = "\n".join(line[min_indent:] for line in diff_lines)
+            diff_text = diff_text.strip()
+
+            # Re-indent to target file's leading whitespace (4 spaces per level)
+            diff_text = self._reindent_diff_to_target(diff_text, 4)
             diff_text = diff_text.strip()
 
             patched_code = self._apply_unified_diff(original_code, diff_text)
@@ -384,6 +393,45 @@ Return ONLY the unified diff. NO additional text."""
             print(f"Diff application failed: {e}")
             return None
 
+    def _reindent_diff_to_target(self, diff_text: str, target_indent: int) -> str:
+        """Re-indent diff lines to match target file's indentation level.
+
+        Adjusts the indentation of added/removed/context lines in the diff
+        to match the target file's indentation level (e.g., 4 spaces per level).
+        """
+        diff_lines = diff_text.splitlines(keepends=True)
+        adjusted_lines = []
+
+        for line in diff_lines:
+            if line.startswith(("+", "-", " ")):
+                # This is a diff line (added, removed, or context)
+                # Extract the content after the diff marker
+                marker = line[0]
+                content = line[1:] if len(line) > 1 else ""
+
+                # Calculate the current indentation of the content
+                content_indent = len(content) - len(content.lstrip())
+                content_stripped = content.lstrip()
+
+                # Determine the expected indentation based on diff context
+                # For diff lines, we want to maintain the relative indentation
+                # but ensure it's aligned with target_indent
+                if content_stripped:
+                    # Adjust to target_indent while preserving relative indentation
+                    adjusted_content = " " * target_indent + content_stripped
+                else:
+                    adjusted_content = ""
+
+                adjusted_line = marker + adjusted_content
+                adjusted_lines.append(
+                    adjusted_line + ("\n" if line.endswith("\n") else "")
+                )
+            else:
+                # Hunk header or other diff metadata - keep as-is
+                adjusted_lines.append(line)
+
+        return "".join(adjusted_lines)
+
     def _replace_function(
         self, original_code: str, func_name: str, new_func_code: str
     ) -> Optional[str]:
@@ -402,6 +450,7 @@ Return ONLY the unified diff. NO additional text."""
                     ]
                     patched_lines = lines[:start_line] + new_lines + lines[end_line:]
                     return "".join(patched_lines)
+
             return None
         except Exception:
             return None

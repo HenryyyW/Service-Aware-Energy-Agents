@@ -298,6 +298,36 @@ class VerifierAgent:
                 }
             )
 
+        # Cosmetic classifier: reject patches that don't change behavior (cosmetic only)
+        # If the patched code is identical to original (except whitespace), it's cosmetic
+        if state.controller_code and state.patched_code:
+            import difflib
+
+            original_lines = state.controller_code.splitlines()
+            patched_lines = state.patched_code.splitlines()
+            diff = list(
+                difflib.unified_diff(original_lines, patched_lines, lineterm="")
+            )
+            # Filter out whitespace-only changes
+            meaningful_changes = [
+                line
+                for line in diff
+                if line.startswith(("+", "-"))
+                and not line.strip().startswith(("+", "-"))
+                or line.strip()
+                and not line.strip().startswith(("#", '"""', "'''"))
+            ]
+            # If no meaningful behavior changes, it's a cosmetic patch
+            if len(meaningful_changes) == 0:
+                remaining.append(
+                    {
+                        "issue": "cosmetic_patch",
+                        "reason": "Patch is cosmetic only - no behavior-changing modifications detected",
+                        "severity": "high",
+                    }
+                )
+                return False, remaining, new_violations
+
         return violations_resolved, remaining, new_violations
 
     def _compare_metrics(
