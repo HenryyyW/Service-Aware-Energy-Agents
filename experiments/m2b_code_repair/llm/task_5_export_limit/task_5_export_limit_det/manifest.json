@@ -1,0 +1,48 @@
+{
+  "run_id": "task_5_export_limit_det",
+  "task_id": "task_5_export_limit",
+  "arm": "llm",
+  "negative_control": false,
+  "wiring_workaround": "explicit NIM backend injection (create_backend TypeError, A-side defect)",
+  "git_commit": "fbf80907b04a49df9eebedc119e82b7d075bbd7a",
+  "git_dirty": true,
+  "controller_file": "src/controllers/__init__.py",
+  "expected_transformations": [
+    "_add_export_limit_enforcement",
+    "_add_pv_curtailment",
+    "_add_battery_charge_for_excess_pv"
+  ],
+  "planner_bypass": {
+    "forced_issue": "grid_export",
+    "forced_targets": [
+      "_apply_grid_limits",
+      "get_actions"
+    ]
+  },
+  "detector_signature_present_on_broken": true,
+  "detector_broken": {
+    "passed": false,
+    "detail": "requested export 5.0 kW vs limit 3 kW"
+  },
+  "detector_patched": {
+    "passed": null,
+    "detail": "patched controller does not parse: IndentationError: unexpected indent (patched_task_5_export_limit_det.py, line 383)"
+  },
+  "iterations": 1,
+  "wall_clock_seconds": 41.4,
+  "llm_calls": 2,
+  "llm_backend_errors": 0,
+  "backend_telemetry": {
+    "llm_calls": 2,
+    "llm_prompt_tokens": 4308,
+    "llm_completion_tokens": 3247,
+    "model_digest": "poolside/laguna-xs-2.1",
+    "last_error": null,
+    "llm_backend_errors": 0
+  },
+  "sandbox_memory_limit_mb": 4096,
+  "keep": false,
+  "acceptance_of_record": "driver criteria (a)-(f)",
+  "loop_claimed_success": true,
+  "verdict": "loop-claims-success / driver rejects"
+}

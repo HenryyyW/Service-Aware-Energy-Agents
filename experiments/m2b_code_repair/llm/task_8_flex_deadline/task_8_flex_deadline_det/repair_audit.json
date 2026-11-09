@@ -1,0 +1,68 @@
+{
+  "criteria": {
+    "a_parses": false,
+    "b_ran_clean": false,
+    "c_output_differs": false,
+    "d_not_cosmetic": true,
+    "e_harness_accepts": true,
+    "f_service_preserved": null
+  },
+  "iterations": [
+    {
+      "iteration": 1,
+      "planner_issue": "flexible_load",
+      "planner_targets": [
+        "_control_flexible_load",
+        "get_actions"
+      ],
+      "planner_strategy": "Improve EV charging scheduling: start earlier, use maximum power when deadline approaches, prioritize by departure time",
+      "target_functions": [
+        "_control_flexible_load",
+        "get_actions"
+      ],
+      "coder_changes": 0,
+      "coder_source": "deterministic",
+      "diff": "--- original\n+++ patched\n@@ -140,23 +140,90 @@\n             self.battery_soc[battery_id] = max(new_soc, battery.soc_min)\n             return Action(\n                 asset_id=battery_id,\n-                action_type=ActionType.BATTERY_DISCHARGE,\n-                value_kw=-discharge_kw,\n-                timestep=self.timestep,\n-            )\n-\n         return None\n \n-    def _control_ev(\n+\n+\n+    def _control_flexible_load(\n+\n         self,\n-        ev_id: str,\n-        ev: EVConfig,\n-        net_demand: float,\n+\n+        fl_id: str,\n+\n+        fl: \"FlexibleLoadConfig\",\n+\n         pv_gen: float,\n+\n         hour_of_day: float,\n+\n         timestep: int,\n+\n     ) -> Optional[Action]:\n-        \"\"\"Control EV charging: charge when connected, prioritize off-peak and PV.\"\"\"\n+\n+        \"\"\"Control flexible load: run during high PV generation.\"\"\"\n+\n+        progress = self.flexible_load_progress.get(fl_id, 0.0)\n+\n+\n+\n+        if progress >= fl.energy_kwh:\n+\n+            return None\n+\n+\n+\n+        start_hour = self._time_to_hour(fl.earliest_start)\n+\n+        end_hour = self._time_to_hour(fl.latest_end)\n+\n+\n+\n+        # Check if within window\n+\n+        if end_hour < start_hour:  # overnight\n+\n+            in_window = hour_of_day >= start_hour or hour_of_day < end_hour\n+\n+        else:\n+\n+            in_window = start_hour <= hour_of_day < end_hour\n+\n+\n+\n+        if not in_window:\n+\n+            return None\n+\n+\n+\n+        # Run flexible load - prioritize earlier in window, use max power\n+\n+        power_kw = fl.power_kw\n+\n+        energy_this_step = power_kw * self.scenario_config.timestep_minutes / 60\n+\n+        self.flexible_load_progress[fl_id] = progress + energy_this_step\n+\n+\n+\n+        return Action(\n+\n+            asset_id=fl_id,\n+\n+            action_type=ActionType.FLEXIBLE_LOAD,\n+\n+            value_kw=power_kw,\n+\n+            timestep=self.timestep,\n+\n+        )\n+\n+\n+\n+    def _apply_grid_limits(self, actions: List[Action]) -> List[Action]:\n+\n+        \"\"\"Apply community-level grid import/export limits.\"\"\"\n+\n         current_soc = self.ev_soc.get(ev_id, ev.initial_soc)\n         capacity_kwh = ev.capacity_kwh\n         max_charge = ev.max_charge_kw\n@@ -239,12 +306,483 @@\n \n         start_hour = self._time_to_hour(fl.earliest_start)\n         end_hour = self._time_to_hour(fl.latest_end)\n-\n-        # Check if within window\n-        if end_hour < start_hour:  # overnight\n-            in_window = hour_of_day >= start_hour or hour_of_day < end_hour\n-        else:\n-            in_window = start_hour <= hour_of_day < end_hour\n+            return self._create_requested_actions(actions)\n+\n+\n+\n+    def _control_ev(\n+\n+        self,\n+\n+        ev_id: str,\n+\n+        ev: EVConfig,\n+\n+        net_demand: float,\n+\n+        pv_gen: float,\n+\n+        hour_of_day: float,\n+\n+        timestep: int,\n+\n+    ) -> Optional[Action]:\n+\n+        \"\"\"Control EV charging: charge when connected, prioritize off-peak and PV.\"\"\"\n+\n+        current_soc = self.ev_soc.get(ev_id, ev.initial_soc)\n+\n+        capacity_kwh = ev.capacity_kwh\n+\n+        max_charge = ev.max_charge_kw\n+\n+\n+\n+        # Check if EV is connected\n+\n+        arrival_hour = self._time_to_hour(ev.arrival_time)\n+\n+        departure_hour = self._time_to_hour(ev.departure_time)\n+\n+\n+\n+        # Handle overnight case (e.g., 22:00 to 07:00)\n+\n+        if departure_hour < arrival_hour:\n+\n+            connected = hour_of_day >= arrival_hour or hour_of_day < departure_hour\n+\n+        else:\n+\n+            connected = arrival_hour <= hour_of_day < departure_hour\n+\n+\n+\n+        self.ev_connected[ev_id] = connected\n+\n+\n+\n+        if not connected:\n+\n+            return None\n+\n+\n+\n+        # Check if already at target\n+\n+        if current_soc >= ev.target_soc:\n+\n+            return None\n+\n+\n+\n+        # Calculate time remaining until departure\n+\n+        if hour_of_day < departure_hour:\n+\n+            hours_remaining = departure_hour - hour_of_day\n+\n+        else:\n+\n+            hours_remaining = (24 - hour_of_day) + departure_hour\n+\n+\n+\n+        # Energy needed\n+\n+        energy_needed = (ev.target_soc - current_soc) * capacity_kwh\n+\n+        required_power = energy_needed / max(hours_remaining, 0.25)\n+\n+\n+\n+        # Determine charge power\n+\n+        charge_kw = min(required_power, max_charge)\n+\n+\n+\n+        # Prefer PV charging\n+\n+        excess_pv = max(0, pv_gen - net_demand)\n+\n+        if excess_pv > 0:\n+\n+            charge_kw = min(charge_kw, excess_pv)\n+\n+\n+\n+        # Off-peak bonus (reduce charging during peak 17-21)\n+\n+        if 17 <= hour_of_day < 21:\n+\n+            charge_kw *= 0.5\n+\n+\n+\n+        if charge_kw > 0.1:\n+\n+            new_soc = (\n+\n+                current_soc\n+\n+                + (\n+\n+                    charge_kw\n+\n+                    * ev.efficiency\n+\n+                    * self.scenario_config.timestep_minutes\n+\n+                    / 60\n+\n+                )\n+\n+                / capacity_kwh\n+\n+            )\n+\n+            self.ev_soc[ev_id] = min(new_soc, 1.0)\n+\n+            return Action(\n+\n+                asset_id=ev_id,\n+\n+                action_type=ActionType.EV_CHARGE,\n+\n+                value_kw=charge_kw,\n+\n+                timestep=self.timestep,\n+\n+            )\n+\n+\n+\n+        return None\n+\n+\n+\n+    def _control_ev(\n+\n+        self,\n+\n+        ev_id: str,\n+\n+        ev: EVConfig,\n+\n+        net_demand: float,\n+\n+        pv_gen: float,\n+\n+        hour_of_day: float,\n+\n+        timestep: int,\n+\n+    ) -> Optional[Action]:\n+\n+        \"\"\"Control EV charging: start earlier, use max power when deadline approaches, prioritize by departure time.\"\"\"\n+\n+        current_soc = self.ev_soc.get(ev_id, ev.initial_soc)\n+\n+        capacity_kwh = ev.capacity_kwh\n+\n+        max_charge = ev.max_charge_kw\n+\n+\n+\n+        # Check if EV is connected\n+\n+        arrival_hour = self._time_to_hour(ev.arrival_time)\n+\n+        departure_hour = self._time_to_hour(ev.departure_time)\n+\n+\n+\n+        # Handle overnight case (e.g., 22:00 to 07:00)\n+\n+        if departure_hour < arrival_hour:\n+\n+            connected = hour_of_day >= arrival_hour or hour_of_day < departure_hour\n+\n+        else:\n+\n+            connected = arrival_hour <= hour_of_day < departure_hour\n+\n+\n+\n+        self.ev_connected[ev_id] = connected\n+\n+\n+\n+        if not connected:\n+\n+            return None\n+\n+\n+\n+        # Check if already at target\n+\n+        if current_soc >= ev.target_soc:\n+\n+            return None\n+\n+\n+\n+        # Calculate time remaining until departure\n+\n+        if hour_of_day < departure_hour:\n+\n+            hours_remaining = departure_hour - hour_of_day\n+\n+        else:\n+\n+            hours_remaining = (24 - hour_of_day) + departure_hour\n+\n+\n+\n+        # Energy needed\n+\n+        energy_needed = (ev.target_soc - current_soc) * capacity_kwh\n+\n+\n+\n+        # Start charging earlier: if more than half the window remains, charge at minimum rate\n+\n+        # When deadline approaches, use maximum power\n+\n+        if hours_remaining > 4:\n+\n+            # Early in window: charge at minimum rate to start early\n+\n+            charge_kw = min(max_charge * 0.3, energy_needed / hours_remaining)\n+\n+        else:\n+\n+            # Approaching deadline: use maximum power\n+\n+            charge_kw = min(max_charge, energy_needed / max(hours_remaining, 0.25))\n+\n+\n+\n+        # Prefer PV charging when available\n+\n+        excess_pv = max(0, pv_gen - net_demand)\n+\n+        if excess_pv > 0:\n+\n+            charge_kw = min(charge_kw, excess_pv)\n+\n+\n+\n+        # Off-peak bonus (reduce charging during peak 17-21)\n+\n+        if 17 <= hour_of_day < 21:\n+\n+            charge_kw *= 0.5\n+\n+\n+\n+        if charge_kw > 0.1:\n+\n+            new_soc = (\n+\n+                current_soc\n+\n+                + (\n+\n+                    charge_kw\n+\n+                    * ev.efficiency\n+\n+                    * self.scenario_config.timestep_minutes\n+\n+                    / 60\n+\n+                )\n+\n+                / capacity_kwh\n+\n+            )\n+\n+            self.ev_soc[ev_id] = min(new_soc, 1.0)\n+\n+            return Action(\n+\n+                asset_id=ev_id,\n+\n+                action_type=ActionType.EV_CHARGE,\n+\n+                value_kw=charge_kw,\n+\n+                timestep=self.timestep,\n+\n+            )\n+\n+\n+\n+        return None\n+\n+\n+\n+    def _control_ev(\n+\n+        self,\n+\n+        ev_id: str,\n+\n+        ev: EVConfig,\n+\n+        net_demand: float,\n+\n+        pv_gen: float,\n+\n+        hour_of_day: float,\n+\n+        timestep: int,\n+\n+    ) -> Optional[Action]:\n+\n+        \"\"\"Control EV charging: start earlier, use max power when deadline approaches, prioritize by departure time.\"\"\"\n+\n+        current_soc = self.ev_soc.get(ev_id, ev.initial_soc)\n+\n+        capacity_kwh = ev.capacity_kwh\n+\n+        max_charge = ev.max_charge_kw\n+\n+\n+\n+        # Check if EV is connected\n+\n+        arrival_hour = self._time_to_hour(ev.arrival_time)\n+\n+        departure_hour = self._time_to_hour(ev.departure_time)\n+\n+\n+\n+        # Handle overnight case (e.g., 22:00 to 07:00)\n+\n+        if departure_hour < arrival_hour:\n+\n+            connected = hour_of_day >= arrival_hour or hour_of_day < departure_hour\n+\n+        else:\n+\n+            connected = arrival_hour <= hour_of_day < departure_hour\n+\n+\n+\n+        self.ev_connected[ev_id] = connected\n+\n+\n+\n+        if not connected:\n+\n+            return None\n+\n+\n+\n+        # Check if already at target\n+\n+        if current_soc >= ev.target_soc:\n+\n+            return None\n+\n+\n+\n+        # Calculate time remaining until departure\n+\n+        if hour_of_day < departure_hour:\n+\n+            hours_remaining = departure_hour - hour_of_day\n+\n+        else:\n+\n+            hours_remaining = (24 - hour_of_day) + departure_hour\n+\n+\n+\n+        # Energy needed\n+\n+        energy_needed = (ev.target_soc - current_soc) * capacity_kwh\n+\n+\n+\n+        # Start charging earlier: if more than half the window remains, charge at minimum rate\n+\n+        # When deadline approaches, use maximum power\n+\n+        if hours_remaining > 4:\n+\n+            # Early in window: charge at minimum rate to start early\n+\n+            charge_kw = min(max_charge * 0.3, energy_needed / hours_remaining)\n+\n+        else:\n+\n+            # Approaching deadline: use maximum power\n+\n+            charge_kw = min(max_charge, energy_needed / max(hours_remaining, 0.25))\n+\n+\n+\n+        # Prefer PV charging when available\n+\n+        excess_pv = max(0, pv_gen - net_demand)\n+\n+        if excess_pv > 0:\n+\n+            charge_kw = min(charge_kw, excess_pv)\n+\n+\n+\n+        # Off-peak bonus (reduce charging during peak 17-21)\n+\n+        if 17 <= hour_of_day < 21:\n+\n+            charge_kw *= 0.5\n+\n+\n+\n+        if charge_kw > 0.1:\n+\n+            new_soc = (\n+\n+                current_soc\n+\n+                + (\n+\n+                    charge_kw\n+\n+                    * ev.efficiency\n+\n+                    * self.scenario_config.timestep_minutes\n+\n+                    / 60\n+\n+                )\n+\n+                / capacity_kwh\n+\n+            )\n+\n+            self.ev_soc[ev_id] = min(new_soc, 1.0)\n+\n+            return Action(\n+\n+                asset_id=ev_id,\n+\n+                action_type=ActionType.EV_CHARGE,\n+\n+                value_kw=charge_kw,\n+\n+                timestep=self.timestep,\n+\n+            )\n+\n+\n+\n+        return None\n \n         if not in_window:\n             return None\n",
+      "verifier_violations_resolved": true,
+      "success": true,
+      "duration": 42.47
+    }
+  ],
+  "loop_error": null,
+  "telemetry": {
+    "l1_broken": {
+      "violating_values": 0,
+      "violating_steps": 0
+    },
+    "l1_patched": {
+      "violating_values": 0,
+      "violating_steps": 0
+    },
+    "l5_before": {
+      "success": true,
+      "error": null,
+      "violation_counts": {
+        "voltage": 0,
+        "line_loading": 0,
+        "transformer_loading": 0
+      },
+      "max_violations": {
+        "voltage": 0,
+        "line_loading": 0,
+        "transformer_loading": 0
+      },
+      "execution_time": 0.77,
+      "tests_passed": true
+    },
+    "l5_after": {
+      "success": false,
+      "error": "patch does not parse: SyntaxError: '(' was never closed (patched_task_8_flex_deadline_det.py, line 141)",
+      "violation_counts": {}
+    }
+  },
+  "cosmetic": false,
+  "magnitudes": {
+    "broken": 5.0,
+    "patched": null
+  }
+}

@@ -1,0 +1,11 @@
+--- broken_controller
++++ patched_controller
+@@ -286,7 +286,7 @@
+                 if a.value_kw > 0:
+                     a.value_kw *= scale
+ 
+-        if total_export > export_limit:
++        if False:
+             scale = export_limit / total_export
+             for a in actions:
+                 if a.value_kw < 0:

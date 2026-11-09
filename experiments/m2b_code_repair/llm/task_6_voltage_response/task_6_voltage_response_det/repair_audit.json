@@ -1,0 +1,59 @@
+{
+  "criteria": {
+    "a_parses": true,
+    "b_ran_clean": true,
+    "c_output_differs": false,
+    "d_not_cosmetic": true,
+    "e_harness_accepts": false,
+    "f_service_preserved": false
+  },
+  "iterations": [],
+  "loop_error": "AttributeError: 'CoderAgent' object has no attribute 'apply_changes'",
+  "telemetry": {
+    "l1_broken": {
+      "violating_values": 0,
+      "violating_steps": 0
+    },
+    "l1_patched": {
+      "violating_values": 0,
+      "violating_steps": 0
+    },
+    "l5_before": {
+      "success": true,
+      "error": null,
+      "violation_counts": {
+        "voltage": 0,
+        "line_loading": 0,
+        "transformer_loading": 0
+      },
+      "max_violations": {
+        "voltage": 0,
+        "line_loading": 0,
+        "transformer_loading": 0
+      },
+      "execution_time": 0.75,
+      "tests_passed": true
+    },
+    "l5_after": {
+      "success": true,
+      "error": null,
+      "violation_counts": {
+        "voltage": 0,
+        "line_loading": 0,
+        "transformer_loading": 0
+      },
+      "max_violations": {
+        "voltage": 0,
+        "line_loading": 0,
+        "transformer_loading": 0
+      },
+      "execution_time": 0.76,
+      "tests_passed": true
+    }
+  },
+  "cosmetic": false,
+  "magnitudes": {
+    "broken": 5.0,
+    "patched": 5.0
+  }
+}

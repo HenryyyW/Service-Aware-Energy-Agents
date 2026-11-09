@@ -1,0 +1,68 @@
+{
+  "criteria": {
+    "a_parses": false,
+    "b_ran_clean": false,
+    "c_output_differs": false,
+    "d_not_cosmetic": true,
+    "e_harness_accepts": true,
+    "f_service_preserved": null
+  },
+  "iterations": [
+    {
+      "iteration": 1,
+      "planner_issue": "line_loading",
+      "planner_targets": [
+        "_apply_grid_violation_redispatch",
+        "get_actions"
+      ],
+      "planner_strategy": "Improve EV charging scheduling: start earlier, use maximum power when deadline approaches, prioritize by departure time",
+      "target_functions": [
+        "_apply_grid_violation_redispatch",
+        "get_actions"
+      ],
+      "coder_changes": 0,
+      "coder_source": "deterministic",
+      "diff": "--- original\n+++ patched\n@@ -264,35 +264,269 @@\n \n         return None\n \n-    def _apply_grid_limits(self, actions: List[Action]) -> List[Action]:\n-        \"\"\"Apply community-level grid import/export limits.\"\"\"\n-        if (\n-            not self.scenario_config.community_import_limit_kw\n-            and not self.scenario_config.community_export_limit_kw\n-        ):\n+    def _apply_grid_violation_redispatch(self, actions: List[Action]) -> List[Action]:\n+\n+        \"\"\"Re-dispatch actions based on grid violations from previous step.\n+\n+\n+\n+        Improved EV charging: start earlier, use maximum power when deadline approaches,\n+\n+        prioritize by departure time.\n+\n+        \"\"\"\n+\n+        if not self.last_grid_diagnostics:\n+\n+            return actions\n+\n+\n+\n+        diagnostics = self.last_grid_diagnostics.get(\"diagnostics\", [])\n+\n+        overvoltage = False\n+\n+        undervoltage = False\n+\n             return actions\n \n         # Calculate total grid import/export from actions\n         total_import = sum(a.value_kw for a in actions if a.value_kw > 0)\n         total_export = sum(-a.value_kw for a in actions if a.value_kw < 0)\n \n-        import_limit = self.scenario_config.community_import_limit_kw or float(\"inf\")\n-        export_limit = self.scenario_config.community_export_limit_kw or float(\"inf\")\n-\n-        # Scale down if limits exceeded\n-        if total_import > import_limit:\n-            scale = import_limit / total_import\n+                elif category == \"line_loading\":\n+\n+                    line_loading_violated = True\n+\n+                elif category == \"transformer_loading\":\n+\n+                    transformer_loading_violated = True\n+\n+\n+\n+        # If violations detected, apply re-dispatch scaling (preserve original behavior)\n+\n+        if (\n+\n+            overvoltage\n+\n+            or undervoltage\n+\n+            or line_loading_violated\n+\n+            or transformer_loading_violated\n+\n+        ):\n+\n+            # Determine scaling factor based on violation type\n+\n+            # AGGRESSIVE scaling for testing - ensure violations are resolved\n+\n+            if overvoltage:\n+\n+                scale = 2.0  # Aggressively increase charging to absorb excess PV\n+\n+            elif undervoltage:\n+\n+                scale = 0.1  # Aggressively reduce discharging to raise voltage\n+\n+            elif False:\n+\n+                scale = 0.1  # Aggressively reduce power to fix line loading\n+\n+            else:  # transformer_loading\n+\n+                scale = 0.5  # Aggressively reduce power\n+\n+\n+\n+            # Apply scaling to controllable actions (battery, EV, flexible load)\n+\n             for a in actions:\n-                if a.value_kw > 0:\n+\n+                if a.action_type in [\n+\n+                    ActionType.BATTERY_CHARGE,\n+\n+                    ActionType.BATTERY_DISCHARGE,\n+\n+                    ActionType.EV_CHARGE,\n+\n+                    ActionType.FLEXIBLE_LOAD,\n+\n+                ]:\n+\n                     a.value_kw *= scale\n \n-        if total_export > export_limit:\n-            scale = export_limit / total_export\n-            for a in actions:\n-                if a.value_kw < 0:\n-                    a.value_kw *= scale\n+\n \n         return actions\n+\n+\n+\n+    def get_actions(\n+\n+        self, observations: Dict[str, Any], timestep: int\n+\n+    ) -> RequestedActions:\n+\n+        \"\"\"Generate rule-based actions with grid-aware re-dispatch.\"\"\"\n+\n+        self.timestep = timestep\n+\n+        actions = []\n+\n+\n+\n+        # Get current hour for time-of-use decisions\n+\n+        current_hour = (timestep * self.scenario_config.timestep_minutes) / 60\n+\n+        hour_of_day = current_hour % 24\n+\n+                    ev_action = self._control_ev(\n+\n+                        ev_id, ev, net_demand, pv_gen, hour_of_day, timestep\n+\n+                    )\n+\n+                    if ev_action:\n+\n+                        if ev_action:\n+\n+                            actions.append(ev_action)\n+\n+\n+\n+            # Flexible load control\n+\n+            for i, fl in enumerate(building.flexible_loads or []):\n+\n+                fl_id = f\"{bid}_flex_{i}\"\n+\n+                fl_action = self._control_flexible_load(\n+\n+                    fl_id, fl, pv_gen, hour_of_day, timestep\n+\n+                )\n+\n+                if fl_action:\n+\n+                    actions.append(fl_action)\n+\n+\n+\n+        # Improved EV charging: start earlier, use max power when deadline approaches, prioritize by departure time\n+\n+        # Re-process EV actions with improved scheduling\n+\n+        ev_actions = [a for a in actions if a.action_type == ActionType.EV_CHARGE]\n+\n+        other_actions = [a for a in actions if a.action_type != ActionType.EV_CHARGE]\n+\n+\n+\n+        # Sort EVs by departure time (earliest first)\n+\n+        ev_actions_sorted = sorted(ev_actions, key=lambda a: ev_info.get(a.asset_id, (float('inf'),))[0])\n+\n+\n+\n+        # Re-dispatch EV charging with improved strategy\n+\n+        for ev_action in ev_actions_sorted:\n+\n+            ev_id = ev_action.asset_id\n+\n+            if ev_id not in ev_info:\n+\n+                continue\n+\n+            departure_hour, target_soc, capacity_kwh, max_charge = ev_info[ev_id]\n+\n+\n+\n+            # Calculate time remaining until departure\n+\n+            if hour_of_day < departure_hour:\n+\n+                hours_remaining = departure_hour - hour_of_day\n+\n+            else:\n+\n+                hours_remaining = (24 - hour_of_day) + departure_hour\n+\n+\n+\n+            # Get current SOC from state\n+\n+            current_soc = self.ev_soc.get(ev_id, 0)\n+\n+            energy_needed = (target_soc - current_soc) * capacity_kwh\n+\n+\n+\n+            # Use maximum power when deadline is approaching (within 2 hours)\n+\n+            if hours_remaining <= 2.0:\n+\n+                # Use maximum power to ensure completion\n+\n+                ev_action.value_kw = min(max_charge, energy_needed / max(hours_remaining, 0.25))\n+\n+            elif hours_remaining <= 4.0:\n+\n+                # Use higher power (75% of max)\n+\n+                ev_action.value_kw = min(max_charge * 0.75, energy_needed / max(hours_remaining, 0.25))\n+\n+            else:\n+\n+                # Start earlier with moderate power (50% of max)\n+\n+                ev_action.value_kw = min(max_charge * 0.5, energy_needed / max(hours_remaining, 0.25))\n+\n+\n+\n+        # Combine actions back\n+\n+        actions = other_actions + ev_actions_sorted\n+\n+\n+\n+        # Apply community-level grid limits\n+\n+        actions = self._apply_grid_limits(actions)\n+\n+\n+            # Get observations for this building\n+\n+            net_demand = observations.get(f\"{bid}_net_electricity_consumption\", 0)\n+\n+            pv_gen = observations.get(f\"{bid}_solar_generation\", 0)\n+\n+            load = observations.get(f\"{bid}_non_shiftable_load\", 0)\n+\n+\n+\n+            # Collect EV info for prioritization\n+\n+            for i, ev in enumerate(building.evs or []):\n+\n+                ev_id = f\"{bid}_ev_{i}\"\n+\n+                departure_hour = self._time_to_hour(ev.departure_time)\n+\n+                ev_info[ev_id] = (departure_hour, ev.target_soc, ev.capacity_kwh, ev.max_charge_kw)\n+\n+\n+\n+            # Battery control\n+\n+            if building.battery:\n+\n+                battery_action = self._control_battery(\n+\n \n     def _apply_grid_violation_redispatch(self, actions: List[Action]) -> List[Action]:\n         \"\"\"Re-dispatch actions based on grid violations from previous step.\n",
+      "verifier_violations_resolved": true,
+      "success": true,
+      "duration": 30.85
+    }
+  ],
+  "loop_error": null,
+  "telemetry": {
+    "l1_broken": {
+      "violating_values": 0,
+      "violating_steps": 0
+    },
+    "l1_patched": {
+      "violating_values": 0,
+      "violating_steps": 0
+    },
+    "l5_before": {
+      "success": true,
+      "error": null,
+      "violation_counts": {
+        "voltage": 0,
+        "line_loading": 0,
+        "transformer_loading": 0
+      },
+      "max_violations": {
+        "voltage": 0,
+        "line_loading": 0,
+        "transformer_loading": 0
+      },
+      "execution_time": 0.8,
+      "tests_passed": true
+    },
+    "l5_after": {
+      "success": false,
+      "error": "patch does not parse: IndentationError: unexpected indent (patched_task_7_line_loading_response_det.py, line 291)",
+      "violation_counts": {}
+    }
+  },
+  "cosmetic": false,
+  "magnitudes": {
+    "broken": 5.0,
+    "patched": null
+  }
+}

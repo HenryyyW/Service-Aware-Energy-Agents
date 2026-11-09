@@ -1,0 +1,41 @@
+{
+  "run_id": "task_5_export_limit_det",
+  "task_id": "task_5_export_limit",
+  "arm": "deterministic",
+  "negative_control": false,
+  "wiring_workaround": null,
+  "git_commit": "fbf80907b04a49df9eebedc119e82b7d075bbd7a",
+  "git_dirty": true,
+  "controller_file": "src/controllers/__init__.py",
+  "expected_transformations": [
+    "_add_export_limit_enforcement",
+    "_add_pv_curtailment",
+    "_add_battery_charge_for_excess_pv"
+  ],
+  "planner_bypass": {
+    "forced_issue": "grid_export",
+    "forced_targets": [
+      "_apply_grid_limits",
+      "get_actions"
+    ]
+  },
+  "detector_signature_present_on_broken": true,
+  "detector_broken": {
+    "passed": false,
+    "detail": "requested export 5.0 kW vs limit 3 kW"
+  },
+  "detector_patched": {
+    "passed": false,
+    "detail": "requested export 5.0 kW vs limit 3 kW"
+  },
+  "iterations": 5,
+  "wall_clock_seconds": 0.03,
+  "llm_calls": 0,
+  "llm_backend_errors": 0,
+  "backend_telemetry": null,
+  "sandbox_memory_limit_mb": 4096,
+  "keep": false,
+  "acceptance_of_record": "driver criteria (a)-(f)",
+  "loop_claimed_success": false,
+  "verdict": "driver-reject"
+}

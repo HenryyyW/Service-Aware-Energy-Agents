@@ -1,0 +1,40 @@
+{
+  "run_id": "task_2_ev_urgent_power_det",
+  "task_id": "task_2_ev_urgent_power",
+  "arm": "deterministic",
+  "negative_control": false,
+  "wiring_workaround": null,
+  "git_commit": "fbf80907b04a49df9eebedc119e82b7d075bbd7a",
+  "git_dirty": true,
+  "controller_file": "src/controllers/__init__.py",
+  "expected_transformations": [
+    "_add_max_power_for_urgent_deadline",
+    "_add_early_charging_for_low_soc"
+  ],
+  "planner_bypass": {
+    "forced_issue": "ev_deadline",
+    "forced_targets": [
+      "_control_ev",
+      "get_actions"
+    ]
+  },
+  "detector_signature_present_on_broken": true,
+  "detector_broken": {
+    "passed": false,
+    "detail": "EV charge 3.30 kW vs required 11.00 kW at 1h-to-departure"
+  },
+  "detector_patched": {
+    "passed": false,
+    "detail": "EV charge 3.30 kW vs required 11.00 kW at 1h-to-departure"
+  },
+  "iterations": 5,
+  "wall_clock_seconds": 0.03,
+  "llm_calls": 0,
+  "llm_backend_errors": 0,
+  "backend_telemetry": null,
+  "sandbox_memory_limit_mb": 4096,
+  "keep": false,
+  "acceptance_of_record": "driver criteria (a)-(f)",
+  "loop_claimed_success": false,
+  "verdict": "driver-reject"
+}

@@ -1,0 +1,47 @@
+{
+  "run_id": "task_1_ev_deadline_soc_det",
+  "task_id": "task_1_ev_deadline_soc",
+  "arm": "llm",
+  "negative_control": false,
+  "wiring_workaround": "explicit NIM backend injection (create_backend TypeError, A-side defect)",
+  "git_commit": "fbf80907b04a49df9eebedc119e82b7d075bbd7a",
+  "git_dirty": true,
+  "controller_file": "src/controllers/__init__.py",
+  "expected_transformations": [
+    "_add_precise_time_to_departure",
+    "_add_ev_prioritization_by_departure"
+  ],
+  "planner_bypass": {
+    "forced_issue": "ev_deadline",
+    "forced_targets": [
+      "_control_ev",
+      "get_actions"
+    ]
+  },
+  "detector_signature_present_on_broken": true,
+  "detector_broken": {
+    "passed": false,
+    "detail": "final EV SOC 0.4296 (target 0.800, tol 0.02)"
+  },
+  "detector_patched": {
+    "passed": null,
+    "detail": "patched controller does not parse: IndentationError: unexpected indent (patched_task_1_ev_deadline_soc_det.py, line 452)"
+  },
+  "iterations": 1,
+  "wall_clock_seconds": 24.08,
+  "llm_calls": 2,
+  "llm_backend_errors": 0,
+  "backend_telemetry": {
+    "llm_calls": 2,
+    "llm_prompt_tokens": 4316,
+    "llm_completion_tokens": 1508,
+    "model_digest": "poolside/laguna-xs-2.1",
+    "last_error": null,
+    "llm_backend_errors": 0
+  },
+  "sandbox_memory_limit_mb": 4096,
+  "keep": false,
+  "acceptance_of_record": "driver criteria (a)-(f)",
+  "loop_claimed_success": true,
+  "verdict": "loop-claims-success / driver rejects"
+}

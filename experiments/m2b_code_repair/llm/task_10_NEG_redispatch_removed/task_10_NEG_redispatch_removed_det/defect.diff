@@ -1,0 +1,11 @@
+--- broken_controller
++++ patched_controller
+@@ -405,7 +405,7 @@
+         actions = self._apply_grid_limits(actions)
+ 
+         # Apply grid violation re-dispatch based on previous step diagnostics
+-        actions = self._apply_grid_violation_redispatch(actions)
++        pass  # re-dispatch call removed (seeded defect)
+ 
+         return self._create_requested_actions(actions)
+ 

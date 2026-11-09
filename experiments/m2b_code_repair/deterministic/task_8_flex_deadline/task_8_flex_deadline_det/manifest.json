@@ -1,0 +1,40 @@
+{
+  "run_id": "task_8_flex_deadline_det",
+  "task_id": "task_8_flex_deadline",
+  "arm": "deterministic",
+  "negative_control": false,
+  "wiring_workaround": null,
+  "git_commit": "fbf80907b04a49df9eebedc119e82b7d075bbd7a",
+  "git_dirty": true,
+  "controller_file": "src/controllers/__init__.py",
+  "expected_transformations": [
+    "_add_earliest_deadline_first",
+    "_add_deadline_tracking"
+  ],
+  "planner_bypass": {
+    "forced_issue": "flexible_load",
+    "forced_targets": [
+      "_control_flexible_load",
+      "get_actions"
+    ]
+  },
+  "detector_signature_present_on_broken": true,
+  "detector_broken": {
+    "passed": false,
+    "detail": "flexible load never ran inside its window"
+  },
+  "detector_patched": {
+    "passed": false,
+    "detail": "flexible load never ran inside its window"
+  },
+  "iterations": 5,
+  "wall_clock_seconds": 0.03,
+  "llm_calls": 0,
+  "llm_backend_errors": 0,
+  "backend_telemetry": null,
+  "sandbox_memory_limit_mb": 4096,
+  "keep": false,
+  "acceptance_of_record": "driver criteria (a)-(f)",
+  "loop_claimed_success": false,
+  "verdict": "driver-reject"
+}

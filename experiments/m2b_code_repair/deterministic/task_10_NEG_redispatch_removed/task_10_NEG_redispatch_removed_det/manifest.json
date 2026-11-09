@@ -1,0 +1,37 @@
+{
+  "run_id": "task_10_NEG_redispatch_removed_det",
+  "task_id": "task_10_NEG_redispatch_removed",
+  "arm": "deterministic",
+  "negative_control": true,
+  "wiring_workaround": null,
+  "git_commit": "fbf80907b04a49df9eebedc119e82b7d075bbd7a",
+  "git_dirty": true,
+  "controller_file": "src/controllers/__init__.py",
+  "expected_transformations": [],
+  "planner_bypass": {
+    "forced_issue": "voltage",
+    "forced_targets": [
+      "_apply_grid_violation_redispatch",
+      "get_actions"
+    ]
+  },
+  "detector_signature_present_on_broken": true,
+  "detector_broken": {
+    "passed": true,
+    "detail": "negative control (re-dispatch inert required): magnitude 5.00 kW under 1.08 pu vs expected 2.0x baseline 5.00 kW"
+  },
+  "detector_patched": {
+    "passed": true,
+    "detail": "negative control (re-dispatch inert required): magnitude 5.00 kW under 1.08 pu vs expected 2.0x baseline 5.00 kW"
+  },
+  "iterations": 1,
+  "wall_clock_seconds": 5.3,
+  "llm_calls": 0,
+  "llm_backend_errors": 0,
+  "backend_telemetry": null,
+  "sandbox_memory_limit_mb": 4096,
+  "keep": false,
+  "acceptance_of_record": "driver criteria (a)-(f)",
+  "loop_claimed_success": true,
+  "verdict": "loop-claims-success / driver rejects"
+}
