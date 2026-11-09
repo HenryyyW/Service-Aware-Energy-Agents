@@ -566,8 +566,8 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
         "arm": ARM,
         "negative_control": task.negative_control,
         "wiring_workaround": (
-            "explicit NIM backend injection (create_backend TypeError, A-side defect)"
-            if ARM == "llm"
+            "explicit NIM backend injection (configured path unusable)"
+            if ARM == "llm" and coder_config.get("backend") is not None
             else None
         ),
         "git_commit": _git_commit(),

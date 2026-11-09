@@ -251,6 +251,27 @@ authenticated (model digest `poolside/laguna-xs-2.1`).
 **Paper consequence unchanged:** the code-repair claim stays "scaffolded, not
 yet demonstrated"; both arms published unpooled.
 
+## Label correction (2026-11-09, after the PM's merge of the rearm evidence)
+
+The `wiring_workaround` field in the LLM-arm cell manifests of the
+decision-grade run carries a **stale hardcoded label** ("explicit NIM backend
+injection (create_backend TypeError, A-side defect)"): the run's driver wrote
+that string for every llm-arm cell regardless of the path used. The run itself
+used the **configured product path** - `_configured_backend_ok()` passed (no
+"configured backend path unusable" line in the run log), `coder_config` carried
+no `backend` key, and the telemetry shows authenticated calls (model digest
+`poolside/laguna-xs-2.1`). Re-verified against current `origin/main`
+(`7a0e09c6b`, which contains A's `e1e709db3` truthiness fix):
+`LLMConfig().create_backend()` now returns an authenticated backend with the
+configured model and NIM base URL (`api_key` set) - the earlier `api_key=None`
+reproduction predated that fix on the rearm branch and is retracted. The driver
+field is fixed (it now reports the injection only when the injection was
+actually used); the published label correction stands for the already-merged
+cells. No numeric result changes.
+
+Per the PM's hygiene rule, this push carries docs + experiments code only - no
+generated cell directories.
+
 ## Recommendation
 
 Do not put any code-repair number in the paper from this run. The pipeline
