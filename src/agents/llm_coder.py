@@ -301,6 +301,16 @@ Return ONLY the unified diff. NO additional text."""
         Attempts light repair (strip markdown fences, fix indentation, re-indent to target file's leading whitespace)
         before rejecting. Returns (patched_code, diff, changes, notes) or None if failed.
         """
+        # First, do a global de-indent of the entire response to handle over-indented responses
+        # where every line is shifted by N spaces (e.g., from copy-paste or formatting)
+        response_lines = response.splitlines(keepends=True)
+        min_indent = min(
+            (len(line) - len(line.lstrip()) for line in response_lines if line.strip()),
+            default=0,
+        )
+        if min_indent > 0:
+            response = "\n".join(line[min_indent:] for line in response_lines)
+
         # Try to extract diff from markdown fences first (light repair)
         diff_text = None
 
@@ -392,9 +402,10 @@ Return ONLY the unified diff. NO additional text."""
                             i += 1
 
                         # Apply: replace old lines with new lines
+                        # new_lines already have newlines from splitlines(keepends=True)
                         patched_lines = (
                             patched_lines[:old_start]
-                            + [ln + "\n" for ln in new_lines]
+                            + new_lines
                             + patched_lines[old_start + old_count :]
                         )
                         continue
@@ -462,10 +473,19 @@ Return ONLY the unified diff. NO additional text."""
         changes = []
         func_names = set()
         hunk_count = 0
-        for line in diff_text.splitlines():
+        lines = diff_text.splitlines()
+
+        for i, line in enumerate(lines):
             if line.startswith("@@"):
                 hunk_count += 1
+                # Try to find function name in hunk header or next few lines
                 match = re.search(r"@@ -\d+,\d+ \+\d+,\d+ @@.*?def (\w+)", line)
+                if not match:
+                    # Look ahead a few lines for function definition
+                    for j in range(i + 1, min(i + 5, len(lines))):
+                        match = re.search(r"def (\w+)", lines[j])
+                        if match:
+                            break
                 if match:
                     func_names.add(match.group(1))
 
