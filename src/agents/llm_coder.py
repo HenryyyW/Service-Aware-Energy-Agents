@@ -283,13 +283,18 @@ FORMAT - Return EXACTLY ONE unified diff:
          return actions
 ```
 
-CRITICAL RULES:
+CRITICAL RULES - VIOLATION WILL CAUSE REJECTION:
 - Use EXACTLY this format: --- a/file +++ b/file then @@ -start,count +start,count @@
 - Hunk headers MUST have correct line numbers (count lines in context)
 - Indentation MUST match the target file (4 spaces per level)
 - NO markdown fences (no ```diff or ```python)
 - NO additional text, explanations, or apologies
 - Each hunk must have correct line counts in the header
+- EACH HUNK MUST BE BALANCED: similar number of + and - lines (ratio max 3:1)
+- NO additions-only or deletions-only hunks - every hunk must have BOTH + and - lines
+- CONTEXT LINES (lines starting with space) MUST be included to show context
+- DO NOT dump entire functions - only show the minimal changes needed
+- Changes must be BEHAVIOR-CHANGING (not cosmetic) - the sandbox will verify
 
 Return ONLY the unified diff. NO additional text."""
 
