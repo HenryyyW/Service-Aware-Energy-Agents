@@ -34,6 +34,7 @@ class LLMCoderAgent:
         temperature: float = 0.2,
         max_tokens: int = 4096,
         preflight_probe: bool = True,
+        timeout_s: float = 300.0,
         # NEW: iteration context for test-driven prompts
         iteration: int = 0,
         previous_failures: Optional[List[Dict[str, Any]]] = None,
@@ -43,6 +44,7 @@ class LLMCoderAgent:
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.preflight_probe = preflight_probe
+        self.timeout_s = timeout_s
         self._backend = None
         self._backend_ready = False
         self._preflight_done = False
@@ -74,7 +76,7 @@ class LLMCoderAgent:
                 base_url=os.getenv("LLM_BASE_URL"),
                 temperature=0.2,
                 seed=42,
-                timeout_s=120.0,
+                timeout_s=self.timeout_s,
                 max_tokens=4096,
             )
 
@@ -203,6 +205,17 @@ class LLMCoderAgent:
             # DO NOT fall back to deterministic - return None so loop can retry/escalate
             return None
 
+        except TimeoutError as e:
+            # Record timeout as failure for next iteration
+            self.previous_failures.append(
+                {
+                    "iteration": self.iteration,
+                    "error": f"TimeoutError: {e}",
+                    "test_output": "LLM API request timed out",
+                    "verifier_feedback": "LLM API request timed out",
+                }
+            )
+            return None
         except Exception as e:
             # Record exception as failure for next iteration
             self.previous_failures.append(
@@ -502,7 +515,7 @@ Return ONLY the unified diff. NO additional text."""
                 }
             )
 
-        patched_code = deterministic_coder.apply_changes(controller_code, changes)
+        patched_code = deterministic_coder._apply_changes(controller_code, changes)
         diff = self._generate_diff(controller_code, patched_code)
         return patched_code, diff, changes, "deterministic AST fallback"
 
@@ -525,6 +538,7 @@ def create_llm_coder_from_config(config: Dict[str, Any]) -> "LLMCoderAgent":
         temperature=config.get("temperature", 0.2),
         max_tokens=config.get("max_tokens", 4096),
         preflight_probe=config.get("preflight_probe", True),
+        timeout_s=config.get("timeout_s", 300.0),
         iteration=config.get("iteration", 0),
         previous_failures=config.get("previous_failures", []),
     )
@@ -539,6 +553,7 @@ def create_coder_agent(config: Dict[str, Any]):
             temperature=config.get("temperature", 0.2),
             max_tokens=config.get("max_tokens", 4096),
             preflight_probe=config.get("preflight_probe", True),
+            timeout_s=config.get("timeout_s", 300.0),
             iteration=config.get("iteration", 0),
             previous_failures=config.get("previous_failures", []),
         )
