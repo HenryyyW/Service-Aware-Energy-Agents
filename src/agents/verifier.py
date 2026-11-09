@@ -309,14 +309,13 @@ class VerifierAgent:
                 difflib.unified_diff(original_lines, patched_lines, lineterm="")
             )
             # Filter out whitespace-only changes
-            meaningful_changes = [
-                line
-                for line in diff
-                if line.startswith(("+", "-"))
-                and not line.strip().startswith(("+", "-"))
-                or line.strip()
-                and not line.strip().startswith(("#", '"""', "'''"))
-            ]
+            # Skip context lines (starting with space), strip +/- marker before checking for comments
+            meaningful_changes = []
+            for line in diff:
+                if line.startswith(("+", "-")):
+                    content = line[1:].lstrip()
+                    if content and not content.startswith(("#", '"""', "'''")):
+                        meaningful_changes.append(line)
             # If no meaningful behavior changes, it's a cosmetic patch
             if len(meaningful_changes) == 0:
                 remaining.append(
@@ -381,7 +380,7 @@ class VerifierAgent:
     def _run_detector(self, state: AgentState) -> Optional[tuple]:
         """Run the detector function against the patched controller.
 
-        Returns (ok, detail, exc) tuple or None if no detector function.
+        Returns (ok, detail) tuple or None if no detector function.
         """
         detector_fn = state.detector_fn
         if detector_fn is None:
@@ -415,17 +414,17 @@ class VerifierAgent:
                         break
 
                 if controller_cls is None:
-                    return (False, "No controller class found in patched code", None)
+                    return (False, "No controller class found in patched code")
 
                 # Run detector
                 scenario_config = state.scenario_config
                 ok, detail = detector_fn(controller_cls, scenario_config)
-                return (ok, detail, None)
+                return (ok, detail)
             finally:
                 os.unlink(temp_path)
 
         except Exception as exc:
-            return (None, f"Detector execution error: {exc}", str(exc))
+            return (False, f"Detector execution error: {exc}")
 
     def verify_full_experiment(
         self,
