@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import difflib
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -46,6 +47,83 @@ from experiments.code_repair_detectors import (  # noqa: E402
 )
 
 MATRIX = ROOT / "experiments" / "m2b_code_repair"
+ARM = os.environ.get("CODE_REPAIR_ARM", "deterministic")
+NIM_ENDPOINT = "https://integrate.api.nvidia.com/v1"
+NIM_MODEL = "poolside/laguna-xs-2.1"
+KEY_STORE = (
+    "/home/box/.config/OpenBot/agent-api-keys/"
+    "agent-66d119d6-4915-479e-a539-1ab4a6b3b57b/NVIDIA_API_KEY"
+)
+
+
+def configure_llm_arm() -> dict:
+    """Set the LLM-arm environment (NIM / laguna-xs-2.1) before any config read.
+
+    Called at process start for --arm llm. DASHSCOPE is unset so the
+    DashScope key can never be picked up; the NIM key comes from the
+    key-store file. Returns the probe-relevant settings for the record.
+    """
+    os.environ["AGENT_BACKEND"] = f"api:{NIM_MODEL}"
+    os.environ["LLM_MODEL"] = NIM_MODEL
+    os.environ["LLM_PROVIDER"] = "nvidia"
+    os.environ["LLM_ENDPOINT"] = NIM_ENDPOINT
+    os.environ.pop("DASHSCOPE_API_KEY", None)
+    key_path = Path(KEY_STORE)
+    if not key_path.is_file():
+        raise RuntimeError(f"NIM key not found at {key_path}")
+    os.environ["NVIDIA_API_KEY"] = key_path.read_text().strip()
+    return {
+        "agent_backend": f"api:{NIM_MODEL}",
+        "endpoint": NIM_ENDPOINT,
+        "model": NIM_MODEL,
+        "dashscope_unset": "DASHSCOPE_API_KEY" not in os.environ,
+    }
+
+
+def build_nim_backend():
+    """Explicit NIM backend via the coder's supported injection point.
+
+    Needed because LLMConfig.create_backend() raises TypeError for the api
+    backend (openai_api_key passed to ApiPromptCallable) and LLMCoderAgent
+    swallows it into the keyless env fallback - a wiring defect in
+    src/agents/backend/registry.py reported to A; the injection point is the
+    documented alternative and uses the same endpoint/model/key.
+    """
+    from src.agents.backend.api import api_prompt_callable
+
+    return api_prompt_callable(
+        model=NIM_MODEL,
+        base_url=NIM_ENDPOINT,
+        api_key=os.environ["NVIDIA_API_KEY"],
+        temperature=0.2,
+        seed=42,
+        timeout_s=120.0,
+        max_tokens=4096,
+    )
+
+
+def preflight_probe_explicit() -> bool:
+    """1-token probe through the explicit NIM backend (the injection path the
+    LLM arm uses, because LLMConfig.create_backend() is broken - see report)."""
+    try:
+        backend = build_nim_backend()
+        backend("probe")
+        return backend.call_count >= 1 and backend.last_error is None
+    except Exception as exc:  # noqa: BLE001
+        print(f"pre-flight probe failed: {type(exc).__name__}: {exc}")
+        return False
+
+
+def preflight_probe() -> bool:
+    """1-token probe against the configured NIM backend; True on success."""
+    from src.agents.llm_coder import LLMCoderAgent
+
+    coder = LLMCoderAgent(preflight_probe=False)
+    backend = coder._get_backend()
+    if backend is None:
+        return False
+    backend("probe")
+    return backend.call_count >= 1 and backend.last_error is None
 DRY_RUN_TASKS = ["task_1_ev_deadline_soc", "task_10_NEG_redispatch_removed"]
 
 
@@ -177,7 +255,7 @@ def sandbox_run(controller_code: str, cell_dir: Path, tag: str, max_steps: int =
 
 
 def cell_dir_for(task_id: str, run_id: str) -> Path:
-    d = MATRIX / task_id / run_id
+    d = MATRIX / ARM / task_id / run_id
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -253,11 +331,26 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
     planner = ForcedPlanner(
         PlannerAgent(), task.planner_issue or "none", task.planner_targets
     )
+    coder_config = (
+        {
+            "use_llm_coder": True,
+            "preflight_probe": True,
+            "temperature": 0.2,
+            "backend": build_nim_backend(),
+            "wiring_workaround": (
+                "explicit backend injection: LLMConfig.create_backend() raises "
+                "TypeError (openai_api_key -> ApiPromptCallable) and "
+                "LLMCoderAgent falls back to the keyless env path"
+            ),
+        }
+        if ARM == "llm" else None
+    )
     loop = MultiAgentRepairLoop(
         max_iterations=max_iterations,
         project_root=str(ROOT),
         executor=executor,
         planner=planner,
+        coder_config=coder_config,
     )
     started = time.time()
     try:
@@ -288,12 +381,34 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
                     "planner_strategy": it.planner_output.repair_strategy,
                     "target_functions": it.planner_output.target_functions,
                     "coder_changes": len(it.coder_output.code_changes),
+                "coder_source": (
+                    "LLM" if "LLM-generated" in (it.coder_output.implementation_notes or "")
+                    else "deterministic"
+                ),
                     "diff": it.coder_output.diff,
                     "verifier_violations_resolved": it.verifier_output.violations_resolved,
                     "success": it.success,
                     "duration": round(it.duration, 2),
                 }
             )
+
+    backend_stats = None
+    if ARM == "llm":
+        try:
+            backend = getattr(loop.coder, "_backend", None)
+            if backend is not None:
+                backend_stats = {
+                    "llm_calls": backend.call_count,
+                    "llm_prompt_tokens": backend.prompt_tokens,
+                    "llm_completion_tokens": backend.completion_tokens,
+                    "model_digest": backend.model_digest,
+                    "last_error": backend.last_error,
+                    "llm_backend_errors": (
+                        1 if backend.last_error else 0
+                    ),
+                }
+        except Exception as exc:  # noqa: BLE001 - recorded, not swallowed
+            backend_stats = {"telemetry_error": f"{type(exc).__name__}: {exc}"}
 
     # 3) criteria on the final patched controller
     patched_cls = _load_controller(patched_final, f"patched_{run_id}")
@@ -388,6 +503,11 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
         "task_id": task.task_id,
         "arm": task.arm,
         "negative_control": task.negative_control,
+        "arm": ARM,
+        "wiring_workaround": (
+            "explicit NIM backend injection (create_backend TypeError, A-side defect)"
+            if ARM == "llm" else None
+        ),
         "git_commit": _git_commit(),
         "git_dirty": _git_dirty(),
         "controller_file": CONTROLLER_FILE,
@@ -401,8 +521,9 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
         "detector_patched": {"passed": patched_ok, "detail": patched_detail},
         "iterations": len(iterations),
         "wall_clock_seconds": elapsed,
-        "llm_calls": 0,
-        "llm_backend_errors": 0,
+        "llm_calls": (backend_stats or {}).get("llm_calls", 0),
+        "llm_backend_errors": (backend_stats or {}).get("llm_backend_errors", 0),
+        "backend_telemetry": backend_stats,
         "sandbox_memory_limit_mb": 4096,
         "keep": keep,
         # acceptance of record = the driver-level criteria (a)-(f); the loop's
@@ -490,6 +611,14 @@ def main() -> int:
         for t in TASKS:
             print(f"{t.task_id:<34} {t.title}")
         return 0
+
+    if ARM == "llm":
+        cfg = configure_llm_arm()
+        print("LLM arm configuration:", json.dumps(cfg))
+        if not preflight_probe_explicit():
+            print("PRE-FLIGHT FAILED - aborting the queue (no LLM calls)")
+            return 2
+        print("PRE-FLIGHT: PASS (1 token, model digest recorded)")
 
     if args.dry_run:
         task_ids = DRY_RUN_TASKS

@@ -1,0 +1,11 @@
+--- broken_controller
++++ patched_controller
+@@ -191,7 +191,7 @@
+         required_power = energy_needed / max(hours_remaining, 0.25)
+ 
+         # Determine charge power
+-        charge_kw = min(required_power, max_charge)
++        charge_kw = min(required_power, 0.3 * max_charge)
+ 
+         # Prefer PV charging
+         excess_pv = max(0, pv_gen - net_demand)
