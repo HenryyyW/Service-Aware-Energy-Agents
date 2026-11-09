@@ -292,3 +292,38 @@ and a Verifier that rejects absent execution. All three are A's; the benchmark
 harness, detectors, and criteria are proven and will re-run unchanged once
 those land. The paper's "scaffolded, not yet demonstrated" wording therefore
 stays correct.
+
+## Rebased on origin/main (160893e71) with the 2-tuple detector adapter - deterministic verification for the decisive re-run
+
+**What was wrong (mechanism correction, verified by the PM and reproduced on
+the merged tree):** the adapter returned a 3-tuple `(ok, detail, None)` while
+`VerifierAgent._run_detector` unpacks `ok, detail = detector_fn(cls, cfg)`, so
+every in-loop detector call failed closed with "too many values to unpack
+(expected 2)". The 10/10 `loop_claimed_success=False` reported from that branch
+was therefore fail-closed rejection, not a working detector check - safe for the
+all-failing deterministic arm, but it would also have rejected a genuine LLM
+repair.
+
+**Fix:** `_harness_detector` returns the 2-tuple `(ok, detail)` (A's unified
+convention, now merged on main). Verified directly: broken controller ->
+`(False, "requested import 5.0 kW vs limit 3 kW")`, pristine controller ->
+`(True, "requested import 3.0 kW vs limit 3 kW")` - the detector genuinely
+discriminates.
+
+**Full deterministic re-run on the rebased branch (10 cells, zero LLM calls,
+budget 5): `loop_claimed_success=False` on all 10 cells, 0/9 measured repairs,
+negative control `keep=True`, zero "too many values to unpack" occurrences in
+the run log - the in-loop detector check now runs for real.** Independently
+merge-checked by the Project Partner on their tree with the same expectation.
+
+**Labelling (binding):** the negative control's `keep=True` is a **valid
+honest-failure cell** - the pipeline correctly does not repair a defect outside
+the transformation vocabulary - and is **not a counted repair**. Repair counts
+are read from the 9 measured tasks only; this applies to every section of this
+document.
+
+The LLM arm is held until A's remaining diff-application defect is fixed; the
+decisive two-arm re-run (deterministic comparator first, then the LLM arm via
+the configured product path, <= 10 tasks x <= 5 iterations, both arms unpooled,
+`loop_claimed_success` beside every verdict, threshold >= 7/9 reported either
+way) runs on the PM's GO.
