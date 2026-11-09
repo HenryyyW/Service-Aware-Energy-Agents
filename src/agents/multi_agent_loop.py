@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from src.agents.roles import AgentState
 from src.agents.planner import PlannerAgent, PlannerOutput
 from src.agents.coder import CoderAgent, CoderOutput
-from src.agents.llm_coder import create_coder_agent
+from src.agents.llm_coder import create_coder_agent, LLMCoderAgent
 from src.agents.executor import ExecutorAgent, ExecutorOutput
 from src.agents.verifier import VerifierAgent, VerifierOutput
 from src.agents.reporter import ReporterAgent, ReporterOutput
@@ -27,6 +27,8 @@ class IterationRecord:
     reporter_output: ReporterOutput
     success: bool
     duration: float
+    # NEW: Track failure context for LOOP FEEDBACK
+    failure_context: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -125,6 +127,28 @@ class MultiAgentRepairLoop:
             print(f"ITERATION {iteration + 1}/{self.max_iterations}")
             print(f"{'='*60}")
 
+            # === LOOP FEEDBACK: Build failure context from previous iteration ===
+            failure_context = None
+            if iteration > 0 and self.iteration_history:
+                prev = self.iteration_history[-1]
+                failure_context = {
+                    "iteration": iteration - 1,
+                    "error": prev.executor_output.error,
+                    "test_output": (
+                        prev.executor_output.stdout[-2000:]
+                        if prev.executor_output.stdout
+                        else ""
+                    ),
+                    "verifier_feedback": (
+                        f"Violations resolved: {prev.verifier_output.violations_resolved}. "
+                        f"Remaining: {prev.verifier_output.remaining_violations}. "
+                        f"Confidence: {prev.verifier_output.confidence:.0%}. "
+                        f"Recommendation: {prev.verifier_output.recommendation}"
+                    ),
+                    "executor_success": prev.executor_output.success,
+                    "violations_resolved": prev.verifier_output.violations_resolved,
+                }
+
             # === PLANNER ===
             print("\n[PLANNER] Analyzing violations and creating repair plan...")
             plan = self.planner.plan(state)
@@ -139,6 +163,13 @@ class MultiAgentRepairLoop:
                 break
 
             # === CODER ===
+            # LOOP FEEDBACK: Update coder with failure context for TEST-DRIVEN prompt
+            if isinstance(self.coder, LLMCoderAgent):
+                self.coder.iteration = iteration
+                self.coder.previous_failures = (
+                    [failure_context] if failure_context else []
+                )
+
             print("\n[CODER] Implementing code changes...")
             coder_output = self.coder.code(state, plan, state.controller_file)
             print(f"  Changes: {len(coder_output.code_changes)}")
@@ -182,6 +213,7 @@ class MultiAgentRepairLoop:
                 reporter_output=reporter_output,
                 success=executor_output.success and verifier_output.violations_resolved,
                 duration=iter_duration,
+                failure_context=failure_context,
             )
             self.iteration_history.append(iteration_record)
 
