@@ -812,7 +812,13 @@ class Sandbox:
                 def get_actions(self, observations, timestep):
                     self.timestep = timestep
                     if self._impl:
-                        return self._impl.get_actions(observations, timestep)
+                        try:
+                            return self._impl.get_actions(observations, timestep)
+                        except Exception as e:
+                            # Re-raise with context so sandbox can catch and track properly
+                            raise RuntimeError(
+                                f"Patched controller crashed at step {timestep}: {e}"
+                            ) from e
                     # Fallback: return empty actions
                     from src.schemas.action import RequestedActions
 
