@@ -42,9 +42,7 @@ from experiments.code_repair_tasks import (  # noqa: E402
     load_tasks,
 )
 from experiments.code_repair_detectors import (  # noqa: E402
-    PROBE_TIMESTEP_MIN,
     _obs,
-    _hour,
 )
 
 MATRIX = ROOT / "experiments" / "m2b_code_repair"
@@ -55,7 +53,10 @@ DRY_RUN_TASKS = ["task_1_ev_deadline_soc", "task_10_NEG_redispatch_removed"]
 # per-cell helpers
 # ---------------------------------------------------------------------------
 
-def proposal_bound_violations(controller_cls, config, steps: int = 24) -> Tuple[int, int]:
+
+def proposal_bound_violations(
+    controller_cls, config, steps: int = 24
+) -> Tuple[int, int]:
     """L1 (derived, E1 method): requested values beyond the device rating.
 
     Returns (violating values, steps). Ratings come from the probe config's
@@ -85,13 +86,19 @@ def proposal_bound_violations(controller_cls, config, steps: int = 24) -> Tuple[
     return values, steps
 
 
-def run_detector_safe(detector, controller_cls, config) -> Tuple[Optional[bool], str, Optional[str]]:
+def run_detector_safe(
+    detector, controller_cls, config
+) -> Tuple[Optional[bool], str, Optional[str]]:
     """Run a detector, capturing exceptions (criterion (b): runs clean)."""
     try:
         ok, detail = detector(controller_cls, config)
         return ok, detail, None
     except Exception as exc:  # noqa: BLE001 - recorded, not swallowed
-        return None, f"detector raised {type(exc).__name__}: {exc}", f"{type(exc).__name__}: {exc}"
+        return (
+            None,
+            f"detector raised {type(exc).__name__}: {exc}",
+            f"{type(exc).__name__}: {exc}",
+        )
 
 
 def build_experiment_result(task, detector_detail: str):
@@ -108,7 +115,12 @@ def build_experiment_result(task, detector_detail: str):
 
 
 def build_diagnostic_report(task, detector_detail: str):
-    from src.schemas.diagnostics import DiagnosticReport, Diagnostic, DiagnosticCategory, Severity
+    from src.schemas.diagnostics import (
+        DiagnosticReport,
+        Diagnostic,
+        DiagnosticCategory,
+        Severity,
+    )
 
     return DiagnosticReport(
         scenario_id="task_probe",
@@ -146,7 +158,10 @@ def sandbox_run(controller_code: str, cell_dir: Path, tag: str, max_steps: int =
     cfg = cell_dir / "probe.yaml"
     try:
         result = validate_controller_in_sandbox(
-            controller_code, controller_rel, str(cfg), project_root=str(ROOT),
+            controller_code,
+            controller_rel,
+            str(cfg),
+            project_root=str(ROOT),
             max_steps=max_steps,
         )
         return {
@@ -174,6 +189,7 @@ def persist(cell_dir: Path, name: str, payload: dict) -> None:
 # ---------------------------------------------------------------------------
 # cell execution
 # ---------------------------------------------------------------------------
+
 
 class ForcedPlanner:
     """Harness-side planner bypass (A's sign-off workaround): forces the task's
@@ -238,7 +254,9 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
         PlannerAgent(), task.planner_issue or "none", task.planner_targets
     )
     loop = MultiAgentRepairLoop(
-        max_iterations=max_iterations, project_root=str(ROOT), executor=executor,
+        max_iterations=max_iterations,
+        project_root=str(ROOT),
+        executor=executor,
         planner=planner,
     )
     started = time.time()
@@ -262,18 +280,20 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
     if result is not None:
         for it in result.iterations:
             patched_final = it.coder_output.patched_code or patched_final
-            iterations.append({
-                "iteration": it.iteration + 1,
-                "planner_issue": it.planner_output.primary_issue,
-                "planner_targets": it.planner_output.target_functions,
-                "planner_strategy": it.planner_output.repair_strategy,
-                "target_functions": it.planner_output.target_functions,
-                "coder_changes": len(it.coder_output.code_changes),
-                "diff": it.coder_output.diff,
-                "verifier_violations_resolved": it.verifier_output.violations_resolved,
-                "success": it.success,
-                "duration": round(it.duration, 2),
-            })
+            iterations.append(
+                {
+                    "iteration": it.iteration + 1,
+                    "planner_issue": it.planner_output.primary_issue,
+                    "planner_targets": it.planner_output.target_functions,
+                    "planner_strategy": it.planner_output.repair_strategy,
+                    "target_functions": it.planner_output.target_functions,
+                    "coder_changes": len(it.coder_output.code_changes),
+                    "diff": it.coder_output.diff,
+                    "verifier_violations_resolved": it.verifier_output.violations_resolved,
+                    "success": it.success,
+                    "duration": round(it.duration, 2),
+                }
+            )
 
     # 3) criteria on the final patched controller
     patched_cls = _load_controller(patched_final, f"patched_{run_id}")
@@ -301,7 +321,8 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
     broken_mag = _probe_magnitude(_load_controller(broken, f"broken_mag_{run_id}"))
     patched_mag = _probe_magnitude(patched_cls)
     output_differs = (
-        broken_mag is not None and patched_mag is not None
+        broken_mag is not None
+        and patched_mag is not None
         and abs(broken_mag - patched_mag) > 1e-6
     )
 
@@ -311,8 +332,14 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
     )
     l1_patched = proposal_bound_violations(patched_cls, config)
     telemetry = {
-        "l1_broken": {"violating_values": l1_broken[0], "violating_steps": l1_broken[1]},
-        "l1_patched": {"violating_values": l1_patched[0], "violating_steps": l1_patched[1]},
+        "l1_broken": {
+            "violating_values": l1_broken[0],
+            "violating_steps": l1_broken[1],
+        },
+        "l1_patched": {
+            "violating_values": l1_patched[0],
+            "violating_steps": l1_patched[1],
+        },
     }
     if sandbox:
         telemetry["l5_before"] = sandbox_run(broken, cell_dir, "before")
@@ -322,13 +349,12 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
         "a_parses": patched_exc is None,
         "b_ran_clean": patched_exc is None,
         "c_output_differs": output_differs,
-        "d_not_cosmetic": (cosmetic is False) if isinstance(cosmetic, bool) else cosmetic,
+        "d_not_cosmetic": (
+            (cosmetic is False) if isinstance(cosmetic, bool) else cosmetic
+        ),
         "e_harness_accepts": (
             result is not None
-            and any(
-                it.verifier_output.violations_resolved
-                for it in result.iterations
-            )
+            and any(it.verifier_output.violations_resolved for it in result.iterations)
         ),
         "f_service_preserved": None,  # from the before/after KPIs; set below
     }
@@ -355,8 +381,7 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
         )
 
     loop_claimed_success = bool(
-        result is not None
-        and any(it.success for it in result.iterations)
+        result is not None and any(it.success for it in result.iterations)
     )
     manifest = {
         "run_id": run_id,
@@ -386,28 +411,40 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
         "acceptance_of_record": "driver criteria (a)-(f)",
         "loop_claimed_success": loop_claimed_success,
         "verdict": (
-            "driver-keep" if keep else
-            ("loop-claims-success / driver rejects" if loop_claimed_success
-             else "driver-reject")
+            "driver-keep"
+            if keep
+            else (
+                "loop-claims-success / driver rejects"
+                if loop_claimed_success
+                else "driver-reject"
+            )
         ),
     }
     persist(cell_dir, "manifest.json", manifest)
-    persist(cell_dir, "repair_audit.json", {
-        "criteria": criteria,
-        "iterations": iterations,
-        "loop_error": loop_error,
-        "telemetry": telemetry,
-        "cosmetic": cosmetic,
-        "magnitudes": {"broken": broken_mag, "patched": patched_mag},
-    })
+    persist(
+        cell_dir,
+        "repair_audit.json",
+        {
+            "criteria": criteria,
+            "iterations": iterations,
+            "loop_error": loop_error,
+            "telemetry": telemetry,
+            "cosmetic": cosmetic,
+            "magnitudes": {"broken": broken_mag, "patched": patched_mag},
+        },
+    )
     return manifest
 
 
 def _git_commit() -> Optional[str]:
     import subprocess
+
     try:
         return subprocess.run(
-            ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True,
+            ["git", "rev-parse", "HEAD"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
             check=True,
         ).stdout.strip()
     except Exception:  # noqa: BLE001
@@ -416,9 +453,13 @@ def _git_commit() -> Optional[str]:
 
 def _git_dirty() -> Optional[bool]:
     import subprocess
+
     try:
         out = subprocess.run(
-            ["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True,
+            ["git", "status", "--porcelain"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
             check=True,
         ).stdout.strip()
         return bool(out)
@@ -430,6 +471,7 @@ def _git_dirty() -> Optional[bool]:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tasks", nargs="*", default=None)
@@ -437,8 +479,11 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--iterations", type=int, default=3)
-    parser.add_argument("--no-sandbox", action="store_true",
-                        help="skip the before/after full simulation")
+    parser.add_argument(
+        "--no-sandbox",
+        action="store_true",
+        help="skip the before/after full simulation",
+    )
     args = parser.parse_args()
 
     if args.list:
@@ -453,18 +498,21 @@ def main() -> int:
     else:
         task_ids = [t.task_id for t in TASKS]
 
-    print(f"tasks: {len(task_ids)}; iterations <= {args.iterations}; "
-          f"sandbox before/after: {'off' if args.no_sandbox else 'on'}; "
-          f"LLM calls: 0 (deterministic repair path as wired)")
+    print(
+        f"tasks: {len(task_ids)}; iterations <= {args.iterations}; "
+        f"sandbox before/after: {'off' if args.no_sandbox else 'on'}; "
+        f"LLM calls: 0 (deterministic repair path as wired)"
+    )
     summaries = []
     for task in load_tasks(task_ids):
         print(f"\n=== {task.task_id} - {task.title} ===")
-        m = run_cell(task, max_iterations=args.iterations,
-                     sandbox=not args.no_sandbox)
+        m = run_cell(task, max_iterations=args.iterations, sandbox=not args.no_sandbox)
         summaries.append(m)
-        print(f"  iterations={m['iterations']} keep={m['keep']} "
-              f"signature_present={m['detector_signature_present_on_broken']} "
-              f"patched_passes_detector={m['detector_patched']['passed']}")
+        print(
+            f"  iterations={m['iterations']} keep={m['keep']} "
+            f"signature_present={m['detector_signature_present_on_broken']} "
+            f"patched_passes_detector={m['detector_patched']['passed']}"
+        )
     kept = sum(1 for m in summaries if m["keep"])
     print(f"\nsummary: {kept}/{len(summaries)} cells keep")
     return 0
