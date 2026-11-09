@@ -112,6 +112,46 @@ So: 0/9 measured tasks repaired with correct targeting as well; the planner
 bypass removes root cause 1 but exposes root causes 2 (insertion position) and
 3 (acceptance path) as the binding ones, both in `src/agents/` (A's).
 
+## Re-run after A's two landed fixes (0a83db3d2)
+
+A landed both binding fixes (`_find_insertion_point` insertion-position helper;
+Executor/Verifier absent-execution rejection with `action_counts`). Re-ran the
+same envelope (all 10 tasks x <= 3 iterations, zero LLM). Result: **still 0/10
+keep** - the fixes are necessary but not sufficient, and the residual failure is
+now precisely characterized:
+
+- the Coder now inserts after the function's variable definitions, but the
+  transformation snippets still reference names that are **not in the target
+  function's scope at all** - they belong to a different function. Task 1's
+  snippet went into `get_actions` (my forced target list includes it) and
+  references `hours_remaining`, a local of `_control_ev`; the other tasks fail
+  on `avg_net_demand`, `hour_of_day`, `building`, `export_limit` in the same
+  way. The snippets are authored for one function context and applied to
+  another; no insertion position can fix a name that does not exist there.
+- the loop's Executor still reports PASS and the Verifier still records
+  `violations_resolved=True` / `accept` for a patch that raises on execution -
+  reproduced two ways: the sandbox's own `_create_dynamic_controller` path
+  raises the same `UnboundLocalError`, and my driver's before/after 24-step run
+  fails with the same error. The absent-execution rejection therefore did not
+  fire on this path (the Executor's experiment reports actions taken while the
+  patched controller crashes - the exception is being swallowed inside the
+  experiment loop).
+- negative control: patch runs, does not repair, loop still claims success -
+  same acceptance-path gap.
+
+So the remaining work for A: snippets must be scoped to the function they are
+inserted into (or the coder must choose the function the snippet was authored
+for), and the Executor must surface a controller exception as a failed
+execution. Both are inside the three gate items the PM already listed.
+
+## Comparator arm (per the user's wire-the-LLM decision)
+
+The deterministic run is no longer a dry-run artefact: it is the comparator
+arm's baseline (every task's broken-controller detector signature, the
+before/after simulation behaviour, and the honest non-repair outcomes), to be
+published separately from the LLM arm and never pooled with it - see the wiring
+design in `docs/reviewer_response/code_repair_benchmark_scope.md`.
+
 ## Recommendation
 
 Do not put any code-repair number in the paper from this run. The pipeline
