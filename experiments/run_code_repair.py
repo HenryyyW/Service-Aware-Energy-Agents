@@ -324,6 +324,22 @@ class ForcedPlanner:
         return getattr(self._inner, name)
 
 
+def _harness_detector(task):
+    """Adapter that passes THIS task's detector into the repair loop.
+
+    The loop/verifier convention is detector_fn(controller_cls,
+    scenario_config) -> (ok, detail) (A's unified arity); we supply the task's
+    own probe config so the in-loop detector check measures the same defect
+    signature as the driver-level criteria.
+    """
+
+    def _run(controller_cls, _scenario_config):
+        ok, detail = task.detector_fn()(controller_cls, task.config())
+        return ok, detail
+
+    return _run
+
+
 def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
     from src.agents.multi_agent_loop import MultiAgentRepairLoop
     from src.agents.planner import PlannerAgent
@@ -400,6 +416,7 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
             CONTROLLER_FILE,
             config.model_dump(mode="json"),
             str(cell_dir / "probe.yaml"),
+            detector_fn=_harness_detector(task),
         )
         loop_error = None
     except Exception as exc:  # noqa: BLE001 - recorded
@@ -572,8 +589,8 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
         "arm": ARM,
         "negative_control": task.negative_control,
         "wiring_workaround": (
-            "explicit NIM backend injection (create_backend TypeError, A-side defect)"
-            if ARM == "llm"
+            "explicit NIM backend injection (configured path unusable)"
+            if ARM == "llm" and coder_config.get("backend") is not None
             else None
         ),
         "git_commit": _git_commit(),
