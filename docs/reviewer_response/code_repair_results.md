@@ -283,6 +283,37 @@ the user's envelope; the LLM arm through the **configured product path**
 Both arms published unpooled; all cells carry per-iteration records, per-cell
 L1/L5 telemetry and `loop_claimed_success` beside the verdict.
 
+## Decisive re-run after A's triple fix (dcfc558 + 79a42e5 + e09c69cd1: fallback AttributeError, 300s timeout, diff re-indent, detector arity/path, cosmetic classifier)
+
+Branch merged with main; the driver adapter was updated to A's unified 2-tuple
+detector convention and the task detector wired into the verifier.
+
+**Deterministic comparator (10 cells, 0 calls): 10/10 agreement** - all cells
+ran the full 5-iteration budget, `loop_claimed_success=False` on all 10,
+negative control `keep=True`, 0/9 measured repairs.
+
+**LLM arm (configured product path, 300s timeouts): 60 calls, 1 endpoint
+error (timeouts fixed), 0/9 measured repairs, negative control `keep=True`,
+10/10 loop/driver agreement.** Every cell used the full 5-iteration budget with
+the accumulated failure history. The measured defect is unchanged but now
+precisely located: the model's real-code diff does not yield valid code -
+standalone probe on task_4: `changes: 0`, `LLM REAL-CODE PATH FAILED: no valid
+unified diff produced`, with the recorded failure `SyntaxError: invalid syntax
+(<unknown>, line 143)` after ~4.3k prompt / ~1.4k completion tokens. So the
+calls succeed, the model emits a diff, but the applied result is syntactically
+invalid and A's syntax rejection correctly drops it (no silent fallback), so
+every iteration is a no-op patch that the verifier's detector check rejects.
+
+**Claim decision: 0 of 9 measured repairs in BOTH arms - threshold >= 7/9 not
+met - the paper's A2 sentence stays "scaffolded, not yet demonstrated".**
+Reported either way; both arms unpooled; acceptance of record = driver criteria
+(a)-(f); loop/driver agreement is now 10/10 in both arms (the acceptance path
+is sound).
+
+Remaining binding defect (A-side): the model's unified-diff output does not
+apply into syntactically valid, behaviour-changing code - the diff parsing /
+application stage, not the endpoint.
+
 ## Recommendation
 
 Do not put any code-repair number in the paper from this run. The pipeline

@@ -324,6 +324,18 @@ class ForcedPlanner:
         return getattr(self._inner, name)
 
 
+def _harness_detector(task):
+    """Adapter so the loop's verifier detector check runs THIS task's detector.
+    The verifier/harness call detector_fn(controller_cls, cfg) and expect the
+    2-tuple (ok, detail) convention (A's arity unification); we supply the
+    task's own probe config regardless of the passed value."""
+    def _run(controller_cls, _ignored):
+        ok, detail = task.detector_fn()(controller_cls, task.config())
+        return ok, detail
+
+    return _run
+
+
 def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
     from src.agents.multi_agent_loop import MultiAgentRepairLoop
     from src.agents.planner import PlannerAgent
@@ -400,6 +412,7 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
             CONTROLLER_FILE,
             config.model_dump(mode="json"),
             str(cell_dir / "probe.yaml"),
+            detector_fn=_harness_detector(task),
         )
         loop_error = None
     except Exception as exc:  # noqa: BLE001 - recorded
