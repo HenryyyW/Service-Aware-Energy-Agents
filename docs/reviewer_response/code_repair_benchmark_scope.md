@@ -8,10 +8,14 @@ voltage-violating diagnostic (1.08 pu -> `BATTERY_CHARGE` 5.0 becomes 2.5). A
 benchmark on comment-only patches would prove nothing; this list targets real,
 test-detectable defects.
 
-## Authorized envelope (user decision D-A, verbatim constraints)
+## Authorized envelope (user decision D-A; iteration cap raised by the user
+2026-11-09 from 3 to 5; deepseek deferred, laguna-xs-2.1/NIM only)
 
 - Model `poolside/laguna-xs-2.1`, provider NVIDIA NIM (`https://integrate.api.nvidia.com/v1`).
-- Count **<= 10 seeded repair tasks x <= 3 iterations each**.
+- Count **<= 10 seeded repair tasks x <= 5 iterations each** (user envelope
+  update 2026-11-09; the deterministic comparator arm uses the same cap). The
+  authorized model/provider is unchanged: `poolside/laguna-xs-2.1` on NVIDIA
+  NIM only - no other model or provider (deepseek deferred by the user).
 - Same hostile-flag discipline and keep rule as M2b.
 - Single matrix directory `experiments/m2b_code_repair/`.
 - No other model, no other provider, no other output directory.
@@ -46,7 +50,7 @@ set; task 10 is reported separately.
 
 1. **Seed**: apply the documented defect diff to a copy of the controller; record `git commit`, `git_dirty`, config SHA-256 in the cell manifest (M2b manifest hygiene).
 2. **Detect**: run the failing test + the full suite; record which tests fail (the defect's signature) and which pass (the no-regression set).
-3. **Repair**: the repair loop (Planner -> Coder -> Executor(sandbox: unit tests + quick sim) -> Verifier) with **at most 3 iterations**; the repair prompt carries the failing-test output, not a solution hint.
+3. **Repair**: the repair loop (Planner -> Coder -> Executor(sandbox: unit tests + quick sim) -> Verifier) with **at most 5 iterations** (user envelope update 2026-11-09); the repair prompt carries the failing-test output, not a solution hint.
 4. **Before/after**: full 24-step simulation (scenario A pool TOU) of the broken-baseline controller and each repaired controller; record cost, peak, EV completion, flexible-load completion, grid violations, member cost coverage.
 5. **Keep rule (identical to M2b)**: cell kept iff `llm_backend_errors <= 2` AND `llm_calls >= iterations` AND telemetry recorded; quarantined cells (endpoint degradation) are published per cell and excluded from headline stats; epochs are never pooled.
 
@@ -58,7 +62,7 @@ set; task 10 is reported separately.
 
 ## Count arithmetic (LLM calls, inside the authorized envelope)
 
-- 10 tasks x <= 3 iterations. Each iteration makes at least one Coder call; a Planner call precedes it where the loop plans, so the worst case is 10 x 3 x 2 = **<= 60 LLM calls**, the best case 10 (one iteration per task). All sandbox executions (unit tests, quick simulation, the before/after simulations) are deterministic and consume no LLM calls.
+- 10 tasks x <= 5 iterations. Each iteration makes at least one Coder call; a Planner call precedes it where the loop plans, so the worst case is 10 x 5 x 2 = **<= 100 LLM calls**, plus one 1-token pre-flight probe per cell (<= 10), the best case 10 (one iteration per task). All sandbox executions (unit tests, quick simulation, the before/after simulations) are deterministic and consume no LLM calls.
 - One queue, `--workers 3`, `--timeout` as in the M2b queues; pre-flight 1-token probe first; skip-existing resume by run id.
 
 ## Pilot caveats (stated in the results, M2b style)
@@ -80,9 +84,10 @@ set; task 10 is reported separately.
 
 The user ruled that the benchmark must measure real LLM repair, so the
 authorized envelope is now the actual budget: model `poolside/laguna-xs-2.1`,
-provider NVIDIA NIM, count <= 10 tasks x <= 3 iterations x (planner + coder) =
-**<= 60 LLM calls**, single output dir `experiments/m2b_code_repair/`, no other
-model or provider. The deterministic run documented in
+provider NVIDIA NIM, count <= 10 tasks x <= 5 iterations x (planner + coder) =
+**<= 100 LLM calls** (plus <= 10 pre-flight probes), single output dir
+`experiments/m2b_code_repair/`, no other model or provider (user envelope
+update 2026-11-09; deepseek deferred). The deterministic run documented in
 `code_repair_dryrun_report.md` / `code_repair_results.md` is the **comparator
 arm's baseline**.
 

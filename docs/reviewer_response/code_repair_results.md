@@ -152,6 +152,17 @@ before/after simulation behaviour, and the honest non-repair outcomes), to be
 published separately from the LLM arm and never pooled with it - see the wiring
 design in `docs/reviewer_response/code_repair_benchmark_scope.md`.
 
+## Note on the iteration cap (2026-11-09)
+
+Both delivered arms above ran under the earlier <= 3-iteration envelope (LLM
+arm: 40 calls = 4 per cell: 1 pre-flight + 3 iterations). The user has since
+raised the authorized envelope to <= 10 tasks x <= 5 iterations on
+poolside/laguna-xs-2.1 / NVIDIA NIM only (deepseek deferred), comparator arm
+included - so a re-run under the rearmed real-code-path build gets up to 5
+iterations per task (<= 100 LLM calls + <= 10 pre-flights). The pre-registered
+threshold (>= 7/9), the negative control, and the acceptance of record
+(driver criteria (a)-(f)) are unchanged.
+
 ## Two-arm re-run on origin/main 66e7a7432 (deterministic comparator + LLM-wired measured run)
 
 Both arms ran the same 10 tasks x <= 3 iterations, same detectors, same
