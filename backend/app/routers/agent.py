@@ -617,10 +617,12 @@ async def _run_agent_task(
         # Load scenario config with fallback: configs/{scenario_id}.yaml -> data/schemas/{scenario_id}/schema.json
         from src.schemas.scenario import ScenarioConfig
         import yaml
+        import tempfile
+        import json
 
         def _load_scenario_config(scenario_id: str) -> tuple[ScenarioConfig, str]:
             """Load scenario with fallback: configs/{scenario_id}.yaml -> data/schemas/{scenario_id}/schema.json
-            Returns (ScenarioConfig, path_used)
+            Returns (ScenarioConfig, path_to_yaml_file)
             """
             # Try configs/{scenario_id}.yaml first
             config_path = f"{PROJECT_ROOT}/configs/{scenario_id}.yaml"
@@ -636,7 +638,19 @@ async def _run_agent_task(
 
                 scenario = _load_scenario_from_disk(scenario_id)
                 if scenario is not None:
-                    return scenario, schema_path
+                    # Write scenario to a temporary YAML file so sandbox can load it consistently
+                    # Use JSON-compatible serialization to avoid YAML enum tags
+                    with tempfile.NamedTemporaryFile(
+                        mode="w", suffix=".yaml", delete=False
+                    ) as f:
+                        # Use JSON-compatible mode to avoid Python enum tags in YAML
+                        yaml.dump(
+                            json.loads(scenario.model_dump_json()),
+                            f,
+                            default_flow_style=False,
+                        )
+                        temp_yaml_path = f.name
+                    return scenario, temp_yaml_path
             except Exception as e:
                 # Log the error but don't fail yet - we'll raise a clear error below
                 pass
