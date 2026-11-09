@@ -622,10 +622,14 @@ Repair success in the detection epoch is derived (720 repair iterations minus
 360 deterministic replacements; the recorded field is null in that build).
 Reference = 65.52 USD over exactly 15 cells: the deterministic
 \texttt{multi\_agent} 24-step pool-TOU runs at seeds 42/123/456 across
-scenarios A--E in \texttt{experiments/m2a\_rerun\_laguna} (per-cell
-66.29/68.81/59.93/66.29/66.29 USD by scenario, three seeds each), shipped in
-the release artifact \texttt{dist/m2a-laguna-matrix-2026-11-08.zip} at build
-commit 67d3e276b (\texttt{git\_dirty: false}).}
+scenarios A--E in \texttt{experiments/m2a\_rerun\_laguna} (per-scenario means
+66.29/68.81/59.93/66.29/66.29 USD, three seeds each; every manifest records
+\texttt{git\_dirty: false}, build commits 9588cb5e4/67d3e276b/95b328d6e). The
+per-cell list (run id, cost, peak, commit) is committed at
+\texttt{docs/reviewer\_response/m2b\_reference\_cells.csv}, and the runs ship
+in the release artifact \texttt{dist/m2a-laguna-matrix-2026-11-08.zip}
+(SHA-256 \texttt{660dc7b2...}), so the aggregate recomputes from the committed
+list or the archived artifact.}
 \label{tab:m2b}
 \begin{tabular}{lccc}
 \toprule
@@ -825,8 +829,10 @@ corrective re-prompt returned an in-bounds proposal that was applied (recorded
 repair success 0.957, one deterministic replacement), and the reporter wrote
 Markdown + JSON. The unverified arm of the same cell applied all corrupted
 proposals as proposed (adapter clamping downstream) at 460.87 USD against the
-verified arm's 471.15; the deterministic reference for the same cell is 66.29
-USD. The safety gain is therefore real and measurable at the proposal layer;
+verified arm's 471.15; the deterministic reference for that same (scenario,
+seed) cell --- \texttt{scenario\_a\_multi\_agent\_42}, one of the 15 reference
+cells of Table~\ref{tab:m2b} --- is 66.29 USD. The safety gain is therefore
+real and measurable at the proposal layer;
 the KPI gain is not (the verified arm is slightly \emph{worse} on cost here),
 which is the honest reading of the recovery pilot at cell granularity.
 

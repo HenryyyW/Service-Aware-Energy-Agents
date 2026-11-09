@@ -1,0 +1,16 @@
+run_id,scenario,seed,total_cost_usd,peak_demand_kw,git_commit,git_dirty,cost_basis
+scenario_a_multi_agent_42,scenario_a,42,66.29,12.03,67d3e276bbbbca08082050661ac22f0235faf1d3,False,tariff
+scenario_a_multi_agent_123,scenario_a,123,66.29,12.03,67d3e276bbbbca08082050661ac22f0235faf1d3,False,tariff
+scenario_a_multi_agent_456,scenario_a,456,66.29,12.03,67d3e276bbbbca08082050661ac22f0235faf1d3,False,tariff
+scenario_b_multi_agent_42,scenario_b,42,68.81,12.03,67d3e276bbbbca08082050661ac22f0235faf1d3,False,tariff
+scenario_b_multi_agent_123,scenario_b,123,68.81,12.03,67d3e276bbbbca08082050661ac22f0235faf1d3,False,tariff
+scenario_b_multi_agent_456,scenario_b,456,68.81,12.03,67d3e276bbbbca08082050661ac22f0235faf1d3,False,tariff
+scenario_c_multi_agent_42,scenario_c,42,59.93,12.03,67d3e276bbbbca08082050661ac22f0235faf1d3,False,tariff
+scenario_c_multi_agent_123,scenario_c,123,59.93,12.03,67d3e276bbbbca08082050661ac22f0235faf1d3,False,tariff
+scenario_c_multi_agent_456,scenario_c,456,59.93,12.03,9588cb5e4921e7dc08fde6e0dbf77a8479fbe800,False,tariff
+scenario_d_multi_agent_42,scenario_d,42,66.29,12.03,95b328d6e0bfc7d5101b37a73dc3a8357257df78,False,tariff
+scenario_d_multi_agent_123,scenario_d,123,66.29,12.03,95b328d6e0bfc7d5101b37a73dc3a8357257df78,False,tariff
+scenario_d_multi_agent_456,scenario_d,456,66.29,12.03,95b328d6e0bfc7d5101b37a73dc3a8357257df78,False,tariff
+scenario_e_multi_agent_42,scenario_e,42,66.29,12.03,95b328d6e0bfc7d5101b37a73dc3a8357257df78,False,tariff
+scenario_e_multi_agent_123,scenario_e,123,66.29,12.03,95b328d6e0bfc7d5101b37a73dc3a8357257df78,False,tariff
+scenario_e_multi_agent_456,scenario_e,456,66.29,12.03,95b328d6e0bfc7d5101b37a73dc3a8357257df78,False,tariff
