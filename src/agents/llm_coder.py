@@ -372,10 +372,10 @@ Return ONLY the unified diff. NO additional text."""
             original_lines = original_code.splitlines(keepends=True)
             # Parse and apply diff using difflib
 
-            patched_lines = list(original_lines)
+            # First, parse all hunks
             diff_lines = diff_text.splitlines(keepends=True)
+            hunks = []
 
-            # Simple diff application - find hunks and apply
             i = 0
             while i < len(diff_lines):
                 line = diff_lines[i]
@@ -389,27 +389,56 @@ Return ONLY the unified diff. NO additional text."""
                         new_count = int(match.group(4)) if match.group(4) else 1
 
                         i += 1
-                        new_lines = []
+                        hunk_lines = []
                         while i < len(diff_lines) and not diff_lines[i].startswith(
                             "@@"
                         ):
-                            if diff_lines[i].startswith("+"):
-                                new_lines.append(diff_lines[i][1:])
-                            elif diff_lines[i].startswith("-"):
-                                pass  # deletion handled by slice
-                            else:
-                                new_lines.append(diff_lines[i][1:])
+                            hunk_lines.append(diff_lines[i])
                             i += 1
 
-                        # Apply: replace old lines with new lines
-                        # new_lines already have newlines from splitlines(keepends=True)
-                        patched_lines = (
-                            patched_lines[:old_start]
-                            + new_lines
-                            + patched_lines[old_start + old_count :]
+                        hunks.append(
+                            {
+                                "old_start": old_start,
+                                "old_count": old_count,
+                                "new_start": new_start,
+                                "new_count": new_count,
+                                "lines": hunk_lines,
+                            }
                         )
                         continue
                 i += 1
+
+            # Apply hunks in REVERSE order so that line numbers for earlier hunks remain valid
+            patched_lines = list(original_code.splitlines(keepends=True))
+            for hunk in reversed(hunks):
+                old_start = hunk["old_start"]
+                old_count = hunk["old_count"]
+                hunk_lines = hunk["lines"]
+
+                # Apply hunk by processing each line
+                # We build the new lines for this hunk by processing the diff operations
+                new_hunk_lines = []
+                src_idx = 0  # index into original lines (relative to old_start)
+
+                for diff_line in hunk["lines"]:
+                    if diff_line.startswith(" "):
+                        # Context line - copy from original
+                        if old_start + src_idx < len(patched_lines):
+                            new_hunk_lines.append(patched_lines[old_start + src_idx])
+                        src_idx += 1
+                    elif diff_line.startswith("-"):
+                        # Deletion - skip in source, don't add to output
+                        src_idx += 1
+                    elif diff_line.startswith("+"):
+                        # Addition - add to output, don't advance source
+                        new_hunk_lines.append(diff_line[1:])
+
+                # Replace the old lines with new hunk lines
+                patched_lines = (
+                    patched_lines[: hunk["old_start"]]
+                    + new_hunk_lines
+                    + patched_lines[hunk["old_start"] + hunk["old_count"] :]
+                )
 
             return "".join(patched_lines)
 
