@@ -43,6 +43,8 @@ class AgentState:
     iteration: int = 0
     max_iterations: int = 5
     messages: List[Message] = field(default_factory=list)
+    # NEW: detector function to verify the actual defect is fixed
+    detector_fn: Optional[Any] = None
 
     def add_message(
         self, role: AgentRole, content: str, metadata: Dict[str, Any] = None

@@ -83,6 +83,7 @@ class MultiAgentRepairLoop:
         controller_file: str,
         scenario_config: Dict[str, Any],
         scenario_config_path: str,
+        detector_fn: Optional[Any] = None,
     ) -> MultiAgentRepairResult:
         """
         Run the complete multi-agent repair loop.
@@ -94,6 +95,7 @@ class MultiAgentRepairLoop:
             controller_file: Path to controller file
             scenario_config: Scenario configuration
             scenario_config_path: Path to scenario config file
+            detector_fn: Optional detector function to verify the actual defect is fixed
 
         Returns:
             MultiAgentRepairResult with final outcome
@@ -111,6 +113,7 @@ class MultiAgentRepairLoop:
             scenario_config=scenario_config,
             scenario_config_path=scenario_config_path,
             max_iterations=self.max_iterations,
+            detector_fn=detector_fn,
         )
 
         print(f"\n{'='*60}")
@@ -321,6 +324,7 @@ def run_multi_agent_repair(
     scenario_config_path: str,
     max_iterations: int = 3,
     project_root: str = None,
+    detector_fn: Optional[Any] = None,
 ) -> MultiAgentRepairResult:
     """Convenience function to run multi-agent repair loop."""
     loop = MultiAgentRepairLoop(
@@ -333,4 +337,5 @@ def run_multi_agent_repair(
         controller_file,
         scenario_config,
         scenario_config_path,
+        detector_fn,
     )

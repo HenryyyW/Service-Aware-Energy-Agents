@@ -399,6 +399,7 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
             CONTROLLER_FILE,
             config.model_dump(mode="json"),
             str(cell_dir / "probe.yaml"),
+            task.detector_fn(),
         )
         loop_error = None
     except Exception as exc:  # noqa: BLE001 - recorded

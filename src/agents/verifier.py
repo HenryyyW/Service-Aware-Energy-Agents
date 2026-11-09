@@ -1,6 +1,6 @@
 """Verifier agent - verifies that fixes resolve violations."""
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from src.agents.roles import AgentState, VerifierOutput, AgentRole
 from src.agents.planner import PlannerOutput
 from src.schemas.report import ExperimentResult
@@ -55,6 +55,34 @@ class VerifierAgent:
                 output.model_dump(),
             )
             return output
+
+        # CRITICAL: Run the detector against the patched controller
+        # The detector defines the actual defect - if it still fails, the repair is NOT resolved
+        detector_result = self._run_detector(state)
+        if detector_result is not None:
+            detector_ok, detector_detail, detector_exc = detector_result
+            if not detector_ok:
+                # Detector still fails - defect NOT fixed
+                output = VerifierOutput(
+                    violations_resolved=False,
+                    remaining_violations=[
+                        {
+                            "issue": "detector_failure",
+                            "reason": f"Defect detector still fails: {detector_detail}",
+                            "severity": "critical",
+                            "details": detector_detail,
+                        }
+                    ],
+                    confidence=0.0,
+                    recommendation="retry",
+                )
+                state.verification_result = output.model_dump()
+                state.add_message(
+                    AgentRole.VERIFIER,
+                    f"Verification: FAILED (detector still fails: {detector_detail})",
+                    output.model_dump(),
+                )
+                return output
 
         # Parse experiment results from executor output
         # In practice, would run full experiment and get metrics
@@ -293,6 +321,55 @@ class VerifierAgent:
             return "retry"
         else:
             return "escalate"
+
+    def _run_detector(self, state: AgentState) -> Optional[tuple]:
+        """Run the detector function against the patched controller.
+
+        Returns (ok, detail, exc) tuple or None if no detector function.
+        """
+        detector_fn = state.detector_fn
+        if detector_fn is None:
+            return None
+
+        try:
+            # Load the patched controller
+            import importlib.util
+            import tempfile
+            import os
+
+            # Write patched code to a temp file and import it
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".py", delete=False, prefix="patched_controller_"
+            ) as f:
+                f.write(state.patched_code)
+                temp_path = f.name
+
+            try:
+                spec = importlib.util.spec_from_file_location(
+                    "patched_controller", temp_path
+                )
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+
+                # Find the controller class (should be RuleBasedController or similar)
+                controller_cls = None
+                for name, obj in module.__dict__.items():
+                    if isinstance(obj, type) and name.endswith("Controller"):
+                        controller_cls = obj
+                        break
+
+                if controller_cls is None:
+                    return (False, "No controller class found in patched code", None)
+
+                # Run detector
+                scenario_config = state.scenario_config
+                ok, detail = detector_fn(controller_cls, scenario_config)
+                return (ok, detail, None)
+            finally:
+                os.unlink(temp_path)
+
+        except Exception as exc:
+            return (None, f"Detector execution error: {exc}", str(exc))
 
     def verify_full_experiment(
         self,
