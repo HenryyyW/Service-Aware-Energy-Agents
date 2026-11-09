@@ -154,9 +154,10 @@ class LLMCoderAgent:
         plan: PlannerOutput,
         controller_file: str,
     ) -> Optional[tuple]:
-        """Generate code using REAL-CODE PATH: LLM returns unified diff or full function.
+        """Generate code using REAL-CODE PATH: LLM returns unified diff.
 
         Returns (patched_code, diff, changes, notes) or None if failed.
+        Failures are recorded in self.previous_failures for next iteration.
         """
         backend = self._get_backend()
         if backend is None:
@@ -172,7 +173,7 @@ class LLMCoderAgent:
             else:
                 return None
 
-            # Parse LLM response - expect unified diff or full function
+            # Parse LLM response - expect unified diff
             result = self._parse_llm_response_real_code(
                 raw_response, controller_code, controller_file
             )
@@ -182,19 +183,37 @@ class LLMCoderAgent:
                 try:
                     ast.parse(patched_code)
                 except SyntaxError as e:
-                    print(f"LLM generated syntactically invalid code: {e}")
+                    # Record syntax error as failure for next iteration
+                    self.previous_failures.append(
+                        {
+                            "iteration": self.iteration,
+                            "error": f"SyntaxError: {e}",
+                            "test_output": f"LLM generated syntactically invalid code: {e}",
+                            "verifier_feedback": "Generated code failed syntax validation",
+                        }
+                    )
                     return None
                 return patched_code, diff, changes, notes
 
-        except Exception as e:
-            print(f"LLM real-code path failed: {e}")
+            # If we reach here, parsing failed - failure already recorded in _parse_llm_response_real_code
+            return None
 
-        return None
+        except Exception as e:
+            # Record exception as failure for next iteration
+            self.previous_failures.append(
+                {
+                    "iteration": self.iteration,
+                    "error": f"{type(e).__name__}: {e}",
+                    "test_output": str(e)[:500],
+                    "verifier_feedback": f"LLM backend exception: {e}",
+                }
+            )
+            return None
 
     def _build_coder_prompt_real_code(
         self, plan: PlannerOutput, controller_code: str
     ) -> str:
-        """Build TEST-DRIVEN prompt including failure history."""
+        """Build TEST-DRIVEN prompt demanding strict unified-diff format."""
         failure_context = ""
         if self.previous_failures:
             failure_context = "\n\nPREVIOUS FAILURES (fix these):\n"
@@ -210,7 +229,7 @@ class LLMCoderAgent:
 
         return f"""You are an expert Python developer fixing energy community controllers.
 
-TASK: Fix the following issue by providing a UNIFIED DIFF or COMPLETE FUNCTION REPLACEMENT.
+TASK: Fix the following issue by providing a STRICT UNIFIED DIFF.
 
 ISSUE: {plan.primary_issue}
 STRATEGY: {plan.repair_strategy}
@@ -225,14 +244,13 @@ CURRENT CONTROLLER CODE:
 ```
 
 REQUIREMENTS:
-1. Return ONLY a UNIFIED DIFF (starting with --- / +++) OR a COMPLETE FUNCTION REPLACEMENT
+1. Return ONLY a UNIFIED DIFF (starting with --- / +++)
 2. Target functions: {plan.target_functions}
 3. Fix: {plan.repair_strategy}
 4. Changes must be BEHAVIOR-CHANGING (not cosmetic) - the sandbox will verify
 
-FORMAT - Return EXACTLY one of:
+FORMAT - Return EXACTLY ONE unified diff:
 
-OPTION A - Unified Diff:
 ```diff
 --- a/controllers/__init__.py
 +++ b/controllers/__init__.py
@@ -247,75 +265,73 @@ OPTION A - Unified Diff:
          return actions
 ```
 
-OPTION B - Complete Function Replacement:
-```python
-# FILE: controllers/__init__.py
-# FUNCTION: _apply_grid_limits
-def _apply_grid_limits(self, actions):
-    \"\"\"Enforce grid voltage and loading limits.\"\"\"
-    # Voltage-triggered load reduction
-    if self.last_grid_diagnostics:
-        diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
-        for d in diagnostics:
-            if d.get("severity") in ["violation", "critical"] and d.get("category") == "voltage":
-                # ... reduction logic
-    return actions
-```
+CRITICAL RULES:
+- Use EXACTLY this format: --- a/file +++ b/file then @@ -start,count +start,count @@
+- Hunk headers MUST have correct line numbers (count lines in context)
+- Indentation MUST match the target file (4 spaces per level)
+- NO markdown fences (no ```diff or ```python)
+- NO additional text, explanations, or apologies
+- Each hunk must have correct line counts in the header
 
-Return EXACTLY ONE of the above formats. NO additional text."""
+Return ONLY the unified diff. NO additional text."""
 
     def _parse_llm_response_real_code(
         self, response: str, original_code: str, controller_file: str
     ) -> Optional[tuple]:
-        """Parse LLM response expecting unified diff or full function."""
-        # Try unified diff first
+        """Parse LLM response expecting unified diff.
+
+        Attempts light repair (strip markdown fences, fix indentation) before rejecting.
+        Returns (patched_code, diff, changes, notes) or None if failed.
+        """
+        # Try to extract diff from markdown fences first (light repair)
+        diff_text = None
+
+        # Try to find diff in markdown fences
         diff_match = re.search(r"```diff\n(.*?)```", response, re.DOTALL)
-        if not diff_match:
+        if diff_match:
+            diff_text = diff_match.group(1).strip()
+        else:
+            # Try without markdown fences - look for raw diff
             diff_match = re.search(
                 r"(--- a/.*?\n\+{3} b/.*?)(?:\n```|\Z)", response, re.DOTALL
             )
+            if diff_match:
+                diff_text = diff_match.group(1).strip()
 
-        if diff_match:
-            diff_text = diff_match.group(1).strip()
+        # Light repair: strip any remaining markdown fences, fix common issues
+        if diff_text:
+            # Remove any remaining markdown fences
+            diff_text = re.sub(r"^```(?:diff)?\n", "", diff_text)
+            diff_text = re.sub(r"\n```$", "", diff_text)
+            # Fix common indentation issues - ensure diff starts at column 0
+            diff_lines = diff_text.splitlines()
+            # Find minimum indentation of non-empty lines
+            min_indent = min(
+                (len(line) - len(line.lstrip()) for line in diff_lines if line.strip()),
+                default=0,
+            )
+            if min_indent > 0:
+                diff_text = "\n".join(line[min_indent:] for line in diff_lines)
+            diff_text = diff_text.strip()
+
             patched_code = self._apply_unified_diff(original_code, diff_text)
             if patched_code and patched_code != original_code:
                 diff = self._generate_diff(original_code, patched_code)
                 changes = self._extract_changes_from_diff(diff_text, controller_file)
                 return patched_code, diff, changes, "unified diff applied"
 
-        # Try complete function replacement
-        func_match = re.search(
-            r"# FILE:.*?\n# FUNCTION: (\w+)\n```python\n(.*?)\n```",
-            response,
-            re.DOTALL,
-        )
-        if not func_match:
-            # Alternative format
-            func_match = re.search(
-                r"FUNCTION: (\w+)\n```python\n(.*?)\n```",
-                response,
-                re.DOTALL,
+        # No valid diff found - record the failure instead of silent fallback
+        # The failure will be recorded in previous_failures for next iteration
+        parse_error = "Could not extract valid unified diff from LLM response"
+        if self.previous_failures is not None:
+            self.previous_failures.append(
+                {
+                    "iteration": self.iteration,
+                    "error": parse_error,
+                    "test_output": response[:500],
+                    "verifier_feedback": "LLM response did not contain a valid unified diff",
+                }
             )
-
-        if func_match:
-            func_name = func_match.group(1)
-            new_func_code = func_match.group(2).strip()
-            patched_code = self._replace_function(
-                original_code, func_name, new_func_code
-            )
-            if patched_code and patched_code != original_code:
-                diff = self._generate_diff(original_code, patched_code)
-                changes = [
-                    {
-                        "file": controller_file,
-                        "function": func_name,
-                        "change": f"Replaced {func_name} with LLM-generated implementation",
-                        "type": "modification",
-                        "location": "function_body",
-                    }
-                ]
-                return patched_code, diff, changes, f"function {func_name} replaced"
-
         return None
 
     def _apply_unified_diff(self, original_code: str, diff_text: str) -> Optional[str]:
