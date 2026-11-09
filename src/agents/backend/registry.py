@@ -85,7 +85,8 @@ def create_backend_from_config(config: Dict[str, Any]) -> "AgentBackend":
     # Map config keys to backend constructor parameters
     if "prompt_template" in backend_config:
         backend_config["prompt_template_id"] = backend_config.pop("prompt_template")
-    if "local_endpoint" in backend_config:
+    # Only map local_endpoint to endpoint for ollama backend
+    if "local_endpoint" in backend_config and backend_type == "ollama":
         backend_config["endpoint"] = backend_config.pop("local_endpoint")
     # Only map local_model to model for ollama/local backends
     if "local_model" in backend_config and backend_type == "ollama":
