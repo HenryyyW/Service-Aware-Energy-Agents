@@ -32,7 +32,11 @@ class ExecutorAgent:
             ExecutorOutput with execution results
         """
         if not state.patched_code:
-            return ExecutorOutput(success=False, error="No patched code to execute")
+            return ExecutorOutput(
+                success=False,
+                error="No patched code to execute",
+                test_results={"experiment_error": "No patched code to execute"},
+            )
 
         start_time = time.time()
 
@@ -50,6 +54,7 @@ class ExecutorAgent:
                         "unit_tests_passed": False,
                         "patch_rejected": True,
                         "rejection_reason": "cosmetic_only",
+                        "experiment_error": f"Patch rejected: {classification.reason}",
                         "classification": {
                             "is_behavior_changing": classification.is_behavior_changing,
                             "reason": classification.reason,
@@ -72,6 +77,9 @@ class ExecutorAgent:
                         success=False,
                         error="Failed to apply code changes in sandbox",
                         execution_time=time.time() - start_time,
+                        test_results={
+                            "experiment_error": "Failed to apply code changes in sandbox"
+                        },
                     )
 
             # Write patched controller to sandbox (get the modified code from sandbox)
@@ -88,6 +96,9 @@ class ExecutorAgent:
                     success=False,
                     error=f"Syntax error: {syntax_result.error}",
                     execution_time=time.time() - start_time,
+                    test_results={
+                        "experiment_error": f"Syntax error: {syntax_result.error}"
+                    },
                 )
 
             # Run unit tests first
@@ -110,6 +121,7 @@ class ExecutorAgent:
                         "unit_test_error": (
                             test_result.stderr[-1000:] if test_result.stderr else ""
                         ),
+                        "experiment_error": f"Unit tests failed: {test_result.error or test_result.stderr}",
                     },
                 )
 
