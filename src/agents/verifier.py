@@ -86,7 +86,7 @@ class VerifierAgent:
         # The detector defines the actual defect - if it still fails, the repair is NOT resolved
         detector_result = self._run_detector(state)
         if detector_result is not None:
-            detector_ok, detector_detail, detector_exc = detector_result
+            detector_ok, detector_detail = detector_result
             if not detector_ok:
                 # Detector still fails - defect NOT fixed
                 output = VerifierOutput(
@@ -309,10 +309,14 @@ class VerifierAgent:
                 difflib.unified_diff(original_lines, patched_lines, lineterm="")
             )
             # Filter out whitespace-only changes
-            # Skip context lines (starting with space), strip +/- marker before checking for comments
+            # Skip context lines (starting with space), skip file headers (---/+++),
+            # strip +/- marker before checking for comments
             meaningful_changes = []
             for line in diff:
                 if line.startswith(("+", "-")):
+                    # Skip file headers (--- a/file +++ b/file)
+                    if line.startswith("--- ") or line.startswith("+++ "):
+                        continue
                     content = line[1:].lstrip()
                     if content and not content.startswith(("#", '"""', "'''")):
                         meaningful_changes.append(line)
