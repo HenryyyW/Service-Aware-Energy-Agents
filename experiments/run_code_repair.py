@@ -175,8 +175,32 @@ def persist(cell_dir: Path, name: str, payload: dict) -> None:
 # cell execution
 # ---------------------------------------------------------------------------
 
+class ForcedPlanner:
+    """Harness-side planner bypass (A's sign-off workaround): forces the task's
+    own primary issue and target functions instead of the planner's
+    severity-only prioritisation, whose issue map also lacks
+    _apply_grid_violation_redispatch. Wraps PlannerAgent so the rest of the
+    loop is unchanged."""
+
+    def __init__(self, inner, issue: str, targets: List[str]):
+        self._inner = inner
+        self._issue = issue
+        self._targets = targets
+
+    def plan(self, state):
+        plan = self._inner.plan(state)
+        plan.primary_issue = self._issue
+        plan.target_functions = list(self._targets)
+        state.repair_plan = plan.model_dump()
+        return plan
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+
 def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
     from src.agents.multi_agent_loop import MultiAgentRepairLoop
+    from src.agents.planner import PlannerAgent
 
     source = (ROOT / CONTROLLER_FILE).read_text()
     broken = apply_mutation(source, task)
@@ -210,8 +234,12 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
     executor.sandbox = _Sandbox(
         project_root=str(ROOT), timeout=120, memory_limit_mb=4096
     )
+    planner = ForcedPlanner(
+        PlannerAgent(), task.planner_issue or "none", task.planner_targets
+    )
     loop = MultiAgentRepairLoop(
-        max_iterations=max_iterations, project_root=str(ROOT), executor=executor
+        max_iterations=max_iterations, project_root=str(ROOT), executor=executor,
+        planner=planner,
     )
     started = time.time()
     try:
@@ -237,6 +265,7 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
             iterations.append({
                 "iteration": it.iteration + 1,
                 "planner_issue": it.planner_output.primary_issue,
+                "planner_targets": it.planner_output.target_functions,
                 "planner_strategy": it.planner_output.repair_strategy,
                 "target_functions": it.planner_output.target_functions,
                 "coder_changes": len(it.coder_output.code_changes),
@@ -334,6 +363,10 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
         "git_dirty": _git_dirty(),
         "controller_file": CONTROLLER_FILE,
         "expected_transformations": task.expected_transformations,
+        "planner_bypass": {
+            "forced_issue": task.planner_issue,
+            "forced_targets": task.planner_targets,
+        },
         "detector_signature_present_on_broken": signature_present,
         "detector_broken": {"passed": broken_ok, "detail": broken_detail},
         "detector_patched": {"passed": patched_ok, "detail": patched_detail},

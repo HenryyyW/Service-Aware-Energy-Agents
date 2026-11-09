@@ -22,7 +22,7 @@ Matrix output: experiments/m2b_code_repair/ only (authorized envelope).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 from experiments.code_repair_detectors import DETECTORS, config_for
@@ -56,6 +56,12 @@ class Task:
     success_test: str
     negative_control: bool = False
     notes: str = ""
+    # Harness-side planner bypass (per A's sign-off): the planner's
+    # _prioritize_issues picks by severity only and its issue->function map has
+    # no entry for _apply_grid_violation_redispatch, so the driver forces the
+    # task's own issue/targets instead of inferring them.
+    planner_issue: str = ""
+    planner_targets: List[str] = field(default_factory=list)
 
     def detector_fn(self):
         return DETECTORS[self.detector]
@@ -83,6 +89,8 @@ def _load_controller(source: str, module_name: str):
 
 TASKS: List[Task] = [
     Task(
+        planner_issue="ev_deadline",
+        planner_targets=['_control_ev', 'get_actions'],
         task_id="task_1_ev_deadline_soc",
         arm="deterministic",
         title="EV charging stops early (deadline SOC miss)",
@@ -95,6 +103,8 @@ TASKS: List[Task] = [
         success_test="final EV SOC >= 0.800 at departure",
     ),
     Task(
+        planner_issue="ev_deadline",
+        planner_targets=['_control_ev', 'get_actions'],
         task_id="task_2_ev_urgent_power",
         arm="deterministic",
         title="EV urgent-deadline charging underpowered",
@@ -107,6 +117,8 @@ TASKS: List[Task] = [
         success_test="charge power covers the remaining need at 1h-to-departure",
     ),
     Task(
+        planner_issue="battery_soc",
+        planner_targets=['_control_battery', 'get_actions'],
         task_id="task_3_battery_soc_floor",
         arm="deterministic",
         title="Battery discharge ignores the SOC floor (over-discharge)",
@@ -120,6 +132,8 @@ TASKS: List[Task] = [
         success_test="no discharge action draws above-floor stored energy",
     ),
     Task(
+        planner_issue="grid_import",
+        planner_targets=['_apply_grid_limits', 'get_actions'],
         task_id="task_4_import_limit",
         arm="deterministic",
         title="Community import limit not enforced",
@@ -132,6 +146,8 @@ TASKS: List[Task] = [
         success_test="requested import <= 3 kW under a 3 kW limit",
     ),
     Task(
+        planner_issue="grid_export",
+        planner_targets=['_apply_grid_limits', 'get_actions'],
         task_id="task_5_export_limit",
         arm="deterministic",
         title="Community export limit not enforced",
@@ -145,6 +161,8 @@ TASKS: List[Task] = [
         success_test="requested export <= 3 kW under a 3 kW limit",
     ),
     Task(
+        planner_issue="voltage",
+        planner_targets=['_apply_grid_violation_redispatch', 'get_actions'],
         task_id="task_6_voltage_response",
         arm="deterministic",
         title="No overvoltage response in re-dispatch",
@@ -157,6 +175,8 @@ TASKS: List[Task] = [
         success_test="actions scale to exactly 2x baseline under a 1.08 pu diagnostic",
     ),
     Task(
+        planner_issue="line_loading",
+        planner_targets=['_apply_grid_violation_redispatch', 'get_actions'],
         task_id="task_7_line_loading_response",
         arm="deterministic",
         title="No line-loading response in re-dispatch",
@@ -169,6 +189,8 @@ TASKS: List[Task] = [
         success_test="actions scale to exactly 0.1x baseline under 110% loading",
     ),
     Task(
+        planner_issue="flexible_load",
+        planner_targets=['_control_flexible_load', 'get_actions'],
         task_id="task_8_flex_deadline",
         arm="deterministic",
         title="Flexible load never runs (deadline miss)",
@@ -181,6 +203,8 @@ TASKS: List[Task] = [
         success_test="flexible load runs inside its window when PV is available",
     ),
     Task(
+        planner_issue="ev_deadline",
+        planner_targets=['_control_ev', 'get_actions'],
         task_id="task_9_overcharge_spike",
         arm="deterministic",
         title="EV charges at charger max regardless of remaining need",
@@ -194,6 +218,8 @@ TASKS: List[Task] = [
         success_test="no charge action exceeds the remaining energy need",
     ),
     Task(
+        planner_issue="voltage",
+        planner_targets=['_apply_grid_violation_redispatch', 'get_actions'],
         task_id="task_10_NEG_redispatch_removed",
         arm="deterministic",
         title="NEGATIVE CONTROL: re-dispatch call site removed (outside vocabulary)",

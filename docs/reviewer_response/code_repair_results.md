@@ -84,6 +84,34 @@ constructs the loop's Executor with `Sandbox(memory_limit_mb=4096)` and records
 sandbox's unit tests pass (3.7 s) and the failure mode above is purely the
 patch content, not the environment.
 
+## Re-run with A's harness-side planner bypass (same envelope, zero LLM)
+
+Per A's sign-off the driver now forces each task's own primary issue and target
+functions (`ForcedPlanner` in `experiments/run_code_repair.py`; the override is
+needed on `PlannerAgent.plan`, not `create_plan` - the loop calls `plan`).
+The bypass works: every task now plans its own issue and targets the mutated
+function. The outcome isolates the remaining causes:
+
+- the Coder's patches still fail on **every** measured task (9/9), now with
+  target-specific errors that pinpoint the bug: snippets inserted at the top of
+  the function body reference variables defined later in it
+  (`_control_ev` -> `hours_remaining`, `_control_battery` -> `current_soc`,
+  `_apply_grid_limits` -> `export_limit` / `hour_of_day`,
+  `_control_flexible_load` -> `hours_until_deadline`,
+  `_apply_grid_violation_redispatch` -> `export_limit`). The insertion position,
+  not the transformation vocabulary, is the defect (A confirmed the vocabulary
+  is expressible);
+- the negative control's patch runs cleanly but does not repair the removed
+  call site, and the loop still claims `success=True` - the false-positive
+  acceptance path (root cause 3) is unchanged: the Executor validates with the
+  shipped unit tests, which never execute the patched controller, so the
+  verifier reads a non-execution as "violations resolved". My driver-level
+  criteria and the before/after sandbox both catch it (keep=False, 10/10).
+
+So: 0/9 measured tasks repaired with correct targeting as well; the planner
+bypass removes root cause 1 but exposes root causes 2 (insertion position) and
+3 (acceptance path) as the binding ones, both in `src/agents/` (A's).
+
 ## Recommendation
 
 Do not put any code-repair number in the paper from this run. The pipeline
