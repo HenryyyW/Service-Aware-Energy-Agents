@@ -37,14 +37,27 @@ class PlannerAgent:
         # Generate repair strategy
         strategy = self._generate_strategy(primary_issue, violations, state)
 
-        # Identify target functions
-        target_functions = self._identify_target_functions(primary_issue, state)
+        # Identify target functions for ALL detected violations
+        target_functions = set()
+        for category in violations:
+            if violations[
+                category
+            ]:  # Only add functions for categories with violations
+                target_functions.update(
+                    self._identify_target_functions(category, state)
+                )
+
+        # Also add functions for primary issue (in case it's not in violations dict)
+        target_functions.update(self._identify_target_functions(primary_issue, state))
+
+        # Convert to list
+        target_functions = list(target_functions)
 
         # Define success criteria
         success_criteria = self._define_success_criteria(primary_issue, state)
 
         # Risk assessment
-        risk = self._assess_risk(primary_issue, strategy)
+        risk = self._assess_risk(primary_issue, state)
 
         plan = PlannerOutput(
             primary_issue=primary_issue,
@@ -59,7 +72,7 @@ class PlannerAgent:
         state.repair_plan = plan.model_dump()
         state.add_message(
             AgentRole.PLANNER,
-            f"Created repair plan for {primary_issue}",
+            f"Created repair plan for {primary_issue} (target functions: {target_functions})",
             plan.model_dump(),
         )
 
