@@ -152,6 +152,58 @@ before/after simulation behaviour, and the honest non-repair outcomes), to be
 published separately from the LLM arm and never pooled with it - see the wiring
 design in `docs/reviewer_response/code_repair_benchmark_scope.md`.
 
+## Two-arm re-run on origin/main 66e7a7432 (deterministic comparator + LLM-wired measured run)
+
+Both arms ran the same 10 tasks x <= 3 iterations, same detectors, same
+driver-level criteria (a)-(f) as the acceptance of record, `loop_claimed_success`
+recorded beside the verdict and never as it. Cells:
+`experiments/m2b_code_repair/{deterministic,llm}/<task_id>/<run_id>/`.
+LLM arm: `AGENT_BACKEND=api:poolside/laguna-xs-2.1`, NVIDIA NIM
+(`https://integrate.api.nvidia.com/v1`), key from the key store,
+`DASHSCOPE_API_KEY` unset, 1-token pre-flight PASS (model digest
+`poolside/laguna-xs-2.1`), per-cell backend telemetry in every manifest.
+
+| Task | deterministic: keep / loop claim | LLM: keep / loop claim | detector (patched, both arms) |
+|---|---|---|---|
+| task_1_ev_deadline_soc | False / True | False / False | EV SOC 0.4296 vs 0.800 (not repaired) |
+| task_2_ev_urgent_power | False / True | False / False | 3.30 kW vs required 11.00 kW |
+| task_3_battery_soc_floor | False / True | False / False | overshoot 1.3 kWh/step remains |
+| task_4_import_limit | False / True | False / False | import 5.0 kW vs 3 kW limit |
+| task_5_export_limit | False / True | False / False | export 5.0 kW vs 3 kW limit |
+| task_6_voltage_response | False / True | False / False | 2.50 kW vs expected 2.0x baseline |
+| task_7_line_loading_response | False / True | False / False | 2.50 kW vs expected 0.1x baseline |
+| task_8_flex_deadline | False / True | False / False | flexible load never ran |
+| task_9_overcharge_spike | False / True | False / False | overshoot 10.93 kW remains |
+| task_10_NEG (negative control) | False / True | **True** / False | re-dispatch still inert (correct outcome) |
+
+**Headline: 0 of 9 measured tasks repaired in BOTH arms** (pre-registered
+threshold >= 7/9 not met; reported either way). The negative control is
+`keep=True` in the LLM arm - honest non-repair - while the deterministic arm's
+loop still falsely claims success on it.
+
+**Arm differences worth recording:**
+- LLM arm: 40 calls total (1 pre-flight + 3 iterations x 10 cells), 0 backend
+  errors; every cell used the LLM coder (`coder_source=LLM`); prompt/completion
+  tokens ~11,030/900 per cell. `loop_claimed_success` is **False for all 10
+  cells** - with the LLM path the loop's own verdict now agrees with the
+  driver-level rejection.
+- Deterministic arm: `loop_claimed_success` is **True for all 10 cells** - the
+  false-positive acceptance pattern survives on the deterministic path even
+  after the landed fixes (the Executor's sandbox experiment still passes the
+  crashing/unrepaired patches there). The false positive is therefore a
+  property of the deterministic acceptance path, not of the LLM path.
+- Neither arm repaired any measured defect: the LLM's change descriptions are
+  sensible ("Fix grid import limit enforcement by properly scaling down
+  actions...") but the AST-application layer still cannot turn them into
+  behaviour-changing patches that flip the detectors; and the deterministic
+  vocabulary patches still crash or no-op.
+
+**Paper consequence (unchanged):** the code-repair claim stays
+"scaffolded, not yet demonstrated"; the honest reported result is a
+0-of-9 measured benchmark with the loop's self-report unreliable on the
+deterministic path. If any of this is quoted in the paper, the two arms are
+published unpooled with these exact per-cell rows.
+
 ## Recommendation
 
 Do not put any code-repair number in the paper from this run. The pipeline

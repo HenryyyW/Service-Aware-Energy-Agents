@@ -1,0 +1,47 @@
+{
+  "run_id": "task_4_import_limit_det",
+  "task_id": "task_4_import_limit",
+  "arm": "llm",
+  "negative_control": false,
+  "wiring_workaround": "explicit NIM backend injection (create_backend TypeError, A-side defect)",
+  "git_commit": "66e7a7432f9d7d47f0607f641e2f36d18b80b762",
+  "git_dirty": true,
+  "controller_file": "src/controllers/__init__.py",
+  "expected_transformations": [
+    "_add_import_limit_enforcement",
+    "_add_proportional_curtailment"
+  ],
+  "planner_bypass": {
+    "forced_issue": "grid_import",
+    "forced_targets": [
+      "_apply_grid_limits",
+      "get_actions"
+    ]
+  },
+  "detector_signature_present_on_broken": true,
+  "detector_broken": {
+    "passed": false,
+    "detail": "requested import 5.0 kW vs limit 3 kW"
+  },
+  "detector_patched": {
+    "passed": false,
+    "detail": "requested import 5.0 kW vs limit 3 kW"
+  },
+  "iterations": 3,
+  "wall_clock_seconds": 16.51,
+  "llm_calls": 4,
+  "llm_backend_errors": 0,
+  "backend_telemetry": {
+    "llm_calls": 4,
+    "llm_prompt_tokens": 11030,
+    "llm_completion_tokens": 919,
+    "model_digest": "poolside/laguna-xs-2.1",
+    "last_error": null,
+    "llm_backend_errors": 0
+  },
+  "sandbox_memory_limit_mb": 4096,
+  "keep": false,
+  "acceptance_of_record": "driver criteria (a)-(f)",
+  "loop_claimed_success": false,
+  "verdict": "driver-reject"
+}
