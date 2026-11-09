@@ -160,6 +160,7 @@ class ExecutorAgent:
                     "experiment_output": (
                         exp_result.stdout[-1000:] if exp_result.stdout else ""
                     ),
+                    "experiment_error": exp_result.error,  # Include error for verifier
                     "violation_counts": exp_result.violation_counts,
                     "max_violations": exp_result.max_violations,
                     "check_categories": check_categories,
@@ -177,7 +178,10 @@ class ExecutorAgent:
 
         except Exception as e:
             return ExecutorOutput(
-                success=False, error=str(e), execution_time=time.time() - start_time
+                success=False,
+                error=str(e),
+                execution_time=time.time() - start_time,
+                test_results={"experiment_error": str(e)},
             )
         finally:
             self.sandbox.cleanup()

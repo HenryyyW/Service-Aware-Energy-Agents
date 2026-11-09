@@ -38,7 +38,10 @@ class VerifierAgent:
                         "details": (
                             state.sandbox_result.error
                             if state.sandbox_result
-                            else executor_output.get("error", "Unknown error")
+                            else executor_output.get(
+                                "experiment_error",
+                                executor_output.get("error", "Unknown error"),
+                            )
                         ),
                     }
                 ],
@@ -48,7 +51,7 @@ class VerifierAgent:
             state.verification_result = output.model_dump()
             state.add_message(
                 AgentRole.VERIFIER,
-                f"Verification: FAILED (execution failed: {state.sandbox_result.error if state.sandbox_result else executor_output.get('error', 'Unknown error')})",
+                f"Verification: FAILED (execution failed: {state.sandbox_result.error if state.sandbox_result else executor_output.get('experiment_error', executor_output.get('error', 'Unknown error'))})",
                 output.model_dump(),
             )
             return output
