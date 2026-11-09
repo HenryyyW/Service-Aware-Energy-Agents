@@ -48,8 +48,10 @@ def main() -> int:
             ok = (p_ok is True) and (m_ok is False)
             expected = "pristine pass, mutated fail"
         failures += 0 if ok else 1
-        print(f"{task.task_id:<34} {str(p_ok):>9} {str(m_ok):>9}  "
-              f"{'OK' if ok else 'REVIEW':>7}  {m_detail[:60]}")
+        print(
+            f"{task.task_id:<34} {str(p_ok):>9} {str(m_ok):>9}  "
+            f"{'OK' if ok else 'REVIEW':>7}  {m_detail[:60]}"
+        )
         if not ok:
             print(f"    expected: {expected}; pristine detail: {p_detail}")
     print(f"tasks: {len(TASKS)}, needing review: {failures}")

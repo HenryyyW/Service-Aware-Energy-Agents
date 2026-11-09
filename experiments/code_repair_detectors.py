@@ -20,11 +20,16 @@ from src.schemas.scenario import (
 )
 
 PROBE_TIMESTEP_MIN = 60  # one hour per probe step; the controllers' internal
-                         # bookkeeping (SOC, progress) advances by this amount
+# bookkeeping (SOC, progress) advances by this amount
 
 
-def _config(ev_max_charge=11.0, battery_power=5.0, import_limit=None,
-            export_limit=None, with_flex=False) -> ScenarioConfig:
+def _config(
+    ev_max_charge=11.0,
+    battery_power=5.0,
+    import_limit=None,
+    export_limit=None,
+    with_flex=False,
+) -> ScenarioConfig:
     flex = []
     if with_flex:
         flex = [
@@ -97,6 +102,7 @@ def _hour(t: int) -> float:
 # Detectors
 # ---------------------------------------------------------------------------
 
+
 def detect_ev_deadline_soc(controller_cls, config) -> Tuple[bool, str]:
     """EV reaches its departure target SOC inside the connected window."""
     c = controller_cls(config)
@@ -120,9 +126,11 @@ def detect_ev_urgent_power(controller_cls, config) -> Tuple[bool, str]:
     soc = c.ev_soc.get("building_0_ev_0", 0.3)
     needed = max(0.0, (0.8 - soc) * 60.0)  # kWh to target
     required = needed / 1.0  # 1h remaining
-    return (kw >= min(required, 11.0) - 1e-6,
-            f"EV charge {kw:.2f} kW vs required {min(required, 11.0):.2f} kW "
-            f"at 1h-to-departure")
+    return (
+        kw >= min(required, 11.0) - 1e-6,
+        f"EV charge {kw:.2f} kW vs required {min(required, 11.0):.2f} kW "
+        f"at 1h-to-departure",
+    )
 
 
 def detect_battery_soc_floor(controller_cls, config) -> Tuple[bool, str]:
@@ -137,8 +145,10 @@ def detect_battery_soc_floor(controller_cls, config) -> Tuple[bool, str]:
             if a.action_type.value == "battery_discharge":
                 allowed = (prev - 0.1) * 13.5  # above-floor energy, kWh
                 worst = max(worst, abs(a.value_kw) - allowed)
-    return (worst <= 1e-6,
-            f"worst discharge overshoot above SOC-floor energy {worst:.3f} kWh/step")
+    return (
+        worst <= 1e-6,
+        f"worst discharge overshoot above SOC-floor energy {worst:.3f} kWh/step",
+    )
 
 
 def detect_import_limit(controller_cls, config) -> Tuple[bool, str]:
@@ -147,8 +157,10 @@ def detect_import_limit(controller_cls, config) -> Tuple[bool, str]:
     c.reset()
     req = c.get_actions(_obs(net_demand=1.0, pv=20.0), 12)
     import_kw = sum(a.value_kw for a in req.actions if a.value_kw > 0)
-    return (import_kw <= 3.0 + 1e-6,
-            f"requested import {import_kw:.1f} kW vs limit 3 kW")
+    return (
+        import_kw <= 3.0 + 1e-6,
+        f"requested import {import_kw:.1f} kW vs limit 3 kW",
+    )
 
 
 def detect_export_limit(controller_cls, config) -> Tuple[bool, str]:
@@ -157,15 +169,19 @@ def detect_export_limit(controller_cls, config) -> Tuple[bool, str]:
     c.reset()
     req = c.get_actions(_obs(net_demand=600.0, pv=0.0), 12)
     export_kw = sum(-a.value_kw for a in req.actions if a.value_kw < 0)
-    return (export_kw <= 3.0 + 1e-6,
-            f"requested export {export_kw:.1f} kW vs limit 3 kW")
+    return (
+        export_kw <= 3.0 + 1e-6,
+        f"requested export {export_kw:.1f} kW vs limit 3 kW",
+    )
 
 
 def _magnitude(controller_cls, config, diagnostics) -> float:
     c = controller_cls(config)
     c.reset()
     c.update_grid_diagnostics(diagnostics)
-    return sum(abs(a.value_kw) for a in c.get_actions(_obs(net_demand=5.0, pv=0.0), 12).actions)
+    return sum(
+        abs(a.value_kw) for a in c.get_actions(_obs(net_demand=5.0, pv=0.0), 12).actions
+    )
 
 
 def detect_voltage_response(controller_cls, config) -> Tuple[bool, str]:
@@ -173,15 +189,21 @@ def detect_voltage_response(controller_cls, config) -> Tuple[bool, str]:
     overvoltage = {
         "power_flow_converged": True,
         "diagnostics": [
-            {"category": "voltage", "severity": "violation",
-             "values": {"voltage_pu": 1.08}}
+            {
+                "category": "voltage",
+                "severity": "violation",
+                "values": {"voltage_pu": 1.08},
+            }
         ],
     }
     with_diag = _magnitude(controller_cls, config, overvoltage)
     without = _magnitude(controller_cls, config, None)
     ok = without > 0 and abs(with_diag - 2.0 * without) <= 1e-3 * without
-    return (ok, f"magnitude {with_diag:.2f} kW under 1.08 pu vs "
-               f"expected 2.0x baseline {without:.2f} kW")
+    return (
+        ok,
+        f"magnitude {with_diag:.2f} kW under 1.08 pu vs "
+        f"expected 2.0x baseline {without:.2f} kW",
+    )
 
 
 def detect_line_loading_response(controller_cls, config) -> Tuple[bool, str]:
@@ -189,15 +211,21 @@ def detect_line_loading_response(controller_cls, config) -> Tuple[bool, str]:
     loading = {
         "power_flow_converged": True,
         "diagnostics": [
-            {"category": "line_loading", "severity": "violation",
-             "values": {"loading_pct": 110}}
+            {
+                "category": "line_loading",
+                "severity": "violation",
+                "values": {"loading_pct": 110},
+            }
         ],
     }
     with_diag = _magnitude(controller_cls, config, loading)
     without = _magnitude(controller_cls, config, None)
     ok = without > 0 and abs(with_diag - 0.1 * without) <= 1e-3 * without
-    return (ok, f"magnitude {with_diag:.2f} kW under 110% loading vs "
-               f"expected 0.1x baseline {without:.2f} kW")
+    return (
+        ok,
+        f"magnitude {with_diag:.2f} kW under 110% loading vs "
+        f"expected 0.1x baseline {without:.2f} kW",
+    )
 
 
 def detect_flex_deadline(controller_cls, config) -> Tuple[bool, str]:
@@ -224,11 +252,12 @@ def detect_overcharge_spike(controller_cls, config) -> Tuple[bool, str]:
             if a.action_type.value == "ev_charge":
                 hour = _hour(t)
                 departure = 7.0
-                hours_left = (departure - hour) if hour < departure else (24 - hour) + departure
+                hours_left = (
+                    (departure - hour) if hour < departure else (24 - hour) + departure
+                )
                 required = max(0.0, (0.8 - soc) * 60.0) / max(hours_left, 0.25)
                 worst = max(worst, a.value_kw - min(required, 11.0))
-    return (worst <= 1e-6,
-            f"worst charge above remaining need {worst:.2f} kW")
+    return (worst <= 1e-6, f"worst charge above remaining need {worst:.2f} kW")
 
 
 def detect_redispatch_call_removed(controller_cls, config) -> Tuple[bool, str]:
@@ -261,7 +290,10 @@ def config_for(detector_name: str) -> ScenarioConfig:
         return _config(export_limit=3.0)
     if detector_name in ("detect_flex_deadline",):
         return _config(with_flex=True)
-    if detector_name in ("detect_voltage_response", "detect_line_loading_response",
-                         "detect_redispatch_call_removed"):
+    if detector_name in (
+        "detect_voltage_response",
+        "detect_line_loading_response",
+        "detect_redispatch_call_removed",
+    ):
         return _config(battery_power=20.0)
     return _config()

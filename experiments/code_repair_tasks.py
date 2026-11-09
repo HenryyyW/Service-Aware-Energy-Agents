@@ -70,7 +70,6 @@ class Task:
         return config_for(self.detector)
 
 
-
 def _load_controller(source: str, module_name: str):
     """Load a controller source string as a module; return RuleBasedController."""
     import importlib.util
@@ -90,7 +89,7 @@ def _load_controller(source: str, module_name: str):
 TASKS: List[Task] = [
     Task(
         planner_issue="ev_deadline",
-        planner_targets=['_control_ev', 'get_actions'],
+        planner_targets=["_control_ev", "get_actions"],
         task_id="task_1_ev_deadline_soc",
         arm="deterministic",
         title="EV charging stops early (deadline SOC miss)",
@@ -98,13 +97,15 @@ TASKS: List[Task] = [
         mutation_from=EV_TARGET_CHECK,
         mutation_to="        if current_soc >= 0.5 * ev.target_soc:",
         detector="detect_ev_deadline_soc",
-        expected_transformations=["_add_precise_time_to_departure",
-                                  "_add_ev_prioritization_by_departure"],
+        expected_transformations=[
+            "_add_precise_time_to_departure",
+            "_add_ev_prioritization_by_departure",
+        ],
         success_test="final EV SOC >= 0.800 at departure",
     ),
     Task(
         planner_issue="ev_deadline",
-        planner_targets=['_control_ev', 'get_actions'],
+        planner_targets=["_control_ev", "get_actions"],
         task_id="task_2_ev_urgent_power",
         arm="deterministic",
         title="EV urgent-deadline charging underpowered",
@@ -112,13 +113,15 @@ TASKS: List[Task] = [
         mutation_from=EV_CHARGE_CAP,
         mutation_to="        charge_kw = min(required_power, 0.3 * max_charge)",
         detector="detect_ev_urgent_power",
-        expected_transformations=["_add_max_power_for_urgent_deadline",
-                                  "_add_early_charging_for_low_soc"],
+        expected_transformations=[
+            "_add_max_power_for_urgent_deadline",
+            "_add_early_charging_for_low_soc",
+        ],
         success_test="charge power covers the remaining need at 1h-to-departure",
     ),
     Task(
         planner_issue="battery_soc",
-        planner_targets=['_control_battery', 'get_actions'],
+        planner_targets=["_control_battery", "get_actions"],
         task_id="task_3_battery_soc_floor",
         arm="deterministic",
         title="Battery discharge ignores the SOC floor (over-discharge)",
@@ -126,14 +129,16 @@ TASKS: List[Task] = [
         mutation_from=BATTERY_DISCHARGE_CAP,
         mutation_to="                deficit, max_power, current_soc * capacity_kwh",
         detector="detect_battery_soc_floor",
-        expected_transformations=["_add_dynamic_soc_reserve",
-                                  "_add_emergency_reserve",
-                                  "_add_soc_forecast"],
+        expected_transformations=[
+            "_add_dynamic_soc_reserve",
+            "_add_emergency_reserve",
+            "_add_soc_forecast",
+        ],
         success_test="no discharge action draws above-floor stored energy",
     ),
     Task(
         planner_issue="grid_import",
-        planner_targets=['_apply_grid_limits', 'get_actions'],
+        planner_targets=["_apply_grid_limits", "get_actions"],
         task_id="task_4_import_limit",
         arm="deterministic",
         title="Community import limit not enforced",
@@ -141,13 +146,15 @@ TASKS: List[Task] = [
         mutation_from=APPLY_IMPORT_LIMIT,
         mutation_to="        if False:",
         detector="detect_import_limit",
-        expected_transformations=["_add_import_limit_enforcement",
-                                  "_add_proportional_curtailment"],
+        expected_transformations=[
+            "_add_import_limit_enforcement",
+            "_add_proportional_curtailment",
+        ],
         success_test="requested import <= 3 kW under a 3 kW limit",
     ),
     Task(
         planner_issue="grid_export",
-        planner_targets=['_apply_grid_limits', 'get_actions'],
+        planner_targets=["_apply_grid_limits", "get_actions"],
         task_id="task_5_export_limit",
         arm="deterministic",
         title="Community export limit not enforced",
@@ -155,14 +162,16 @@ TASKS: List[Task] = [
         mutation_from=APPLY_EXPORT_LIMIT,
         mutation_to="        if False:",
         detector="detect_export_limit",
-        expected_transformations=["_add_export_limit_enforcement",
-                                  "_add_pv_curtailment",
-                                  "_add_battery_charge_for_excess_pv"],
+        expected_transformations=[
+            "_add_export_limit_enforcement",
+            "_add_pv_curtailment",
+            "_add_battery_charge_for_excess_pv",
+        ],
         success_test="requested export <= 3 kW under a 3 kW limit",
     ),
     Task(
         planner_issue="voltage",
-        planner_targets=['_apply_grid_violation_redispatch', 'get_actions'],
+        planner_targets=["_apply_grid_violation_redispatch", "get_actions"],
         task_id="task_6_voltage_response",
         arm="deterministic",
         title="No overvoltage response in re-dispatch",
@@ -170,13 +179,15 @@ TASKS: List[Task] = [
         mutation_from=REDISPATCH_OVERVOLTAGE,
         mutation_to="            if False:",
         detector="detect_voltage_response",
-        expected_transformations=["_add_voltage_monitoring_and_reduction",
-                                  "_add_voltage_triggered_load_reduction"],
+        expected_transformations=[
+            "_add_voltage_monitoring_and_reduction",
+            "_add_voltage_triggered_load_reduction",
+        ],
         success_test="actions scale to exactly 2x baseline under a 1.08 pu diagnostic",
     ),
     Task(
         planner_issue="line_loading",
-        planner_targets=['_apply_grid_violation_redispatch', 'get_actions'],
+        planner_targets=["_apply_grid_violation_redispatch", "get_actions"],
         task_id="task_7_line_loading_response",
         arm="deterministic",
         title="No line-loading response in re-dispatch",
@@ -184,13 +195,15 @@ TASKS: List[Task] = [
         mutation_from=REDISPATCH_LINE_LOADING,
         mutation_to="            elif False:",
         detector="detect_line_loading_response",
-        expected_transformations=["_add_line_loading_monitoring",
-                                  "_add_transformer_loading_check"],
+        expected_transformations=[
+            "_add_line_loading_monitoring",
+            "_add_transformer_loading_check",
+        ],
         success_test="actions scale to exactly 0.1x baseline under 110% loading",
     ),
     Task(
         planner_issue="flexible_load",
-        planner_targets=['_control_flexible_load', 'get_actions'],
+        planner_targets=["_control_flexible_load", "get_actions"],
         task_id="task_8_flex_deadline",
         arm="deterministic",
         title="Flexible load never runs (deadline miss)",
@@ -198,13 +211,15 @@ TASKS: List[Task] = [
         mutation_from=FLEX_PV_GATE,
         mutation_to="        if False:",
         detector="detect_flex_deadline",
-        expected_transformations=["_add_earliest_deadline_first",
-                                  "_add_deadline_tracking"],
+        expected_transformations=[
+            "_add_earliest_deadline_first",
+            "_add_deadline_tracking",
+        ],
         success_test="flexible load runs inside its window when PV is available",
     ),
     Task(
         planner_issue="ev_deadline",
-        planner_targets=['_control_ev', 'get_actions'],
+        planner_targets=["_control_ev", "get_actions"],
         task_id="task_9_overcharge_spike",
         arm="deterministic",
         title="EV charges at charger max regardless of remaining need",
@@ -212,14 +227,16 @@ TASKS: List[Task] = [
         mutation_from=EV_CHARGE_CAP,
         mutation_to="        charge_kw = max_charge",
         detector="detect_overcharge_spike",
-        expected_transformations=["_add_proportional_power_allocation",
-                                  "_add_action_magnitude_reduction",
-                                  "_add_precise_time_to_departure"],
+        expected_transformations=[
+            "_add_proportional_power_allocation",
+            "_add_action_magnitude_reduction",
+            "_add_precise_time_to_departure",
+        ],
         success_test="no charge action exceeds the remaining energy need",
     ),
     Task(
         planner_issue="voltage",
-        planner_targets=['_apply_grid_violation_redispatch', 'get_actions'],
+        planner_targets=["_apply_grid_violation_redispatch", "get_actions"],
         task_id="task_10_NEG_redispatch_removed",
         arm="deterministic",
         title="NEGATIVE CONTROL: re-dispatch call site removed (outside vocabulary)",
@@ -231,10 +248,10 @@ TASKS: List[Task] = [
         success_test="none - honest non-repair is the required outcome",
         negative_control=True,
         notes="Vocabulary-boundary probe: the _add_* transformations add logic "
-              "inside functions; nothing restores a deleted call site. A "
-              "'repair' here would mean the pipeline accepts cosmetic diffs. "
-              "Amends the scope doc's tariff-lookup probe (the rule_based "
-              "controller has no price-aware surface to mutate).",
+        "inside functions; nothing restores a deleted call site. A "
+        "'repair' here would mean the pipeline accepts cosmetic diffs. "
+        "Amends the scope doc's tariff-lookup probe (the rule_based "
+        "controller has no price-aware surface to mutate).",
     ),
 ]
 
