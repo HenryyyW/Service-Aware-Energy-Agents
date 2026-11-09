@@ -31,6 +31,7 @@ class SandboxResult:
     max_violations: Dict[str, int] = field(default_factory=dict)
     memory_used_mb: float = 0.0
     timed_out: bool = False
+    action_counts: Dict[str, int] = field(default_factory=dict)
 
 
 class Sandbox:
@@ -671,10 +672,22 @@ class Sandbox:
                     or ["voltage", "line_loading", "transformer_loading"]
                 )
             }
+            # Track action execution for absent-execution detection
+            action_counts = {
+                "total_steps": 0,
+                "steps_with_actions": 0,
+                "total_actions": 0,
+            }
 
             for step in range(max_steps):
                 # Get actions from controller
                 requested = controller.get_actions(observations, step)
+
+                # Track action execution
+                action_counts["total_steps"] += 1
+                if requested.actions:
+                    action_counts["steps_with_actions"] += 1
+                    action_counts["total_actions"] += len(requested.actions)
 
                 # Step simulation
                 result = coupler.step(requested)
@@ -714,15 +727,19 @@ class Sandbox:
             # Success = no violations in checked categories
             violations_resolved = all(v == 0 for v in violation_counts.values())
 
+            # Check for absent execution (controller took no actions)
+            absent_execution = action_counts["steps_with_actions"] == 0
+
             return SandboxResult(
-                success=violations_resolved,
+                success=violations_resolved and not absent_execution,
                 stdout="\n".join(stdout_lines),
                 stderr="",
                 execution_time=execution_time,
-                tests_passed=violations_resolved,
+                tests_passed=violations_resolved and not absent_execution,
                 test_output="\n".join(stdout_lines),
                 violation_counts=violation_counts,
                 max_violations=max_violations,
+                action_counts=action_counts,
             )
 
         except Exception as e:
@@ -733,6 +750,7 @@ class Sandbox:
                 error=f"Experiment failed: {str(e)}\n{traceback.format_exc()}",
                 stderr=traceback.format_exc(),
                 execution_time=time.time() - start_time,
+                action_counts={},
             )
 
     def _create_dynamic_controller(self, controller_code: str, scenario) -> type:

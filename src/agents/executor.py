@@ -176,6 +176,7 @@ class ExecutorAgent:
                     "violation_counts": exp_result.violation_counts,
                     "max_violations": exp_result.max_violations,
                     "check_categories": check_categories,
+                    "action_counts": getattr(exp_result, "action_counts", {}),
                 },
             )
 
