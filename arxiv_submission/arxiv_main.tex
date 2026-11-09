@@ -625,11 +625,13 @@ Reference = 65.52 USD over exactly 15 cells: the deterministic
 scenarios A--E in \texttt{experiments/m2a\_rerun\_laguna} (per-scenario means
 66.29/68.81/59.93/66.29/66.29 USD, three seeds each; every manifest records
 \texttt{git\_dirty: false}, build commits 9588cb5e4/67d3e276b/95b328d6e). The
-per-cell list (run id, cost, peak, commit) is committed at
+per-cell list (run id, cost, peak, per-cell \texttt{result.json} SHA-256,
+build commit) is committed at
 \texttt{docs/reviewer\_response/m2b\_reference\_cells.csv}, and the runs ship
 in the release artifact \texttt{dist/m2a-laguna-matrix-2026-11-08.zip}
 (SHA-256 \texttt{660dc7b2...}), so the aggregate recomputes from the committed
-list or the archived artifact.}
+list or the archived artifact (the 15 cells are bit-identical between the
+shared checkout and the artifact, SHA-256 verified).}
 \label{tab:m2b}
 \begin{tabular}{lccc}
 \toprule
