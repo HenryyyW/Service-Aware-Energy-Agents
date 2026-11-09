@@ -587,7 +587,8 @@ proposal path (env flag \texttt{SAEA\_LLM\_HOSTILE=out\_of\_bounds}), scaling
 every first-attempt proposal past its device power limit, and runs two 30-cell
 pilots (5 scenarios $\times$ \{llm\_agent, llm\_agent\_verified\} $\times$ 3
 seeds 42/123/456, 24 steps, pool TOU, reference cells reused from the M2a
-matrix). The first pilot (detection epoch) corrupts every parsed proposal
+screen at the same (scenario, seed) pairs --- the 15 deterministic
+\texttt{multi\_agent} cells itemised in the Table~\ref{tab:m2b} caption). The first pilot (detection epoch) corrupts every parsed proposal
 including the verified arm's corrective re-prompt; the second (recovery epoch)
 exempts re-prompts so the repair path is measurable. Both arms see identical
 corrupted proposals, so verification is the only difference between them; the
@@ -619,8 +620,18 @@ pooled). The unfiltered as-run sets are published alongside for audit
 (detection: 360/360 steps, 203.44 USD; recovery: 15/360 steps, 442.11 USD).
 Repair success in the detection epoch is derived (720 repair iterations minus
 360 deterministic replacements; the recorded field is null in that build).
-Reference = the 15 deterministic \texttt{multi\_agent} cells at the M2b seeds
-(42/123/456 across the five scenarios) reused from the M2a screen.}
+Reference = 65.52 USD over exactly 15 cells: the deterministic
+\texttt{multi\_agent} 24-step pool-TOU runs at seeds 42/123/456 across
+scenarios A--E in \texttt{experiments/m2a\_rerun\_laguna} (per-scenario means
+66.29/68.81/59.93/66.29/66.29 USD, three seeds each; every manifest records
+\texttt{git\_dirty: false}, build commits 9588cb5e4/67d3e276b/95b328d6e). The
+per-cell list (run id, cost, peak, per-cell \texttt{result.json} SHA-256,
+build commit) is committed at
+\texttt{docs/reviewer\_response/m2b\_reference\_cells.csv}, and the runs ship
+in the release artifact \texttt{dist/m2a-laguna-matrix-2026-11-08.zip}
+(SHA-256 \texttt{660dc7b2...}), so the aggregate recomputes from the committed
+list or the archived artifact (the 15 cells are bit-identical between the
+shared checkout and the artifact, SHA-256 verified).}
 \label{tab:m2b}
 \begin{tabular}{lccc}
 \toprule
@@ -820,8 +831,10 @@ corrective re-prompt returned an in-bounds proposal that was applied (recorded
 repair success 0.957, one deterministic replacement), and the reporter wrote
 Markdown + JSON. The unverified arm of the same cell applied all corrupted
 proposals as proposed (adapter clamping downstream) at 460.87 USD against the
-verified arm's 471.15; the deterministic reference for the same cell is 66.29
-USD. The safety gain is therefore real and measurable at the proposal layer;
+verified arm's 471.15; the deterministic reference for that same (scenario,
+seed) cell --- \texttt{scenario\_a\_multi\_agent\_42}, one of the 15 reference
+cells of Table~\ref{tab:m2b} --- is 66.29 USD. The safety gain is therefore
+real and measurable at the proposal layer;
 the KPI gain is not (the verified arm is slightly \emph{worse} on cost here),
 which is the honest reading of the recovery pilot at cell granularity.
 
