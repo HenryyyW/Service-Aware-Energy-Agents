@@ -353,3 +353,44 @@ would spend ~60 calls recording the same parse failures (the exact case the PM
 excluded). Recommended next step (A's decision): either change the output
 contract to function replacement (the coder already has `_replace_function`),
 or re-prompt for strict `@@ -a,b +c,d @@` hunks with balanced -/+ counts.
+
+## Decisive two-arm re-run on origin/main (A's full fix line merged) - the run that decides the A2 sentence
+
+Base: `origin/main` as of this run (A's full real-code fix line: re-indent,
+de-indent, double-newline, diff look-ahead, 300s timeouts, detector-path and
+arity unification; plus the merged detector wiring and the truthful
+`wiring_workaround` field). Envelope: <= 10 tasks x <= 5 iterations,
+`poolside/laguna-xs-2.1` on NVIDIA NIM via the **configured product path**
+(`AGENT_BACKEND=api:poolside/laguna-xs-2.1`, NIM key from the key store,
+`DASHSCOPE_API_KEY` unset, 1-token pre-flight per cell, `timeout_s=300`),
+deterministic comparator first, both arms unpooled.
+
+**Deterministic comparator (10 cells, 0 LLM calls): 10/10 loop/driver
+agreement** - every cell used the full 5-iteration budget,
+`loop_claimed_success=False` on all 10, the 9 measured cells keep=False with
+`f_service_preserved=False` (the in-loop detector check runs the real defect
+signature and honestly fails the unrepaired patches), negative control
+`keep=True` = **valid honest-failure cell (honest non-repair), not a counted
+repair**.
+
+**LLM arm (60 calls, 0 backend errors): 10/10 loop/driver agreement, 0/9
+measured repairs, negative control `keep=True`, every cell used the full
+5-iteration budget with the accumulated failure history.** One cell (task_8)
+recorded a single LLM change that did not repair the defect; the other nine
+produced no applicable change (the model's unified diffs remain structurally
+unbalanced - e.g. 12 `-` vs 330 `+` lines - so the syntax rejection drops
+them and each iteration is a no-op the detector rejects).
+
+**Claim decision: 0 of 9 measured repairs in BOTH arms - the pre-registered
+threshold >= 7/9 is not met - the paper's A2 sentence stays "scaffolded, not
+yet demonstrated".** Reported either way; both arms unpooled; acceptance of
+record = driver criteria (a)-(f); `loop_claimed_success` recorded beside every
+verdict and agreeing with the driver verdict in both arms (10/10).
+
+**Labelling correction applied to the earlier sections:** the LLM-arm section
+produced on the `e7434ae` base reported "Changes: 0 on every iteration" as the
+model's ceiling; that base still contained the diff re-indent corruption (the
+model's diff was mangled before apply), so that section is a **corruption
+artifact**, not evidence about the model. The decisive numbers are the ones
+above, produced on the fully-fixed base. The negative control's `keep=True` is
+labelled throughout as a valid honest-failure cell, not a counted repair.
