@@ -220,6 +220,9 @@ class ExperimentResult(BaseModel):
     plots_dir: Optional[str] = None
     # Hostile proposer metrics (M2b experiment)
     hostile_metrics: Optional[Dict[str, Any]] = None
+    # E1/E2 instrumentation: adapter interventions and applied violations
+    adapter_interventions: List[Dict[str, Any]] = Field(default_factory=list)
+    applied_violations: List[Dict[str, Any]] = Field(default_factory=list)
 
     def duration_seconds(self) -> float:
         if self.end_time:

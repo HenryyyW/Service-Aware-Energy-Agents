@@ -427,6 +427,13 @@ class ExperimentRunner:
                     "costs": h.citylearn_result.costs,
                     "constraint_violations": h.citylearn_result.constraint_violations,
                     "grid_diagnostics": h.citylearn_result.grid_diagnostics,
+                    # E1/E2 instrumentation: adapter interventions and applied violations
+                    "adapter_interventions": getattr(
+                        self.coupler.citylearn, "get_adapter_interventions", lambda: []
+                    )(),
+                    "applied_violations": getattr(
+                        self.coupler.citylearn, "get_applied_violations", lambda: []
+                    )(),
                 }
             )
 
@@ -785,6 +792,18 @@ class ExperimentRunner:
             trajectories_file=str(self.run_dir / "trajectories.jsonl"),
             logs_file=str(self.run_dir / "experiment.log"),
             hostile_metrics=hostile_metrics,
+            adapter_interventions=(
+                self.coupler.citylearn.get_adapter_interventions()
+                if hasattr(self.coupler, "citylearn")
+                and hasattr(self.coupler.citylearn, "get_adapter_interventions")
+                else []
+            ),
+            applied_violations=(
+                self.coupler.citylearn.get_applied_violations()
+                if hasattr(self.coupler, "citylearn")
+                and hasattr(self.coupler.citylearn, "get_applied_violations")
+                else []
+            ),
         )
 
         return result
