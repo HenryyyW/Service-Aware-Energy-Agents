@@ -164,6 +164,17 @@ class VerifierAgent:
         action_counts = test_results.get("action_counts", {})
         steps_with_actions = action_counts.get("steps_with_actions", 0)
         total_actions = action_counts.get("total_actions", 0)
+        controller_crashed = action_counts.get("controller_crashed", False)
+        crash_error = action_counts.get("crash_error", "")
+        if controller_crashed:
+            remaining.append(
+                {
+                    "issue": "controller_crashed",
+                    "reason": f"Controller raised exception during execution: {crash_error}",
+                    "severity": "critical",
+                }
+            )
+            return False, remaining, new_violations
         if steps_with_actions == 0 or total_actions == 0:
             remaining.append(
                 {
