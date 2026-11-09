@@ -55,11 +55,8 @@ class LLMCoderAgent:
 
         # Use LLMConfig to create backend
         if self.llm_config:
-            try:
-                self._backend = self.llm_config.create_backend()
-                return self._backend
-            except Exception:
-                pass
+            self._backend = self.llm_config.create_backend()
+            return self._backend
 
         # Fallback: try to create from env directly
         raw = os.getenv("AGENT_BACKEND", "").strip().lower()
