@@ -326,6 +326,20 @@ Return ONLY the unified diff. NO additional text."""
             if diff_match:
                 diff_text = diff_match.group(1).strip()
 
+        # Validate diff format before attempting to apply
+        if diff_text and not self._validate_diff_format(diff_text):
+            parse_error = "LLM response did not contain a valid unified diff format"
+            if self.previous_failures is not None:
+                self.previous_failures.append(
+                    {
+                        "iteration": self.iteration,
+                        "error": parse_error,
+                        "test_output": response[:500],
+                        "verifier_feedback": "LLM response did not contain a valid unified diff format",
+                    }
+                )
+            return None
+
         # Light repair: strip markdown fences, fix indentation, re-indent to target file's leading whitespace
         if diff_text:
             # Remove any remaining markdown fences
@@ -445,6 +459,68 @@ Return ONLY the unified diff. NO additional text."""
         except Exception as e:
             print(f"Diff application failed: {e}")
             return None
+
+    def _validate_diff_format(self, diff_text: str) -> bool:
+        """Validate that the diff text is a well-formed unified diff.
+
+        Checks:
+        - Has proper file headers (--- and +++)
+        - Has valid hunk headers with correct line counts
+        - Has balanced additions/deletions in each hunk
+        - Hunks have proper format
+        """
+        if not diff_text or not diff_text.strip():
+            return False
+
+        lines = diff_text.splitlines()
+
+        # Must have file headers
+        has_minus_header = any(line.startswith("--- ") for line in lines)
+        has_plus_header = any(line.startswith("+++ ") for line in lines)
+        if not has_minus_header or not has_plus_header:
+            return False
+
+        # Check each hunk
+        hunk_count = 0
+        for line in lines:
+            if line.startswith("@@"):
+                hunk_count += 1
+                # Validate hunk header format: @@ -start,count +start,count @@
+                match = re.match(r"@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@", line)
+                if not match:
+                    return False
+                old_start = int(match.group(1))
+                old_count = int(match.group(2)) if match.group(2) else 1
+                new_start = int(match.group(3))
+                new_count = int(match.group(4)) if match.group(4) else 1
+
+                # Line counts must be positive
+                if old_count < 0 or new_count < 0:
+                    return False
+
+        # Must have at least one hunk
+        if hunk_count == 0:
+            return False
+
+        # Check balanced changes - count +/- lines (excluding headers and hunk markers)
+        additions = sum(
+            1 for line in lines if line.startswith("+") and not line.startswith("+++")
+        )
+        deletions = sum(
+            1 for line in lines if line.startswith("-") and not line.startswith("---")
+        )
+
+        # At least some changes should exist
+        if additions == 0 and deletions == 0:
+            return False
+
+        # Check for wildly unbalanced hunks (more than 10:1 ratio suggests malformed)
+        if additions > 0 and deletions > 0:
+            ratio = max(additions, deletions) / min(additions, deletions)
+            if ratio > 10:
+                return False
+
+        return True
 
     def _reindent_diff_to_target(self, diff_text: str, target_indent: int) -> str:
         """Normalize diff indentation by stripping leading whitespace uniformly.
