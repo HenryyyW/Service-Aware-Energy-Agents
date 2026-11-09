@@ -108,7 +108,7 @@ class LLMCoderAgent:
     ) -> CoderOutput:
         """Implement code changes using REAL-CODE PATH.
 
-        LLM returns unified diff or full function replacement.
+        LLM returns full function replacement (primary) or unified diff (fallback).
         Safe applier enforces all validation gates.
         NO SILENT FALLBACK - if LLM fails, return failure so loop can retry/escalate.
         """
@@ -129,9 +129,7 @@ class LLMCoderAgent:
             implementation_notes = f"LLM REAL-CODE PATH: {notes}"
         else:
             # NO SILENT FALLBACK - return failure so loop can retry/escalate
-            implementation_notes = (
-                "LLM REAL-CODE PATH FAILED: no valid unified diff produced"
-            )
+            implementation_notes = "LLM REAL-CODE PATH FAILED: no valid function replacement or unified diff produced"
             changes = []
             patched_code = state.controller_code  # Return original code unchanged
             diff = ""
@@ -159,7 +157,10 @@ class LLMCoderAgent:
         plan: PlannerOutput,
         controller_file: str,
     ) -> Optional[tuple]:
-        """Generate code using REAL-CODE PATH: LLM returns unified diff.
+        """Generate code using REAL-CODE PATH.
+
+        PRIMARY: LLM returns full function replacement (FILE + FUNCTION + fenced python)
+        FALLBACK: LLM returns unified diff (if function replacement fails)
 
         Returns (patched_code, diff, changes, notes) or None if failed.
         Failures are recorded in self.previous_failures for next iteration.
@@ -169,7 +170,8 @@ class LLMCoderAgent:
         if backend is None:
             return None
 
-        prompt = self._build_coder_prompt_real_code(plan, controller_code)
+        # Try function replacement first (PRIMARY)
+        prompt = self._build_coder_prompt_function_replacement(plan, controller_code)
 
         try:
             if hasattr(backend, "__call__"):
@@ -179,8 +181,8 @@ class LLMCoderAgent:
             else:
                 return None
 
-            # Parse LLM response - expect unified diff
-            result = self._parse_llm_response_real_code(
+            # Parse LLM response - expect function replacement (PRIMARY)
+            result = self._parse_llm_response_function_replacement(
                 raw_response, controller_code, controller_file
             )
             if result:
@@ -198,12 +200,17 @@ class LLMCoderAgent:
                             "verifier_feedback": "Generated code failed syntax validation",
                         }
                     )
-                    return None
+                    # Try unified diff as fallback
+                    return self._try_unified_diff_fallback(
+                        controller_code, plan, controller_file
+                    )
+
                 return patched_code, diff, changes, notes
 
-            # If we reach here, parsing failed - failure already recorded in _parse_llm_response_real_code
-            # DO NOT fall back to deterministic - return None so loop can retry/escalate
-            return None
+            # If function replacement failed, try unified diff as fallback
+            return self._try_unified_diff_fallback(
+                controller_code, plan, controller_file
+            )
 
         except TimeoutError as e:
             # Record timeout as failure for next iteration
@@ -227,6 +234,71 @@ class LLMCoderAgent:
                 }
             )
             return None
+
+    def _build_coder_prompt_function_replacement(
+        self, plan: PlannerOutput, controller_code: str
+    ) -> str:
+        """Build TEST-DRIVEN prompt demanding strict function replacement format."""
+        failure_context = ""
+        if self.previous_failures:
+            failure_context = "\n\nPREVIOUS FAILURES (fix these):\n"
+            for i, failure in enumerate(self.previous_failures):
+                failure_context += (
+                    f"\n--- Iteration {failure.get('iteration', '?')} ---\n"
+                )
+                failure_context += f"Error: {failure.get('error', 'Unknown')}\n"
+                if failure.get("test_output"):
+                    failure_context += f"Test output: {failure['test_output'][:1000]}\n"
+                if failure.get("verifier_feedback"):
+                    failure_context += f"Verifier: {failure['verifier_feedback']}\n"
+
+        return f"""You are an expert Python developer fixing energy community controllers.
+
+TASK: Fix the following issue by providing a COMPLETE FUNCTION REPLACEMENT.
+
+ISSUE: {plan.primary_issue}
+STRATEGY: {plan.repair_strategy}
+TARGET FUNCTIONS: {plan.target_functions}
+SUCCESS CRITERIA: {plan.success_criteria}
+RISK: {plan.risk_assessment}
+{failure_context}
+
+CURRENT CONTROLLER CODE:
+```python
+{controller_code}
+```
+
+REQUIREMENTS:
+1. Return ONLY a COMPLETE FUNCTION REPLACEMENT (with FILE/FUNCTION markers)
+2. Target functions: {plan.target_functions}
+3. Fix: {plan.repair_strategy}
+4. Changes must be BEHAVIOR-CHANGING (not cosmetic) - the sandbox will verify
+
+FORMAT - Return EXACTLY ONE function replacement:
+
+```python
+# FILE: controllers/__init__.py
+# FUNCTION: _apply_grid_limits
+def _apply_grid_limits(self, actions):
+    \"\"\"Enforce grid voltage and loading limits.\"\"\"
+    # Voltage-triggered load reduction
+    if self.last_grid_diagnostics:
+        diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
+        for d in diagnostics:
+            if d.get("severity") in ["violation", "critical"] and d.get("category") == "voltage":
+                # ... reduction logic
+    return actions
+```
+
+CRITICAL RULES - VIOLATION WILL CAUSE REJECTION:
+- Use EXACTLY this format: # FILE: <path> then # FUNCTION: <name> then fenced python
+- The function code MUST be syntactically valid Python
+- Indentation MUST match the target file (4 spaces per level)
+- NO markdown fences other than the required ```python fence
+- NO additional text, explanations, or apologies
+- Changes must be BEHAVIOR-CHANGING (not cosmetic) - the sandbox will verify
+
+Return ONLY the function replacement. NO additional text."""
 
     def _build_coder_prompt_real_code(
         self, plan: PlannerOutput, controller_code: str
