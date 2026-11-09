@@ -199,8 +199,20 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
     else:
         signature_present = (broken_exc is None) and (broken_ok is False)
 
-    # 2) repair loop
-    loop = MultiAgentRepairLoop(max_iterations=max_iterations, project_root=str(ROOT))
+    # 2) repair loop (sandbox memory limit raised: the 512 MB default makes the
+    # sandbox's pytest subprocess fail in this container - jemalloc arena /
+    # compile errors, an environment failure, not a patch failure; recorded in
+    # the manifest)
+    from src.agents.executor import ExecutorAgent
+    from src.agents.sandbox import Sandbox as _Sandbox
+
+    executor = ExecutorAgent(project_root=str(ROOT))
+    executor.sandbox = _Sandbox(
+        project_root=str(ROOT), timeout=120, memory_limit_mb=4096
+    )
+    loop = MultiAgentRepairLoop(
+        max_iterations=max_iterations, project_root=str(ROOT), executor=executor
+    )
     started = time.time()
     try:
         result = loop.run_repair(
@@ -329,6 +341,7 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
         "wall_clock_seconds": elapsed,
         "llm_calls": 0,
         "llm_backend_errors": 0,
+        "sandbox_memory_limit_mb": 4096,
         "keep": keep,
     }
     persist(cell_dir, "manifest.json", manifest)
