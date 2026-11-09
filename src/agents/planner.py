@@ -40,8 +40,12 @@ class PlannerAgent:
         # Identify target functions for ALL detected violations (not just primary)
         target_functions = set()
         for category in violations:
-            if violations[category]:  # Only add functions for categories with violations
-                target_functions.update(self._identify_target_functions(category, state))
+            if violations[
+                category
+            ]:  # Only add functions for categories with violations
+                target_functions.update(
+                    self._identify_target_functions(category, state)
+                )
 
         # Also add functions for primary issue (in case it's not in violations dict)
         target_functions.update(self._identify_target_functions(primary_issue, state))
