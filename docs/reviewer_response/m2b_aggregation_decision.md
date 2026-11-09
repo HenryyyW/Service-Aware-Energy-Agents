@@ -71,13 +71,18 @@ affected rows and the caption states the definition, so the earlier
 events-vs-steps ambiguity is closed. This closes the Partner's pre-paper
 reconciliation condition (no epoch number is quoted from a disagreeing set).
 
-Reference row: 65.52 USD is the mean `total_cost` of the 15 deterministic
-`multi_agent` cells at the M2b seeds (42/123/456 across the five scenarios) in
-`experiments/m2a_rerun_laguna` — verified on the complete tree (50
-`multi_agent` cells, 10 seeds; the 15-cell M2b-seed mean equals the 50-cell
-mean). Note for QA's audit: a partial `experiments/` extraction (28
-`multi_agent` cells, 7 at the M2b seeds) reproduces neither figure — audits
-must run against a complete `experiments/` tree or a release artifact.
+Reference row: 65.52 USD is the mean `total_cost` of exactly 15 cells: the
+deterministic `multi_agent` 24-step pool-TOU runs at seeds 42/123/456 across
+scenarios A--E in `experiments/m2a_rerun_laguna` (per-scenario means 66.29 /
+68.81 / 59.93 / 66.29 / 66.29 USD, three seeds each), shipped in the release
+artifact `dist/m2a-laguna-matrix-2026-11-08.zip` at build commit `67d3e276b`
+(`git_dirty: false`). This list is now stated in the Table 7 caption, so the
+reference row is traceable cell-by-cell. Note for QA's audit: the
+"all_28_cells: 64.47 / seeds 42/123/456 n7: 65.38" figures came from an
+incomplete `experiments/` extraction — the release artifact and the shared
+checkout both hold all 50 `multi_agent` cells, and the 15-cell M2b-seed mean
+equals the 50-cell mean (65.52). Audits must run against a complete
+`experiments/` tree or the release artifact.
 
 ## What was untraceable and is replaced
 
