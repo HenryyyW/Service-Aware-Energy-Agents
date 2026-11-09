@@ -295,6 +295,375 @@ class CoderAgent:
                     error_lines.append(f"# {line}")
             return code + "\n\n" + "\n".join(error_lines)
 
+    def _get_required_names(self, change_desc: str) -> set:
+        """Get the set of variable names required by a change description.
+
+        Maps change descriptions to the set of variable names that must be
+        available in the target function's scope for the transformation to work.
+        """
+        desc_lower = change_desc.lower()
+        required_names = set()
+
+        # Common names used across many transformations
+        common_names = {"self", "actions", "ActionType"}
+
+        # Voltage-related
+        if (
+            "voltage monitoring" in desc_lower
+            or "voltage-triggered load reduction" in desc_lower
+        ):
+            required_names.update({"self", "actions", "ActionType"})
+        # Line loading
+        elif (
+            "line loading monitoring" in desc_lower
+            or "load redistribution" in desc_lower
+            or "generation curtailment" in desc_lower
+        ):
+            required_names.update({"self", "actions", "ActionType"})
+        # Transformer loading
+        elif (
+            "transformer loading" in desc_lower
+            or "proportional load reduction" in desc_lower
+            or "coordinate battery discharge" in desc_lower
+        ):
+            required_names.update({"self", "actions", "ActionType"})
+        # EV deadline
+        elif (
+            "time-to-departure" in desc_lower
+            or "start charging earlier" in desc_lower
+            or "maximum available power" in desc_lower
+            or "prioritize evs by departure" in desc_lower
+        ):
+            required_names.update({"self", "actions", "ActionType"})
+        # Comfort
+        elif (
+            "pre-conditioning" in desc_lower
+            or "widen temperature deadband" in desc_lower
+            or "thermal mass" in desc_lower
+        ):
+            required_names.update({"self", "actions", "ActionType"})
+        # Battery SOC
+        elif (
+            "dynamic soc reserve" in desc_lower
+            or "soc forecast" in desc_lower
+            or "emergency reserve" in desc_lower
+        ):
+            required_names.update({"self", "actions", "ActionType"})
+        # Flexible load
+        elif (
+            "earliest-deadline-first" in desc_lower
+            or "allocate power proportional" in desc_lower
+            or "deadline tracking" in desc_lower
+        ):
+            required_names.update({"self", "actions", "ActionType"})
+        # Grid import/export
+        elif (
+            "enforce community import limit" in desc_lower
+            or "proportional curtailment" in desc_lower
+            or "prioritize battery discharge" in desc_lower
+            or "enforce community export limit" in desc_lower
+            or "curtail pv" in desc_lower
+            or "charge batteries to absorb" in desc_lower
+        ):
+            required_names.update({"self", "actions", "ActionType"})
+        # Power flow
+        elif (
+            "power flow pre-check" in desc_lower
+            or "fallback to safe actions" in desc_lower
+            or "reduce action magnitude" in desc_lower
+        ):
+            required_names.update({"self", "actions", "ActionType"})
+
+        # Add specific variable names referenced in snippets
+        snippet_vars = set()
+        if (
+            "voltage monitoring" in desc_lower
+            or "voltage-triggered load reduction" in desc_lower
+        ):
+            snippet_vars.update(
+                {
+                    "overvoltage",
+                    "undervoltage",
+                    "diagnostics",
+                    "category",
+                    "severity",
+                    "values",
+                    "voltage_pu",
+                }
+            )
+        elif (
+            "line loading monitoring" in desc_lower
+            or "load redistribution" in desc_lower
+            or "generation curtailment" in desc_lower
+        ):
+            snippet_vars.update(
+                {"line_loading_violated", "max_line_loading", "diagnostics"}
+            )
+        elif (
+            "transformer loading" in desc_lower
+            or "proportional load reduction" in desc_lower
+            or "coordinate battery discharge" in desc_lower
+        ):
+            snippet_vars.update(
+                {
+                    "transformer_loading_violated",
+                    "max_transformer_loading",
+                    "diagnostics",
+                }
+            )
+        elif (
+            "time-to-departure" in desc_lower
+            or "start charging earlier" in desc_lower
+            or "maximum available power" in desc_lower
+        ):
+            snippet_vars.update(
+                {
+                    "hour_of_day",
+                    "departure_hour",
+                    "hours_remaining",
+                    "minutes_remaining",
+                    "current_soc",
+                    "max_charge",
+                    "charge_kw",
+                }
+            )
+        elif (
+            "pre-conditioning" in desc_lower
+            or "widen temperature deadband" in desc_lower
+            or "thermal mass" in desc_lower
+        ):
+            snippet_vars.update(
+                {
+                    "hour_of_day",
+                    "departure_hour",
+                    "power_kw",
+                    "fl",
+                    "peak_hours",
+                    "peak_pricing",
+                    "temp_min",
+                    "temp_max",
+                }
+            )
+        elif (
+            "dynamic soc reserve" in desc_lower
+            or "soc forecast" in desc_lower
+            or "emergency reserve" in desc_lower
+        ):
+            snippet_vars.update(
+                {
+                    "hour_of_day",
+                    "peak_hours",
+                    "battery",
+                    "effective_soc_min",
+                    "emergency_reserve",
+                    "forecast_hours",
+                    "avg_net_demand",
+                    "net_demand",
+                    "current_soc",
+                    "capacity_kwh",
+                }
+            )
+        elif (
+            "earliest-deadline-first" in desc_lower
+            or "allocate power proportional" in desc_lower
+            or "deadline tracking" in desc_lower
+        ):
+            snippet_vars.update(
+                {
+                    "flex_loads",
+                    "fl_id",
+                    "fl",
+                    "latest_end",
+                    "hours_until_deadline",
+                    "progress",
+                    "urgency",
+                    "allocated_power",
+                }
+            )
+        elif (
+            "enforce community import limit" in desc_lower
+            or "proportional curtailment" in desc_lower
+            or "prioritize battery discharge" in desc_lower
+        ):
+            snippet_vars.update(
+                {
+                    "import_limit",
+                    "total_import",
+                    "export_limit",
+                    "total_export",
+                    "scale",
+                    "excess",
+                    "battery_soc",
+                    "hour_of_day",
+                    "peak_hours",
+                }
+            )
+        elif (
+            "enforce community export limit" in desc_lower
+            or "curtail pv" in desc_lower
+            or "charge batteries to absorb" in desc_lower
+        ):
+            snippet_vars.update(
+                {
+                    "export_limit",
+                    "total_export",
+                    "total_import",
+                    "scale",
+                    "battery_soc",
+                    "hour_of_day",
+                    "peak_hours",
+                }
+            )
+        elif "power flow" in desc_lower:
+            snippet_vars.update({"actions", "diagnostics"})
+
+        return common_names.union(snippet_vars)
+
+    def _get_snippet_for_change(self, change_desc: str) -> Optional[str]:
+        """Get the snippet text for a given change description.
+
+        This extracts the snippet from the corresponding transformation method.
+        """
+        transformation = self._determine_transformation(change_desc)
+        if not transformation:
+            return None
+
+        # Get the source code of the transformation method and extract the snippet
+        import inspect
+        import re
+
+        source = inspect.getsource(transformation)
+        # Find the snippet variable assignment
+        match = re.search(
+            r'snippet\s*=\s*textwrap\.dedent\("""(.*?)"""\)', source, re.DOTALL
+        )
+        if match:
+            return match.group(1)
+        return None
+
+    def _get_snippet_defined_names(self, snippet: str) -> set:
+        """Extract variable names that are defined (assigned) within a snippet.
+
+        This helps identify variables that are created by the snippet itself
+        and therefore don't need to exist in the target function's scope beforehand.
+        """
+        defined_names = set()
+        try:
+            # Dedent the snippet first to handle indentation
+            import textwrap
+
+            snippet = textwrap.dedent(snippet)
+            snippet_ast = ast.parse(snippet)
+            for node in ast.walk(snippet_ast):
+                if isinstance(node, ast.Assign):
+                    for target in node.targets:
+                        if isinstance(target, ast.Name):
+                            defined_names.add(target.id)
+                        elif isinstance(target, (ast.Tuple, ast.List)):
+                            for elt in target.elts:
+                                if isinstance(elt, ast.Name):
+                                    defined_names.add(elt.id)
+                        elif isinstance(target, ast.Attribute):
+                            # Attribute assignments like self.x = ... don't define new local names
+                            pass
+                elif isinstance(node, ast.AnnAssign):
+                    if isinstance(node.target, ast.Name):
+                        defined_names.add(node.target.id)
+                elif isinstance(node, ast.AugAssign):
+                    if isinstance(node.target, ast.Name):
+                        defined_names.add(node.target.id)
+                elif isinstance(node, ast.For):
+                    if isinstance(node.target, ast.Name):
+                        defined_names.add(node.target.id)
+                    elif isinstance(node.target, ast.Tuple):
+                        for elt in node.target.elts:
+                            if isinstance(elt, ast.Name):
+                                defined_names.add(elt.id)
+                elif isinstance(node, ast.With):
+                    for item in node.items:
+                        if item.optional_vars:
+                            if isinstance(item.optional_vars, ast.Name):
+                                defined_names.add(item.optional_vars.id)
+                            elif isinstance(item.optional_vars, ast.Tuple):
+                                for elt in item.optional_vars.elts:
+                                    if isinstance(elt, ast.Name):
+                                        defined_names.add(elt.id)
+        except SyntaxError:
+            pass
+        return defined_names
+
+    def _check_snippet_scope(self, func_node: ast.FunctionDef, change_desc: str) -> set:
+        """Check if all required names for a transformation are available in the function's scope.
+
+        Returns a set of missing names, empty if all required names are available.
+        """
+        # Get the snippet for this change to find locally defined names
+        snippet = self._get_snippet_for_change(change_desc)
+        snippet_defined = self._get_snippet_defined_names(snippet) if snippet else set()
+
+        # Get all names defined in the function's scope (parameters, assignments, etc.)
+        available_names = set()
+
+        # Function parameters
+        for arg in func_node.args.args:
+            available_names.add(arg.arg)
+        if func_node.args.vararg:
+            available_names.add(func_node.args.vararg.arg)
+        if func_node.args.kwarg:
+            available_names.add(func_node.args.kwarg.arg)
+        for default in func_node.args.defaults:
+            if isinstance(default, ast.Name):
+                available_names.add(default.id)
+
+        # Names assigned in the function body (at top level)
+        for stmt in func_node.body:
+            if isinstance(stmt, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+                for target in (
+                    stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
+                ):
+                    if isinstance(target, ast.Name):
+                        available_names.add(target.id)
+            elif isinstance(stmt, ast.For):
+                if isinstance(stmt.target, ast.Name):
+                    available_names.add(target.id)
+                elif isinstance(stmt.target, ast.Tuple):
+                    for elt in stmt.target.elts:
+                        if isinstance(elt, ast.Name):
+                            available_names.add(elt.id)
+            elif isinstance(stmt, ast.With):
+                for item in stmt.items:
+                    if item.optional_vars:
+                        if isinstance(item.optional_vars, ast.Name):
+                            available_names.add(item.optional_vars.id)
+                        elif isinstance(item.optional_vars, ast.Tuple):
+                            for elt in item.optional_vars.elts:
+                                if isinstance(elt, ast.Name):
+                                    available_names.add(elt.id)
+
+        # Common names available via self
+        available_names.add("self")
+
+        # Variables defined by the snippet itself are considered available
+        available_names.update(snippet_defined)
+
+        # Get required names for this change
+        required_names = self._get_required_names(change_desc)
+
+        # Check which required names are missing
+        missing = required_names - available_names
+
+        # Filter out names that are available via self (attributes)
+        # For now, we'll be conservative and only consider truly missing names
+        # that aren't self attributes
+        truly_missing = set()
+        for name in missing:
+            if name not in {"self", "actions", "ActionType"}:
+                # Check if it's an attribute access pattern (self.xxx)
+                if not (name.startswith("self.") or name in ["self"]):
+                    truly_missing.add(name)
+
+        return truly_missing
+
     def _apply_ast_transformation(
         self, func_node: ast.FunctionDef, change_desc: str
     ) -> None:
@@ -306,6 +675,14 @@ class CoderAgent:
         # Determine transformation type from change description
         transformation = self._determine_transformation(change_desc)
         if transformation:
+            # Validate that the target function has all required names in scope
+            missing_names = self._check_snippet_scope(func_node, change_desc)
+            if missing_names:
+                # Refuse to apply transformation - report missing names so planner can re-target
+                raise ValueError(
+                    f"Transformation '{change_desc}' cannot be applied to function: "
+                    f"missing names in scope: {', '.join(sorted(missing_names))}"
+                )
             transformation(func_node)
 
     def _determine_transformation(self, change_desc: str) -> Optional[Callable]:
