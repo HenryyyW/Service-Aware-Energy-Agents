@@ -327,3 +327,29 @@ decisive two-arm re-run (deterministic comparator first, then the LLM arm via
 the configured product path, <= 10 tasks x <= 5 iterations, both arms unpooled,
 `loop_claimed_success` beside every verdict, threshold >= 7/9 reported either
 way) runs on the PM's GO.
+
+
+## LLM-arm probe after A's conversion fixes (main 160893e71) - the blocker moved to the model's diff format
+
+A's conversion fixes (diff look-ahead, double-newline) are merged. Verified on
+the merged tree with the 2-tuple detector wired in:
+
+- Deterministic comparator (10 cells, 0 LLM calls, budget 5): 10/10
+  loop/driver agreement, `loop_claimed_success=False` on all 10, 0/9 measured
+  repairs, negative control `keep=True` (valid honest-failure cell).
+- LLM real-code probe, 3 tasks, 6 calls total (in-envelope): the model still
+  does not emit a well-formed unified diff, so `changes=0` and the notes read
+  "LLM REAL-CODE PATH FAILED: no valid unified diff produced":
+  - task_4_import_limit: 10 `-` lines vs 41 `+` lines (unbalanced hunk), 5
+    no-op identical pairs, the "changes" are comment-text edits (e.g. appending
+    "(in hours)" to a comment) - parser rejects.
+  - task_6_voltage_response: 0 `-` lines vs 84 `+` lines - additions only.
+  - task_8_flex_deadline: 0 `-` lines vs 6 `+` lines - additions only.
+
+So the binding defect is no longer the diff application: it is the model's
+output format. A's applier accepts strict unified diffs; this model does not
+produce them at this prompt/temperature. The full LLM arm is HELD: running it
+would spend ~60 calls recording the same parse failures (the exact case the PM
+excluded). Recommended next step (A's decision): either change the output
+contract to function replacement (the coder already has `_replace_function`),
+or re-prompt for strict `@@ -a,b +c,d @@` hunks with balanced -/+ counts.
