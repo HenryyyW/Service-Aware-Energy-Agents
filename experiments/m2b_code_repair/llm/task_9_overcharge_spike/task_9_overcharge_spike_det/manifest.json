@@ -1,0 +1,48 @@
+{
+  "run_id": "task_9_overcharge_spike_det",
+  "task_id": "task_9_overcharge_spike",
+  "arm": "llm",
+  "negative_control": false,
+  "wiring_workaround": "explicit NIM backend injection (create_backend TypeError, A-side defect)",
+  "git_commit": "1ed5a21933f2439ad6eb8d333377710eeaa532ad",
+  "git_dirty": true,
+  "controller_file": "src/controllers/__init__.py",
+  "expected_transformations": [
+    "_add_proportional_power_allocation",
+    "_add_action_magnitude_reduction",
+    "_add_precise_time_to_departure"
+  ],
+  "planner_bypass": {
+    "forced_issue": "ev_deadline",
+    "forced_targets": [
+      "_control_ev",
+      "get_actions"
+    ]
+  },
+  "detector_signature_present_on_broken": true,
+  "detector_broken": {
+    "passed": false,
+    "detail": "worst charge above remaining need 10.93 kW"
+  },
+  "detector_patched": {
+    "passed": null,
+    "detail": "patched controller does not parse: IndentationError: unexpected indent (patched_task_9_overcharge_spike_det.py, line 267)"
+  },
+  "iterations": 1,
+  "wall_clock_seconds": 40.08,
+  "llm_calls": 2,
+  "llm_backend_errors": 0,
+  "backend_telemetry": {
+    "llm_calls": 2,
+    "llm_prompt_tokens": 4306,
+    "llm_completion_tokens": 4112,
+    "model_digest": "poolside/laguna-xs-2.1",
+    "last_error": null,
+    "llm_backend_errors": 0
+  },
+  "sandbox_memory_limit_mb": 4096,
+  "keep": false,
+  "acceptance_of_record": "driver criteria (a)-(f)",
+  "loop_claimed_success": true,
+  "verdict": "loop-claims-success / driver rejects"
+}

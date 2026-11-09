@@ -1,0 +1,68 @@
+{
+  "criteria": {
+    "a_parses": false,
+    "b_ran_clean": false,
+    "c_output_differs": false,
+    "d_not_cosmetic": true,
+    "e_harness_accepts": true,
+    "f_service_preserved": null
+  },
+  "iterations": [
+    {
+      "iteration": 1,
+      "planner_issue": "battery_soc",
+      "planner_targets": [
+        "_control_battery",
+        "get_actions"
+      ],
+      "planner_strategy": "Improve EV charging scheduling: start earlier, use maximum power when deadline approaches, prioritize by departure time",
+      "target_functions": [
+        "_control_battery",
+        "get_actions"
+      ],
+      "coder_changes": 0,
+      "coder_source": "deterministic",
+      "diff": "--- original\n+++ patched\n@@ -143,12 +143,20 @@\n                 action_type=ActionType.BATTERY_DISCHARGE,\n                 value_kw=-discharge_kw,\n                 timestep=self.timestep,\n-            )\n-\n-        return None\n-\n-    def _control_ev(\n-        self,\n+                timestep=self.timestep,\n+\n+            )\n+\n+\n+\n+    def _control_battery(self, battery_id: str, battery: BatteryConfig, net_demand: float, pv_gen: float, hour_of_day: float, ev_actions: List[Action] = None) -> Optional[Action]:\n+\n+        \"\"\"Control battery: charge from excess PV, discharge to meet demand.\"\"\"\n+\n+        battery_id = f\"{bid}_battery\"\n+\n+        current_soc = self.battery_soc.get(battery_id, battery.initial_soc)\n+\n         ev_id: str,\n         ev: EVConfig,\n         net_demand: float,\n@@ -171,12 +179,20 @@\n         else:\n             connected = arrival_hour <= hour_of_day < departure_hour\n \n-        self.ev_connected[ev_id] = connected\n-\n-        if not connected:\n-            return None\n-\n-        # Check if already at target\n+                timestep=self.timestep,\n+\n+            )\n+\n+\n+\n+    def _control_ev(self, ev_id: str, ev: EVConfig, net_demand: float, pv_gen: float, hour_of_day: float, timestep: int, all_evs: List[tuple] = None) -> Optional[Action]:\n+\n+        \"\"\"Control EV charging: charge when connected, prioritize off-peak and PV.\"\"\"\n+\n+        current_soc = self.ev_soc.get(ev_id, ev.initial_soc)\n+\n+        capacity_kwh = ev.capacity_kwh\n+\n         if current_soc >= ev.target_soc:\n             return None\n \n@@ -205,12 +221,20 @@\n         if charge_kw > 0.1:\n             new_soc = (\n                 current_soc\n-                + (\n-                    charge_kw\n-                    * ev.efficiency\n-                    * self.scenario_config.timestep_minutes\n-                    / 60\n-                )\n+                timestep=self.timestep,\n+\n+            )\n+\n+\n+\n+    def _control_flexible_load(self, fl_id: str, fl: \"FlexibleLoadConfig\", pv_gen: float, hour_of_day: float, timestep: int) -> Optional[Action]:\n+\n+        \"\"\"Control flexible load: run during high PV generation.\"\"\"\n+\n+        progress = self.flexible_load_progress.get(fl_id, 0.0)\n+\n+\n+\n                 / capacity_kwh\n             )\n             self.ev_soc[ev_id] = min(new_soc, 1.0)\n@@ -261,12 +285,21 @@\n                 value_kw=power_kw,\n                 timestep=self.timestep,\n             )\n-\n-        return None\n-\n-    def _apply_grid_limits(self, actions: List[Action]) -> List[Action]:\n-        \"\"\"Apply community-level grid import/export limits.\"\"\"\n-        if (\n+    def _apply_grid_limits(self, actions):\n+\n+        # Voltage-triggered load reduction\n+\n+        if self.last_grid_diagnostics:\n+\n+            diagnostics = self.last_grid_diagnostics.get(\"diagnostics\", [])\n+\n+            for d in diagnostics:\n+\n+                if d.get(\"severity\") in [\"violation\", \"critical\"] and d.get(\"category\") == \"voltage\":\n+\n+                    # ... reduction logic\n+\n+        return actions\n             not self.scenario_config.community_import_limit_kw\n             and not self.scenario_config.community_export_limit_kw\n         ):\n",
+      "verifier_violations_resolved": true,
+      "success": true,
+      "duration": 16.87
+    }
+  ],
+  "loop_error": null,
+  "telemetry": {
+    "l1_broken": {
+      "violating_values": 0,
+      "violating_steps": 0
+    },
+    "l1_patched": {
+      "violating_values": 0,
+      "violating_steps": 0
+    },
+    "l5_before": {
+      "success": true,
+      "error": null,
+      "violation_counts": {
+        "voltage": 0,
+        "line_loading": 0,
+        "transformer_loading": 0
+      },
+      "max_violations": {
+        "voltage": 0,
+        "line_loading": 0,
+        "transformer_loading": 0
+      },
+      "execution_time": 0.73,
+      "tests_passed": true
+    },
+    "l5_after": {
+      "success": false,
+      "error": "patch does not parse: SyntaxError: unmatched ')' (patched_task_3_battery_soc_floor_det.py, line 166)",
+      "violation_counts": {}
+    }
+  },
+  "cosmetic": false,
+  "magnitudes": {
+    "broken": 5.0,
+    "patched": null
+  }
+}

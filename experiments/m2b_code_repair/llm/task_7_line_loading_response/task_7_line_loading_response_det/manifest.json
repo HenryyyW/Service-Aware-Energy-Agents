@@ -1,0 +1,47 @@
+{
+  "run_id": "task_7_line_loading_response_det",
+  "task_id": "task_7_line_loading_response",
+  "arm": "llm",
+  "negative_control": false,
+  "wiring_workaround": "explicit NIM backend injection (create_backend TypeError, A-side defect)",
+  "git_commit": "1ed5a21933f2439ad6eb8d333377710eeaa532ad",
+  "git_dirty": true,
+  "controller_file": "src/controllers/__init__.py",
+  "expected_transformations": [
+    "_add_line_loading_monitoring",
+    "_add_transformer_loading_check"
+  ],
+  "planner_bypass": {
+    "forced_issue": "line_loading",
+    "forced_targets": [
+      "_apply_grid_violation_redispatch",
+      "get_actions"
+    ]
+  },
+  "detector_signature_present_on_broken": true,
+  "detector_broken": {
+    "passed": false,
+    "detail": "magnitude 2.50 kW under 110% loading vs expected 0.1x baseline 5.00 kW"
+  },
+  "detector_patched": {
+    "passed": null,
+    "detail": "patched controller does not parse: IndentationError: expected an indented block after 'if' statement on line 372 (patched_task_7_line_loading_response_det.py, line 376)"
+  },
+  "iterations": 1,
+  "wall_clock_seconds": 24.23,
+  "llm_calls": 2,
+  "llm_backend_errors": 0,
+  "backend_telemetry": {
+    "llm_calls": 2,
+    "llm_prompt_tokens": 4316,
+    "llm_completion_tokens": 1836,
+    "model_digest": "poolside/laguna-xs-2.1",
+    "last_error": null,
+    "llm_backend_errors": 0
+  },
+  "sandbox_memory_limit_mb": 4096,
+  "keep": false,
+  "acceptance_of_record": "driver criteria (a)-(f)",
+  "loop_claimed_success": true,
+  "verdict": "loop-claims-success / driver rejects"
+}

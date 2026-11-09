@@ -1,0 +1,48 @@
+{
+  "run_id": "task_3_battery_soc_floor_det",
+  "task_id": "task_3_battery_soc_floor",
+  "arm": "llm",
+  "negative_control": false,
+  "wiring_workaround": "explicit NIM backend injection (create_backend TypeError, A-side defect)",
+  "git_commit": "1ed5a21933f2439ad6eb8d333377710eeaa532ad",
+  "git_dirty": true,
+  "controller_file": "src/controllers/__init__.py",
+  "expected_transformations": [
+    "_add_dynamic_soc_reserve",
+    "_add_emergency_reserve",
+    "_add_soc_forecast"
+  ],
+  "planner_bypass": {
+    "forced_issue": "battery_soc",
+    "forced_targets": [
+      "_control_battery",
+      "get_actions"
+    ]
+  },
+  "detector_signature_present_on_broken": true,
+  "detector_broken": {
+    "passed": false,
+    "detail": "worst discharge overshoot above SOC-floor energy 1.350 kWh/step"
+  },
+  "detector_patched": {
+    "passed": null,
+    "detail": "patched controller does not parse: SyntaxError: unmatched ')' (patched_task_3_battery_soc_floor_det.py, line 166)"
+  },
+  "iterations": 1,
+  "wall_clock_seconds": 16.87,
+  "llm_calls": 2,
+  "llm_backend_errors": 0,
+  "backend_telemetry": {
+    "llm_calls": 2,
+    "llm_prompt_tokens": 4305,
+    "llm_completion_tokens": 675,
+    "model_digest": "poolside/laguna-xs-2.1",
+    "last_error": null,
+    "llm_backend_errors": 0
+  },
+  "sandbox_memory_limit_mb": 4096,
+  "keep": false,
+  "acceptance_of_record": "driver criteria (a)-(f)",
+  "loop_claimed_success": true,
+  "verdict": "loop-claims-success / driver rejects"
+}

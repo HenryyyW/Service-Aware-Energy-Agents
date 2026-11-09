@@ -1,0 +1,41 @@
+{
+  "run_id": "task_3_battery_soc_floor_det",
+  "task_id": "task_3_battery_soc_floor",
+  "arm": "deterministic",
+  "negative_control": false,
+  "wiring_workaround": null,
+  "git_commit": "1ed5a21933f2439ad6eb8d333377710eeaa532ad",
+  "git_dirty": true,
+  "controller_file": "src/controllers/__init__.py",
+  "expected_transformations": [
+    "_add_dynamic_soc_reserve",
+    "_add_emergency_reserve",
+    "_add_soc_forecast"
+  ],
+  "planner_bypass": {
+    "forced_issue": "battery_soc",
+    "forced_targets": [
+      "_control_battery",
+      "get_actions"
+    ]
+  },
+  "detector_signature_present_on_broken": true,
+  "detector_broken": {
+    "passed": false,
+    "detail": "worst discharge overshoot above SOC-floor energy 1.350 kWh/step"
+  },
+  "detector_patched": {
+    "passed": false,
+    "detail": "worst discharge overshoot above SOC-floor energy 1.350 kWh/step"
+  },
+  "iterations": 5,
+  "wall_clock_seconds": 0.03,
+  "llm_calls": 0,
+  "llm_backend_errors": 0,
+  "backend_telemetry": null,
+  "sandbox_memory_limit_mb": 4096,
+  "keep": false,
+  "acceptance_of_record": "driver criteria (a)-(f)",
+  "loop_claimed_success": false,
+  "verdict": "driver-reject"
+}

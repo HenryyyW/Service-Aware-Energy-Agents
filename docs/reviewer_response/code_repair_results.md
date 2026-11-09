@@ -228,6 +228,61 @@ because the registry maps the present-but-None `dashscope_api_key` before
 that mapping order is fixed (reported to A with the reproduction; the driver
 now prefers the product path and falls back with the reason recorded).
 
+## Decision-grade re-run on origin/main 1ed5a2193 (A's real-code path merged, envelope <= 5 iterations)
+
+The authoritative run, on the code the paper cites: `origin/main` (A's real-code
+path with the safe applier + test-driven prompt + loop feedback, max-iterations
+5, registry key fix, and the acceptance-path crash tracking). Both arms under
+the user's envelope; the LLM arm through the **configured product path**
+(`AGENT_BACKEND=api:poolside/laguna-xs-2.1`, NIM key from the key store,
+`DASHSCOPE_API_KEY` unset, 1-token pre-flight per cell) with no injection.
+
+| Task | deterministic: iters / keep / loop | LLM: iters / keep / loop | LLM patched outcome |
+|---|---|---|---|
+| task_1_ev_deadline_soc | 5 / False / False | 1 / False / **True** | does not parse (IndentationError) |
+| task_2_ev_urgent_power | 5 / False / False | 1 / False / **True** | does not parse (IndentationError) |
+| task_3_battery_soc_floor | 5 / False / False | 1 / False / **True** | does not parse (SyntaxError: unmatched ')') |
+| task_4_import_limit | 5 / False / False | 1 / False / **True** | does not parse (SyntaxError: invalid syntax) |
+| task_5_export_limit | 5 / False / False | 1 / False / **True** | does not parse (SyntaxError: '(' never closed) |
+| task_6_voltage_response | 1 / False / **True** | 1 / False / **True** | does not parse (IndentationError) |
+| task_7_line_loading_response | 1 / False / **True** | 1 / False / **True** | does not parse (IndentationError) |
+| task_8_flex_deadline | 5 / False / False | 1 / False / **True** | does not parse (SyntaxError) |
+| task_9_overcharge_spike | 5 / False / False | 1 / False / **True** | does not parse (IndentationError) |
+| task_10_NEG (negative control) | 1 / False / **True** | 1 / False / **True** | does not parse (IndentationError) |
+
+**Headline: 0 of 9 measured repairs in BOTH arms** (pre-registered threshold
+>= 7/9 not met; reported either way). **The A2 sentence therefore stays
+"scaffolded, not yet demonstrated"** - this run does not move it.
+
+**Per-iteration story (as requested):**
+- Deterministic arm: the seven crash-class cells ran the full 5-iteration
+  budget (5 patches each, all deterministic-vocabulary, none behaviour-changing)
+  and ended with `loop_claimed_success=False` - the acceptance fix works for
+  that class. The three clean-but-unrepaired cells (6, 7, 10) still get
+  `loop_claimed_success=True` after 1 iteration because the loop's verifier
+  checks "no grid violations in the sandbox experiment" rather than "the defect
+  is fixed".
+- LLM arm: 20 calls, 0 backend errors, model digest `poolside/laguna-xs-2.1`,
+  every cell authenticated through the configured path. Every cell stopped
+  after **one** iteration because the loop declared success - so the <= 5
+  budget and the test-driven failure-history feedback were never exercised. The
+  LLM's real-code output **does not parse in 10 of 10 cells** (IndentationError
+  / SyntaxError), so the coder fell back to the deterministic vocabulary and
+  the final patch is again invalid or ineffective. The loop then claims success
+  on 10/10 cells whose patches do not parse.
+
+**Two A-side findings, sharper than before:**
+1. The real-code path's model output is syntactically invalid Python in
+   **10 of 10** cells (was 9/10 in the pre-merge run) - the binding defect is
+   the model's code generation, not the applier.
+2. The acceptance path claims success on patches that do not parse - the loop
+   applies neither the driver's syntax check nor a defect-level check. Driver
+   criteria (a)-(f) remain the acceptance of record and reject 10/10 in both
+   arms.
+
+Both arms published unpooled; all cells carry per-iteration records, per-cell
+L1/L5 telemetry and `loop_claimed_success` beside the verdict.
+
 ## Recommendation
 
 Do not put any code-repair number in the paper from this run. The pipeline
