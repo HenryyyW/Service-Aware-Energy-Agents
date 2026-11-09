@@ -283,6 +283,40 @@ the user's envelope; the LLM arm through the **configured product path**
 Both arms published unpooled; all cells carry per-iteration records, per-cell
 L1/L5 telemetry and `loop_claimed_success` beside the verdict.
 
+## Final re-run after A's e7434ae (pre-apply repair pass, no silent fallback, cosmetic classifier) - fix/llm-real-code-path merged with main
+
+Driver: task detector wired into the loop verifier (re-applied on this branch;
+the merge had taken main's copy without it) and the truthful
+`wiring_workaround` field (the merged cells still carry the stale hardcoded
+label - the field fix lives on `benchmark/label-correction`; this run used the
+configured product path, no "configured backend path unusable" line in the log).
+
+**Deterministic comparator (10 cells, 0 calls): 10/10 agreement** - every cell
+ran the full 5-iteration budget, `loop_claimed_success=False` on all 10,
+negative control `keep=True`, 0/9 measured repairs.
+
+**LLM arm through the configured product path: 60 calls, 8 endpoint errors
+(one read timeout per affected cell, all within the M2b >2 quarantine rule),
+0/9 measured repairs, negative control `keep=True`, 10/10 loop/driver
+agreement.** Every cell used the full 5-iteration budget with the accumulated
+failure history. Per-iteration outcome: the model's real-code output never
+parsed into changes on any iteration (`Changes: 0` each time, coder_source
+`deterministic`), so the patch was a no-op each iteration and the verifier's
+detector check rejected it - the loop then honestly exhausted the budget with
+`loop_claimed_success=False`. Total token spend 17082 prompt / 2867 completion
+tokens on the probe cell - the calls succeed, the diffs do not convert into
+changes.
+
+**Claim decision: 0 of 9 measured repairs in both arms - the pre-registered
+threshold >= 7/9 is not met, so the paper's A2 sentence stays "scaffolded, not
+yet demonstrated".** Reported either way; both arms unpooled; acceptance of
+record = driver criteria (a)-(f), with the loop's own verdict now agreeing
+(10/10) in both arms.
+
+The remaining binding defect is A-side: the model's unified-diff output does not
+convert into changes (and the whole-source prompt still triggers read timeouts
+on ~8/10 cells, retried within budget).
+
 ## Recommendation
 
 Do not put any code-repair number in the paper from this run. The pipeline
