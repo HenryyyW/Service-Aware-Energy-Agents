@@ -50,9 +50,18 @@ MATRIX = ROOT / "experiments" / "m2b_code_repair"
 ARM = os.environ.get("CODE_REPAIR_ARM", "deterministic")
 NIM_ENDPOINT = "https://integrate.api.nvidia.com/v1"
 NIM_MODEL = "poolside/laguna-xs-2.1"
-KEY_STORE = (
-    "/home/box/.config/OpenBot/agent-api-keys/"
-    "agent-66d119d6-4915-479e-a539-1ab4a6b3b57b/NVIDIA_API_KEY"
+# Key-store location is environment-driven (never a hardcoded absolute path):
+# SAEA_NIM_KEY_FILE points at the key file directly, or SAEA_NIM_KEY_DIR points
+# at the directory holding NVIDIA_API_KEY.
+KEY_STORE = os.environ.get("SAEA_NIM_KEY_FILE", "") or str(
+    Path(
+        os.environ.get(
+            "SAEA_NIM_KEY_DIR",
+            str(Path.home() / ".config" / "OpenBot" / "agent-api-keys"),
+        )
+    )
+    / os.environ.get("OPENBOT_AGENT_ID", "agent-66d119d6-4915-479e-a539-1ab4a6b3b57b")
+    / "NVIDIA_API_KEY"
 )
 
 
@@ -504,9 +513,8 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
     manifest = {
         "run_id": run_id,
         "task_id": task.task_id,
-        "arm": task.arm,
-        "negative_control": task.negative_control,
         "arm": ARM,
+        "negative_control": task.negative_control,
         "wiring_workaround": (
             "explicit NIM backend injection (create_backend TypeError, A-side defect)"
             if ARM == "llm"
