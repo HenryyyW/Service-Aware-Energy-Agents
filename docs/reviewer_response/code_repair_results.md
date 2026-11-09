@@ -228,6 +228,61 @@ because the registry maps the present-but-None `dashscope_api_key` before
 that mapping order is fixed (reported to A with the reproduction; the driver
 now prefers the product path and falls back with the reason recorded).
 
+## Decision-grade re-run on origin/main 1ed5a2193 (A's real-code path merged, envelope <= 5 iterations)
+
+The authoritative run, on the code the paper cites: `origin/main` (A's real-code
+path with the safe applier + test-driven prompt + loop feedback, max-iterations
+5, registry key fix, and the acceptance-path crash tracking). Both arms under
+the user's envelope; the LLM arm through the **configured product path**
+(`AGENT_BACKEND=api:poolside/laguna-xs-2.1`, NIM key from the key store,
+`DASHSCOPE_API_KEY` unset, 1-token pre-flight per cell) with no injection.
+
+| Task | deterministic: iters / keep / loop | LLM: iters / keep / loop | LLM patched outcome |
+|---|---|---|---|
+| task_1_ev_deadline_soc | 5 / False / False | 1 / False / **True** | does not parse (IndentationError) |
+| task_2_ev_urgent_power | 5 / False / False | 1 / False / **True** | does not parse (IndentationError) |
+| task_3_battery_soc_floor | 5 / False / False | 1 / False / **True** | does not parse (SyntaxError: unmatched ')') |
+| task_4_import_limit | 5 / False / False | 1 / False / **True** | does not parse (SyntaxError: invalid syntax) |
+| task_5_export_limit | 5 / False / False | 1 / False / **True** | does not parse (SyntaxError: '(' never closed) |
+| task_6_voltage_response | 1 / False / **True** | 1 / False / **True** | does not parse (IndentationError) |
+| task_7_line_loading_response | 1 / False / **True** | 1 / False / **True** | does not parse (IndentationError) |
+| task_8_flex_deadline | 5 / False / False | 1 / False / **True** | does not parse (SyntaxError) |
+| task_9_overcharge_spike | 5 / False / False | 1 / False / **True** | does not parse (IndentationError) |
+| task_10_NEG (negative control) | 1 / False / **True** | 1 / False / **True** | does not parse (IndentationError) |
+
+**Headline: 0 of 9 measured repairs in BOTH arms** (pre-registered threshold
+>= 7/9 not met; reported either way). **The A2 sentence therefore stays
+"scaffolded, not yet demonstrated"** - this run does not move it.
+
+**Per-iteration story (as requested):**
+- Deterministic arm: the seven crash-class cells ran the full 5-iteration
+  budget (5 patches each, all deterministic-vocabulary, none behaviour-changing)
+  and ended with `loop_claimed_success=False` - the acceptance fix works for
+  that class. The three clean-but-unrepaired cells (6, 7, 10) still get
+  `loop_claimed_success=True` after 1 iteration because the loop's verifier
+  checks "no grid violations in the sandbox experiment" rather than "the defect
+  is fixed".
+- LLM arm: 20 calls, 0 backend errors, model digest `poolside/laguna-xs-2.1`,
+  every cell authenticated through the configured path. Every cell stopped
+  after **one** iteration because the loop declared success - so the <= 5
+  budget and the test-driven failure-history feedback were never exercised. The
+  LLM's real-code output **does not parse in 10 of 10 cells** (IndentationError
+  / SyntaxError), so the coder fell back to the deterministic vocabulary and
+  the final patch is again invalid or ineffective. The loop then claims success
+  on 10/10 cells whose patches do not parse.
+
+**Two A-side findings, sharper than before:**
+1. The real-code path's model output is syntactically invalid Python in
+   **10 of 10** cells (was 9/10 in the pre-merge run) - the binding defect is
+   the model's code generation, not the applier.
+2. The acceptance path claims success on patches that do not parse - the loop
+   applies neither the driver's syntax check nor a defect-level check. Driver
+   criteria (a)-(f) remain the acceptance of record and reject 10/10 in both
+   arms.
+
+Both arms published unpooled; all cells carry per-iteration records, per-cell
+L1/L5 telemetry and `loop_claimed_success` beside the verdict.
+
 ## Recommendation
 
 Do not put any code-repair number in the paper from this run. The pipeline
@@ -237,3 +292,105 @@ and a Verifier that rejects absent execution. All three are A's; the benchmark
 harness, detectors, and criteria are proven and will re-run unchanged once
 those land. The paper's "scaffolded, not yet demonstrated" wording therefore
 stays correct.
+
+## Rebased on origin/main (160893e71) with the 2-tuple detector adapter - deterministic verification for the decisive re-run
+
+**What was wrong (mechanism correction, verified by the PM and reproduced on
+the merged tree):** the adapter returned a 3-tuple `(ok, detail, None)` while
+`VerifierAgent._run_detector` unpacks `ok, detail = detector_fn(cls, cfg)`, so
+every in-loop detector call failed closed with "too many values to unpack
+(expected 2)". The 10/10 `loop_claimed_success=False` reported from that branch
+was therefore fail-closed rejection, not a working detector check - safe for the
+all-failing deterministic arm, but it would also have rejected a genuine LLM
+repair.
+
+**Fix:** `_harness_detector` returns the 2-tuple `(ok, detail)` (A's unified
+convention, now merged on main). Verified directly: broken controller ->
+`(False, "requested import 5.0 kW vs limit 3 kW")`, pristine controller ->
+`(True, "requested import 3.0 kW vs limit 3 kW")` - the detector genuinely
+discriminates.
+
+**Full deterministic re-run on the rebased branch (10 cells, zero LLM calls,
+budget 5): `loop_claimed_success=False` on all 10 cells, 0/9 measured repairs,
+negative control `keep=True`, zero "too many values to unpack" occurrences in
+the run log - the in-loop detector check now runs for real.** Independently
+merge-checked by the Project Partner on their tree with the same expectation.
+
+**Labelling (binding):** the negative control's `keep=True` is a **valid
+honest-failure cell** - the pipeline correctly does not repair a defect outside
+the transformation vocabulary - and is **not a counted repair**. Repair counts
+are read from the 9 measured tasks only; this applies to every section of this
+document.
+
+The LLM arm is held until A's remaining diff-application defect is fixed; the
+decisive two-arm re-run (deterministic comparator first, then the LLM arm via
+the configured product path, <= 10 tasks x <= 5 iterations, both arms unpooled,
+`loop_claimed_success` beside every verdict, threshold >= 7/9 reported either
+way) runs on the PM's GO.
+
+
+## LLM-arm probe after A's conversion fixes (main 160893e71) - the blocker moved to the model's diff format
+
+A's conversion fixes (diff look-ahead, double-newline) are merged. Verified on
+the merged tree with the 2-tuple detector wired in:
+
+- Deterministic comparator (10 cells, 0 LLM calls, budget 5): 10/10
+  loop/driver agreement, `loop_claimed_success=False` on all 10, 0/9 measured
+  repairs, negative control `keep=True` (valid honest-failure cell).
+- LLM real-code probe, 3 tasks, 6 calls total (in-envelope): the model still
+  does not emit a well-formed unified diff, so `changes=0` and the notes read
+  "LLM REAL-CODE PATH FAILED: no valid unified diff produced":
+  - task_4_import_limit: 10 `-` lines vs 41 `+` lines (unbalanced hunk), 5
+    no-op identical pairs, the "changes" are comment-text edits (e.g. appending
+    "(in hours)" to a comment) - parser rejects.
+  - task_6_voltage_response: 0 `-` lines vs 84 `+` lines - additions only.
+  - task_8_flex_deadline: 0 `-` lines vs 6 `+` lines - additions only.
+
+So the binding defect is no longer the diff application: it is the model's
+output format. A's applier accepts strict unified diffs; this model does not
+produce them at this prompt/temperature. The full LLM arm is HELD: running it
+would spend ~60 calls recording the same parse failures (the exact case the PM
+excluded). Recommended next step (A's decision): either change the output
+contract to function replacement (the coder already has `_replace_function`),
+or re-prompt for strict `@@ -a,b +c,d @@` hunks with balanced -/+ counts.
+
+## Decisive two-arm re-run on origin/main (A's full fix line merged) - the run that decides the A2 sentence
+
+Base: `origin/main` as of this run (A's full real-code fix line: re-indent,
+de-indent, double-newline, diff look-ahead, 300s timeouts, detector-path and
+arity unification; plus the merged detector wiring and the truthful
+`wiring_workaround` field). Envelope: <= 10 tasks x <= 5 iterations,
+`poolside/laguna-xs-2.1` on NVIDIA NIM via the **configured product path**
+(`AGENT_BACKEND=api:poolside/laguna-xs-2.1`, NIM key from the key store,
+`DASHSCOPE_API_KEY` unset, 1-token pre-flight per cell, `timeout_s=300`),
+deterministic comparator first, both arms unpooled.
+
+**Deterministic comparator (10 cells, 0 LLM calls): 10/10 loop/driver
+agreement** - every cell used the full 5-iteration budget,
+`loop_claimed_success=False` on all 10, the 9 measured cells keep=False with
+`f_service_preserved=False` (the in-loop detector check runs the real defect
+signature and honestly fails the unrepaired patches), negative control
+`keep=True` = **valid honest-failure cell (honest non-repair), not a counted
+repair**.
+
+**LLM arm (60 calls, 0 backend errors): 10/10 loop/driver agreement, 0/9
+measured repairs, negative control `keep=True`, every cell used the full
+5-iteration budget with the accumulated failure history.** One cell (task_8)
+recorded a single LLM change that did not repair the defect; the other nine
+produced no applicable change (the model's unified diffs remain structurally
+unbalanced - e.g. 12 `-` vs 330 `+` lines - so the syntax rejection drops
+them and each iteration is a no-op the detector rejects).
+
+**Claim decision: 0 of 9 measured repairs in BOTH arms - the pre-registered
+threshold >= 7/9 is not met - the paper's A2 sentence stays "scaffolded, not
+yet demonstrated".** Reported either way; both arms unpooled; acceptance of
+record = driver criteria (a)-(f); `loop_claimed_success` recorded beside every
+verdict and agreeing with the driver verdict in both arms (10/10).
+
+**Labelling correction applied to the earlier sections:** the LLM-arm section
+produced on the `e7434ae` base reported "Changes: 0 on every iteration" as the
+model's ceiling; that base still contained the diff re-indent corruption (the
+model's diff was mangled before apply), so that section is a **corruption
+artifact**, not evidence about the model. The decisive numbers are the ones
+above, produced on the fully-fixed base. The negative control's `keep=True` is
+labelled throughout as a valid honest-failure cell, not a counted repair.

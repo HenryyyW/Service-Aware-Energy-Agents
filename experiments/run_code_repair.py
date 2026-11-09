@@ -324,6 +324,22 @@ class ForcedPlanner:
         return getattr(self._inner, name)
 
 
+def _harness_detector(task):
+    """Adapter that passes THIS task's detector into the repair loop.
+
+    The loop/verifier convention is detector_fn(controller_cls,
+    scenario_config) -> (ok, detail) (A's unified arity); we supply the task's
+    own probe config so the in-loop detector check measures the same defect
+    signature as the driver-level criteria.
+    """
+
+    def _run(controller_cls, _scenario_config):
+        ok, detail = task.detector_fn()(controller_cls, task.config())
+        return ok, detail
+
+    return _run
+
+
 def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
     from src.agents.multi_agent_loop import MultiAgentRepairLoop
     from src.agents.planner import PlannerAgent
@@ -400,7 +416,7 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
             CONTROLLER_FILE,
             config.model_dump(mode="json"),
             str(cell_dir / "probe.yaml"),
-            task.detector_fn(),
+            detector_fn=_harness_detector(task),
         )
         loop_error = None
     except Exception as exc:  # noqa: BLE001 - recorded
@@ -451,10 +467,25 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
             backend_stats = {"telemetry_error": f"{type(exc).__name__}: {exc}"}
 
     # 3) criteria on the final patched controller
-    patched_cls = _load_controller(patched_final, f"patched_{run_id}")
-    patched_ok, patched_detail, patched_exc = run_detector_safe(
-        task.detector_fn(), patched_cls, config
-    )
+    try:
+        patched_cls = _load_controller(patched_final, f"patched_{run_id}")
+        patched_load_error = None
+    except (
+        Exception
+    ) as exc:  # noqa: BLE001 - an unparsable patch is criterion (a)=False, not a crash
+        patched_cls = None
+        patched_load_error = f"{type(exc).__name__}: {exc}"
+        print(f"  patched controller does not parse: {patched_load_error}", flush=True)
+    if patched_cls is None:
+        patched_ok, patched_detail, patched_exc = (
+            None,
+            (f"patched controller does not parse: {patched_load_error}"),
+            patched_load_error,
+        )
+    else:
+        patched_ok, patched_detail, patched_exc = run_detector_safe(
+            task.detector_fn(), patched_cls, config
+        )
     from src.agents.diff_classifier import classify_diff
 
     cosmetic = None
@@ -466,6 +497,8 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
 
     # output differs from the broken baseline under the probe (criterion c)
     def _probe_magnitude(cls):
+        if cls is None:
+            return None
         try:
             c = cls(config)
             c.reset()
@@ -485,7 +518,11 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
     l1_broken = proposal_bound_violations(
         _load_controller(broken, f"broken_l1_{run_id}"), config
     )
-    l1_patched = proposal_bound_violations(patched_cls, config)
+    l1_patched = (
+        proposal_bound_violations(patched_cls, config)
+        if patched_cls is not None
+        else (0, 0)
+    )
     telemetry = {
         "l1_broken": {
             "violating_values": l1_broken[0],
@@ -498,10 +535,18 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
     }
     if sandbox:
         telemetry["l5_before"] = sandbox_run(broken, cell_dir, "before")
-        telemetry["l5_after"] = sandbox_run(patched_final, cell_dir, "after")
+        telemetry["l5_after"] = (
+            sandbox_run(patched_final, cell_dir, "after")
+            if patched_cls is not None
+            else {
+                "success": False,
+                "error": f"patch does not parse: {patched_load_error}",
+                "violation_counts": {},
+            }
+        )
 
     criteria = {
-        "a_parses": patched_exc is None,
+        "a_parses": patched_cls is not None,
         "b_ran_clean": patched_exc is None,
         "c_output_differs": output_differs,
         "d_not_cosmetic": (
@@ -544,8 +589,8 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
         "arm": ARM,
         "negative_control": task.negative_control,
         "wiring_workaround": (
-            "explicit NIM backend injection (create_backend TypeError, A-side defect)"
-            if ARM == "llm"
+            "explicit NIM backend injection (configured path unusable)"
+            if ARM == "llm" and coder_config.get("backend") is not None
             else None
         ),
         "git_commit": _git_commit(),
