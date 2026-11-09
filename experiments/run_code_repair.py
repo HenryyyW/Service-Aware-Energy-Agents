@@ -452,14 +452,18 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
     try:
         patched_cls = _load_controller(patched_final, f"patched_{run_id}")
         patched_load_error = None
-    except Exception as exc:  # noqa: BLE001 - an unparsable patch is criterion (a)=False, not a crash
+    except (
+        Exception
+    ) as exc:  # noqa: BLE001 - an unparsable patch is criterion (a)=False, not a crash
         patched_cls = None
         patched_load_error = f"{type(exc).__name__}: {exc}"
         print(f"  patched controller does not parse: {patched_load_error}", flush=True)
     if patched_cls is None:
-        patched_ok, patched_detail, patched_exc = None, (
-            f"patched controller does not parse: {patched_load_error}"
-        ), patched_load_error
+        patched_ok, patched_detail, patched_exc = (
+            None,
+            (f"patched controller does not parse: {patched_load_error}"),
+            patched_load_error,
+        )
     else:
         patched_ok, patched_detail, patched_exc = run_detector_safe(
             task.detector_fn(), patched_cls, config
@@ -498,7 +502,8 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
     )
     l1_patched = (
         proposal_bound_violations(patched_cls, config)
-        if patched_cls is not None else (0, 0)
+        if patched_cls is not None
+        else (0, 0)
     )
     telemetry = {
         "l1_broken": {
@@ -515,8 +520,11 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
         telemetry["l5_after"] = (
             sandbox_run(patched_final, cell_dir, "after")
             if patched_cls is not None
-            else {"success": False, "error": f"patch does not parse: {patched_load_error}",
-                  "violation_counts": {}}
+            else {
+                "success": False,
+                "error": f"patch does not parse: {patched_load_error}",
+                "violation_counts": {},
+            }
         )
 
     criteria = {
