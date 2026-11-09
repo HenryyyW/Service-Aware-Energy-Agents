@@ -121,8 +121,10 @@ def _configured_backend_ok() -> bool:
         # the registry still maps the present-but-None dashscope key first, so
         # the built backend can carry api_key=None -> unusable for NIM
         if backend is not None and not getattr(backend, "api_key", None):
-            print("configured backend path unusable (backend built with api_key=None: "
-                  "registry maps the None-valued dashscope key before nvidia)")
+            print(
+                "configured backend path unusable (backend built with api_key=None: "
+                "registry maps the None-valued dashscope key before nvidia)"
+            )
             return False
         return backend is not None
     except Exception as exc:  # noqa: BLE001
