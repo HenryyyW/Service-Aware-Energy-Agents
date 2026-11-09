@@ -178,6 +178,12 @@ class LLMCoderAgent:
             )
             if result:
                 patched_code, diff, changes, notes = result
+                # Validate that patched code is syntactically valid Python
+                try:
+                    ast.parse(patched_code)
+                except SyntaxError as e:
+                    print(f"LLM generated syntactically invalid code: {e}")
+                    return None
                 return patched_code, diff, changes, notes
 
         except Exception as e:

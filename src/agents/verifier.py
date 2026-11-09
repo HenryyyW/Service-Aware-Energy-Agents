@@ -1,6 +1,7 @@
 """Verifier agent - verifies that fixes resolve violations."""
 
 from typing import List, Dict, Any, Optional
+import ast
 from src.agents.roles import AgentState, VerifierOutput, AgentRole
 from src.agents.planner import PlannerOutput
 from src.schemas.report import ExperimentResult
@@ -55,6 +56,31 @@ class VerifierAgent:
                 output.model_dump(),
             )
             return output
+
+        # CRITICAL: Check patched code syntax before running detector
+        if state.patched_code:
+            try:
+                ast.parse(state.patched_code)
+            except SyntaxError as e:
+                output = VerifierOutput(
+                    violations_resolved=False,
+                    remaining_violations=[
+                        {
+                            "issue": "syntax_error",
+                            "reason": f"Patched code has syntax error: {e}",
+                            "severity": "critical",
+                        }
+                    ],
+                    confidence=0.0,
+                    recommendation="retry",
+                )
+                state.verification_result = output.model_dump()
+                state.add_message(
+                    AgentRole.VERIFIER,
+                    f"Verification: FAILED (patched code syntax error: {e})",
+                    output.model_dump(),
+                )
+                return output
 
         # CRITICAL: Run the detector against the patched controller
         # The detector defines the actual defect - if it still fails, the repair is NOT resolved
