@@ -55,7 +55,7 @@ class VerificationHarness:
     def set_detector(self, detector_fn: Callable):
         """Set a detector function to verify the actual defect is fixed.
 
-        The detector should take (controller_cls, scenario_config) and return (ok, detail, exc).
+        The detector should take (controller_cls, scenario_config) and return (ok, detail).
         """
         self.detector_fn = detector_fn
 
@@ -118,7 +118,7 @@ class VerificationHarness:
 
                 if controller_cls is not None:
                     # Run detector
-                    ok, detail, exc = self.detector_fn(controller_cls, {})
+                    ok, detail = self.detector_fn(controller_cls, {})
                     if not ok:
                         detector_passed = False
                         detector_detail = detail or "Detector failed"
