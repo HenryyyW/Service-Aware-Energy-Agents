@@ -124,6 +124,8 @@ def preflight_probe() -> bool:
         return False
     backend("probe")
     return backend.call_count >= 1 and backend.last_error is None
+
+
 DRY_RUN_TASKS = ["task_1_ev_deadline_soc", "task_10_NEG_redispatch_removed"]
 
 
@@ -343,7 +345,8 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
                 "LLMCoderAgent falls back to the keyless env path"
             ),
         }
-        if ARM == "llm" else None
+        if ARM == "llm"
+        else None
     )
     loop = MultiAgentRepairLoop(
         max_iterations=max_iterations,
@@ -381,10 +384,12 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
                     "planner_strategy": it.planner_output.repair_strategy,
                     "target_functions": it.planner_output.target_functions,
                     "coder_changes": len(it.coder_output.code_changes),
-                "coder_source": (
-                    "LLM" if "LLM-generated" in (it.coder_output.implementation_notes or "")
-                    else "deterministic"
-                ),
+                    "coder_source": (
+                        "LLM"
+                        if "LLM-generated"
+                        in (it.coder_output.implementation_notes or "")
+                        else "deterministic"
+                    ),
                     "diff": it.coder_output.diff,
                     "verifier_violations_resolved": it.verifier_output.violations_resolved,
                     "success": it.success,
@@ -403,9 +408,7 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
                     "llm_completion_tokens": backend.completion_tokens,
                     "model_digest": backend.model_digest,
                     "last_error": backend.last_error,
-                    "llm_backend_errors": (
-                        1 if backend.last_error else 0
-                    ),
+                    "llm_backend_errors": (1 if backend.last_error else 0),
                 }
         except Exception as exc:  # noqa: BLE001 - recorded, not swallowed
             backend_stats = {"telemetry_error": f"{type(exc).__name__}: {exc}"}
@@ -506,7 +509,8 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
         "arm": ARM,
         "wiring_workaround": (
             "explicit NIM backend injection (create_backend TypeError, A-side defect)"
-            if ARM == "llm" else None
+            if ARM == "llm"
+            else None
         ),
         "git_commit": _git_commit(),
         "git_dirty": _git_dirty(),
