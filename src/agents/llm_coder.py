@@ -402,9 +402,10 @@ Return ONLY the unified diff. NO additional text."""
                             i += 1
 
                         # Apply: replace old lines with new lines
+                        # new_lines already have newlines from splitlines(keepends=True)
                         patched_lines = (
                             patched_lines[:old_start]
-                            + [ln + "\n" for ln in new_lines]
+                            + new_lines
                             + patched_lines[old_start + old_count :]
                         )
                         continue
