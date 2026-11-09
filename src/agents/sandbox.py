@@ -953,6 +953,17 @@ class Sandbox:
         timeout: Optional[int] = None,
     ) -> subprocess.CompletedProcess:
         """Run command with memory and time limits."""
+        # Set environment variables to limit thread usage and avoid resource exhaustion
+        env = os.environ.copy()
+        env.update(
+            {
+                "OPENBLAS_NUM_THREADS": "1",
+                "OMP_NUM_THREADS": "1",
+                "NUMEXPR_NUM_THREADS": "1",
+                "MALLOC_ARENA_MAX": "1",
+                "JEMALLOC_ARENA_MAX": "1",
+            }
+        )
         return subprocess.run(
             cmd,
             cwd=cwd,
@@ -961,6 +972,7 @@ class Sandbox:
             text=True,
             timeout=timeout or self.timeout,
             preexec_fn=self._preexec_fn if hasattr(os, "fork") else None,
+            env=env,
         )
 
     def __enter__(self):

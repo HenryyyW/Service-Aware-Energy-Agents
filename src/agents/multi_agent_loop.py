@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from src.agents.roles import AgentState
 from src.agents.planner import PlannerAgent, PlannerOutput
 from src.agents.coder import CoderAgent, CoderOutput
+from src.agents.llm_coder import create_coder_agent
 from src.agents.executor import ExecutorAgent, ExecutorOutput
 from src.agents.verifier import VerifierAgent, VerifierOutput
 from src.agents.reporter import ReporterAgent, ReporterOutput
@@ -55,9 +56,16 @@ class MultiAgentRepairLoop:
         reporter: ReporterAgent = None,
         max_iterations: int = 3,
         project_root: str = None,
+        coder_config: Optional[Dict[str, Any]] = None,
     ):
         self.planner = planner or PlannerAgent()
-        self.coder = coder or CoderAgent()
+
+        # Create coder based on config (LLM-backed or deterministic)
+        if coder_config is not None:
+            self.coder = create_coder_agent(coder_config)
+        else:
+            self.coder = coder or CoderAgent()
+
         self.executor = executor or ExecutorAgent(project_root=project_root)
         self.verifier = verifier or VerifierAgent()
         self.reporter = reporter or ReporterAgent()

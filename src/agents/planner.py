@@ -169,13 +169,21 @@ class PlannerAgent:
         return violations
 
     def _prioritize_issues(self, violations: Dict[str, List[Dict]]) -> tuple:
-        """Prioritize issues by severity and impact."""
+        """Prioritize issues by severity and impact.
+
+        EV deadline missed-deadline is treated as 'violation' severity
+        to ensure it's prioritized correctly over grid_export warnings.
+        """
         critical = []
         warnings = []
 
         for category, issues in violations.items():
             for issue in issues:
                 severity = issue.get("severity", "warning")
+                # Treat EV deadline missed-deadline as violation severity
+                if category == "ev_deadline" and issue.get("source") == "metrics":
+                    # EV deadline missed is a hard constraint violation
+                    severity = "violation"
                 if severity in ["critical", "violation"]:
                     critical.append((category, issue))
                 else:
