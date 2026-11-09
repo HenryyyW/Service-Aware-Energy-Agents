@@ -292,3 +292,64 @@ and a Verifier that rejects absent execution. All three are A's; the benchmark
 harness, detectors, and criteria are proven and will re-run unchanged once
 those land. The paper's "scaffolded, not yet demonstrated" wording therefore
 stays correct.
+
+## Rebased on origin/main (160893e71) with the 2-tuple detector adapter - deterministic verification for the decisive re-run
+
+**What was wrong (mechanism correction, verified by the PM and reproduced on
+the merged tree):** the adapter returned a 3-tuple `(ok, detail, None)` while
+`VerifierAgent._run_detector` unpacks `ok, detail = detector_fn(cls, cfg)`, so
+every in-loop detector call failed closed with "too many values to unpack
+(expected 2)". The 10/10 `loop_claimed_success=False` reported from that branch
+was therefore fail-closed rejection, not a working detector check - safe for the
+all-failing deterministic arm, but it would also have rejected a genuine LLM
+repair.
+
+**Fix:** `_harness_detector` returns the 2-tuple `(ok, detail)` (A's unified
+convention, now merged on main). Verified directly: broken controller ->
+`(False, "requested import 5.0 kW vs limit 3 kW")`, pristine controller ->
+`(True, "requested import 3.0 kW vs limit 3 kW")` - the detector genuinely
+discriminates.
+
+**Full deterministic re-run on the rebased branch (10 cells, zero LLM calls,
+budget 5): `loop_claimed_success=False` on all 10 cells, 0/9 measured repairs,
+negative control `keep=True`, zero "too many values to unpack" occurrences in
+the run log - the in-loop detector check now runs for real.** Independently
+merge-checked by the Project Partner on their tree with the same expectation.
+
+**Labelling (binding):** the negative control's `keep=True` is a **valid
+honest-failure cell** - the pipeline correctly does not repair a defect outside
+the transformation vocabulary - and is **not a counted repair**. Repair counts
+are read from the 9 measured tasks only; this applies to every section of this
+document.
+
+The LLM arm is held until A's remaining diff-application defect is fixed; the
+decisive two-arm re-run (deterministic comparator first, then the LLM arm via
+the configured product path, <= 10 tasks x <= 5 iterations, both arms unpooled,
+`loop_claimed_success` beside every verdict, threshold >= 7/9 reported either
+way) runs on the PM's GO.
+
+
+## LLM-arm probe after A's conversion fixes (main 160893e71) - the blocker moved to the model's diff format
+
+A's conversion fixes (diff look-ahead, double-newline) are merged. Verified on
+the merged tree with the 2-tuple detector wired in:
+
+- Deterministic comparator (10 cells, 0 LLM calls, budget 5): 10/10
+  loop/driver agreement, `loop_claimed_success=False` on all 10, 0/9 measured
+  repairs, negative control `keep=True` (valid honest-failure cell).
+- LLM real-code probe, 3 tasks, 6 calls total (in-envelope): the model still
+  does not emit a well-formed unified diff, so `changes=0` and the notes read
+  "LLM REAL-CODE PATH FAILED: no valid unified diff produced":
+  - task_4_import_limit: 10 `-` lines vs 41 `+` lines (unbalanced hunk), 5
+    no-op identical pairs, the "changes" are comment-text edits (e.g. appending
+    "(in hours)" to a comment) - parser rejects.
+  - task_6_voltage_response: 0 `-` lines vs 84 `+` lines - additions only.
+  - task_8_flex_deadline: 0 `-` lines vs 6 `+` lines - additions only.
+
+So the binding defect is no longer the diff application: it is the model's
+output format. A's applier accepts strict unified diffs; this model does not
+produce them at this prompt/temperature. The full LLM arm is HELD: running it
+would spend ~60 calls recording the same parse failures (the exact case the PM
+excluded). Recommended next step (A's decision): either change the output
+contract to function replacement (the coder already has `_replace_function`),
+or re-prompt for strict `@@ -a,b +c,d @@` hunks with balanced -/+ counts.
