@@ -301,6 +301,16 @@ Return ONLY the unified diff. NO additional text."""
         Attempts light repair (strip markdown fences, fix indentation, re-indent to target file's leading whitespace)
         before rejecting. Returns (patched_code, diff, changes, notes) or None if failed.
         """
+        # First, do a global de-indent of the entire response to handle over-indented responses
+        # where every line is shifted by N spaces (e.g., from copy-paste or formatting)
+        response_lines = response.splitlines(keepends=True)
+        min_indent = min(
+            (len(line) - len(line.lstrip()) for line in response_lines if line.strip()),
+            default=0,
+        )
+        if min_indent > 0:
+            response = "\n".join(line[min_indent:] for line in response_lines)
+
         # Try to extract diff from markdown fences first (light repair)
         diff_text = None
 
