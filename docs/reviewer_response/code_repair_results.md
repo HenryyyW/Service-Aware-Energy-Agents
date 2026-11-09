@@ -204,6 +204,30 @@ loop still falsely claims success on it.
 deterministic path. If any of this is quoted in the paper, the two arms are
 published unpooled with these exact per-cell rows.
 
+## Deterministic-arm validation against origin/main 7980673a8f (A's crash-tracking fix)
+
+Re-ran the deterministic comparator (10 cells, zero LLM calls) after A's
+dynamic-path crash tracking (`controller_crashed` / `crash_error` in the
+sandbox; the verifier treats a crashed controller as absent execution).
+Result: **7/10 loop/driver agreement** (was 0/10): the seven cells whose
+patches crash (tasks 1-5, 8, 9) now get `loop_claimed_success=False`, matching
+the driver rejection. The three remaining disagreements are a different,
+narrower class: patches that **execute cleanly but do not repair the defect**
+(tasks 6, 7 - the patch runs, the behaviour is unchanged; task 10 - the
+negative control, correctly unrepaired). Those still get
+`loop_claimed_success=True` because the loop's verifier checks "no violations
+in the sandbox experiment" rather than "the defect is fixed" - the probe
+config produces zero grid violations in both the broken and patched runs, so
+an unrepaired patch reads as a resolution. That is an acceptance-path design
+gap, not a crash.
+
+Also validated on this main: the configured `AGENT_BACKEND` path builds the
+NIM backend (no TypeError any more), but it still carries `api_key=None`
+because the registry maps the present-but-None `dashscope_api_key` before
+`nvidia_api_key` - so the LLM arm still needs the explicit injection until
+that mapping order is fixed (reported to A with the reproduction; the driver
+now prefers the product path and falls back with the reason recorded).
+
 ## Recommendation
 
 Do not put any code-repair number in the paper from this run. The pipeline
