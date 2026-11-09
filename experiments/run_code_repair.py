@@ -368,6 +368,7 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
             "use_llm_coder": True,
             "preflight_probe": True,
             "temperature": 0.2,
+            "timeout_s": 300.0,
             # preferred: the product path (AGENT_BACKEND / LLM_* env) - A's
             # registry fix (origin/main a08a1fdd1) made it reach NIM; the
             # explicit injection stays only as a recorded fallback

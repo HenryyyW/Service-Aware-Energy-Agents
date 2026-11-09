@@ -34,6 +34,7 @@ class LLMCoderAgent:
         temperature: float = 0.2,
         max_tokens: int = 4096,
         preflight_probe: bool = True,
+        timeout_s: float = 300.0,
         # NEW: iteration context for test-driven prompts
         iteration: int = 0,
         previous_failures: Optional[List[Dict[str, Any]]] = None,
@@ -43,6 +44,7 @@ class LLMCoderAgent:
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.preflight_probe = preflight_probe
+        self.timeout_s = timeout_s
         self._backend = None
         self._backend_ready = False
         self._preflight_done = False
@@ -74,7 +76,7 @@ class LLMCoderAgent:
                 base_url=os.getenv("LLM_BASE_URL"),
                 temperature=0.2,
                 seed=42,
-                timeout_s=120.0,
+                timeout_s=self.timeout_s,
                 max_tokens=4096,
             )
 
@@ -108,6 +110,7 @@ class LLMCoderAgent:
 
         LLM returns unified diff or full function replacement.
         Safe applier enforces all validation gates.
+        NO SILENT FALLBACK - if LLM fails, return failure so loop can retry/escalate.
         """
         controller_file = (
             controller_file or state.controller_file or "controllers/rule_based.py"
@@ -125,11 +128,13 @@ class LLMCoderAgent:
             patched_code, diff, changes, notes = llm_result
             implementation_notes = f"LLM REAL-CODE PATH: {notes}"
         else:
-            # Fallback to deterministic AST-based changes
-            patched_code, diff, changes, notes = self._generate_deterministic_changes(
-                plan, controller_file, state.controller_code
+            # NO SILENT FALLBACK - return failure so loop can retry/escalate
+            implementation_notes = (
+                "LLM REAL-CODE PATH FAILED: no valid unified diff produced"
             )
-            implementation_notes = f"Deterministic AST fallback: {notes}"
+            changes = []
+            patched_code = state.controller_code  # Return original code unchanged
+            diff = ""
 
         output = CoderOutput(
             code_changes=changes,
@@ -142,7 +147,7 @@ class LLMCoderAgent:
         state.patched_code = patched_code
         state.add_message(
             AgentRole.CODER,
-            f"Implemented {len(changes)} code changes ({'LLM real-code' if llm_result else 'deterministic'})",
+            f"Implemented {len(changes)} code changes ({'LLM real-code' if changes else 'LLM FAILED'})",
             output.model_dump(),
         )
 
@@ -154,9 +159,11 @@ class LLMCoderAgent:
         plan: PlannerOutput,
         controller_file: str,
     ) -> Optional[tuple]:
-        """Generate code using REAL-CODE PATH: LLM returns unified diff or full function.
+        """Generate code using REAL-CODE PATH: LLM returns unified diff.
 
         Returns (patched_code, diff, changes, notes) or None if failed.
+        Failures are recorded in self.previous_failures for next iteration.
+        NO SILENT FALLBACK - if LLM fails, return None so loop can retry/escalate.
         """
         backend = self._get_backend()
         if backend is None:
@@ -172,7 +179,7 @@ class LLMCoderAgent:
             else:
                 return None
 
-            # Parse LLM response - expect unified diff or full function
+            # Parse LLM response - expect unified diff
             result = self._parse_llm_response_real_code(
                 raw_response, controller_code, controller_file
             )
@@ -182,19 +189,49 @@ class LLMCoderAgent:
                 try:
                     ast.parse(patched_code)
                 except SyntaxError as e:
-                    print(f"LLM generated syntactically invalid code: {e}")
+                    # Record syntax error as failure for next iteration
+                    self.previous_failures.append(
+                        {
+                            "iteration": self.iteration,
+                            "error": f"SyntaxError: {e}",
+                            "test_output": f"LLM generated syntactically invalid code: {e}",
+                            "verifier_feedback": "Generated code failed syntax validation",
+                        }
+                    )
                     return None
                 return patched_code, diff, changes, notes
 
-        except Exception as e:
-            print(f"LLM real-code path failed: {e}")
+            # If we reach here, parsing failed - failure already recorded in _parse_llm_response_real_code
+            # DO NOT fall back to deterministic - return None so loop can retry/escalate
+            return None
 
-        return None
+        except TimeoutError as e:
+            # Record timeout as failure for next iteration
+            self.previous_failures.append(
+                {
+                    "iteration": self.iteration,
+                    "error": f"TimeoutError: {e}",
+                    "test_output": "LLM API request timed out",
+                    "verifier_feedback": "LLM API request timed out",
+                }
+            )
+            return None
+        except Exception as e:
+            # Record exception as failure for next iteration
+            self.previous_failures.append(
+                {
+                    "iteration": self.iteration,
+                    "error": f"{type(e).__name__}: {e}",
+                    "test_output": str(e)[:500],
+                    "verifier_feedback": f"LLM backend exception: {e}",
+                }
+            )
+            return None
 
     def _build_coder_prompt_real_code(
         self, plan: PlannerOutput, controller_code: str
     ) -> str:
-        """Build TEST-DRIVEN prompt including failure history."""
+        """Build TEST-DRIVEN prompt demanding strict unified-diff format."""
         failure_context = ""
         if self.previous_failures:
             failure_context = "\n\nPREVIOUS FAILURES (fix these):\n"
@@ -210,7 +247,7 @@ class LLMCoderAgent:
 
         return f"""You are an expert Python developer fixing energy community controllers.
 
-TASK: Fix the following issue by providing a UNIFIED DIFF or COMPLETE FUNCTION REPLACEMENT.
+TASK: Fix the following issue by providing a STRICT UNIFIED DIFF.
 
 ISSUE: {plan.primary_issue}
 STRATEGY: {plan.repair_strategy}
@@ -225,14 +262,13 @@ CURRENT CONTROLLER CODE:
 ```
 
 REQUIREMENTS:
-1. Return ONLY a UNIFIED DIFF (starting with --- / +++) OR a COMPLETE FUNCTION REPLACEMENT
+1. Return ONLY a UNIFIED DIFF (starting with --- / +++)
 2. Target functions: {plan.target_functions}
 3. Fix: {plan.repair_strategy}
 4. Changes must be BEHAVIOR-CHANGING (not cosmetic) - the sandbox will verify
 
-FORMAT - Return EXACTLY one of:
+FORMAT - Return EXACTLY ONE unified diff:
 
-OPTION A - Unified Diff:
 ```diff
 --- a/controllers/__init__.py
 +++ b/controllers/__init__.py
@@ -247,75 +283,77 @@ OPTION A - Unified Diff:
          return actions
 ```
 
-OPTION B - Complete Function Replacement:
-```python
-# FILE: controllers/__init__.py
-# FUNCTION: _apply_grid_limits
-def _apply_grid_limits(self, actions):
-    \"\"\"Enforce grid voltage and loading limits.\"\"\"
-    # Voltage-triggered load reduction
-    if self.last_grid_diagnostics:
-        diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
-        for d in diagnostics:
-            if d.get("severity") in ["violation", "critical"] and d.get("category") == "voltage":
-                # ... reduction logic
-    return actions
-```
+CRITICAL RULES:
+- Use EXACTLY this format: --- a/file +++ b/file then @@ -start,count +start,count @@
+- Hunk headers MUST have correct line numbers (count lines in context)
+- Indentation MUST match the target file (4 spaces per level)
+- NO markdown fences (no ```diff or ```python)
+- NO additional text, explanations, or apologies
+- Each hunk must have correct line counts in the header
 
-Return EXACTLY ONE of the above formats. NO additional text."""
+Return ONLY the unified diff. NO additional text."""
 
     def _parse_llm_response_real_code(
         self, response: str, original_code: str, controller_file: str
     ) -> Optional[tuple]:
-        """Parse LLM response expecting unified diff or full function."""
-        # Try unified diff first
+        """Parse LLM response expecting unified diff.
+
+        Attempts light repair (strip markdown fences, fix indentation, re-indent to target file's leading whitespace)
+        before rejecting. Returns (patched_code, diff, changes, notes) or None if failed.
+        """
+        # Try to extract diff from markdown fences first (light repair)
+        diff_text = None
+
+        # Try to find diff in markdown fences
         diff_match = re.search(r"```diff\n(.*?)```", response, re.DOTALL)
-        if not diff_match:
+        if diff_match:
+            diff_text = diff_match.group(1).strip()
+        else:
+            # Try without markdown fences - look for raw diff
             diff_match = re.search(
                 r"(--- a/.*?\n\+{3} b/.*?)(?:\n```|\Z)", response, re.DOTALL
             )
+            if diff_match:
+                diff_text = diff_match.group(1).strip()
 
-        if diff_match:
-            diff_text = diff_match.group(1).strip()
+        # Light repair: strip markdown fences, fix indentation, re-indent to target file's leading whitespace
+        if diff_text:
+            # Remove any remaining markdown fences
+            diff_text = re.sub(r"^```(?:diff)?\n", "", diff_text)
+            diff_text = re.sub(r"\n```$", "", diff_text)
+            # Fix common indentation issues - ensure diff starts at column 0
+            diff_lines = diff_text.splitlines()
+            # Find minimum indentation of non-empty lines
+            min_indent = min(
+                (len(line) - len(line.lstrip()) for line in diff_lines if line.strip()),
+                default=0,
+            )
+            if min_indent > 0:
+                diff_text = "\n".join(line[min_indent:] for line in diff_lines)
+            diff_text = diff_text.strip()
+
+            # Re-indent to target file's leading whitespace (4 spaces per level)
+            diff_text = self._reindent_diff_to_target(diff_text, 4)
+            diff_text = diff_text.strip()
+
             patched_code = self._apply_unified_diff(original_code, diff_text)
             if patched_code and patched_code != original_code:
                 diff = self._generate_diff(original_code, patched_code)
                 changes = self._extract_changes_from_diff(diff_text, controller_file)
                 return patched_code, diff, changes, "unified diff applied"
 
-        # Try complete function replacement
-        func_match = re.search(
-            r"# FILE:.*?\n# FUNCTION: (\w+)\n```python\n(.*?)\n```",
-            response,
-            re.DOTALL,
-        )
-        if not func_match:
-            # Alternative format
-            func_match = re.search(
-                r"FUNCTION: (\w+)\n```python\n(.*?)\n```",
-                response,
-                re.DOTALL,
+        # No valid diff found - record the failure instead of silent fallback
+        # The failure will be recorded in previous_failures for next iteration
+        parse_error = "Could not extract valid unified diff from LLM response"
+        if self.previous_failures is not None:
+            self.previous_failures.append(
+                {
+                    "iteration": self.iteration,
+                    "error": parse_error,
+                    "test_output": response[:500],
+                    "verifier_feedback": "LLM response did not contain a valid unified diff",
+                }
             )
-
-        if func_match:
-            func_name = func_match.group(1)
-            new_func_code = func_match.group(2).strip()
-            patched_code = self._replace_function(
-                original_code, func_name, new_func_code
-            )
-            if patched_code and patched_code != original_code:
-                diff = self._generate_diff(original_code, patched_code)
-                changes = [
-                    {
-                        "file": controller_file,
-                        "function": func_name,
-                        "change": f"Replaced {func_name} with LLM-generated implementation",
-                        "type": "modification",
-                        "location": "function_body",
-                    }
-                ]
-                return patched_code, diff, changes, f"function {func_name} replaced"
-
         return None
 
     def _apply_unified_diff(self, original_code: str, diff_text: str) -> Optional[str]:
@@ -368,6 +406,45 @@ Return EXACTLY ONE of the above formats. NO additional text."""
             print(f"Diff application failed: {e}")
             return None
 
+    def _reindent_diff_to_target(self, diff_text: str, target_indent: int) -> str:
+        """Re-indent diff lines to match target file's indentation level.
+
+        Adjusts the indentation of added/removed/context lines in the diff
+        to match the target file's indentation level (e.g., 4 spaces per level).
+        """
+        diff_lines = diff_text.splitlines(keepends=True)
+        adjusted_lines = []
+
+        for line in diff_lines:
+            if line.startswith(("+", "-", " ")):
+                # This is a diff line (added, removed, or context)
+                # Extract the content after the diff marker
+                marker = line[0]
+                content = line[1:] if len(line) > 1 else ""
+
+                # Calculate the current indentation of the content
+                content_indent = len(content) - len(content.lstrip())
+                content_stripped = content.lstrip()
+
+                # Determine the expected indentation based on diff context
+                # For diff lines, we want to maintain the relative indentation
+                # but ensure it's aligned with target_indent
+                if content_stripped:
+                    # Adjust to target_indent while preserving relative indentation
+                    adjusted_content = " " * target_indent + content_stripped
+                else:
+                    adjusted_content = ""
+
+                adjusted_line = marker + adjusted_content
+                adjusted_lines.append(
+                    adjusted_line + ("\n" if line.endswith("\n") else "")
+                )
+            else:
+                # Hunk header or other diff metadata - keep as-is
+                adjusted_lines.append(line)
+
+        return "".join(adjusted_lines)
+
     def _replace_function(
         self, original_code: str, func_name: str, new_func_code: str
     ) -> Optional[str]:
@@ -386,6 +463,7 @@ Return EXACTLY ONE of the above formats. NO additional text."""
                     ]
                     patched_lines = lines[:start_line] + new_lines + lines[end_line:]
                     return "".join(patched_lines)
+
             return None
         except Exception:
             return None
@@ -437,7 +515,7 @@ Return EXACTLY ONE of the above formats. NO additional text."""
                 }
             )
 
-        patched_code = deterministic_coder.apply_changes(controller_code, changes)
+        patched_code = deterministic_coder._apply_changes(controller_code, changes)
         diff = self._generate_diff(controller_code, patched_code)
         return patched_code, diff, changes, "deterministic AST fallback"
 
@@ -460,6 +538,7 @@ def create_llm_coder_from_config(config: Dict[str, Any]) -> "LLMCoderAgent":
         temperature=config.get("temperature", 0.2),
         max_tokens=config.get("max_tokens", 4096),
         preflight_probe=config.get("preflight_probe", True),
+        timeout_s=config.get("timeout_s", 300.0),
         iteration=config.get("iteration", 0),
         previous_failures=config.get("previous_failures", []),
     )
@@ -474,6 +553,7 @@ def create_coder_agent(config: Dict[str, Any]):
             temperature=config.get("temperature", 0.2),
             max_tokens=config.get("max_tokens", 4096),
             preflight_probe=config.get("preflight_probe", True),
+            timeout_s=config.get("timeout_s", 300.0),
             iteration=config.get("iteration", 0),
             previous_failures=config.get("previous_failures", []),
         )

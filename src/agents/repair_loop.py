@@ -168,6 +168,7 @@ class RepairLoop:
                     scenario_config_path,
                     current_experiment_result,
                     verification_harness,
+                    state.detector_fn,
                 )
                 repair_iteration.verification_report = verification_report
 
@@ -243,6 +244,7 @@ class RepairLoop:
         scenario_config_path: str,
         before_result: ExperimentResult,
         verification_harness: VerificationHarness,
+        detector_fn: Optional[Any] = None,
     ) -> Optional[HarnessReport]:
         """Run a full experiment with the repaired controller and verify with harness."""
         try:
@@ -277,9 +279,13 @@ class RepairLoop:
                 # Run full experiment (or at least more steps)
                 after_result = runner.run(max_steps=200)
 
-                # Verify with harness
+                # Set detector on harness if available
+                if hasattr(self, "detector_fn") and self.detector_fn:
+                    verification_harness.set_detector(self.detector_fn)
+
+                # Verify with harness - pass controller code for detector
                 verification_report = verification_harness.verify_repair(
-                    before_result, after_result
+                    before_result, after_result, controller_code=controller_code
                 )
                 return verification_report
 
