@@ -186,16 +186,17 @@ Five scenarios (Table~\ref{tab:scenarios}) differ in device mix and stressors.
 Each runs ten seeds (42, 123, 456, 789, 999, 1234, 2024, 3456, 5555,
 8888) $\times$ five controllers $= 250$ runs per regime, under three regimes
 (pool TOU, LMP, bilateral P2P) for 750 runs; the legs of record are
-\texttt{matrix\_full\_postfix} (pool TOU, 250 runs, the post-fix D block
-included), \texttt{m52\_benchmark} (LMP, A/B/C/E plus the scenario-D re-run
-under LMP; the directory name is a legacy of its M5.2 origin), and
-\texttt{matrix\_p2p} (P2P, A/B/C/E plus the scenario-D re-run under P2P).
-\texttt{matrix\_full} and \texttt{matrix\_full\_postfix} are two versions of
-the same pool-TOU leg (postfix carries the post-fix D block and is the leg of
-record), and \texttt{matrix\_d\_rerun} duplicates postfix's D block, so neither
-is added on top of the 750. An energy-sharing configuration defect was found
-and fixed and scenario D's rows are cited from the post-fix re-run in all three
-regimes; D's rows are settlement-inclusive, A/B/C/E report grid-only cost. A
+\texttt{matrix\_full} (pool TOU, A/B/C/E) plus \texttt{matrix\_d\_rerun} (D),
+\texttt{m52\_benchmark} (LMP, A/B/C/E; the directory name is a legacy of its
+M5.2 origin) plus \texttt{matrix\_d\_rerun\_lmp} (D), and
+\texttt{matrix\_p2p} (P2P, A/B/C/E) plus \texttt{matrix\_d\_rerun\_p2p} (D).
+An energy-sharing configuration defect was found and fixed; the settlement fix
+is not in the \texttt{matrix\_full} or \texttt{m52\_benchmark} lineages, so
+their D blocks are pre-fix and superseded, and scenario D's rows are cited
+from the 150-run re-run (5 controllers $\times$ 10 seeds $\times$ 3 regimes) in
+all three regimes. Postfix copies and the \texttt{matrix\_d\_rerun} pool-TOU
+block duplicate D rows and are never added on top of the 750. D's rows are
+settlement-inclusive, A/B/C/E report grid-only cost. A
 further 50-run fallback-mode
 ablation and a 150-cell real-LLM screen (100 LLM-arm and 50 reference cells,
 24 simulated steps) isolate verification machinery from proposer quality, and a
@@ -599,7 +600,12 @@ results.
 \caption{M2b hostile-proposer study, recomputed from run manifests and
 \texttt{result.json} (provenance: \texttt{docs/count\_audit/table7\_rebuilt.md};
 per-cell values: \texttt{docs/reviewer\_response/e1\_cells.csv}; aggregation
-decision: \texttt{docs/reviewer\_response/m2b\_aggregation\_decision.md}).
+decision: \texttt{docs/reviewer\_response/m2b\_aggregation\_decision.md}). Chosen F7
+basis, one cell set per quoted number and never mixed: on-disk manifests, with
+the keep-13 set (13 cells, 312 steps) carrying both the fallback and the cost
+rows and the as-run all-15 set (15 cells, 360 steps) quoted for both of its own
+rows; the archive-substituted construction (18/360) is invalid because the
+archive holds round-1 degraded copies, not the in-place re-run.
 Definitions and denominators, stated once: ``fallback steps'' is the recorded
 \texttt{llm\_fallback\_steps} counter summed over the cell set (denominator =
 24 steps $\times$ cells in the set), and ``cost'' is the mean per-cell
