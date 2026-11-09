@@ -103,14 +103,84 @@ seeds.
 \section{Introduction}
 \label{sec:intro}
 
-Renewable energy communities (RECs) require coordinated control of distributed energy resources (DERs) under physical grid constraints, service-level commitments, and time-varying pricing regimes. Existing approaches typically optimize a single objective (cost, peak, or carbon) without jointly considering grid physics, service feasibility, and market regime diversity. Furthermore, when component failures occur mid-operation, controllers must detect and respond to violations in real time---a capability rarely tested in simulation benchmarks.
+Renewable energy communities (RECs) require coordinated control of distributed
+energy resources (DERs) under physical grid constraints, service-level
+commitments, and a market mechanism that prices energy. Existing approaches
+typically optimize a single objective (cost, peak, or carbon) within one fixed
+setting --- one tariff, one device mix, one assumption that controllers execute
+what they compute. Three research questions follow, each established by a
+distinct literature, and this paper answers the parts of them our experiments
+actually support.
 
-We address three gaps:
-\begin{enumerate}
-    \item \textbf{Pricing regime diversity}: most benchmarks fix a single tariff structure; we evaluate the full controller matrix under pool TOU, LMP, and bilateral P2P regimes, and separate dispatch sensitivity from billing sensitivity --- only price-aware controllers change dispatch across regimes, while cost is a function of prices on any fixed trajectory.
-    \item \textbf{Failure injection}: scenario E injects PV inverter, battery, EV charger, and sensor failures at severity 1.0 mid-run plus a grid-service limit reduction to 95\% of the import limit (the paper's aggressive configuration, identical in all three regime legs), and we report oracle-side detection, grid-level detection, and recovery separately for the failure types as configured.
-    \item \textbf{Verified LLM dispatch agents}: a per-step verification layer (asset-shape and device-power bounds) with one corrective re-prompt and a deterministic replacement guards LLM dispatch proposals. We ablate verified vs.\ unverified arms under a deterministic proposer, a hosted LLM, and a deliberately out-of-bounds ``hostile'' proposer, so that verification is measured where it can actually engage. The five-agent code-repair loop (Planner$\rightarrow$Coder$\rightarrow$Executor$\rightarrow$Verifier$\rightarrow$Reporter) is implemented and instrumented, but its behaviour-changing code patches are scaffolded rather than demonstrated; a code-repair benchmark is future work.
-\end{enumerate}
+\textbf{(1) Pricing-regime diversity.} Community-control benchmarks and datasets
+fix a single price-formation mechanism: the CityLearn challenge series ships
+time-of-use tariffs; ElecBench scores power-dispatch knowledge under fixed
+assumptions \cite{zhou2025elecbench}; PowerAgentBench-SS scores tool-using
+agents on steady-state studies \cite{mylonas2026poweragentbench}; distributed
+MPC and dual-decomposition formulations \cite{yfantis2024dual, su2021dual} take
+the price signal as given. The unresolved question is whether a controller's
+\emph{dispatch} and its \emph{billed cost} respond differently when the
+mechanism changes --- comparisons that price one fixed trajectory under two
+series cannot separate the two responses, and dispatch identity never implies
+cost identity. Our finding, over a 750-run matrix (5 scenarios $\times$ 5
+controllers $\times$ 10 seeds $\times$ 3 regimes) plus a 150-run scenario-D
+re-run, is the separation itself: only the price-aware controllers (MPC, RL)
+change dispatch across regimes, the price-insensitive heuristics dispatch
+identically, the LMP price series reaches the bills only where settlement and
+dynamic pricing are active (scenario D), and bilateral P2P clearing
+redistributes member bills while the A/B/C/E community aggregate is
+bit-identical to pool clearing. The contribution is the dispatch/billing
+separation and the mechanism account of which regime reaches the bills, not a
+TOU-versus-LMP cost comparison.
+
+\textbf{(2) Failure injection.} Injection itself is standard practice in
+power-systems and building-simulation benchmarks and measures the scenario,
+not the agent. The research question is the four-step chain a controller must
+complete: identify the failure type, localise the affected controller, produce
+an effective repair, and maintain grid constraints and participant service
+after the repair; no benchmark in this literature reports the chain. We measure
+the chain and state our position on each step. Scenario E injects PV inverter,
+battery, EV-charger and sensor failures at severity 1.0 plus a grid-service
+limit reduction, in 150 runs across all three regime legs. Identification at
+the grid level is \emph{empty} --- power flow converges in every step of all
+150 runs with zero voltage, line and transformer violations and zero
+re-dispatches, so no controller observes the failures and detection is
+configuration-oracle only. Localisation is oracle-side only, by construction of
+the injection. Repair is \emph{not demonstrated}: the commissioned code-repair
+benchmark measured zero of nine seeded defects repaired with the current
+pipeline, so the repair workflow is reported as scaffolded, not demonstrated.
+Maintaining constraints and service is trivially satisfied because no injected
+failure produced a violation in these runs. We claim no detection and no
+recovery for any failure type.
+
+\textbf{(3) Verified LLM code agents.} This is the paper's contribution.
+Control code is executable, so an emitted ``change'' that does not change
+behaviour is not a repair: without an executable check the failure mode is
+silent. Our own instrumented coder produced comment-level patches until an
+AST-transformation layer was restored, and the ten-task code-repair benchmark
+measured zero of nine measured repairs with a hosted model in the loop, because
+the model emitted change descriptions while the edit was applied by a fixed
+transformation vocabulary. Adjacent verification layers exist in the
+literature --- solver-grounded reporting \cite{rojas2026smartgridllm},
+intent-driven separation of planning from solver-side execution
+\cite{mao2026intent}, and runtime interception of proposed actions against
+derived specifications \cite{batole2026refineact} --- but none measures whether
+agent-generated \emph{code} changes behaviour, and none prices the
+verification layer against a deterministic alternative. We therefore separate
+the loop into five specialised agents rather than one agent plus a
+deterministic verifier: the Planner diagnoses the violation set and targets
+functions, the Coder generates the change, the Executor runs the patched
+controller in a sandbox with the real test suite, the Verifier checks violation
+resolution against held-harmless service criteria, and the Reporter emits a
+machine-readable per-iteration audit; the decomposition puts a deterministic
+checkpoint at every boundary and makes each stage independently auditable. The
+workflow's value is then measurable, and we measure it: the verification
+machinery is a no-op under an in-bounds proposer (a safety-metrics null,
+reported as such) and engages fully under a deliberately out-of-bounds
+proposer --- the verified arm accepted zero out-of-bounds proposals in every
+kept cell, 13/13 paired directional wins, exact sign test $p = 2.4 \times
+10^{-4}$ (reference-only). That is runtime proposal verification measured
+against ground truth, which is what this paper contributes.
 
 Related work spans four areas. For building- and home-scale agentic energy management, tool-calling ReAct agents convert natural-language requests into appliance schedules over dynamic tariffs and PV forecasts \cite{jonah2026agentic}; hierarchical agentic HEMS put the LLM in the decision loop \cite{elmakroum2026agentic}; and multi-agent assistants add conversational interfaces with domain-specific tool registries \cite{jung2026hema}. A recent synthesis of smart-grid LLM agents states the solver-grounded principle we instantiate --- a numerical result is reported only when it comes from a trusted tool and passes verification \cite{rojas2026smartgridllm}. For verification of agent actions, intent-driven workflows separate LLM planning from solver-side execution and gate results on state-dependent constraint checks \cite{mao2026intent}, and runtime verification intercepts proposed actions against derived specifications \cite{batole2026refineact}. For benchmarking, ElecBench scores power-dispatch knowledge \cite{zhou2025elecbench} and PowerAgentBench-SS scores tool-using agents on steady-state studies with evidence logs and risk-sensitive metrics \cite{mylonas2026poweragentbench}; neither covers failure injection or settlement, which this matrix adds. Multi-agent systems for smart grids are surveyed in \cite{izmirlioglu2024mas}. Finally, dual decomposition for distributed MPC, including asynchrony and inexact subproblem solves, is benchmarked and analysed in \cite{yfantis2024dual, su2021dual}. Simulation and validation build on CityLearn \cite{citylearn2021} and pandapower \cite{pandapower2018}, with model-predictive control \cite{mpc2020}, tabular RL \cite{acmenergy2022}, AST-based patching \cite{ast2020}, and the Holm correction for multiple comparisons \cite{holm1979}.
 
