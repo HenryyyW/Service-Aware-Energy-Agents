@@ -303,7 +303,7 @@ class ForcedPlanner:
         return getattr(self._inner, name)
 
 
-def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
+def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
     from src.agents.multi_agent_loop import MultiAgentRepairLoop
     from src.agents.planner import PlannerAgent
 

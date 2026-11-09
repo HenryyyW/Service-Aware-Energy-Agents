@@ -116,11 +116,11 @@ def create_backend_from_config(config: Dict[str, Any]) -> "AgentBackend":
         }
         backend_config = {k: v for k, v in backend_config.items() if k in allowed_keys}
         # Map dashscope_api_key to api_key for ApiPromptCallable
-        if "dashscope_api_key" in backend_config:
+        if backend_config.get("dashscope_api_key"):
             backend_config["api_key"] = backend_config.pop("dashscope_api_key")
-        elif "nvidia_api_key" in backend_config:
+        elif backend_config.get("nvidia_api_key"):
             backend_config["api_key"] = backend_config.pop("nvidia_api_key")
-        elif "openai_api_key" in backend_config:
+        elif backend_config.get("openai_api_key"):
             backend_config["api_key"] = backend_config.pop("openai_api_key")
         # Remove all api key aliases that were used for mapping
         backend_config.pop("dashscope_api_key", None)

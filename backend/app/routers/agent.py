@@ -746,7 +746,7 @@ async def _run_agent_task(
             controller_file="src/controllers/__init__.py",
             scenario_config=scenario_config.model_dump(),
             scenario_config_path=scenario_path,
-            max_iterations=3,
+            max_iterations=5,
             project_root=PROJECT_ROOT,
         )
 
