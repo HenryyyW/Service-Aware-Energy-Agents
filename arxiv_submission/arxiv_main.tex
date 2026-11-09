@@ -186,13 +186,16 @@ Five scenarios (Table~\ref{tab:scenarios}) differ in device mix and stressors.
 Each runs ten seeds (42, 123, 456, 789, 999, 1234, 2024, 3456, 5555,
 8888) $\times$ five controllers $= 250$ runs per regime, under three regimes
 (pool TOU, LMP, bilateral P2P) for 750 runs; the legs of record are
-\texttt{matrix\_full} (pool TOU, A/B/C/E), \texttt{m52\_benchmark} (LMP,
-A/B/C/E; the directory name is a legacy of its M5.2 origin), and
-\texttt{matrix\_p2p} (P2P, A/B/C/E), with scenario D's 150 rows cited from the
-dedicated re-run (\texttt{matrix\_d\_rerun}$\{$,\_lmp,\_p2p$\}$) in all three
-regimes, because an energy-sharing configuration defect was found and fixed and
-the matrix legs' D blocks predate that fix. D's rows are settlement-inclusive
-on the re-run basis; A/B/C/E report grid-only cost. A
+\texttt{matrix\_full\_postfix} (pool TOU, 250 runs, the post-fix D block
+included), \texttt{m52\_benchmark} (LMP, A/B/C/E plus the scenario-D re-run
+under LMP; the directory name is a legacy of its M5.2 origin), and
+\texttt{matrix\_p2p} (P2P, A/B/C/E plus the scenario-D re-run under P2P).
+\texttt{matrix\_full} and \texttt{matrix\_full\_postfix} are two versions of
+the same pool-TOU leg (postfix carries the post-fix D block and is the leg of
+record), and \texttt{matrix\_d\_rerun} duplicates postfix's D block, so neither
+is added on top of the 750. An energy-sharing configuration defect was found
+and fixed and scenario D's rows are cited from the post-fix re-run in all three
+regimes; D's rows are settlement-inclusive, A/B/C/E report grid-only cost. A
 further 50-run fallback-mode
 ablation and a 150-cell real-LLM screen (100 LLM-arm and 50 reference cells,
 24 simulated steps) isolate verification machinery from proposer quality, and a
@@ -595,16 +598,23 @@ results.
 \centering
 \caption{M2b hostile-proposer study, recomputed from run manifests and
 \texttt{result.json} (provenance: \texttt{docs/count\_audit/table7\_rebuilt.md};
-per-cell values: \texttt{docs/reviewer\_response/e1\_cells.csv}). Headline =
-KEEP cells under the rule \texttt{llm\_backend\_errors} $\leq 2$ AND
-\texttt{llm\_calls} $\geq$ steps AND telemetry recorded, per epoch and never
-pooled (detection 15/15; recovery 13/15 after a confirmation re-run of the
-three quarantined cells was applied in place: C/42 promoted at 0 errors, C/123
-and E/42 remain quarantined at 3 endpoint errors and are published per cell, not
-pooled). Repair success in the detection epoch is derived (720 repair iterations
-minus 360 deterministic replacements; the recorded field is null in that build).
+per-cell values: \texttt{docs/reviewer\_response/e1\_cells.csv}; aggregation
+decision: \texttt{docs/reviewer\_response/m2b\_aggregation\_decision.md}).
+Definitions and denominators, stated once: ``fallback steps'' is the recorded
+\texttt{llm\_fallback\_steps} counter summed over the cell set (denominator =
+24 steps $\times$ cells in the set), and ``cost'' is the mean per-cell
+\texttt{total\_cost}. Headline = KEEP cells under the rule
+\texttt{llm\_backend\_errors} $\leq 2$ AND \texttt{llm\_calls} $\geq$ steps AND
+telemetry recorded, per epoch and never pooled (detection 15/15 cells; recovery
+13/15 cells, denominator 312 steps, after a confirmation re-run of the three
+quarantined cells was applied in place: C/42 promoted at 0 errors, C/123 and
+E/42 remain quarantined at 3 endpoint errors and are published per cell, not
+pooled). The unfiltered as-run sets are published alongside for audit
+(detection: 360/360 steps, 203.44 USD; recovery: 15/360 steps, 442.11 USD).
+Repair success in the detection epoch is derived (720 repair iterations minus
+360 deterministic replacements; the recorded field is null in that build).
 Reference = the 15 deterministic \texttt{multi\_agent} cells at the M2b seeds
-reused from the M2a screen.}
+(42/123/456 across the five scenarios) reused from the M2a screen.}
 \label{tab:m2b}
 \begin{tabular}{lccc}
 \toprule
@@ -616,8 +626,8 @@ Unsafe acceptance, verified (per step) & 0.0000 & 0.0000 & --- \\
 Paired directional wins & 15/15 & 13/13 & --- \\
 Bound-violation detections (per cell) & 24/24 & 24/24 & --- \\
 Repair success rate (verified) & 0.500 (derived) & 0.909--1.000 (mean 0.970) & --- \\
-Fallback steps (verified total) & 360/360 & 9/312 & --- \\
-Cost, verified (USD, mean) & 203.44 & 440.85 & 65.52 \\
+Fallback steps (verified total) & 360/360 (all 15 cells) & 9/312 (13 keep; 15/360 as-run all-15) & --- \\
+Cost, verified (USD, mean) & 203.44 (all 15 cells) & 440.85 (13 keep; 442.11 as-run all-15) & 65.52 \\
 Cost, unverified (USD, mean) & 440.79 & 437.15 & --- \\
 \bottomrule
 \end{tabular}

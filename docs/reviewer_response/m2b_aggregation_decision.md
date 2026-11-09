@@ -57,6 +57,28 @@ archived degraded cell back in. Rebuilt from the on-disk state below.
 
 Sign test on the 13 recovery pairs: two-sided p = 2.4e-4 (exact, reference only).
 
+## Reconciliation with QA (2026-11-09, after QA's regenerated table7_rebuilt.md)
+
+QA's regenerated `docs/count_audit/table7_rebuilt.md` (origin/main) now carries
+the archive correction and the same on-disk numbers this doc derives:
+detection raw 360/360 + 203.44; recovery as-run all-15 15/360 + 442.11;
+recovery keep-13 9/312 + 440.85. **Definition and denominator, stated once:**
+"fallback steps" = the recorded `llm_fallback_steps` counter summed over the
+cell set (denominator 24 steps x cells in the set); "cost" = mean per-cell
+`total_cost`. Headline basis = KEEP cells per epoch; the as-run all-15 values
+are published alongside. The paper's Table 7 quotes both bases in the two
+affected rows and the caption states the definition, so the earlier
+events-vs-steps ambiguity is closed. This closes the Partner's pre-paper
+reconciliation condition (no epoch number is quoted from a disagreeing set).
+
+Reference row: 65.52 USD is the mean `total_cost` of the 15 deterministic
+`multi_agent` cells at the M2b seeds (42/123/456 across the five scenarios) in
+`experiments/m2a_rerun_laguna` — verified on the complete tree (50
+`multi_agent` cells, 10 seeds; the 15-cell M2b-seed mean equals the 50-cell
+mean). Note for QA's audit: a partial `experiments/` extraction (28
+`multi_agent` cells, 7 at the M2b seeds) reproduces neither figure — audits
+must run against a complete `experiments/` tree or a release artifact.
+
 ## What was untraceable and is replaced
 
 - Table detection column "18/360" → raw **360/360** (every step ended on the
