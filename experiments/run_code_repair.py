@@ -111,6 +111,25 @@ def build_nim_backend():
     )
 
 
+def _configured_backend_ok() -> bool:
+    """True when the product path (LLMConfig.create_backend from env) builds a
+    usable backend for the configured model/endpoint (A's registry fix)."""
+    try:
+        from src.agents.backend.config import LLMConfig
+
+        backend = LLMConfig().create_backend()
+        # the registry still maps the present-but-None dashscope key first, so
+        # the built backend can carry api_key=None -> unusable for NIM
+        if backend is not None and not getattr(backend, "api_key", None):
+            print("configured backend path unusable (backend built with api_key=None: "
+                  "registry maps the None-valued dashscope key before nvidia)")
+            return False
+        return backend is not None
+    except Exception as exc:  # noqa: BLE001
+        print(f"configured backend path unusable ({type(exc).__name__}: {exc})")
+        return False
+
+
 def preflight_probe_explicit() -> bool:
     """1-token probe through the explicit NIM backend (the injection path the
     LLM arm uses, because LLMConfig.create_backend() is broken - see report)."""
@@ -347,11 +366,16 @@ def run_cell(task, max_iterations: int = 3, sandbox: bool = True) -> dict:
             "use_llm_coder": True,
             "preflight_probe": True,
             "temperature": 0.2,
-            "backend": build_nim_backend(),
-            "wiring_workaround": (
-                "explicit backend injection: LLMConfig.create_backend() raises "
-                "TypeError (openai_api_key -> ApiPromptCallable) and "
-                "LLMCoderAgent falls back to the keyless env path"
+            # preferred: the product path (AGENT_BACKEND / LLM_* env) - A's
+            # registry fix (origin/main a08a1fdd1) made it reach NIM; the
+            # explicit injection stays only as a recorded fallback
+            **(
+                {}
+                if _configured_backend_ok()
+                else {
+                    "backend": build_nim_backend(),
+                    "wiring_workaround": "explicit backend injection (configured path failed)",
+                }
             ),
         }
         if ARM == "llm"
