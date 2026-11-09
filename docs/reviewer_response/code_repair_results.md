@@ -204,29 +204,52 @@ loop still falsely claims success on it.
 deterministic path. If any of this is quoted in the paper, the two arms are
 published unpooled with these exact per-cell rows.
 
-## Deterministic-arm validation against origin/main 7980673a8f (A's crash-tracking fix)
+## Rearm re-run on origin/fix/llm-real-code-path + origin/main (user envelope: <= 10 tasks x <= 5 iterations, laguna/NIM only)
 
-Re-ran the deterministic comparator (10 cells, zero LLM calls) after A's
-dynamic-path crash tracking (`controller_crashed` / `crash_error` in the
-sandbox; the verifier treats a crashed controller as absent execution).
-Result: **7/10 loop/driver agreement** (was 0/10): the seven cells whose
-patches crash (tasks 1-5, 8, 9) now get `loop_claimed_success=False`, matching
-the driver rejection. The three remaining disagreements are a different,
-narrower class: patches that **execute cleanly but do not repair the defect**
-(tasks 6, 7 - the patch runs, the behaviour is unchanged; task 10 - the
-negative control, correctly unrepaired). Those still get
-`loop_claimed_success=True` because the loop's verifier checks "no violations
-in the sandbox experiment" rather than "the defect is fixed" - the probe
-config produces zero grid violations in both the broken and patched runs, so
-an unrepaired patch reads as a resolution. That is an acceptance-path design
-gap, not a crash.
+Branch state: A's rearm (`d2c171567` real-code path with test-driven prompt and
+loop feedback; `75dafe541` max-iterations 5; `e1e709db3` registry truthiness key
+fix) merged with `origin/main` for the acceptance-path crash tracking
+(`9f0929041`) - the rearm branch alone lacked it, which reproduced the 0/10
+false-positive pattern. Driver: hardened to record an unparsable patch as
+criterion (a)=False and continue (the first rearm cell raised IndentationError
+inside the driver); LLM arm now runs through the **product path**
+(`AGENT_BACKEND=api:poolside/laguna-xs-2.1` + NIM key from the key store,
+`DASHSCOPE_API_KEY` unset) with the explicit injection only as a recorded
+fallback - the product path built and authenticated in this run (0 injection).
 
-Also validated on this main: the configured `AGENT_BACKEND` path builds the
-NIM backend (no TypeError any more), but it still carries `api_key=None`
-because the registry maps the present-but-None `dashscope_api_key` before
-`nvidia_api_key` - so the LLM arm still needs the explicit injection until
-that mapping order is fixed (reported to A with the reproduction; the driver
-now prefers the product path and falls back with the reason recorded).
+| Task | deterministic: keep / loop | LLM: keep / loop | LLM coder source | LLM calls | criteria (a/b/c/d/e/f) | patched outcome |
+|---|---|---|---|---|---|---|
+| task_1_ev_deadline_soc | False / False | False / **True** | deterministic | 2 | N/N/N/Y/Y/? | patch does not parse (IndentationError) |
+| task_2_ev_urgent_power | False / False | False / **True** | deterministic | 2 | N/N/N/Y/Y/? | does not parse (IndentationError) |
+| task_3_battery_soc_floor | False / False | False / **True** | deterministic | 2 | N/N/N/Y/Y/? | does not parse (SyntaxError) |
+| task_4_import_limit | False / False | False / **True** | deterministic | 2 | N/N/N/Y/Y/? | does not parse (IndentationError) |
+| task_5_export_limit | False / False | False / **True** | deterministic | 2 | N/N/N/Y/Y/? | does not parse (IndentationError) |
+| task_6_voltage_response | False / True | False / False | LLM | 2 | Y/Y/N/Y/N/N | parses and runs, does not repair (2.50 vs expected 2.0x) |
+| task_7_line_loading_response | False / True | False / **True** | deterministic | 2 | N/N/N/Y/Y/? | does not parse (IndentationError) |
+| task_8_flex_deadline | False / False | False / **True** | deterministic | 2 | N/N/N/Y/Y/? | does not parse (SyntaxError) |
+| task_9_overcharge_spike | False / False | False / **True** | deterministic | 2 | N/N/N/Y/Y/? | does not parse (IndentationError) |
+| task_10_NEG (negative control) | False / True | False / **True** | deterministic | 2 | N/N/N/Y/Y/Y | does not parse (IndentationError) |
+
+**Headline: 0 of 9 measured repairs in BOTH arms** (pre-registered threshold
+>= 7/9 not met, reported either way). LLM arm used **20 calls total**
+(1 pre-flight + 1 coder call per cell - the loop stopped after one iteration on
+each cell because it declared success), **0 backend errors**, product path
+authenticated (model digest `poolside/laguna-xs-2.1`).
+
+**Findings from the rearm (both A-side):**
+1. The real-code path's LLM output is **syntactically invalid Python in 9 of 10
+   cells** (IndentationError/SyntaxError on parse), so the coder falls back to
+   the deterministic vocabulary path on those cells - the rearm changed nothing
+   about the 0/9 outcome but produced a sharper diagnosis: the model's
+   real-code generations do not parse.
+2. The loop's acceptance path still claims success on 9 of 10 LLM-arm cells
+   whose final patches do not parse - the same class as the deterministic arm's
+   remaining false positives: the loop does not apply the same
+   syntax/behaviour validity check the driver does. Driver criteria (a)-(f)
+   remain the acceptance of record and reject 10/10 in both arms.
+
+**Paper consequence unchanged:** the code-repair claim stays "scaffolded, not
+yet demonstrated"; both arms published unpooled.
 
 ## Recommendation
 
