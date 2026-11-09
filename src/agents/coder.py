@@ -466,6 +466,30 @@ class CoderAgent:
 
     # --- Voltage Transformation Implementations ---
 
+    def _find_insertion_point(self, func_node: ast.FunctionDef) -> int:
+        """Find the correct insertion point in a function body.
+
+        Returns the index after all initial variable assignments but before
+        any control flow statements (if, for, while, return, etc.).
+        """
+        # Find the last assignment/definition at the top level of the function
+        insert_idx = 0
+        for i, stmt in enumerate(func_node.body):
+            # Stop at first control flow statement
+            if isinstance(
+                stmt,
+                (ast.If, ast.For, ast.While, ast.Return, ast.Try, ast.With, ast.Raise),
+            ):
+                break
+            # Count assignments and variable definitions as "top-level definitions"
+            if isinstance(stmt, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+                insert_idx = i + 1
+            # Also count simple expressions that might be variable definitions
+            elif isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
+                # Could be a function call that initializes something
+                insert_idx = i + 1
+        return insert_idx
+
     def _add_voltage_monitoring_and_reduction(self, func_node: ast.FunctionDef) -> None:
         """Add voltage monitoring and triggered load reduction for overvoltage/undervoltage."""
         # Build AST nodes for voltage monitoring from textwrap.dedent + ast.parse
@@ -487,8 +511,10 @@ class CoderAgent:
                         undervoltage = True
         """)
         monitoring_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(monitoring_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     def _add_voltage_triggered_load_reduction(self, func_node: ast.FunctionDef) -> None:
         """Add voltage-triggered load reduction when voltage exceeds limits."""
@@ -555,8 +581,10 @@ class CoderAgent:
                     max_line_loading = max(max_line_loading, loading)
         """)
         monitoring_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(monitoring_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     def _add_load_redistribution(self, func_node: ast.FunctionDef) -> None:
         """Add load redistribution for overloaded lines."""
@@ -622,8 +650,10 @@ class CoderAgent:
                     max_transformer_loading = max(max_transformer_loading, loading)
         """)
         monitoring_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(monitoring_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     def _add_proportional_load_reduction(self, func_node: ast.FunctionDef) -> None:
         """Add proportional load reduction when transformer loading > 90%."""
@@ -687,8 +717,10 @@ class CoderAgent:
         minutes_remaining = hours_remaining * 60
         """)
         precise_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(precise_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     def _add_early_charging_for_low_soc(self, func_node: ast.FunctionDef) -> None:
         """Start charging earlier when SOC is low."""
@@ -702,8 +734,10 @@ class CoderAgent:
             charge_kw = max_charge * 0.5
         """)
         early_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(early_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     def _add_max_power_for_urgent_deadline(self, func_node: ast.FunctionDef) -> None:
         """Use maximum available power when deadline < 2 hours."""
@@ -713,8 +747,10 @@ class CoderAgent:
             charge_kw = max_charge
         """)
         max_power_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(max_power_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     def _add_ev_prioritization_by_departure(self, func_node: ast.FunctionDef) -> None:
         """Prioritize EVs by departure time (earliest first)."""
@@ -723,8 +759,10 @@ class CoderAgent:
         pass  # Would require sorting EV actions by departure time
         """)
         prioritize_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(prioritize_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     # --- Comfort Transformation Implementations ---
 
@@ -737,8 +775,10 @@ class CoderAgent:
             power_kw = fl.power_kw
         """)
         precond_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(precond_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     def _add_wider_deadband(self, func_node: ast.FunctionDef) -> None:
         """Widen temperature deadband during peak pricing."""
@@ -753,8 +793,10 @@ class CoderAgent:
             temp_max = 25.0
         """)
         deadband_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(deadband_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     def _add_thermal_mass_load_shifting(self, func_node: ast.FunctionDef) -> None:
         """Use thermal mass for load shifting."""
@@ -768,8 +810,10 @@ class CoderAgent:
             power_kw = fl.power_kw
         """)
         thermal_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(thermal_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     # --- Battery SOC Transformation Implementations ---
 
@@ -784,8 +828,10 @@ class CoderAgent:
             effective_soc_min = battery.soc_min
         """)
         reserve_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(reserve_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     def _add_soc_forecast(self, func_node: ast.FunctionDef) -> None:
         """Implement SOC forecast based on net load prediction."""
@@ -796,8 +842,10 @@ class CoderAgent:
         predicted_soc = current_soc - (avg_net_demand * forecast_hours / capacity_kwh)
         """)
         forecast_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(forecast_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     def _add_emergency_reserve(self, func_node: ast.FunctionDef) -> None:
         """Maintain emergency reserve (10-15%) at all times."""
@@ -807,8 +855,10 @@ class CoderAgent:
         effective_soc_min = max(battery.soc_min, emergency_reserve)
         """)
         reserve_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(reserve_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     # --- Flexible Load Transformation Implementations ---
 
@@ -822,8 +872,10 @@ class CoderAgent:
         )
         """)
         edf_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(edf_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     def _add_proportional_power_allocation(self, func_node: ast.FunctionDef) -> None:
         """Allocate power proportional to urgency."""
@@ -835,8 +887,10 @@ class CoderAgent:
             allocated_power = fl.power_kw * (urgency / total_urgency)
         """)
         prop_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(prop_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     def _add_deadline_tracking(self, func_node: ast.FunctionDef) -> None:
         """Add deadline tracking and alerts."""
@@ -846,8 +900,10 @@ class CoderAgent:
             pass  # Would trigger alert in production
         """)
         tracking_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(tracking_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     # --- Grid Import/Export Transformation Implementations ---
 
@@ -897,8 +953,10 @@ class CoderAgent:
                     a.value_kw *= 1.5
         """)
         discharge_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(discharge_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     def _add_export_limit_enforcement(self, func_node: ast.FunctionDef) -> None:
         """Enforce community export limit from scenario config."""
@@ -928,8 +986,10 @@ class CoderAgent:
                     pass  # PV curtailment handled at inverter level
         """)
         curtail_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(curtail_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     def _add_battery_charge_for_excess_pv(self, func_node: ast.FunctionDef) -> None:
         """Charge batteries to absorb excess generation instead of exporting."""
@@ -957,8 +1017,10 @@ class CoderAgent:
             return self._get_safe_fallback_actions()
         """)
         precheck_ast = ast.parse(snippet)
+        insert_idx = self._find_insertion_point(func_node)
         for stmt in reversed(precheck_ast.body):
-            func_node.body.insert(0, stmt)
+            func_node.body.insert(insert_idx, stmt)
+            insert_idx += 1
 
     def _add_power_flow_fallback(self, func_node: ast.FunctionDef) -> None:
         """Fallback to safe actions if power flow fails."""

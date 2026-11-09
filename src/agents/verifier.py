@@ -160,6 +160,24 @@ class VerifierAgent:
         violation_counts = test_results.get("violation_counts", {})
         check_categories = test_results.get("check_categories", [])
 
+        # Check for absent execution (controller took no actions)
+        action_counts = test_results.get("action_counts", {})
+        steps_with_actions = action_counts.get("steps_with_actions", 0)
+        total_actions = action_counts.get("total_actions", 0)
+        if steps_with_actions == 0 or total_actions == 0:
+            remaining.append(
+                {
+                    "issue": "absent_execution",
+                    "reason": "Controller took no actions during experiment (absent execution)",
+                    "severity": "critical",
+                }
+            )
+            return False, remaining, new_violations
+
+        # Check violation counts from sandbox experiment
+        violation_counts = test_results.get("violation_counts", {})
+        check_categories = test_results.get("check_categories", [])
+
         # Check if violations in checked categories are resolved
         primary_issue = plan.primary_issue
         violations_resolved = True
