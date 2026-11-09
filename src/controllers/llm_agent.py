@@ -676,10 +676,16 @@ class LLMAgentController(BaseController):
                 # out-of-bounds values are only counted, never corrected here.
                 actions = proposed
                 violations = 0
+                valid_values = 0
                 for action in actions:
                     limit = self._asset_power_limit(action.asset_id)
                     if limit is not None and abs(action.value_kw) > limit + 1e-9:
                         violations += 1
+                    else:
+                        valid_values += 1
+                if not hasattr(self, "first_attempt_valid_values"):
+                    self.first_attempt_valid_values = 0
+                self.first_attempt_valid_values += valid_values
                 if violations:
                     self.unrepaired_violations += violations
                 else:
@@ -687,6 +693,15 @@ class LLMAgentController(BaseController):
         else:
             # Using FallbackBackend or no backend - use fallback actions
             actions = self._fallback_actions(observations, timestep)
+            # Count valid values in fallback actions
+            valid_values = 0
+            for action in actions:
+                limit = self._asset_power_limit(action.asset_id)
+                if limit is None or abs(action.value_kw) <= limit + 1e-9:
+                    valid_values += 1
+            if not hasattr(self, "first_attempt_valid_values"):
+                self.first_attempt_valid_values = 0
+            self.first_attempt_valid_values += valid_values
             self.first_attempt_valid += 1
 
         return self._create_requested_actions(actions)
@@ -738,6 +753,10 @@ class LLMAgentController(BaseController):
     def agent_stats(self) -> Dict[str, Any]:
         """Runtime accounting for result.json / manifest.json."""
         samples = sorted(self._latency_samples_ms)
+        # Count total valid values (for value-granularity comparison across arms)
+        total_valid_values = getattr(self, "first_attempt_valid_values", 0)
+        # Estimate total possible values (actions per step * steps) for rate calculation
+        # We'll use a conservative estimate based on steps * avg_actions_per_step
         return {
             "agent_backend": self.agent_backend,
             "agent_model": self.agent_model(),
@@ -751,6 +770,9 @@ class LLMAgentController(BaseController):
             "total_steps": self.total_steps,
             "first_attempt_validity": (
                 self.first_attempt_valid / self.total_steps if self.total_steps else 0.0
+            ),
+            "first_attempt_valid_values": getattr(
+                self, "first_attempt_valid_values", 0
             ),
             "repair_iterations": self.repair_iterations,
             "llm_calls": self.llm_calls,
@@ -830,6 +852,15 @@ class LLMVerifiedController(LLMAgentController):
         actions = proposed
         issues = self._validation_issues(actions)
         if not issues:
+            # Count in-bound values on first attempt (value granularity, not just step)
+            valid_values = 0
+            for action in actions:
+                limit = self._asset_power_limit(action.asset_id)
+                if limit is None or abs(action.value_kw) <= limit + 1e-9:
+                    valid_values += 1
+            if not hasattr(self, "first_attempt_valid_values"):
+                self.first_attempt_valid_values = 0
+            self.first_attempt_valid_values += valid_values
             self.first_attempt_valid += 1
             return self._create_requested_actions(actions)
         for category in {category for category, _ in issues}:
