@@ -591,6 +591,15 @@ Return ONLY the unified diff. NO additional text."""
         if additions == 0 and deletions == 0:
             return False
 
+        # Check for additions-only or deletions-only (both suggest malformed diff)
+        # A valid unified diff should have BOTH additions and deletions
+        if additions > 0 and deletions == 0:
+            return (
+                False  # Additions-only suggests whole-function dump, not a proper diff
+            )
+        if deletions > 0 and additions == 0:
+            return False  # Deletions-only is also malformed
+
         # Check for wildly unbalanced hunks (more than 10:1 ratio suggests malformed)
         if additions > 0 and deletions > 0:
             ratio = max(additions, deletions) / min(additions, deletions)
