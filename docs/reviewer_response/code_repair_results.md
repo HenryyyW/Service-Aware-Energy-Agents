@@ -394,3 +394,44 @@ model's diff was mangled before apply), so that section is a **corruption
 artifact**, not evidence about the model. The decisive numbers are the ones
 above, produced on the fully-fixed base. The negative control's `keep=True` is
 labelled throughout as a valid honest-failure cell, not a counted repair.
+
+## State corrections and the two located defects (2026-11-10, after the PM's independent verification)
+
+**Invalid-state runs (labelled, not deleted):** the runs produced on
+`benchmark/decisive-rerun` @5acc8ef5e and the earlier `e7434ae` base are
+**invalid-state runs** - that branch carried an unpack regression
+(`verifier.py` unpacking 3 values from `_run_detector`'s 2-tuple) and lacked
+four merged commits (`2e3da578b` lookahead, `dc111db62` de-indent,
+`3eb0e4455` unpack fix, `7d0c1047f` applier double-newline). Their only durable
+content is the applier defect, located below. Their "10/10 agreement" headlines
+were crash-produced, not detector-produced, and must not be cited.
+
+**Mechanism correction for the latest two-arm run (on `origin/main`, all four
+fixes present):** the **driver-level criteria (a)-(f) are genuine** - the driver
+loads `RuleBasedController` from the patched source and the detector genuinely
+fails on the unrepaired patches (`f_service_preserved=False` on all 9 measured
+cells; negative control `keep=True` = honest non-repair). The **in-loop
+verifier verdict is still fail-closed**, one level deeper: `_run_detector`
+selects the first class whose name ends with `Controller` - in the patched file
+that is abstract `BaseController`, so the detector call dies with "Can't
+instantiate abstract class BaseController without an implementation for abstract
+method 'get_actions'" and the iteration is rejected (15 such events in the
+deterministic run log, 2 in the LLM log). That is an A-side class-selection
+defect (dispatched with the repro): select the concrete class that implements
+`get_actions`.
+
+**The applier defect (located by the PM, reproduced on main, dispatched to A
+with the fix direction):** `_apply_unified_diff` applies every hunk at
+original-file coordinates against the already-modified buffer, so after the
+first hunk changes the line count the later hunks land wrong and garble the
+file - a well-formed two-hunk diff of the real controller produces
+"unterminated triple-quoted string literal" and the syntax check rejects it
+(`changes=0`, no-op patch). Single-hunk diffs are unaffected. This is the
+signature behind the LLM arm's 0/9 on the fully-fixed base. Fix direction:
+reverse-order or delta-tracked hunk application.
+
+**Status of the decisive claim:** 0 of 9 measured repairs stands from the
+driver-level criteria (the acceptance of record) in both arms on the fully-fixed
+base - A2 stays "scaffolded, not yet demonstrated". The decisive re-run is held
+until A's applier fix (and the class-selection fix) merge, so that the loop's
+verdict is produced by a real detector check rather than a crash.
