@@ -462,10 +462,19 @@ Return ONLY the unified diff. NO additional text."""
         changes = []
         func_names = set()
         hunk_count = 0
-        for line in diff_text.splitlines():
+        lines = diff_text.splitlines()
+
+        for i, line in enumerate(lines):
             if line.startswith("@@"):
                 hunk_count += 1
+                # Try to find function name in hunk header or next few lines
                 match = re.search(r"@@ -\d+,\d+ \+\d+,\d+ @@.*?def (\w+)", line)
+                if not match:
+                    # Look ahead a few lines for function definition
+                    for j in range(i + 1, min(i + 5, len(lines))):
+                        match = re.search(r"def (\w+)", lines[j])
+                        if match:
+                            break
                 if match:
                     func_names.add(match.group(1))
 
