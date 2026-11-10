@@ -42,8 +42,12 @@ def main() -> int:
             _load_controller(mutated, f"mutated_{task.task_id}"), task.config()
         )
         if task.negative_control:
-            ok = (p_ok is False) and (m_ok is True)
-            expected = "pristine inert=no, mutated inert=yes"
+            # same orientation as the measured tasks: the detector passes on
+            # the pristine controller and fails on the mutated one (the defect
+            # is unrepairable by the vocabulary, so the honest outcome is a
+            # failing detector on any patch)
+            ok = (p_ok is True) and (m_ok is False)
+            expected = "pristine pass, mutated fail (unrepairable-by-construction)"
         else:
             ok = (p_ok is True) and (m_ok is False)
             expected = "pristine pass, mutated fail"
