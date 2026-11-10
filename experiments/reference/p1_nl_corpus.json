@@ -458,14 +458,12 @@
       "nl": "Run two residential buildings for two weeks from 2023-03-01 with a 60-minute timestep.",
       "rubric": {
         "plans_complete_config": {
-          "buildings": 2,
-          "simulation_window": "2023-03-01 to 2023-03-15",
-          "timestep_minutes": 60
+          "buildings": 2
         },
         "required_fields": [
-          "simulation_start",
-          "simulation_end",
-          "timestep_minutes"
+          "timestep_minutes",
+          "buildings[*].simulation_start",
+          "buildings[*].simulation_end"
         ],
         "values_in_range": [
           "timestep_minutes == 60 (in [5, 15, 30, 60] - no unusual-timestep warning)",
@@ -486,7 +484,9 @@
         "buildings": 2,
         "simulation_start": "2023-03-01",
         "simulation_end": "2023-03-15",
-        "timestep_minutes": 60
+        "timestep_minutes": 60,
+        "buildings[0].simulation_start": "2023-03-01",
+        "buildings[0].simulation_end": "2023-03-15"
       }
     },
     {
