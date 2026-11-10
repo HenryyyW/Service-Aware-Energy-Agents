@@ -397,11 +397,18 @@ labelled throughout as a valid honest-failure cell, not a counted repair.
 
 ## Decisive two-arm re-run v3 on A's latest tree (applier fix + function-replacement primary path) - mechanism now real, blocker precisely located
 
-Tree: `origin/fix/llm-real-code-path` merged with `origin/main` (A's
-offset-aware multi-hunk applier `a9b32b633`, diff-format validation
-`bc0744bed`, strengthened prompt `7160f596a`, function-replacement primary path
-`4bb1add9a`, additions/deletions-only rejection `8def38842`). Harness changes on
-this branch: the detector adapter resolves the concrete controller class from
+**Tree (corrected 2026-11-10, per the Project Partner's merge verification):
+main has NEVER contained the function-replacement switch (verified: zero
+references to the two undefined methods on main; main keeps the verified
+strengthened-prompt diff path). This tree carried it only because this branch
+merged A's BRANCH (`8def38842`) on top of `origin/main` - A's offset-aware
+multi-hunk applier `a9b32b633`, diff-format validation `bc0744bed`, strengthened
+prompt `7160f596a`, function-replacement primary path `4bb1add9a`,
+additions/deletions-only rejection `8def38842`. The PM's merge of this
+experiments layer took `experiments/` + `docs/` ONLY and deliberately left
+`src/agents/llm_coder.py` at main's clean state, so main was never given the
+broken switch.** Harness changes on this branch: the detector adapter resolves
+the concrete controller class from
 the verifier's abstract `BaseController` hand-off (the in-loop detector now runs
 for real), and the negative-control detector uses the same orientation as the
 measured tasks (passes only when the unrepairable defect is fixed), so the loop
@@ -418,6 +425,17 @@ driver criteria (a)-(f), the acceptance of record, agree).**
 measured repairs, negative control `keep=True`, 10/10 agreement, zero
 instantiation/unpack errors.** One cell (task_8) remains the only cell ever to
 record an LLM-produced change; none repaired.
+
+**Labelling (binding, per the PM): this section's LLM-arm 0/9 is the
+AttributeError defect, NOT a model measurement.** The tree's function-replacement
+switch called `self._parse_llm_response_function_replacement`, which did not
+exist, so every function-replacement attempt raised AttributeError, was recorded
+as a failed iteration, and returned None - `changes=0` and a no-op patch the
+detector rejects. The section is retained for the located-defect record and the
+mechanism correction (the in-loop detector genuinely runs; the first real
+detector verdict in this project, independently spot-verified by the PM), not as
+evidence about the model. The model-evidence runs are the later sections (the
+converting contract: 5/9 measured repairs, threshold >= 7/9 not met).
 
 **Located blocker (A-side, reproduced standalone):**
 `_generate_llm_changes_real_code` calls
@@ -538,3 +556,19 @@ and the rest ignored, so this is a regression risk if the model echoes).
 calls; NO new full-arm spend this round (the f3 record - deterministic 10/10,
 LLM 5/9, threshold >= 7/9 not met, A2 "scaffolded, not yet demonstrated" -
 stands).
+
+## Record alignment: `signature_present` on the negative control (runner fix, main `450d999d8`)
+
+The PM flagged that after the negative-control detector flip, the negative
+control's `signature_present` field reported False - the runner's stale special
+case (`run_code_repair.py` ~line 388) still forced the OLD inverted-detector
+semantics (`broken_ok is True`), which no longer matches the flipped detector.
+Diagnostic field only (`keep` and `f` unaffected). Fixed on main (`450d999d8`):
+the defect signature is now "present" whenever the detector fails on the broken
+controller and ran clean - uniformly for measured and negative-control tasks,
+mirroring the detector's now-shared orientation. Verified with the PM's own
+spot cells on the merged runner (deterministic, zero LLM calls):
+`task_6_voltage_response` keep=False loop=False signature_present=True
+broken=False patched=False iters=5; `task_10_NEG_redispatch_removed`
+keep=True loop=False **signature_present=True** broken=False patched=False
+iters=5; zero "Can't instantiate abstract class" events in the log.
