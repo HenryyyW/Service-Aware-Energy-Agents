@@ -334,7 +334,7 @@ class ConfigVerifierAgent:
             ),
             "has_energy_sharing": bool(config.get("energy_sharing")),
             "has_dynamic_pricing": bool(
-                (config.get("energy_sharing") or {}).get("dynamic_pricing")
+                (config.get("energy_sharing") or {}).get("dynamic_pricing", False)
             ),
             "community_import_limit": config.get("community_import_limit_kw"),
             "community_export_limit": config.get("community_export_limit_kw"),

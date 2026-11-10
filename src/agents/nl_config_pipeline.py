@@ -98,7 +98,7 @@ class NLConfigPipeline:
             print(f"  Confidence: {plan.confidence:.0%}")
 
             if not plan.target_assets:
-                print("  No configuration targets identified!")
+                print("  No configuration needed!")
                 break
 
             # === CODER ===

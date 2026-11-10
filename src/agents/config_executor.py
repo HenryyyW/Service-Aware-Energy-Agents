@@ -45,6 +45,21 @@ class ConfigExecutorAgent:
 
         start_time = time.time()
 
+        # Validate internal config format first
+        validation = self.validate_config(patched_config)
+        if not validation["valid"]:
+            execution_time = time.time() - start_time
+            return ConfigExecutorOutput(
+                success=False,
+                scenario_id=scenario_id or f"nl_config_{int(time.time())}",
+                config_valid=False,
+                simulation_steps=0,
+                simulation_time_sec=execution_time,
+                error="; ".join(validation["errors"]),
+                execution_time=execution_time,
+                test_results={"validation_errors": validation["errors"]},
+            )
+
         # Generate scenario ID
         if scenario_id is None:
             scenario_id = f"nl_config_{int(time.time())}"
@@ -54,11 +69,10 @@ class ConfigExecutorAgent:
         scenario_dir.mkdir(parents=True, exist_ok=True)
 
         try:
-            # Save config as schema.json
-            schema_data = self._config_to_schema(patched_config, scenario_id)
+            # Save internal config as schema.json (already in ScenarioConfig format)
             schema_path = scenario_dir / "schema.json"
             with open(schema_path, "w") as f:
-                json.dump(schema_data, f, indent=2)
+                json.dump(patched_config, f, indent=2)
 
             # Create minimal CSV files for buildings if needed
             self._ensure_building_data(scenario_dir, patched_config)
@@ -66,7 +80,7 @@ class ConfigExecutorAgent:
             # Run quick simulation
             try:
                 runner = ExperimentRunner(
-                    load_scenario(str(scenario_dir / "schema.json")),
+                    load_scenario(str(schema_path)),
                     output_dir="experiments/results",
                 )
 
