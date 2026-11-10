@@ -48,14 +48,20 @@ class ConfigPlannerAgent:
         backend = self._get_backend()
         if backend is None:
             # Fallback to rule-based planning
-            return self._fallback_plan(nl)
+            plan = self._fallback_plan(nl)
+            plan.plan_source = "rule_based_fallback"
+            return plan
 
         try:
             response = backend(prompt)
-            return self._parse_llm_response(response, nl)
+            plan = self._parse_llm_response(response, nl)
+            plan.plan_source = "llm"
+            return plan
         except Exception as e:
             # Fallback on error
-            return self._fallback_plan(nl)
+            plan = self._fallback_plan(nl)
+            plan.plan_source = "rule_based_fallback"
+            return plan
 
     def _build_planning_prompt(self, nl: str) -> str:
         """Build the prompt for NL -> Scenario Config planning."""
@@ -68,29 +74,17 @@ NATURAL LANGUAGE DESCRIPTION:
 
 REQUIRED OUTPUT FORMAT (JSON):
 {{
-    "target_assets": ["pv", "battery", "ev", "flexible_load", "tariff", "grid"],
+    "target_assets": [],  // ONLY include assets explicitly mentioned in the description (subset of: pv, battery, ev, flexible_load, tariff, grid)
     "building_count": 1,
     "building_types": ["residential"],
-    "pv_configs": [
-        {{"capacity_kw": 10.0, "azimuth": 180, "tilt": 30, "efficiency": 0.20}}
-    ],
-    "battery_configs": [
-        {{"capacity_kwh": 13.5, "power_kw": 5.0, "efficiency_charge": 0.95, "efficiency_discharge": 0.95, "soc_min": 0.1, "soc_max": 0.9, "initial_soc": 0.5}}
-    ],
-    "ev_configs": [
-        {{"capacity_kwh": 60, "max_charge_kw": 11, "efficiency": 0.9, "arrival_time": "18:00", "departure_time": "07:00", "target_soc": 0.8, "initial_soc": 0.3, "connected_days": [0,1,2,3,4,5,6]}}
-    ],
-    "flexible_load_configs": [
-        {{"power_kw": 3.0, "energy_kwh": 10, "earliest_start": "22:00", "latest_end": "06:00", "duration_hours": 2}}
-    ],
-    "tariff_configs": [
-        {{"type": "time_of_use", "import_prices": {{"peak": 0.30, "off_peak": 0.10}}, "export_prices": {{"peak": 0.05, "off_peak": 0.02}}, "demand_charge": 10.0}}
-    ],
-    "grid_configs": [
-        {{"network_type": "ieee_34", "voltage_limits": {{"min": 0.95, "max": 1.05}}, "line_loading_limit": 1.0}}
-    ],
-    "community_import_limit_kw": 500,
-    "community_export_limit_kw": 300,
+    "pv_configs": [],  // Only include if "pv" in target_assets
+    "battery_configs": [],  // Only include if "battery" in target_assets
+    "ev_configs": [],  // Only include if "ev" in target_assets
+    "flexible_load_configs": [],  // Only include if "flexible_load" in target_assets
+    "tariff_configs": [],  // Only include if "tariff" in target_assets
+    "grid_configs": [],  // Only include if "grid" in target_assets
+    "community_import_limit_kw": null,  // Only include if mentioned
+    "community_export_limit_kw": null,  // Only include if mentioned
     "energy_sharing_enabled": false,
     "dynamic_pricing_enabled": false,
     "timestep_minutes": 15,
@@ -98,86 +92,36 @@ REQUIRED OUTPUT FORMAT (JSON):
     "random_seed": 42,
     "location": {{"lat": 34.05, "lon": -118.24, "timezone": "America/Los_Angeles"}},
     "climate_zone": "tmy3_722950",
+    "weather_file": null,  // Only include if weather file mentioned (e.g., "Singapore weather file")
     "confidence": 0.85,
-    "assumptions": ["Single residential building", "California climate zone", "Standard TOU tariff"],
+    "assumptions": [],
     "required_fields": ["scenario_id", "name", "description", "buildings", "random_seed", "timestep_minutes"],
     "out_of_scope": ["detailed grid topology", "custom market mechanisms"]
 }}
 
 MAPPING RULES:
-1. Weather descriptions ("sunny California", "Mediterranean climate") -> CityLearn climate zones (use tmy3 zones)
-2. Grid descriptions -> pandapower network types (ieee_13, ieee_34, simbench)
-3. Building types: residential, commercial, industrial, mixed
-3. Asset mentions -> corresponding config sections
-4. Community limits -> import/export limits
-5. Energy sharing -> enabled flag + market type
-6. Dynamic pricing -> enabled flag + pricing type
-6. Failure mentions -> failure_injections list
+1. ONLY include assets explicitly mentioned in the description. Do NOT add default assets.
+2. target_assets should ONLY contain assets explicitly mentioned in the description.
+3. For each asset in target_assets, include its corresponding config section with values from the description (or sensible defaults if specific values not given).
+4. Weather descriptions ("sunny California", "Mediterranean climate", "Singapore weather") -> CityLearn climate zones (use tmy3 zones). If specific weather file mentioned (e.g., "Singapore weather file"), include in weather_file field.
+5. Grid descriptions -> pandapower network types (ieee_13, ieee_34, simbench)
+6. Building types: residential, commercial, industrial, mixed
+7. Asset mentions -> corresponding config sections
+8. Community limits -> import/export limits
+9. Energy sharing -> enabled flag + market type
+10. Dynamic pricing -> enabled flag + pricing type
+11. Failure mentions -> failure_injections list
 
-FOR MISSING INFO: Use sensible defaults, document assumptions, note out_of_scope items.
-
-OUTPUT ONLY THE JSON. NO EXPLANATIONS.
-"""
-        prompt = f"""You are an expert energy system designer converting natural language to scenario configurations.
-
-TASK: Parse the following natural language description and create a detailed scenario configuration plan.
-
-NATURAL LANGUAGE DESCRIPTION:
-{nl}
-
-REQUIRED OUTPUT FORMAT (JSON):
-{{
-    "target_assets": ["pv", "battery", "ev", "flexible_load", "tariff", "grid"],
-    "building_count": 1,
-    "building_types": ["residential"],
-    "pv_configs": [
-        {{"capacity_kw": 10.0, "azimuth": 180, "tilt": 30, "efficiency": 0.20}}
-    ],
-    "battery_configs": [
-        {{"capacity_kwh": 13.5, "power_kw": 5.0, "efficiency_charge": 0.95, "efficiency_discharge": 0.95, "soc_min": 0.1, "soc_max": 0.9, "initial_soc": 0.5}}
-    ],
-    "ev_configs": [
-        {{"capacity_kwh": 60, "max_charge_kw": 11, "efficiency": 0.9, "arrival_time": "18:00", "departure_time": "07:00", "target_soc": 0.8, "initial_soc": 0.3, "connected_days": [0,1,2,3,4,5,6]}}
-    ],
-    "flexible_load_configs": [
-        {{"power_kw": 3.0, "energy_kwh": 10, "earliest_start": "22:00", "latest_end": "06:00", "duration_hours": 2}}
-    ],
-    "tariff_configs": [
-        {{"type": "time_of_use", "import_prices": {{"peak": 0.30, "off_peak": 0.10}}, "export_prices": {{"peak": 0.05, "off_peak": 0.02}}, "demand_charge": 10.0}}
-    ],
-    "grid_configs": [
-        {{"network_type": "ieee_34", "voltage_limits": {{"min": 0.95, "max": 1.05}}, "line_loading_limit": 1.0}}
-    ],
-    "community_import_limit_kw": 500,
-    "community_export_limit_kw": 300,
-    "energy_sharing_enabled": false,
-    "dynamic_pricing_enabled": false,
-    "timestep_minutes": 15,
-    "simulation_duration_days": 7,
-    "random_seed": 42,
-    "location": {{"lat": 34.05, "lon": -118.24, "timezone": "America/Los_Angeles"}},
-    "climate_zone": "tmy3_722950",
-    "confidence": 0.85,
-    "assumptions": ["Single residential building", "California climate zone", "Standard TOU tariff"],
-    "required_fields": ["scenario_id", "name", "description", "buildings", "random_seed", "timestep_minutes"],
-    "out_of_scope": ["detailed grid topology", "custom market mechanisms"]
-}}
-
-MAPPING RULES:
-1. Weather descriptions ("sunny California", "Mediterranean climate") -> CityLearn climate zones (use tmy3 zones)
-2. Grid descriptions -> pandapower network types (ieee_13, ieee_34, simbench)
-3. Building types: residential, commercial, industrial, mixed
-3. Asset mentions -> corresponding config sections
-4. Community limits -> import/export limits
-5. Energy sharing -> enabled flag + market type
-6. Dynamic pricing -> enabled flag + pricing type
-6. Failure mentions -> failure_injections list
-
-FOR MISSING INFO: Use sensible defaults, document assumptions, note out_of_scope items.
+CRITICAL RULES:
+- ONLY include assets explicitly mentioned in the description
+- Do NOT add default assets that are not mentioned
+- If an asset is not mentioned, do NOT include it in target_assets or its config section
+- If specific values are not given for an asset, use sensible defaults but still include the asset (since it was mentioned)
+- For missing info: Use sensible defaults, document assumptions, note out_of_scope items
+- If weather file is explicitly mentioned (e.g., "Singapore weather file"), include in weather_file field
 
 OUTPUT ONLY THE JSON. NO EXPLANATIONS.
 """
-        return prompt
 
     def _fallback_plan(self, nl: str) -> ConfigPlannerOutput:
         """Fallback rule-based planning when LLM is unavailable."""
