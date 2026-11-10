@@ -204,15 +204,15 @@ TASK_DETAIL=$(curl -sf "$BACKEND_URL/api/agent/tasks/$TASK_ID")
 echo "$TASK_DETAIL" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
-ver = d.get('verification') or {}
-print('[repair-outcome] status=%s iterations=%s violations_resolved=%s' % (
-    d.get('status'), len(d.get('repairs', [])), ver.get('violations_resolved')))
+rep = d.get('repairs', [])
+last = rep[-1] if rep else {}
+print('[repair-outcome] status=%s iterations=%s last_iteration_executor_success=%s' % (
+    d.get('status'), len(rep), last.get('success')))
 for entry in d.get('execution_log', [])[-2:]:
     print('[repair-outcome]', entry)
 " || true
 
 log "Verifying repairs field is non-empty..."
-TASK_DETAIL=$(curl -sf "$BACKEND_URL/api/agent/tasks/$TASK_ID")
 REPAIRS=$(echo "$TASK_DETAIL" | python3 -c "import sys, json; d=json.load(sys.stdin); print(len(d.get('repairs', [])))")
 if (( REPAIRS == 0 )); then
     # Check if there's verification data instead
@@ -226,12 +226,37 @@ else
     log "Repairs field has $REPAIRS entries"
 fi
 
-# Verify metrics_comparison has real data
-METRICS_COMP=$(echo "$TASK_DETAIL" | python3 -c "import sys, json; d=json.load(sys.stdin); print('metrics_comparison' in d and d['metrics_comparison'])")
+# Verify repair records carry per-iteration content (proves the coder produced
+# changes each iteration, not just empty shells).
+RECORDS_OK=$(echo "$TASK_DETAIL" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+rep = d.get('repairs', [])
+ok = bool(rep) and all(
+    isinstance(r.get('iteration'), int)
+    and (bool(r.get('diff')) or bool(r.get('code_changes')))
+    for r in rep
+)
+print(ok)
+")
+if [[ "$RECORDS_OK" != "True" ]]; then
+    fail "Repair records missing per-iteration diff/code_changes content"
+fi
+log "Repair records carry per-iteration diff/code_changes content"
+
+# Verify metrics_comparison is exposed on the response (AgentTask field
+# since 4a090209c; computed and persisted by the endpoint on both terminal
+# paths — was previously stripped by response validation, see 18953484d).
+METRICS_COMP=$(echo "$TASK_DETAIL" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+mc = d.get('metrics_comparison') or {}
+print(bool(mc.get('baseline')) and bool(mc.get('repaired')))
+")
 if [[ "$METRICS_COMP" == "True" ]]; then
     log "Task has metrics_comparison with real before/after data"
 else
-    fail "Task missing metrics_comparison with real before/after data"
+    fail "Task missing metrics_comparison with baseline/repaired KPIs"
 fi
 
 log "Smoke test PASSED"
