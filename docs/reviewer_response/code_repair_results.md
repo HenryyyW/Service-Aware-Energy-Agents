@@ -417,18 +417,6 @@ four merged commits (`2e3da578b` lookahead, `dc111db62` de-indent,
 content is the applier defect, located below. Their "10/10 agreement" headlines
 were crash-produced, not detector-produced, and must not be cited.
 
-**Tree (corrected 2026-11-10, per the Project Partner's merge verification):
-main has NEVER contained the function-replacement switch (verified: zero
-references to the two undefined methods on main; main keeps the verified
-strengthened-prompt diff path). The invalid-state tree carried it only because
-that branch merged A's BRANCH (`8def38842`) on top of `origin/main` - A's
-offset-aware multi-hunk applier `a9b32b633`, diff-format validation `bc0744bed`,
-strengthened prompt `7160f596a`, function-replacement primary path `4bb1add9a`,
-additions/deletions-only rejection `8def38842`. The PM's merge of that
-experiments layer took `experiments/` + `docs/` ONLY and deliberately left
-`src/agents/llm_coder.py` at main's clean state, so main was never given the
-broken switch.**
-
 **Mechanism correction for the latest two-arm run (on `origin/main`, all four
 fixes present):** the **driver-level criteria (a)-(f) are genuine** - the driver
 loads `RuleBasedController` from the patched source and the detector genuinely
@@ -611,32 +599,35 @@ dominant live shape.
 single-task recapture whose shape had scrolled off the captured output);
 cumulative probe usage 23 calls; no new full-arm spend.
 
-## Record alignment: `signature_present` on the negative control (runner fix, main `450d999d8`)
+## Zero-cost acceptance matrix on current origin/main (`baf45ecce`) - both path matrices green; the 648f7bf0e multi-hunk/indent regressions are superseded
 
-The PM flagged that after the negative-control detector flip, the negative
-control's `signature_present` field reported False - the runner's stale special
-case (`run_code_repair.py` ~line 388) still forced the OLD inverted-detector
-semantics (`broken_ok is True`), which no longer matches the flipped detector.
-Diagnostic field only (`keep` and `f` unaffected). Fixed on main (`450d999d8`):
-the defect signature is now "present" whenever the detector fails on the broken
-controller and ran clean - uniformly for measured and negative-control tasks,
-mirroring the detector's now-shared orientation. Verified with the PM's own
-spot cells on the merged runner (deterministic, zero LLM calls):
-`task_6_voltage_response` keep=False loop=False signature_present=True
-broken=False patched=False iters=5; `task_10_NEG_redispatch_removed`
-keep=True loop=False **signature_present=True** broken=False patched=False
-iters=5; zero "Can't instantiate abstract class" events in the log.
+Runs with zero LLM calls against the current main (which carries `4bbcf33be`,
+`b014d421c`, `ad154135a`, `ce987e856`, `450d999d8`):
 
-## Parser-contract regression test on A's current tip (`ce987e856` + main) - association closed; the echo semantics is the one open item
+**Replacement path** (`experiments/verify_function_replacement_parser.py`,
+updated copy with the PENDING echo case): all five must-apply shapes APPLIED -
+fenced and unfenced single replacements in column-0 AND file-indented (indent-4)
+bodies, and multi-pair responses with both functions genuinely modified (applied
+as 2 changes, patched code parses). The unchanged-echo shapes remain REJECTED in
+both layouts (the open gap, dispatched to A; the PENDING case encodes the
+echo-skip expectation).
 
-`experiments/verify_function_replacement_parser.py` (zero LLM calls) run against
-`ce987e856` merged with `origin/main`: **all five must-apply shapes APPLIED**
-(fenced/unfenced single, col-0 and indent-4; multi-pair with both functions
-genuinely modified - applied as 2 changes). For the record: the markers-BEFORE-
-fence shape now APPLIES (the association gap `ce987e856` closed), and the
-multi-fenced markers-outside extraction failure (the fence slice returns the
-opening fence, so later blocks capture block 0's code) remains the open
-parser item together with the echo semantics: a modified replacement beside one
-unchanged echo is still rejected wholesale in both layouts. The updated
-verifier carries the echo case as REPORTED; promoting it to a must-apply is one
-line once A's echo-skip fix lands.
+**Diff path** (`experiments/verify_diff_path_matrix.py`, new): diffs generated
+with difflib against the real controller and pushed through the full coder path
+via a stub backend (primary parse -> same-response diff fallback -> format
+validation -> applier -> cosmetic gate), zero API calls:
+- single-hunk diff (1 -> 3 lines): **CONVERTS**, patched parses, exact apply.
+- two-hunk diff with a +2 line delta in the EARLIER hunk: **CONVERTS** with an
+  exact apply - the reverse-order applier keeps the later hunk's coordinates
+  valid, so the multi-hunk regression the PM measured on the `648f7bf0e`
+  rewrite (green on `032bda9418`, failing there) is **fixed on current main**.
+- Reject gates: additions-only single hunk, deletions-only without context,
+  comment-only additions, >10:1 unbalanced, context-only no-change, and missing
+  `---/+++` headers - all six correctly do NOT convert.
+
+Mapping to the PM's precondition matrix ("column-0 + file-indented replacements
+apply; single + multi-hunk diffs convert; reject gates work"): **all covered and
+green on current main** - the caveat being that this is the zero-cost matrix;
+the PM's own probe confirmation remains their gate. The echo semantics is not
+part of that matrix and remains the one open conversion gap on the live model
+path.
