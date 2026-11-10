@@ -6,6 +6,7 @@ Build an open-source **spatio-temporal virtual community simulator** for renewab
 
 The user should be able to:
 
+0. **Describe the community in natural language** and have the coding agent turn that description into an executable, reviewable simulation configuration (buildings, PV, batteries, EVs, flexible loads, tariffs, weather, distribution grid).
 1. Create or import a virtual community on a map or 3D/2.5D scene.
 2. Configure buildings, PV, batteries, EVs, flexible loads, tariffs, weather, and a distribution-grid model.
 3. Run a time-stepped simulation over a day, week, or year.
@@ -28,6 +29,19 @@ User compares scenarios and asks follow-up questions
         ↓
 Code agent constructs, diagnoses, repairs, and explains simulations
 ```
+
+## Current status and phase plan (2026-11-10)
+
+The project is deliberately re-centred on this brief: the platform is the product, and the coding agent is the engineering assistant inside it. Phase order (set by the project owner):
+
+| Phase | Content | Status |
+|---|---|---|
+| **P1** | Natural-language → ScenarioConfig pipeline (the agent's scenario-construction front door) + confirmation UX | **In progress** — backend pipeline (A), evaluation corpus (Research), confirmation interaction (Product Design, spec merged at `docs/nl_config_confirm_design.md`), input UX (Frontend) |
+| **P3** | Agent-assistant scope: strategy generation/modification with the physics/service gates; result analysis; diagnostics; verifiable proposals | Component exists (the plan→code→execute→verify→repair workflow). Measured on the strategy-modification component benchmark: **5/9 detector-verified modifications** (pre-registered threshold ≥7/9 not met, reported either way) — real capability, below threshold |
+| **P4** | Paper reframe around the platform; the code-repair/strategy-modification result becomes a supporting result, not the headline | Pending (Research) |
+| **P2** | Spatiotemporal virtual-community visualization and strategy comparison view | Last (Frontend + Product Design) |
+
+Already built and tested (verified on `origin/main`): the physics core (CityLearn adapter + pandapower coupling + closed re-dispatch loop), the full scenario schema (buildings, PV, battery, EV, flexible load, tariff, weather-file, failure injection), the scenario CRUD API (`POST/PATCH /scenarios` + `GET /scenarios/{id}/validate`), the four control strategies (rule-based, MPC, single-agent RL, multi-agent RL, plus the centralized heuristic), the agent workflow with its verification gates, and the React community canvas. LLM authorization of record: `poolside/laguna-xs-2.1` on NVIDIA NIM (fallback DeepSeek 4.1 if inadequate).
 
 ## 2. Core Question
 
@@ -285,18 +299,16 @@ The frontend must never infer grid feasibility by itself. Every voltage, loading
 
 ## 8. Agent Layer
 
-The code agent is a **co-pilot for the simulator**, not a chatbot bolted onto a dashboard.
+The code agent is a **co-pilot for the simulator**, not a chatbot bolted onto a dashboard, and not a fifth control algorithm. Its primary front door is natural language: an engineer describes the community and the agent produces the executable simulation configuration.
 
 It should support:
 
-- Building a scenario from natural language.
-- Generating or modifying controller/scheduler code.
-- Running simulations.
-- Interpreting simulation and grid diagnostics.
-- Explaining why a scenario fails.
-- Proposing and applying minimal repairs.
-- Re-running and comparing scenarios.
-- Producing reproducible reports.
+- **Scenario construction from natural language** — parse the description, emit a validated `ScenarioConfig` (buildings, PV, batteries, EVs, flexible loads, tariffs, weather, grid), and register it for simulation. The confirmation step (readable summary + field-level diff + confidence on inferred/defaulted values) is a gate before any run.
+- **Strategy generation and modification** — create or edit the control strategies (rule-based, MPC, RL) as auditable code/configuration diffs.
+- **Running simulations** and interpreting their outputs.
+- **Result analysis** — explain cost, service, fairness and grid outcomes against the KPI set.
+- **Diagnostics** — interpret simulation and grid diagnostics and explain why a scenario fails.
+- **Verifiable proposals** — propose and apply minimal repairs; re-run and compare; refuse to report success unless the physics/service gates pass.
 
 ### Agent Workflow
 
@@ -375,15 +387,15 @@ Design controllers and agents that coordinate local energy resources while respe
 
 The key novelty is not merely minimizing cost. The system must explicitly trade off community benefit against participant-level service reliability and fairness.
 
-### Contribution 3: Physics-grounded code-agent workflow
+### Contribution 3: Physics-grounded code-agent workflow (natural-language front door)
 
-The code agent must:
+The agent's lead capability is **scenario construction from natural language**: it parses an engineer's description, emits a validated `ScenarioConfig` through a safe applier (schema round-trip, required fields, value ranges), smoke-runs it, and only then hands it to the confirmation gate. On top of that front door it must:
 
-- Generate executable Python controllers from structured task specifications.
-- Execute them against CityLearn.
+- Generate and modify executable strategies (rule-based/MPC/RL configurations and code) as auditable diffs.
+- Execute them against CityLearn and the coupled pandapower grid.
 - Interpret simulation logs, KPI outputs, and pandapower diagnostics.
 - Detect service failures and grid-constraint violations.
-- Produce minimal, testable patches.
+- Produce minimal, testable patches for strategies and configurations.
 - Re-run experiments after repair.
 - Refuse to report success unless validation passes.
 
@@ -502,7 +514,7 @@ Measure how quickly the system detects the issue, repairs the policy or configur
 
 ## 12. Baselines
 
-Implement and compare:
+Implement and compare four control strategies under identical virtual-community scenarios:
 
 1. **Rule-based control**
    - Fixed EV charging schedules.
@@ -519,13 +531,7 @@ Implement and compare:
 4. **Multi-agent reinforcement learning**
    - Independent learners or a standard MARL baseline.
 
-5. **LLM code agent without physics verification**
-   - Generates and executes code but does not receive structured verifier feedback.
-
-6. **LLM code agent with physics/service verification**
-   - Full proposed system.
-
-The most important comparison is between baselines 5 and 6. This isolates the value of structured physical and service feedback.
+**The LLM/code agent is NOT a fifth control baseline.** It is the engineering assistant that constructs scenarios, generates and modifies the strategies above, analyses simulation results, diagnoses service and grid-constraint violations, and proposes minimal verifiable fixes. Its own evaluation is by workflow capability - scenario-construction success rate, strategy-modification verification rate under the physics/service gates, diagnosis quality and report completeness - never by energy performance as a controller. This separation is binding: the agent's code never enters the results as a control strategy.
 
 ## 13. Frontend Design
 

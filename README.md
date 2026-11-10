@@ -1,13 +1,27 @@
-# Service-Aware Energy Agents
+# Renewable Energy Community Virtual Simulator
 
 **English** | [简体中文](README.zh-CN.md)
 
-A research prototype for simulating renewable-energy communities and investigating whether code-generating agents can coordinate buildings, PV, batteries, EVs, and flexible loads while respecting participant service requirements and distribution-grid constraints.
+A physics-based simulator for renewable-energy communities — buildings with rooftop PV, batteries, EVs and flexible loads on a distribution network — with a coding agent that works as an **engineering co-pilot** across the whole workflow. The agent is **not** a fifth control algorithm: it constructs scenarios, generates and modifies the control strategies, analyses results, diagnoses violations, and proposes verifiable fixes.
 
-> **Project status:** A working research prototype — Python simulation + experiment tooling, a FastAPI service (`backend/`), and a React map frontend (`frontend/`) with a switchable visual style. Implemented and covered by tests: pricing regimes (pool-TOU / LMP), P2P matching, configured failure injection (scenario E), and a plan → code → execute → verify → repair agent workflow. It is still **not** a production VPP: the API is a local/dev service, the LMP arm is fallback-dominated on congested cases, and P2P runs are not scheduled. See [Current limitations](#current-limitations) before citing any numbers.
+The platform loop:
+
+```text
+natural-language description
+  → coding agent → validated simulation config (ScenarioConfig)
+  → virtual community → simulation (CityLearn + pandapower)
+  → spatiotemporal visualization
+  → strategy comparison (rule-based / MPC / single-agent RL / multi-agent RL)
+  → agent-assisted optimization (verifiable, gate-checked)
+```
+
+Five workflow stages, one platform: **Scenario Construction → Simulation → Visualization → Strategy Comparison → Agent-assisted Optimization.**
+
+> **Project status (2026-11-10):** re-centred on the simulator platform. Built and tested: the physics core (CityLearn + pandapower coupling with a closed re-dispatch loop), the full scenario schema, the scenario CRUD API, the four control strategies, the agent workflow with its verification gates, and the React community canvas. In progress: the natural-language → ScenarioConfig pipeline (Phase 1). The agent's strategy-modification component measures **5/9 detector-verified modifications** (pre-registered threshold ≥7/9 not met, reported either way) — a real capability below threshold, not a control result. See [Current status](#current-status-and-phase-plan) before citing any numbers.
 
 ## Contents
 
+- [Current status and phase plan](#current-status-and-phase-plan)
 - [Research question](#research-question)
 - [System architecture](#system-architecture)
 - [Repository layout](#repository-layout)
@@ -19,11 +33,26 @@ A research prototype for simulating renewable-energy communities and investigati
 - [Current limitations](#current-limitations)
 - [Roadmap](#roadmap)
 
+## Current status and phase plan
+
+The project owner re-centred the project on the virtual-community simulator described in [`project brief.md`](project%20brief.md): the platform is the product, the agent is the assistant. Phase order:
+
+| Phase | Content | Status |
+|---|---|---|
+| **P1** | Natural-language → ScenarioConfig pipeline: describe a community in plain language, the agent emits a validated, reviewable simulation configuration | In progress — backend pipeline, evaluation corpus, confirmation UX (spec: `docs/nl_config_confirm_design.md`), input UI |
+| **P3** | Agent-assistant scope: strategy generation/modification under the physics/service gates, result analysis, diagnostics, verifiable proposals | Component exists (plan → code → execute → verify → repair). Measured: 5/9 detector-verified modifications, threshold ≥7/9 not met |
+| **P4** | Paper reframe around the platform (the code-repair result becomes a supporting result) | Pending |
+| **P2** | Spatiotemporal virtual-community visualization and strategy comparison | Last phase |
+
+Control strategies of record (compared under identical scenarios): **rule-based, MPC, single-agent RL, multi-agent RL** (the `centralized` heuristic remains a heuristic controller). The LLM/code agent never enters the comparison as a controller.
+
+LLM authorization of record: `poolside/laguna-xs-2.1` on NVIDIA NIM (fallback DeepSeek 4.1 only if inadequate). No other models are authorized.
+
 ## Research question
 
 The project asks:
 
-> Can a physics-grounded code-agent workflow construct, execute, diagnose, and repair renewable-energy-community simulations while preserving individual service guarantees and distribution-grid constraints?
+> Can a physics-grounded building–grid simulator, with a coding agent as the engineering assistant, construct, simulate, diagnose, compare, and improve renewable-energy-community scenarios while preserving individual service guarantees and distribution-grid constraints?
 
 The system is intended to assess more than aggregate cost or grid import. It also tracks whether individual EVs meet departure SOC targets, whether buildings remain within comfort bounds, how energy resources are used, and whether the coupled distribution network remains feasible.
 
@@ -32,10 +61,11 @@ The system is intended to assess more than aggregate cost or grid import. It als
 | Layer | Responsibility | Main implementation |
 |---|---|---|
 | Community simulation | Building demand, PV, storage, EVs, flexible loads, observations and actions | CityLearn v3 adapter |
-| Coordination | Rule-based and hierarchical multi-agent control; community import/export limiting | `src/controllers/`, `src/coordination/` |
+| Coordination | Rule-based, MPC and RL control; hierarchical multi-agent control; community import/export limiting | `src/controllers/`, `src/coordination/` |
 | Grid simulation | Map building power to a distribution network and evaluate power flow, voltage and loading | pandapower adapter |
-| Evaluation | Energy, service, grid, agent and per-member metrics; plots and reports | `src/evaluation/` |
-| Agent workflow | Plan, generate code, execute in a sandbox, verify, repair and report | `src/agents/` |
+| Evaluation | Energy, service, grid, fairness metrics; plots and reports | `src/evaluation/` |
+| Scenario service | Natural-language scenario construction, scenario CRUD, validation | `backend/app/routers/scenarios.py`, `src/schemas/scenario.py` |
+| Agent workflow | Plan, generate code/config, execute in a sandbox, verify, repair, report | `src/agents/` |
 | Results interface | Browse saved runs, spatial layers, assets and simulation time steps | React, TypeScript, MapLibre, deck.gl and Plotly under `frontend/` |
 
 The current co-simulation sequence is: obtain CityLearn observations, request and apply controller actions, pass resulting building powers to pandapower, then record grid diagnostics alongside the simulation step. The grid loop now closes the loop: violations detected (pandapower diagnostics) → controller update_grid_diagnostics → re-dispatch → power flow re-check, running continuously inside SimulationCoupler.step. Metrics track violations resolved vs attempted per run; re-dispatch actions recorded in result.json.
@@ -225,6 +255,8 @@ The suite covers controller coordination, CityLearn adapter behavior, pandapower
 ## Current limitations
 
 - **Not a production VPP.** The FastAPI service (`backend/`) is a local/dev API (no auth, localhost CORS), and the Vite `results/` middleware is a development convenience only.
+- **Natural-language scenario construction is in progress.** The scenario schema and CRUD API exist and the agent's config-authoring pipeline is being built; until Phase 1 lands, scenarios are created from YAML configs or the API rather than from natural language.
+- **Agent strategy-modification is below its pre-registered threshold.** On the component benchmark the agent produces detector-verified modifications in 5/9 measured cases (threshold ≥7/9 not met, reported either way). This is a component result, not a control-strategy result.
 - **LMP arm is fallback-dominated on congested cases.** On the M1 `lmp` runs the OPF falls back (`power_flow_not_converged`) and the per-run price metrics are unusable (zero/negative measured spread), so no valid locational-price dispersal result (figure F8) can be produced from them yet.
 - **P2P is not scheduled.** The matching engine and schemas exist and are tested, but no `p2p` runs are executed and there is no P2P WebSocket endpoint.
 - **Grid feedback loop is partial.** Violations are recorded and re-dispatch exists; a fully verified closed loop across all cases is not yet demonstrated.
@@ -235,10 +267,11 @@ The suite covers controller coordination, CityLearn adapter behavior, pandapower
 
 1. **DONE** — Restored a clean test baseline and unified the timestep/data-unit contract.
 2. **DONE** — Pricing regimes (pool-TOU / LMP), P2P matching + schemas, configured failure injection (scenario E), the plan → code → execute → verify → repair agent workflow, and a FastAPI service with a switchable-style React frontend.
-3. Close the co-simulation loop so grid diagnostics can constrain or trigger a verified re-dispatch.
-4. Make the LMP arm produce valid locational prices on congested cases (fix the OPF fallback) so price-spread results are claim-grade.
-5. Schedule and validate `p2p` runs; add the P2P WebSocket endpoint.
-6. Run the full benchmark matrix with reproducible seeds, appropriate baselines and statistical analysis.
+3. **Phase 1 (in progress)** — Natural-language → ScenarioConfig pipeline: the agent's scenario-construction front door with the confirmation gate; evaluation corpus; input UX.
+4. **Phase 3** — Agent-assistant scope: strategy generation/modification under the physics/service gates, result analysis, diagnostics, verifiable proposals.
+5. **Phase 4** — Paper reframe: the platform as the contribution; the code-repair/strategy-modification result as a supporting result.
+6. **Phase 2 (last)** — Spatiotemporal virtual-community visualization and the strategy-comparison view.
+7. Close the co-simulation loop so grid diagnostics can constrain or trigger a verified re-dispatch; make the LMP arm produce valid locational prices on congested cases; schedule and validate `p2p` runs.
 
 See [`project brief.md`](project%20brief.md) for the full product specification, first-milestone acceptance criteria and paper framing.
 
