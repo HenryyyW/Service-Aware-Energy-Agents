@@ -598,3 +598,36 @@ dominant live shape.
 **Envelope accounting:** this round 4 backend calls (3-task probe + 1
 single-task recapture whose shape had scrolled off the captured output);
 cumulative probe usage 23 calls; no new full-arm spend.
+
+## Zero-cost acceptance matrix on current origin/main (`baf45ecce`) - both path matrices green; the 648f7bf0e multi-hunk/indent regressions are superseded
+
+Runs with zero LLM calls against the current main (which carries `4bbcf33be`,
+`b014d421c`, `ad154135a`, `ce987e856`, `450d999d8`):
+
+**Replacement path** (`experiments/verify_function_replacement_parser.py`,
+updated copy with the PENDING echo case): all five must-apply shapes APPLIED -
+fenced and unfenced single replacements in column-0 AND file-indented (indent-4)
+bodies, and multi-pair responses with both functions genuinely modified (applied
+as 2 changes, patched code parses). The unchanged-echo shapes remain REJECTED in
+both layouts (the open gap, dispatched to A; the PENDING case encodes the
+echo-skip expectation).
+
+**Diff path** (`experiments/verify_diff_path_matrix.py`, new): diffs generated
+with difflib against the real controller and pushed through the full coder path
+via a stub backend (primary parse -> same-response diff fallback -> format
+validation -> applier -> cosmetic gate), zero API calls:
+- single-hunk diff (1 -> 3 lines): **CONVERTS**, patched parses, exact apply.
+- two-hunk diff with a +2 line delta in the EARLIER hunk: **CONVERTS** with an
+  exact apply - the reverse-order applier keeps the later hunk's coordinates
+  valid, so the multi-hunk regression the PM measured on the `648f7bf0e`
+  rewrite (green on `032bda9418`, failing there) is **fixed on current main**.
+- Reject gates: additions-only single hunk, deletions-only without context,
+  comment-only additions, >10:1 unbalanced, context-only no-change, and missing
+  `---/+++` headers - all six correctly do NOT convert.
+
+Mapping to the PM's precondition matrix ("column-0 + file-indented replacements
+apply; single + multi-hunk diffs convert; reject gates work"): **all covered and
+green on current main** - the caveat being that this is the zero-cost matrix;
+the PM's own probe confirmation remains their gate. The echo semantics is not
+part of that matrix and remains the one open conversion gap on the live model
+path.
