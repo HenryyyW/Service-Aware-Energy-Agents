@@ -145,6 +145,9 @@ class LLMCoderAgent:
 
         state.code_changes = changes
         state.patched_code = patched_code
+        print(
+            f"  [LLM_CODER DEBUG] Changes: {len(changes)}, Diff: {'YES' if diff else 'NO'}, Notes: {implementation_notes[:80]}"
+        )
         state.add_message(
             AgentRole.CODER,
             f"Implemented {len(changes)} code changes ({'LLM real-code' if changes else 'LLM FAILED'})",
@@ -159,7 +162,7 @@ class LLMCoderAgent:
         plan: PlannerOutput,
         controller_file: str,
     ) -> Optional[tuple]:
-        """Generate code using REAL-CODE PATH: LLM returns unified diff.
+        """Generate code using REAL-CODE PATH: LLM returns function replacement (primary) or unified diff (fallback).
 
         Returns (patched_code, diff, changes, notes) or None if failed.
         Failures are recorded in self.previous_failures for next iteration.
@@ -167,9 +170,11 @@ class LLMCoderAgent:
         """
         backend = self._get_backend()
         if backend is None:
+            print("  [LLM_CODER DEBUG] No backend available")
             return None
 
-        prompt = self._build_coder_prompt_real_code(plan, controller_code)
+        # Try function replacement first (PRIMARY)
+        prompt = self._build_coder_prompt_function_replacement(plan, controller_code)
 
         try:
             if hasattr(backend, "__call__"):
@@ -179,8 +184,12 @@ class LLMCoderAgent:
             else:
                 return None
 
-            # Parse LLM response - expect unified diff
-            result = self._parse_llm_response_real_code(
+            print(
+                f"  [LLM_CODER DEBUG] Raw response length: {len(raw_response) if raw_response else 0}"
+            )
+
+            # Parse LLM response - expect function replacement (PRIMARY)
+            result = self._parse_llm_response_function_replacement(
                 raw_response, controller_code, controller_file
             )
             if result:
@@ -198,12 +207,26 @@ class LLMCoderAgent:
                             "verifier_feedback": "Generated code failed syntax validation",
                         }
                     )
-                    return None
+                    print(
+                        "  [LLM_CODER DEBUG] Function replacement syntax error, trying unified diff fallback"
+                    )
+                    # Try unified diff as fallback
+                    return self._try_unified_diff_fallback(
+                        controller_code, plan, controller_file
+                    )
+
+                print(
+                    f"  [LLM_CODER DEBUG] Function replacement SUCCESS: {len(changes)} changes"
+                )
                 return patched_code, diff, changes, notes
 
-            # If we reach here, parsing failed - failure already recorded in _parse_llm_response_real_code
-            # DO NOT fall back to deterministic - return None so loop can retry/escalate
-            return None
+            print(
+                "  [LLM_CODER DEBUG] Function replacement failed, trying unified diff fallback"
+            )
+            # If function replacement failed, try unified diff as fallback
+            return self._try_unified_diff_fallback(
+                controller_code, plan, controller_file
+            )
 
         except TimeoutError as e:
             # Record timeout as failure for next iteration
