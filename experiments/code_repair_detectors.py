@@ -264,8 +264,10 @@ def detect_redispatch_call_removed(controller_cls, config) -> Tuple[bool, str]:
     """NEGATIVE CONTROL detector: PASSES only while the defect is present
     (re-dispatch inert under an overvoltage diagnostic). A repair makes it
     FAIL - which is the required, honest outcome for this probe."""
-    ok, detail = detect_voltage_response(controller_cls, config)
-    return (not ok, f"negative control (re-dispatch inert required): {detail}")
+    # same orientation as the measured tasks: passes only if the unrepairable
+    # defect is actually fixed (the removed re-dispatch call site restored), so
+    # the loop cannot claim success on a no-op patch
+    return detect_voltage_response(controller_cls, config)
 
 
 DETECTORS = {

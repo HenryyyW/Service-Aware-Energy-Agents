@@ -435,3 +435,36 @@ driver-level criteria (the acceptance of record) in both arms on the fully-fixed
 base - A2 stays "scaffolded, not yet demonstrated". The decisive re-run is held
 until A's applier fix (and the class-selection fix) merge, so that the loop's
 verdict is produced by a real detector check rather than a crash.
+
+## The decisive two-arm re-run on origin/main (PM GO, prerequisites met) - 0/9 both arms, A2 stays scaffolded
+
+Base: `origin/main` at run time (my detector wiring merged at `9a044109a`;
+A's offset-aware multi-hunk applier `a9b32b633`, diff-format validation
+`bc0744bed`, strengthened prompt `7160f596a`). Harness deltas applied on top
+(pushed with this doc): the detector adapter resolves the concrete controller
+class from the verifier's abstract `BaseController` hand-off so the in-loop
+detector runs for real, and the negative-control detector uses the same
+orientation as the measured tasks so the loop cannot claim success on a no-op.
+
+**Deterministic comparator (10 cells, 0 LLM calls, budget 5): 10/10 loop/driver
+agreement, `loop_claimed_success=False` on all 10, 0/9 measured repairs,
+negative control `keep=True` = valid honest-failure cell, ZERO instantiation
+errors - the loop's verdict is produced by a genuinely running in-loop detector
+check.**
+
+**LLM arm (configured product path, 60 calls, 0 backend errors, full
+5-iteration budget per cell): 0/9 measured repairs, negative control
+`keep=True`, 10/10 loop/driver agreement.** Every cell used the whole budget
+with the accumulated failure history; no cell recorded an applicable LLM change
+(`changes=0` in all 10). Standalone probe on task_4 (4,388 prompt / 1,867
+completion tokens): the model's unified diff still applies to syntactically
+invalid code (`SyntaxError: unexpected indent` at line 208), so A's syntax
+rejection drops it and each iteration is a no-op the detector rejects. The
+applier and the in-loop acceptance are now correct; the model's diff content
+remains the binding defect.
+
+**Claim decision: 0 of 9 measured repairs in BOTH arms - the pre-registered
+threshold >= 7/9 is not met - the paper's A2 sentence stays "scaffolded, not
+yet demonstrated".** Reported either way; both arms unpooled; acceptance of
+record = driver criteria (a)-(f); `loop_claimed_success` recorded beside every
+verdict and agreeing with the driver in both arms (10/10).
