@@ -535,3 +535,60 @@ direction or insufficient magnitude) are recorded for the re-decision.
 **Envelope accounting:** probe rounds 11 + 3 = 14 backend calls; full LLM arm 44 calls
 (within <= 10 tasks x <= 5 iterations, `poolside/laguna-xs-2.1` on NIM, code-repair
 benchmark only); deterministic arms LLM-free.
+
+## The PM's decision-point probe on origin/main (prompt-strengthening `ac39b5814`) - shapes are function replacements, conversion is per-call stochastic; the full run for this contract is already executed
+
+Probe per the PM's spec: 2 tasks, 2 backend calls (<= 6 envelope), configured
+product path selection (configured when usable, explicit NIM injection
+otherwise - the runner's own rule), timeout 300s, shape record per response.
+Reproducible via `experiments/probe_output_shape_decision.py`.
+
+**Observed shapes (no hunks in either response):**
+- `task_4_import_limit`: 8,699 chars, **0 fenced blocks, 4 marker pairs**
+  (unfenced), 0 diff headers/hunks -> main's parser needs one ```` ```python ````
+  block -> "Could not extract function replacement format (missing
+  FILE/FUNCTION/code)" -> `changes=0`, patched == original (ast-valid, no-op).
+- `task_8_flex_deadline`: 7,193 chars, **3 fenced blocks, 3 marker pairs
+  OUTSIDE the fences** -> main's parser searches the markers in the whole
+  response and takes the first fenced block -> **converts** (`changes=1`,
+  "LLM REAL-CODE PATH: function replacement", patched ast-valid, detector
+  still passes on the controller handed to the probe).
+
+**Findings that decide the branch:**
+1. **The strengthened diff prompt (`ac39b5814`) is dead code on main:**
+   `_build_coder_prompt_real_code` is defined (`src/agents/llm_coder.py:320`)
+   and never called - the function-replacement prompt is primary and the diff
+   fallback parses that SAME response, so the "CRITICAL RULES / balanced
+   hunks / no additions-only" prompt is never sent and cannot change any run.
+   The PM's decision rule (balanced hunks vs additions-only/unbalanced) is
+   therefore moot: the model emits no hunks at all in this contract.
+2. **Conversion is per-call stochastic.** The primary prompt is byte-identical
+   between the f3 probe tree (`b014d421c`) and current main, yet task_4's
+   response was fenced-with-markers in the f3 probe (converted) and unfenced
+   now (failed); task_8 failed in the f3 full run and converts now. NIM does
+   not guarantee seed determinism, so each iteration samples the shape
+   distribution - which is exactly what the 5-iteration-per-cell budget in the
+   full run averages over.
+3. **The full decisive two-arm re-run for main's current contract is already
+   executed** (deterministic 10/10, LLM arm 5/9 measured repairs, 44 calls, 0
+   errors, 10/10 agreement, threshold >= 7/9 not met, A2 "scaffolded, not yet
+   demonstrated"). A repeat run on the same tree samples the same stochastic
+   band; no new full-arm spend is justified by this probe.
+4. **The two observed non-converting/converting shapes are covered by
+   DIFFERENT trees:** main accepts fenced blocks with markers anywhere
+   (including outside the fences) but cannot read unfenced responses; A's
+   branch (`f0ad8589b`, whose tip `f8e4535a6` is comment-only versus what the
+   f4 probe measured) accepts unfenced multi-pair responses (proved live:
+   task_1 applied BOTH replacements) but requires the markers inside each
+   fenced block (task_8's markers-outside shape failed there). A parser that
+   accepts markers anywhere AND unfenced blocks would cover both observed
+   shapes - the only remaining conversion gap, and a parser (not prompt) fix.
+
+**Decision: no full-arm spend; no prompt iteration requested.** The PM's rule
+branches as follows: the "still additions-only/unbalanced/comment-edit" hold does not
+apply (no hunks are emitted at all), and the "GO" branch maps to a
+configuration whose full run is already on record (5/9). The next run that
+could move the threshold needs the shape-coverage fix above.
+
+**Envelope accounting:** this probe 2 calls; cumulative probe usage 19 calls;
+no new full-arm spend this round.
