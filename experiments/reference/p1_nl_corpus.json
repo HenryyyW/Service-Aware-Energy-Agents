@@ -19,6 +19,8 @@
           "buildings": {
             "count": 3,
             "types": [
+              "residential",
+              "residential",
               "residential"
             ]
           }

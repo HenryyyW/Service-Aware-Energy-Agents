@@ -30,11 +30,13 @@ A run of the corpus = for each item: A's pipeline parses the NL text into a `Sce
 
 - **Item score** = pass iff all five criteria pass (C1–C5 for complete items; the inverted C1–C3 plus C4/C5 for rejection items).
 - **Corpus score** = fraction of the 16 items passing.
-- **Acceptance bar (pre-registered with the PM):**
+- **Acceptance bar (pre-registered with the PM), evaluated over the FULL corpus — the record of decision:**
   - **≥ 14 / 16 items pass**, **and**
   - **all 8 domains covered by at least one passing complete item**, **and**
   - **all 4 rejection-path items pass** (a missed rejection is a safety-relevant miss, not a partial credit).
+- **Pilot reading (NOT the record):** the PM's sequence runs the pipeline on the **first 10 corpus items** first. When any item is unproduced the report separates the two readings explicitly — the full-corpus bar (which stays FAIL until all 16 exist; missing configs are `MISSING-CONFIG`, never evidence about the pipeline) and a `pilot_reading` tally over the produced subset only (items passed / produced, domains covered, rejection items passed, with the scope stated). A pilot reading never substitutes for the bar: the authoring-acceptance number enters the paper only when the full-corpus bar is evaluated on a complete run.
 - Reported per-item with the failing criterion named — the same "report the shape, not just the count" discipline as the code-repair benchmark.
+- Two instrument corrections from the scorer self-test (2026-11-10): the `building_type` multiset check is order-insensitive and count-sensitive (the NL states the multiset, not the order); the c01 corpus entry's expected types are the exact per-building list (3x residential) rather than a set-style shorthand.
 
 ## 4. Running it
 

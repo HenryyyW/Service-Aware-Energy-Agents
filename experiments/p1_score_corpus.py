@@ -143,12 +143,14 @@ def check_c1(item, cfg):
                     if actual != val:
                         issues.append(f"{section}: planned {actual}, expected {val}")
                 elif key == "types":
-                    actual_types = [
+                    # order-insensitive, count-sensitive: the NL states the
+                    # multiset of building types, not their order
+                    actual_types = sorted(
                         b.get("building_type") for b in (cfg.get(section, []) or [])
-                    ]
-                    if actual_types != val:
+                    )
+                    if actual_types != sorted(val):
                         issues.append(
-                            f"{section} types: {actual_types} != expected {val}"
+                            f"{section} types: {actual_types} != expected {sorted(val)}"
                         )
                 elif key == "enabled":
                     got = (cfg.get(section) or {}).get("enabled")
@@ -356,6 +358,10 @@ def main() -> int:
         report["items"].append(entry)
 
     total = len(corpus["items"])
+    produced = [
+        it for it in report["items"] if "MISSING-CONFIG" not in it["criteria"].values()
+    ]
+    missing = [it["id"] for it in report["items"] if it not in produced]
     domains_covered = {
         d
         for it in report["items"]
@@ -373,7 +379,33 @@ def main() -> int:
         "rejection_items_passed": rejection_pass,
         "acceptance_bar": "PASS" if bar else "FAIL",
         "bar_rule": ">=14/16 items AND all 8 domains covered AND all 4 rejection items pass",
+        "configs_produced": len(produced),
+        "configs_missing": missing,
     }
+    if missing:
+        # Pilot reading (NOT the acceptance of record): the tally over the
+        # produced subset only, so a partial run (e.g. the first-10 pilot) is
+        # not misread as a pipeline failure. The acceptance bar above is
+        # evaluated over the FULL corpus and stays the record.
+        pilot_domains = {
+            d
+            for it in produced
+            if it["pass"] and it["kind"] == "complete"
+            for d in next(c["domains"] for c in corpus["items"] if c["id"] == it["id"])
+        }
+        pilot_rejection = sum(
+            1 for it in produced if it["pass"] and it["kind"] != "complete"
+        )
+        report["score"]["pilot_reading"] = {
+            "scope": f"{len(produced)}/{total} items produced; the remaining "
+            f"{len(missing)} are MISSING-CONFIG and are NOT evidence about the "
+            "pipeline",
+            "items_passed_over_produced": sum(1 for it in produced if it["pass"]),
+            "domains_covered": sorted(pilot_domains),
+            "rejection_items_passed": pilot_rejection,
+            "note": "pilot reading only - the acceptance bar is evaluated over "
+            "the full 16-item corpus and is the record of decision",
+        }
     text = json.dumps(report, indent=2)
     if args.report:
         Path(args.report).write_text(text)
