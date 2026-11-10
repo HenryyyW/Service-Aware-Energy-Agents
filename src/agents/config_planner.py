@@ -205,6 +205,72 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
             json_match = re.search(r"\{.*\}", response, re.DOTALL)
             if json_match:
                 data = json.loads(json_match.group())
+                # Validate and fix flexible load consistency: energy_kwh = power_kw * duration_hours
+                if "flexible_load_configs" in data and isinstance(
+                    data.get("flexible_load_configs"), list
+                ):
+                    for fl in data["flexible_load_configs"]:
+                        if isinstance(fl, dict):
+                            power_kw = fl.get("power_kw")
+                            energy_kwh = fl.get("energy_kwh")
+                            duration_hours = fl.get("duration_hours")
+
+                            # Priority: keep stated energy and power, derive missing duration
+                            # If all three present but inconsistent, derive duration (keep energy & power)
+                            # If energy and power stated but duration missing/inconsistent -> derive duration
+                            # If power and duration stated but energy missing/inconsistent -> derive energy
+                            # If energy and duration stated but power missing/inconsistent -> derive power
+
+                            # Count how many values are present
+                            present_count = sum(
+                                1
+                                for v in [power_kw, energy_kwh, duration_hours]
+                                if v is not None
+                            )
+
+                            if present_count == 3:
+                                # All three present - check consistency
+                                expected_energy = power_kw * duration_hours
+                                if abs(energy_kwh - power_kw * duration_hours) > 0.01:
+                                    # Inconsistent - keep energy and power, derive duration
+                                    fl["duration_hours"] = round(
+                                        energy_kwh / power_kw, 2
+                                    )
+                            elif present_count == 2:
+                                # Two present, derive the missing one
+                                if power_kw is not None and energy_kwh is not None:
+                                    # Have power and energy, derive duration
+                                    fl["duration_hours"] = round(
+                                        energy_kwh / power_kw, 2
+                                    )
+                                elif (
+                                    power_kw is not None and duration_hours is not None
+                                ):
+                                    # Have power and duration, derive energy
+                                    fl["energy_kwh"] = round(
+                                        power_kw * duration_hours, 2
+                                    )
+                                elif (
+                                    energy_kwh is not None
+                                    and duration_hours is not None
+                                ):
+                                    # Have energy and duration, derive power
+                                    fl["power_kw"] = (
+                                        round(energy_kwh / duration_hours, 2)
+                                        if duration_hours
+                                        else None
+                                    )
+                # Fix weather file name to canonical form
+                if data.get("weather_file"):
+                    wf = data["weather_file"]
+                    # Normalize common weather file names to canonical form
+                    wf_lower = wf.lower()
+                    if "singapore" in wf_lower:
+                        data["weather_file"] = "SINGAPORE"
+                    elif "tokyo" in wf_lower:
+                        data["weather_file"] = "TOKYO"
+                    # Add more canonical names as needed
+
                 return ConfigPlannerOutput(**data)
         except Exception:
             pass
