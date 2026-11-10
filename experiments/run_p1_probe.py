@@ -141,8 +141,11 @@ def main() -> int:
                 "manifest": out.get("manifest"),
                 # Rejection items are scored on the NAMED failure, so the last
                 # iteration's report summary and verdict must survive in the
-                # record (not only in the console log).
-                "final_report": (last_it.get("reporter_output") or {}).get("summary"),
+                # record (not only in the console log). 'final_report' is the
+                # pipeline's canonical object (iterations + audit_trail); the
+                # last reporter summary is kept as 'final_summary' for readers.
+                "final_report": out.get("final_report"),
+                "final_summary": (last_it.get("reporter_output") or {}).get("summary"),
                 "final_verdict": (last_it.get("verifier_output") or {}).get(
                     "recommendation"
                 ),
@@ -159,6 +162,7 @@ def main() -> int:
                 "iteration_count": 0,
                 "manifest": None,
                 "final_report": None,
+                "final_summary": None,
                 "final_verdict": None,
                 "error": f"{type(e).__name__}: {e}",
             }

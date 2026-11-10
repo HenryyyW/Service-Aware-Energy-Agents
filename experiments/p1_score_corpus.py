@@ -483,7 +483,19 @@ def main() -> int:
                 for key in ("schema_errors", "mapping_errors"):
                     for e in record.get(key) or []:
                         cands.append(str(e))
-                summary = str((record.get("final_report") or {}).get("summary") or "")
+                # the pipeline's final_report is a dict WITHOUT a 'summary' key;
+                # the probe driver also stores the last reporter summary as a
+                # plain string there (or under 'final_summary' with the full
+                # object in 'final_report') - accept all three shapes.
+                fr = record.get("final_report")
+                if isinstance(fr, dict):
+                    summary = str(
+                        fr.get("summary") or record.get("final_summary") or ""
+                    )
+                elif isinstance(fr, str):
+                    summary = fr
+                else:
+                    summary = str(record.get("final_summary") or "")
                 if summary and "failed" in summary.lower():
                     cands.append(summary)
                 expected = item.get("expected_named_fields") or []
