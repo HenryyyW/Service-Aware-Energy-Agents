@@ -104,8 +104,8 @@ FIELD REFERENCE - for every asset you include, its config list must carry ALL re
 - battery_configs[]: capacity_kwh*, power_kw*, efficiency_charge (default 0.95), efficiency_discharge (default 0.95), soc_min (default 0.1), soc_max (default 0.9), initial_soc (default 0.5)
 - ev_configs[]: capacity_kwh*, max_charge_kw*, arrival_time* (HH:MM), departure_time* (HH:MM), efficiency (default 0.90), target_soc (default 0.8), initial_soc (default 0.3), connected_days (default [0,1,2,3,4,5,6])
 - flexible_load_configs[]: power_kw*, energy_kwh*, earliest_start* (HH:MM), latest_end* (HH:MM), duration_hours*
-- tariff_configs[]: type (default "time_of_use"), import_prices (period -> price), export_prices, demand_charge ($/kW)
-- grid_configs[]: network_type ("ieee_13"/"ieee_34"/"simbench"), voltage_limits (min/max), line_loading_limit
+- tariff_configs[]: type (default "time_of_use"), import_prices (a period->price DICT like {{"peak": 0.30, "off_peak": 0.10}}), export_prices, demand_charge ($/kW)
+- grid_configs[]: network_type ("ieee_13"/"ieee_34"/"simbench"), voltage_limits (a DICT with min/max like {{"min": 0.95, "max": 1.05}} - NEVER a list), line_loading_limit (a number like 1.0 - NEVER null)
 
 Per-asset placement: when an asset is described for only SOME buildings, add a 1-based "building" key to each config of that asset naming the building it belongs to; when every building has the asset, emit one config per building.
 

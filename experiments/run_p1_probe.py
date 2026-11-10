@@ -128,14 +128,24 @@ def main() -> int:
                 max_iterations=args.iterations,
                 project_root=str(ROOT),
             )
+            its = out.get("iterations") or []
+            last_it = its[-1] if its else {}
             rec = {
                 "item_id": item_id,
                 "kind": it.get("kind"),
                 "nl": nl,
                 "success": bool(out.get("success")),
                 "final_config": out.get("final_config"),
-                "iterations": len(out.get("iterations") or []),
+                "iterations": its,
+                "iteration_count": len(its),
                 "manifest": out.get("manifest"),
+                # Rejection items are scored on the NAMED failure, so the last
+                # iteration's report summary and verdict must survive in the
+                # record (not only in the console log).
+                "final_report": (last_it.get("reporter_output") or {}).get("summary"),
+                "final_verdict": (last_it.get("verifier_output") or {}).get(
+                    "recommendation"
+                ),
                 "error": None,
             }
         except Exception as e:  # noqa: BLE001 - recorded, never swallowed silently
@@ -143,13 +153,20 @@ def main() -> int:
                 "item_id": item_id,
                 "kind": it.get("kind"),
                 "nl": nl,
+                "success": False,
+                "final_config": None,
+                "iterations": [],
+                "iteration_count": 0,
+                "manifest": None,
+                "final_report": None,
+                "final_verdict": None,
                 "error": f"{type(e).__name__}: {e}",
             }
         rec["elapsed_s"] = round(time.time() - t0, 1)
         records.append(rec)
         (out_dir / f"{item_id}.json").write_text(json.dumps(rec, indent=1, default=str))
         print(
-            f"[{item_id}] success={rec.get('success')} iterations={rec.get('iterations')} "
+            f"[{item_id}] success={rec.get('success')} iterations={rec.get('iteration_count')} "
             f"err={str(rec.get('error'))[:60]}",
             flush=True,
         )

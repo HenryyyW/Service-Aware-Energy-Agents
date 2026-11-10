@@ -171,12 +171,11 @@ class ConfigCoderAgent:
         buildings = []
         count = plan.get("building_count", 1)
 
+        btypes = plan.get("building_types") or ["residential"]
         for i in range(count):
             building = {
                 "building_id": f"building_{i+1}",
-                "building_type": plan.get("building_types", ["residential"])[
-                    i % len(plan.get("building_types", ["residential"]))
-                ],
+                "building_type": btypes[i % len(btypes)],
                 "location": {},
             }
 

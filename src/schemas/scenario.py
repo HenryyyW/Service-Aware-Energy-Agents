@@ -182,6 +182,17 @@ class ScenarioConfig(BaseModel):
     failures: List[FailureConfig] = Field(default_factory=list)
     community_import_limit_kw: Optional[float] = None
     community_export_limit_kw: Optional[float] = None
+
+    @field_validator("community_import_limit_kw", "community_export_limit_kw")
+    @classmethod
+    def _positive_community_limits(cls, v):
+        # Same contract as EnergySharingConfig: a negative community limit must
+        # be NAMED at validation time (r04), not crash the controllers later in
+        # a division (scale = import_limit / total_import -> ZeroDivisionError).
+        if v is not None and v <= 0:
+            raise ValueError("Limits must be positive")
+        return v
+
     carbon_intensity_file: Optional[str] = None
     random_seed: int = 42
     timestep_minutes: int = 15
