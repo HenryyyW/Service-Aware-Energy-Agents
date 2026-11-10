@@ -94,6 +94,26 @@ MUST_APPLY = {
         f"```python\n{MARKER}# FUNCTION: _apply_grid_limits\n{GRID_MOD}\n```\n\n"
         f"```python\n{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n{REDISP_MOD}\n```\n"
     ),
+    # CLOSED on main 07fa66512 (the integrated markers-inside fix) and verified
+    # there at zero cost - now must-apply so a future regression is caught
+    "modified + unchanged echo (unfenced)": (
+        f"{MARKER}# FUNCTION: _apply_grid_limits\n{GRID_MOD}\n"
+        f"{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n{REDISP}\n"
+    ),
+    "modified + unchanged echo (fenced)": (
+        f"```python\n{MARKER}# FUNCTION: _apply_grid_limits\n{GRID_MOD}\n```\n\n"
+        f"```python\n{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n{REDISP}\n```\n"
+    ),
+    # CLOSED on main 07fa66512 (block-local fence slicing) - was the task_8
+    # family: 3 marker pairs each followed by its OWN fence, all modified
+    "multi-fenced, markers outside each fence, 3 modified": (
+        f"{MARKER}# FUNCTION: _apply_grid_limits\n"
+        f"```python\n{GRID_MOD}\n```\n\n"
+        f"{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n"
+        f"```python\n{REDISP_MOD}\n```\n\n"
+        f"{MARKER}# FUNCTION: _control_ev\n"
+        f"```python\n{EV_MOD}\n```\n"
+    ),
 }
 
 REPORTED = {
@@ -109,27 +129,8 @@ REPORTED = {
         f"{MARKER}# FUNCTION: _apply_grid_limits\n{GRID_MOD}\n"
         f"{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n{REDISP}\n"
     ),
-    "modified + unchanged echo (fenced)": (
-        f"```python\n{MARKER}# FUNCTION: _apply_grid_limits\n{GRID_MOD}\n```\n\n"
-        f"```python\n{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n{REDISP}\n```\n"
-    ),
-    # OPEN GAP 2 (dispatched to A: block-local fence slicing) - the task_8
-    # family: three marker pairs, each followed by its OWN fence, all three
-    # functions genuinely modified (so it isolates the fence-slicing defect
-    # from the echo semantics). Current failure signature on main: REJECTED
-    # 'SyntaxError: invalid syntax' - the closing-fence search returns the
-    # opening fence, so blocks 1..N capture block 0's code (live probe:
-    # SyntaxError line 93; PM's constructed probe: 'unexpected indent line 1').
-    # Acceptance after the fix: APPLIED 3, each block's own code with its own
-    # function, patched parses.
-    "multi-fenced, markers outside each fence, 3 modified": (
-        f"{MARKER}# FUNCTION: _apply_grid_limits\n"
-        f"```python\n{GRID_MOD}\n```\n\n"
-        f"{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n"
-        f"```python\n{REDISP_MOD}\n```\n\n"
-        f"{MARKER}# FUNCTION: _control_ev\n"
-        f"```python\n{EV_MOD}\n```\n"
-    ),
+    # (the echo and multi-fenced gap cases moved to MUST_APPLY when they closed
+    # on main 07fa66512 - verified there at zero cost)
 }
 
 
@@ -159,13 +160,10 @@ def main() -> int:
     print("shapes that MUST apply:")
     ok = all(run(k, v, coder) for k, v in MUST_APPLY.items())
     print(
-        "shapes reported for the record (not asserted) - the OPEN GAPS dispatched"
-        " to A live here: (1) echo-skip for the two 'modified + unchanged echo'"
-        " cases (acceptance: the modified function applied, the echo skipped);"
-        " (2) block-local fence slicing for 'multi-fenced, markers outside each"
-        " fence' (acceptance: APPLIED 3, each block's own code, patched parses)."
-        " Both are expected REJECTED on current main; promote to MUST apply on"
-        " landing."
+        "shapes reported for the record (not asserted): the two dispatched gap"
+        " families (echo-skip; block-local fence slicing) CLOSED on main"
+        " 07fa66512 and were promoted to MUST_APPLY above - verified there at"
+        " zero cost."
     )
     for k, v in REPORTED.items():
         run(k, v, coder)

@@ -690,3 +690,18 @@ rewrite base), and the six reject gates - while gap (2) sits in the replacement
 layout, not the diff path. Both gaps show REJECTED on current main with those
 signatures; the suite's must-apply set stays green (5/5), and each gap is
 promoted to must-apply on landing.
+
+## Registry update: both dispatched gap families CLOSED on main `07fa66512` and promoted to must-apply
+
+The PM integrated A's `94eb70fda` llm_coder delta (extracted from the shared
+repo; A could not push) with the block-local fallback resolution, on main
+`07fa66512`. Verified from my side at zero cost on that integrated tree: the
+multi-fenced-markers-outside case now **APPLIES 3** (block-local fence slicing),
+both echo layouts **APPLY** (modified function applied, unchanged echo skipped),
+and "fenced, two modified" **APPLIES 2** (the markers-inside multi-block
+regression). The registry suite therefore promotes all three gap cases from
+REPORTED to MUST_APPLY - the suite is now eight must-apply shapes, all green on
+main, so a future regression in any of these families fails the gate.
+Provenance note: the fix reached main through the PM's extraction of A's
+unreachable commit, with A's credits intact; my `benchmark/a-parser-fix-0086b98`
+push of A's branch tip remains as a fallback reference.
