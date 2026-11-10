@@ -128,6 +128,9 @@ def _iterations(record):
     its = record.get("iterations")
     if its is None and isinstance(record.get("final_report"), dict):
         its = record["final_report"].get("iterations")
+    # the pilot dump stores the iteration COUNT (an int), not the records
+    if not isinstance(its, list):
+        return []
     return its or []
 
 
@@ -163,6 +166,30 @@ def check_c1(item, cfg):
         issues = rule(cfg) if rule else []
         return (not issues), issues
     plan = item["rubric"].get("plans_complete_config", {})
+    if item["kind"] == "complete":
+        # "no invented assets" (rubric C1): any building-level device section
+        # present in the config that the item does not describe is an invented
+        # asset. Added after the pilot observation that the coder emitted all
+        # five devices on every building regardless of the description.
+        for sec in ("pv", "battery", "evs", "flexible_loads", "tariff", "weather_file"):
+            if sec in plan:
+                continue
+            n = sum(1 for b in cfg.get("buildings", []) or [] if b.get(sec))
+            if n:
+                issues.append(
+                    f"invented asset {sec} on {n} building(s) - not described "
+                    "in the NL for this item"
+                )
+        for sec in ("pandapower", "energy_sharing"):
+            if sec not in plan and cfg.get(sec):
+                # a schema-optional default (e.g. the pipeline's default grid
+                # model) is reported as a note, NOT an invented-device failure:
+                # the rubric's 'no invented assets' clause covers devices the NL
+                # does not describe, and the confirm-UI spec treats defaults as
+                # visible provenance
+                issues.append(
+                    f"NOTE-undemanded {sec} section present (pipeline default)"
+                )
     for section, demand in plan.items():
         if isinstance(demand, int):
             actual = count_section(cfg, section)
@@ -192,7 +219,8 @@ def check_c1(item, cfg):
                     got = (cfg.get(section) or {}).get(key)
                     if got != val:
                         issues.append(f"{section}.{key}: {got!r} != expected {val!r}")
-    return (not issues), issues
+    real = [i for i in issues if not i.startswith("NOTE-")]
+    return (not real), real
 
 
 def check_c2(item, cfg):
@@ -377,6 +405,18 @@ def main() -> int:
             c5_src = "runtime record"
             if c4 is None and record is not None:
                 ex = _execution_block(record)
+                if not ex and record.get("success") is not None:
+                    # the pilot dump kept only the item-level success (the
+                    # pipeline derives it from executor_output.success) - source
+                    # it explicitly and note that the finer evidence
+                    # (power_flow/energy_balance/steps) was not dumped
+                    c4 = bool(record.get("success"))
+                    c4_src = "item-level success=True (executor detail not dumped)"
+                    notes.append(
+                        "C4 rests on item-level success only; the execution "
+                        "block (power_flow_converged/energy_balance_ok/"
+                        "simulation_steps) was not dumped for this item"
+                    )
                 if ex:
                     steps = ex.get("simulation_steps", ex.get("steps", 0)) or 0
                     c4 = bool(
@@ -421,6 +461,11 @@ def main() -> int:
                     )
                 elif plan_source:
                     notes.append(f"planned by: {plan_source}")
+                else:
+                    notes.append(
+                        "plan_source NOT recorded in the dump - the planner "
+                        "path is not evidenced by the record itself"
+                    )
             c4_v = "PASS" if c4 is True else ("UNCHECKED" if c4 is None else "FAIL")
             c5_v = "PASS" if c5 is True else ("UNCHECKED" if c5 is None else "FAIL")
             notes.insert(0, f"C4 source: {c4_src}")
@@ -542,10 +587,11 @@ def main() -> int:
             "rejection_items_passed": pilot_rejection,
             "planned_by_fallback": fallback_items,
             "llm_planned_passed": sum(
-                1
-                for it in produced
-                if it["pass"] and _plan_source(it) != "rule_based_fallback"
+                1 for it in produced if it["pass"] and _plan_source(it) == "llm"
             ),
+            "provenance_unrecorded": [
+                it["id"] for it in produced if it.get("plan_source") is None
+            ],
             "note": "pilot reading only - the acceptance bar is evaluated over "
             "the full 16-item corpus and is the record of decision; items whose "
             "plan_source is rule_based_fallback are listed separately and never "
