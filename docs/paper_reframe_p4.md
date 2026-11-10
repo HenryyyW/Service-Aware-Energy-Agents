@@ -67,22 +67,24 @@ sentence (Section 4 below); everything else verbatim.
 Keep the three literature-established gaps (they are the intro's spine) and add the platform framing as the first move:
 
 1. **New opening paragraph** — the workflow, not the controller zoo: "Renewable energy community studies presuppose an executable scenario: a device mix, a tariff, a grid model, a weather file. Building that scenario is expert busywork, and it is the part practitioners cannot check. We present a simulator whose authoring step is itself assisted by a coding agent and gated by field-level confirmation, so the scenario an experiment runs is the scenario the engineer approved." Then the existing REC-control paragraph follows.
-2. **RQ0 (new, platform):** can an agent-authored scenario config be held to an acceptance standard that names its own failures? Answer: the corpus + rubric (16 items, 5 criteria, rejection path names the field) — **instrument ready; pipeline results pending A's P1 build**, so the paper cites the instrument and reports the outcome when the pipeline lands.
+2. **RQ0 (new, platform) — INSTRUMENT-LEVEL per the PM's call:** can an agent-authored scenario config be held to an acceptance standard that names its own failures? The paper states this as **what the framework enables measuring** — the 16-item corpus, the five criteria, and the pre-registered bar (≥14/16 items, all 8 domains covered, all 4 rejection items pass) — and **cites authoring-acceptance numbers only after the in-envelope probe on the verified pipeline reports them**. Per the PM's decision: no authoring claim enters the abstract before that probe.
 3. **RQs 1–3 keep** (pricing-regime diversity; verified-dispatch safety; strategy comparison), each still "established by a distinct literature" per the current text.
 4. **The agent is not a fifth controller** — one explicit sentence so the strategy suite stays the four-plus-baseline design and the agent's role (authoring, verification gating, strategy modification) is separated from the strategies themselves.
 5. **Contributions list updated:** (C1) platform + coupling; (C2) 750-run strategy matrix findings; (C3) agent-layer safety results (screen null + hostile-proposer); (C4) the NL acceptance corpus; (C5) the strategy-modification component result at its measured level.
 
-## 3. Results restructure (section map)
+## 3. Results restructure (section map) — per the PM's call: the 750-run matrix is NOT the sole quantitative core
+
+**Cores of record:** **two cores today** — (1) the **strategy comparison**, frozen and cited at its recorded level (the PM's record: 83/67/0); and (2) the **agent layer**: the strategy-modification component at its measured level (LLM arm 5/9 detector-verified repairs vs the pre-registered 7/9; deterministic comparator 0/9; loop/driver agreement 10/10; both arms unpooled) plus the dispatch-verification results. A **third core — authoring acceptance** — arrives once A's pipeline passes verification and the in-envelope probe runs the corpus through it. Section order: platform/provenance → strategy comparison → agent layer → the two agent-result sections.
 
 | Current | Reframed |
 |---|---|
-| (opening) Cost, Peak and Service | **Platform: simulation coupling and provenance** (new §, short) — coupling, manifests, same-seed bit-identity, CI half-width — moves the reproducibility claim up front as a platform property |
-| Cost, Peak and Service; LMP; P2P; Scenario E | **Strategy comparison** (same subsections, same numbers, same within-scenario basis) |
-| Ablation: Verified vs Unverified; Real-LLM Screen; Hostile-Proposer | **Agent layer: dispatch verification** (same subsections; the 150/50/49 and 13-cell numbers verbatim) |
-| — | **Agent layer: scenario authoring acceptance** (new §) — the 16-item corpus, the five criteria, the pre-registered bar (≥14/16, all 8 domains, all 4 rejection items), and the pipeline score when A's pipeline is verified; until then the section states the instrument |
-| — | **Agent layer: strategy modification (component result)** (new §) — the two-arm code-repair benchmark: acceptance of record = driver criteria (a)–(f) with `loop_claimed_success` beside every verdict; deterministic comparator 0/9 with 10/10 loop/driver agreement; LLM arm 5/9 detector-verified repairs on the converting contract, threshold ≥7/9 not met; both arms unpooled; earlier bases' 0/9 labelled as located-defect evidence, not model measurement |
+| (opening) Cost, Peak and Service | **Platform: simulation coupling and provenance** (new §, short) — coupling, manifests, same-seed bit-identity, CI half-width — the reproducibility claim up front as a platform property |
+| Cost, Peak and Service; LMP; P2P; Scenario E | **Core 1 — Strategy comparison** (same subsections, same numbers, same within-scenario basis; frozen, cited at the recorded 83/67/0 level) |
+| Ablation: Verified vs Unverified; Real-LLM Screen; Hostile-Proposer | **Core 2 (agent layer, part 1) — Dispatch verification** (same subsections; the 150/50/49 and 13-cell numbers verbatim) |
+| — | **Core 2 (agent layer, part 2) — Strategy modification (component result)** (new §) — the two-arm benchmark: acceptance of record = driver criteria (a)–(f) with `loop_claimed_success` beside every verdict; LLM arm 5/9 detector-verified repairs on the converting contract vs the pre-registered ≥7/9 (not met); deterministic comparator 0/9 with 10/10 loop/driver agreement; both arms unpooled; earlier bases' 0/9 labelled as located-defect evidence, not model measurement |
+| — | **Core 3 (after the probe) — Scenario authoring acceptance** (new §) — the 16-item corpus, the five criteria, the pre-registered bar (≥14/16, all 8 domains, all 4 rejection items), and the pipeline score; **instrument-level until the in-envelope probe reports; no authoring numbers before it** (PM's call (a)) |
 | Service-Level Constraints; Reproducibility | unchanged |
-| Discussion/Limitations; Case Study; Conclusion | Discussion gains one limitation paragraph: the authoring-acceptance results are pending the pipeline; the code-repair component is below its pre-registered bar |
+| Discussion/Limitations; Case Study; Conclusion | Discussion gains one limitation paragraph: the authoring-acceptance results are pending the probe; the code-repair component is below its pre-registered bar |
 
 ## 4. The A2 sentence (before → after)
 
@@ -91,16 +93,19 @@ Keep the three literature-established gaps (they are the intro's spine) and add 
 
 Rationale: the old sentence claims nothing (correctly), but under the reframe the honest positive claim is the workflow role plus a measured component result — the sentence now says what *is* demonstrated and at what level the modification component sits.
 
-## 5. Keywords / title (for the PM's call)
+## 5. Keywords / title
 
+- **Title (PROPOSAL — the PM's wording, held until the user weighs in; the PM is flagging it upward):** *A Renewable Energy Community Virtual Simulator with a Physics-Grounded Coding-Agent Assistant*.
+- **Subtitle (kept from the platform-first draft, carrying the service-awareness / grid-compliance clause):** *service-aware multi-agent control, failure injection, and agent-assisted scenario authoring under grid-compliance verification*. The current paper's title (Service-Aware Energy Agents: Pricing Regimes, Failure Injection, and a Verified LLM Code-Agent Workflow for Community Energy Simulation) is the "before" text this replaces.
 - Keywords: drop "LLM code agents" from the lead; proposed set — *renewable energy communities, virtual simulator, LLM-assisted scenario authoring, multi-agent control, power system simulation, pricing regimes, verification*.
-- Title direction (user's recalibration): lead with the simulator/workflow, keep the strategy result as the second clause. Two candidates in the migration notes below.
 
-## 6. Open items for the PM (not decided unilaterally)
+## 6. Items decided by the PM (2026-11-10) — applied to this draft; nothing open on my side
 
-1. RQ0's results are pending A's pipeline — does the reframed paper go out with the instrument only (accepted with the limitation), or hold the abstract's acceptance sentence until the pipeline is verified?
-2. Whether the 750-run matrix stays the quantitative core (it is the strongest measured result) or shares the core with the platform acceptance once the pipeline lands.
-3. Title wording (two candidates drafted for the PM's pick) and whether "service-aware" stays in the title.
+1. **RQ0 stays instrument-level** (call (a)): the paper states what the framework enables measuring; authoring-acceptance numbers are cited only after the in-envelope probe on the verified pipeline (≥14/16 bar + domains + rejections, per the rubric); no authoring claim in the abstract before that probe.
+2. **Title is a proposal held for the user** (call (b)): the PM's wording is in §5 as a proposal, flagged upward; the platform-first subtitle with the service-awareness/grid-compliance clause is kept.
+3. **The 750-run matrix is not the sole quantitative core** (call (c)): two cores today (strategy comparison frozen at 83/67/0; agent layer with the 5/9-vs-7/9 component and the dispatch-verification results), a third (authoring acceptance) after the probe; the results map in §3 is restructured to that order.
+
+**Remaining hold (not mine to decide):** the title wording awaits the user's call — the PM's proposal stands until then.
 
 ## 7. Migration notes (mechanical, for the merge)
 
