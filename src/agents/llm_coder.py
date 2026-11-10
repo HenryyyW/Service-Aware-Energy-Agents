@@ -479,23 +479,31 @@ Return ONLY the unified diff. NO additional text."""
     ) -> Optional[tuple]:
         """Parse LLM response expecting function replacement format.
 
-        Expected format (fenced):
-        ```python
-        # FILE: controllers/__init__.py
-        # FUNCTION: _apply_grid_limits
-        def _apply_grid_limits(self, actions):
-            # ... new function body ...
-        ```
+        Layout-independent parser that handles multiple formats:
 
-        Expected format (unfenced):
-        # FILE: controllers/__init__.py
-        # FUNCTION: _apply_grid_limits
-        def _apply_grid_limits(self, actions):
-            # ... new function body ...
-        # FILE: controllers/__init__.py
-        # FUNCTION: _control_ev
-        def _control_ev(self, state):
-            # ... new function body ...
+        1. Fenced with markers BEFORE fence:
+           # FILE: controllers/__init__.py
+           # FUNCTION: _apply_grid_limits
+           ```python
+           def _apply_grid_limits(self, actions):
+               ...
+
+        2. Fenced with markers INSIDE fence:
+           ```python
+           # FILE: controllers/__init__.py
+           # FUNCTION: _apply_grid_limits
+           def _apply_grid_limits(self, actions):
+               ...
+
+        3. Unfenced with multiple replacements:
+           # FILE: controllers/__init__.py
+           # FUNCTION: _apply_grid_limits
+           def _apply_grid_limits(self, actions):
+               ...
+           # FILE: controllers/__init__.py
+           # FUNCTION: _control_ev
+           def _control_ev(self, state):
+               ...
 
         Returns (patched_code, diff, changes, notes) or None if failed.
         """
@@ -508,68 +516,14 @@ Return ONLY the unified diff. NO additional text."""
         if min_indent > 0:
             response = "\n".join(line[min_indent:] for line in response_lines)
 
-        # Try to extract fenced blocks first
-        fenced_blocks = []
-        for match in re.finditer(r"```python\n(.*?)```", response, re.DOTALL):
-            fenced_blocks.append(match.group(1).strip())
+        # Find all FILE/FUNCTION marker pairs in the response, regardless of position
+        # Pattern matches both: # FILE: ... # FUNCTION: ...\n  (with trailing newline)
+        # and # FILE: ... # FUNCTION: ... (at end of response)
+        marker_pattern = r"# FILE:\s*(.+?)\s*\n# FUNCTION:\s*(\w+)\n?"
+        matches = list(re.finditer(marker_pattern, response))
 
-        # If no fenced blocks, try to parse unfenced format
-        # Find all FILE/FUNCTION marker pairs and their code blocks
-        replacements = []
-
-        if fenced_blocks:
-            # Parse each fenced block as a potential replacement
-            for block in fenced_blocks:
-                file_match = re.search(r"# FILE:\s*(.+)", block)
-                func_match = re.search(r"# FUNCTION:\s*(\w+)", block)
-                if file_match and func_match:
-                    # Extract code after the markers
-                    code_start = block.find("# FUNCTION:")
-                    if code_start >= 0:
-                        code_start = block.find("\n", code_start)
-                        if code_start >= 0:
-                            code = block[code_start + 1 :].strip()
-                        else:
-                            code = ""
-                    else:
-                        code = block
-                    replacements.append(
-                        {
-                            "file": file_match.group(1).strip(),
-                            "function": func_match.group(1).strip(),
-                            "code": code,
-                        }
-                    )
-        else:
-            # Parse unfenced format: find all FILE/FUNCTION pairs
-            # Pattern: # FILE: ... # FUNCTION: ...\n code ... (until next # FILE: or end)
-            pattern = r"# FILE:\s*(.+?)\s*\n# FUNCTION:\s*(\w+)\n"
-            matches = list(re.finditer(pattern, response))
-
-            for i, match in enumerate(matches):
-                file_path = match.group(1).strip()
-                func_name = match.group(2).strip()
-                code_start = match.end()
-
-                # Find the end of this code block (next # FILE: or end of response)
-                if i + 1 < len(matches):
-                    code_end = matches[i + 1].start()
-                else:
-                    code_end = len(response)
-
-                code = response[code_start:code_end]
-                # Only strip trailing whitespace, preserve leading indentation
-                code = code.rstrip()
-                replacements.append(
-                    {
-                        "file": file_path,
-                        "function": func_name,
-                        "code": code,
-                    }
-                )
-
-        if not replacements:
-            parse_error = "Could not extract function replacement format (missing FILE/FUNCTION/code)"
+        if not matches:
+            parse_error = "Could not extract function replacement format (missing FILE/FUNCTION markers)"
             if self.previous_failures is not None:
                 self.previous_failures.append(
                     {
@@ -580,6 +534,84 @@ Return ONLY the unified diff. NO additional text."""
                     }
                 )
             return None
+
+        # Extract code blocks for each marker pair
+        replacements = []
+        for i, match in enumerate(matches):
+            file_path = match.group(1).strip()
+            func_name = match.group(2).strip()
+            marker_end = match.end()
+
+            # Find the end of this marker's code block
+            if i + 1 < len(matches):
+                code_end = matches[i + 1].start()
+            else:
+                code_end = len(response)
+
+            # Extract the raw code region after the markers
+            raw_code = response[match.end() : code_end]
+
+            # Check if the code starts with a fence (```python)
+            code = raw_code
+            if code.lstrip().startswith("```python"):
+                # Fenced block - extract content between ```python and ```
+                fence_end = code.find("```")
+                if fence_end >= 0:
+                    code = code[len("```python") : fence_end]
+                    # Only strip trailing whitespace, preserve leading indentation
+                    code = code.rstrip()
+                else:
+                    code = code[len("```python") :].rstrip()
+            else:
+                # Unfenced - take from after the marker newline until next marker or EOF
+                # The marker pattern includes the trailing newline, so code starts at the right place
+                code = code.lstrip("\n").rstrip()
+
+            # Remove any trailing ``` fence that might have been included
+            # (when markers are inside a fenced block, the closing ``` may be included)
+            code_lines = code.splitlines()
+            cleaned_lines = []
+            for line in code_lines:
+                stripped = line.strip()
+                if stripped == "```" or stripped.startswith("```"):
+                    break
+                cleaned_lines.append(line)
+            code = "\n".join(cleaned_lines)
+
+            # Handle case where the code might be in a separate fenced block
+            # (markers before fence, fence contains only code)
+            if not code and func_name in response:
+                # Try to find a fenced block for this function
+                # Look for ```python ... ``` that contains the function name
+                fence_pattern = (
+                    r"```python\n(.*?def\s+" + re.escape(func_name) + r"\b.*?)```"
+                )
+                fence_match = re.search(fence_pattern, response, re.DOTALL)
+                if fence_match:
+                    # Only strip trailing whitespace, preserve leading indentation
+                    code = fence_match.group(1).rstrip()
+
+            if not code:
+                # No code found for this marker
+                parse_error = f"Could not extract code for function {func_name}"
+                if self.previous_failures is not None:
+                    self.previous_failures.append(
+                        {
+                            "iteration": self.iteration,
+                            "error": parse_error,
+                            "test_output": response[:500],
+                            "verifier_feedback": f"No code found for function {func_name}",
+                        }
+                    )
+                return None
+
+            replacements.append(
+                {
+                    "file": file_path,
+                    "function": func_name,
+                    "code": code,
+                }
+            )
 
         # Apply all replacements sequentially
         patched_code = original_code
@@ -987,12 +1019,23 @@ Return ONLY the unified diff. NO additional text."""
         )
 
         # Check for additions-only or deletions-only
-        # Reject if no context lines (whole-function dump or incomplete diff)
+        # Allow additions-only if there are context lines AND (multiple hunks OR substantial context)
+        # Reject comment-only diffs (all additions are comments)
         if additions > 0 and deletions == 0:
-            if context_lines == 0:
-                return (
-                    False  # Additions-only with no context suggests whole-function dump
-                )
+            addition_lines = [
+                line
+                for line in lines
+                if line.startswith("+") and not line.startswith("+++")
+            ]
+            if addition_lines and all(
+                line.lstrip("+ ").startswith("#") for line in addition_lines
+            ):
+                return False  # Comment-only diff
+            # Allow additions-only if multiple hunks (multi-function change) or substantial context
+            if hunk_count >= 2 or context_lines > additions:
+                pass  # Allow legitimate multi-function insertions or substantial context
+            else:
+                return False  # Single-hunk additions-only with minimal context suggests whole-function dump
         if deletions > 0 and additions == 0:
             if context_lines == 0:
                 return False  # Deletions-only with no context suggests incomplete diff
