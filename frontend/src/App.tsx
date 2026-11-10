@@ -6,6 +6,7 @@ import Network from './pages/Network'
 import { ScenarioStudioPage } from './pages/ScenarioStudioPage'
 import { AgentWorkspacePage } from './pages/AgentWorkspacePage'
 import { ReportPage } from './pages/ReportPage'
+import { ScenarioGeneratorPage } from './pages/ScenarioGeneratorPage'
 import Layout from './components/Layout'
 import './App.css'
 
@@ -19,6 +20,7 @@ function App() {
         <Route path="network" element={<Network />} />
         <Route path="studio" element={<ScenarioStudioPage />} />
         <Route path="workspace" element={<AgentWorkspacePage />} />
+        <Route path="scenarios/generate" element={<ScenarioGeneratorPage />} />
         <Route path="runs/:runId/report" element={<ReportPage />} />
       </Route>
     </Routes>
