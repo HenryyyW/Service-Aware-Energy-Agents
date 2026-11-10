@@ -394,3 +394,43 @@ model's diff was mangled before apply), so that section is a **corruption
 artifact**, not evidence about the model. The decisive numbers are the ones
 above, produced on the fully-fixed base. The negative control's `keep=True` is
 labelled throughout as a valid honest-failure cell, not a counted repair.
+
+## Decisive two-arm re-run v3 on A's latest tree (applier fix + function-replacement primary path) - mechanism now real, blocker precisely located
+
+Tree: `origin/fix/llm-real-code-path` merged with `origin/main` (A's
+offset-aware multi-hunk applier `a9b32b633`, diff-format validation
+`bc0744bed`, strengthened prompt `7160f596a`, function-replacement primary path
+`4bb1add9a`, additions/deletions-only rejection `8def38842`). Harness changes on
+this branch: the detector adapter resolves the concrete controller class from
+the verifier's abstract `BaseController` hand-off (the in-loop detector now runs
+for real), and the negative-control detector uses the same orientation as the
+measured tasks (passes only when the unrepairable defect is fixed), so the loop
+cannot claim success on a no-op patch there.
+
+**Deterministic comparator (10 cells, 0 LLM calls, budget 5): 10/10 loop/driver
+agreement, `loop_claimed_success=False` on all 10, 0/9 measured repairs,
+negative control `keep=True` = valid honest-failure cell, and zero
+"Can't instantiate abstract class" events in the log - for the first time the
+loop's verdict is produced by a genuinely running in-loop detector check (the
+driver criteria (a)-(f), the acceptance of record, agree).**
+
+**LLM arm (60 calls, 0 backend errors, budget 5 fully used per cell): 0/9
+measured repairs, negative control `keep=True`, 10/10 agreement, zero
+instantiation/unpack errors.** One cell (task_8) remains the only cell ever to
+record an LLM-produced change; none repaired.
+
+**Located blocker (A-side, reproduced standalone):**
+`_generate_llm_changes_real_code` calls
+`self._parse_llm_response_function_replacement(...)` (src/agents/llm_coder.py
+line 185) but that method is **not defined** on `LLMCoderAgent` - the
+function-replacement primary path raises
+`AttributeError: 'LLMCoderAgent' object has no attribute
+'_parse_llm_response_function_replacement'` on every attempt, which the coder
+records as a failed iteration and returns None (no silent fallback), so
+`changes=0` and the patch is a no-op the detector rejects. Standalone probe on
+task_4: 4,273 prompt / 2,236 completion tokens spent, then the AttributeError.
+
+**Claim decision: 0 of 9 measured repairs in BOTH arms - threshold >= 7/9 not
+met - A2 stays "scaffolded, not yet demonstrated"** (reported either way; both
+arms unpooled; acceptance of record = driver criteria (a)-(f); the loop's own
+verdict now agrees with the driver in both arms, 10/10).

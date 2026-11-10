@@ -334,7 +334,32 @@ def _harness_detector(task):
     """
 
     def _run(controller_cls, _scenario_config):
-        ok, detail = task.detector_fn()(controller_cls, task.config())
+        # The loop's verifier hands us the first class whose name ends with
+        # "Controller" from the patched module - in the real controller file
+        # that is abstract BaseController, whose instantiation raises and makes
+        # the in-loop check fail closed. Resolve the concrete controller from
+        # the same module so the in-loop detector runs for real.
+        import inspect
+
+        cls = controller_cls
+        try:
+            if inspect.isabstract(cls):
+                # the verifier builds the module without registering it in
+                # sys.modules, so resolve through the subclass registry
+                seen = set()
+                stack = list(cls.__subclasses__())
+                while stack:
+                    sub = stack.pop(0)
+                    if id(sub) in seen:
+                        continue
+                    seen.add(id(sub))
+                    if not inspect.isabstract(sub) and hasattr(sub, "get_actions"):
+                        cls = sub
+                        break
+                    stack.extend(sub.__subclasses__())
+        except Exception:  # noqa: BLE001 - fall back to the passed class
+            pass
+        ok, detail = task.detector_fn()(cls, task.config())
         return ok, detail
 
     return _run
