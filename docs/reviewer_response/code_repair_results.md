@@ -493,3 +493,48 @@ paper's A2 sentence stays "scaffolded, not yet demonstrated"** (reported either
 way; both arms unpooled; acceptance of record = driver criteria (a)-(f) with
 `loop_claimed_success` beside every verdict - unchanged from the last decisive
 run: deterministic 10/10, LLM 0/9).
+
+## Probe f4 on A's `29c9b22c2` (unfenced + multi-replacement handling) - 2/3 convert, NEW failure shape, no full-arm spend (re-decide with A)
+
+A shipped two further fixes after the f3 run: `c64c35d1d` (multi-hunk applier +
+diff validator for insertions) and `29c9b22c2` (handles UNFENCED
+marker-delimited responses and MULTIPLE replacements per response - the exact
+dispatch from the earlier probe). Probe tree: `origin/fix/llm-real-code-path`
+(`29c9b22c2`) merged with `origin/main` (src byte-identical to A's tip).
+
+**Zero-cost parser verification (committed as
+`experiments/verify_function_replacement_parser.py`, no LLM calls, exit 0):**
+fenced/unfenced single replacements apply (col-0 and indent-4 code);
+multi-replacement responses with genuinely-modified functions apply ALL of
+them; two open shapes are reported, not asserted: (i) a modified replacement
+plus a byte-identical echo of another function is REJECTED wholesale
+("Function replacement did not modify the code for X"), and (ii) markers
+OUTSIDE the fenced blocks are rejected ("Could not extract function
+replacement format (missing FILE/FUNCTION/code)") because the fenced path
+requires the markers inside the block.
+
+**Live probe (3 tasks, 3 backend calls - one per task on the same-response
+fallback): 2/3 convert.**
+- `task_1_ev_deadline_soc`: UNFENCED response, 2 marker pairs, BOTH
+  replacements applied (`changes=2`, notes "function replacement (2
+  functions)"), detector passes (EV SOC 0.8002 vs target 0.800). The new
+  unfenced multi-replacement capability works live.
+- `task_4_import_limit`: fenced block with the marker inside, `changes=1`,
+  detector passes (import 3.0 kW vs limit 3 kW).
+- `task_8_flex_deadline`: FAILS on the new shape - 3 fenced blocks with the
+  3 marker pairs OUTSIDE the fences -> the fenced path finds no markers inside
+  any block -> "missing FILE/FUNCTION/code" -> `changes=0`. task_8 has now
+  failed to convert on both trees (different reasons).
+
+**Decision: no demonstrated gain over the f3 run (5/9 on `b014d421c`) - the
+full LLM arm was NOT spent; re-decide with A.** Two concrete asks for A, both
+evidence-backed: (1) associate each marker pair with the FOLLOWING fenced
+block when the block itself carries no markers (the task_8 shape); (2) skip
+unchanged echoes and apply the modified replacements instead of rejecting the
+whole response (the echo shape - under `b014d421c` the first block was applied
+and the rest ignored, so this is a regression risk if the model echoes).
+
+**Envelope accounting:** probe f4 = 3 backend calls; cumulative probe usage 17
+calls; NO new full-arm spend this round (the f3 record - deterministic 10/10,
+LLM 5/9, threshold >= 7/9 not met, A2 "scaffolded, not yet demonstrated" -
+stands).
