@@ -411,14 +411,29 @@ class VerifierAgent:
                 spec.loader.exec_module(module)
 
                 # Find the controller class (should be RuleBasedController or similar)
+                # Skip abstract BaseController - find concrete class that implements get_actions
                 controller_cls = None
                 for name, obj in module.__dict__.items():
                     if isinstance(obj, type) and name.endswith("Controller"):
-                        controller_cls = obj
-                        break
+                        # Check if it's a concrete class (not abstract) and has get_actions
+                        import inspect
+
+                        if not inspect.isabstract(obj) and hasattr(obj, "get_actions"):
+                            controller_cls = obj
+                            break
+
+                # Fallback: if no concrete class found, try any non-abstract Controller
+                if controller_cls is None:
+                    for name, obj in module.__dict__.items():
+                        if isinstance(obj, type) and name.endswith("Controller"):
+                            import inspect
+
+                            if not inspect.isabstract(obj):
+                                controller_cls = obj
+                                break
 
                 if controller_cls is None:
-                    return (False, "No controller class found in patched code")
+                    return (False, "No concrete controller class found in patched code")
 
                 # Run detector
                 scenario_config = state.scenario_config
