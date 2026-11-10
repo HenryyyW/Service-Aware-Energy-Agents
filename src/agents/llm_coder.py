@@ -740,20 +740,22 @@ Return ONLY the unified diff. NO additional text."""
             new_patched_code = self._replace_function(
                 patched_code, func_name, new_func_code
             )
-            if new_patched_code is None or new_patched_code == patched_code:
-                parse_error = (
-                    f"Function replacement did not modify the code for {func_name}"
-                )
+            if new_patched_code is None:
+                parse_error = f"Function replacement failed for {func_name} (function not found or error)"
                 if self.previous_failures is not None:
                     self.previous_failures.append(
                         {
                             "iteration": self.iteration,
-                            "error": f"Function replacement did not modify the code for {func_name}",
-                            "test_output": f"Function replacement produced no changes for {func_name}",
-                            "verifier_feedback": f"Function replacement produced no changes for {func_name}",
+                            "error": f"Function replacement failed for {func_name}",
+                            "test_output": f"Function replacement failed for {func_name}",
+                            "verifier_feedback": f"Function replacement failed for {func_name}",
                         }
                     )
                 return None
+            # Skip unchanged (echo) functions silently instead of failing
+            if new_patched_code == patched_code:
+                print(f"  [LLM_CODER DEBUG] Skipping unchanged function: {func_name}")
+                continue
 
             patched_code = new_patched_code
             all_changes.append(
