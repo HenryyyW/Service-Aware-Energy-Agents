@@ -99,12 +99,12 @@ REQUIRED OUTPUT FORMAT (JSON):
     "out_of_scope": ["detailed grid topology", "custom market mechanisms"]
 }}
 
-FIELD REFERENCE - for every asset you include, its config list must carry ALL required fields (marked *); fields with defaults may be omitted:
-- pv_configs[]: capacity_kw*, azimuth (default 180), tilt (default 30), efficiency (default 0.20)
-- battery_configs[]: capacity_kwh*, power_kw*, efficiency_charge (default 0.95), efficiency_discharge (default 0.95), soc_min (default 0.1), soc_max (default 0.9), initial_soc (default 0.5)
-- ev_configs[]: capacity_kwh*, max_charge_kw*, arrival_time* (HH:MM), departure_time* (HH:MM), efficiency (default 0.90), target_soc (default 0.8), initial_soc (default 0.3), connected_days (default [0,1,2,3,4,5,6])
-- flexible_load_configs[]: power_kw*, energy_kwh*, earliest_start* (HH:MM), latest_end* (HH:MM), duration_hours*
-- tariff_configs[]: type (default "time_of_use"), import_prices (a period->price DICT like {{"peak": 0.30, "off_peak": 0.10}}), export_prices, demand_charge ($/kW)
+FIELD REFERENCE - for every asset you include, its config list must carry ALL required fields (marked *); fields with defaults may be omitted. All numeric fields are NUMBERS (never strings or null), all time fields are "HH:MM" strings:
+- pv_configs[]: capacity_kw* (number, kW), azimuth (default 180, degrees), tilt (default 30, degrees), efficiency (default 0.20)
+- battery_configs[]: capacity_kwh* (number, kWh), power_kw* (number, kW), efficiency_charge (default 0.95), efficiency_discharge (default 0.95), soc_min (default 0.1), soc_max (default 0.9), initial_soc (default 0.5)
+- ev_configs[]: capacity_kwh* (number, kWh), max_charge_kw* (number, kW), arrival_time* ("HH:MM"), departure_time* ("HH:MM"), efficiency (default 0.90), target_soc (default 0.8), initial_soc (default 0.3), connected_days (default [0,1,2,3,4,5,6])
+- flexible_load_configs[]: power_kw* (number, kW), energy_kwh* (number, kWh), earliest_start* ("HH:MM"), latest_end* ("HH:MM"), duration_hours* (number)
+- tariff_configs[]: type (default "time_of_use"), import_prices (a period->price DICT like {{"peak": 0.30, "off_peak": 0.10}}), export_prices (optional DICT, same shape - OMIT unless export prices are stated), demand_charge (number, $/kW)
 - grid_configs[]: network_type ("ieee_13"/"ieee_34"/"simbench"), voltage_limits (a DICT with min/max like {{"min": 0.95, "max": 1.05}} - NEVER a list), line_loading_limit (a number like 1.0 - NEVER null)
 
 Per-asset placement: when an asset is described for only SOME buildings, add a 1-based "building" key to each config of that asset naming the building it belongs to; when every building has the asset, emit one config per building.
