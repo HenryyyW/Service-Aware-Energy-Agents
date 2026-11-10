@@ -395,42 +395,76 @@ artifact**, not evidence about the model. The decisive numbers are the ones
 above, produced on the fully-fixed base. The negative control's `keep=True` is
 labelled throughout as a valid honest-failure cell, not a counted repair.
 
-## Decisive two-arm re-run v3 on A's latest tree (applier fix + function-replacement primary path) - mechanism now real, blocker precisely located
+## State corrections and the two located defects (2026-11-10, after the PM's independent verification)
 
-Tree: `origin/fix/llm-real-code-path` merged with `origin/main` (A's
-offset-aware multi-hunk applier `a9b32b633`, diff-format validation
-`bc0744bed`, strengthened prompt `7160f596a`, function-replacement primary path
-`4bb1add9a`, additions/deletions-only rejection `8def38842`). Harness changes on
-this branch: the detector adapter resolves the concrete controller class from
-the verifier's abstract `BaseController` hand-off (the in-loop detector now runs
-for real), and the negative-control detector uses the same orientation as the
-measured tasks (passes only when the unrepairable defect is fixed), so the loop
-cannot claim success on a no-op patch there.
+**Invalid-state runs (labelled, not deleted):** the runs produced on
+`benchmark/decisive-rerun` @5acc8ef5e and the earlier `e7434ae` base are
+**invalid-state runs** - that branch carried an unpack regression
+(`verifier.py` unpacking 3 values from `_run_detector`'s 2-tuple) and lacked
+four merged commits (`2e3da578b` lookahead, `dc111db62` de-indent,
+`3eb0e4455` unpack fix, `7d0c1047f` applier double-newline). Their only durable
+content is the applier defect, located below. Their "10/10 agreement" headlines
+were crash-produced, not detector-produced, and must not be cited.
+
+**Mechanism correction for the latest two-arm run (on `origin/main`, all four
+fixes present):** the **driver-level criteria (a)-(f) are genuine** - the driver
+loads `RuleBasedController` from the patched source and the detector genuinely
+fails on the unrepaired patches (`f_service_preserved=False` on all 9 measured
+cells; negative control `keep=True` = honest non-repair). The **in-loop
+verifier verdict is still fail-closed**, one level deeper: `_run_detector`
+selects the first class whose name ends with `Controller` - in the patched file
+that is abstract `BaseController`, so the detector call dies with "Can't
+instantiate abstract class BaseController without an implementation for abstract
+method 'get_actions'" and the iteration is rejected (15 such events in the
+deterministic run log, 2 in the LLM log). That is an A-side class-selection
+defect (dispatched with the repro): select the concrete class that implements
+`get_actions`.
+
+**The applier defect (located by the PM, reproduced on main, dispatched to A
+with the fix direction):** `_apply_unified_diff` applies every hunk at
+original-file coordinates against the already-modified buffer, so after the
+first hunk changes the line count the later hunks land wrong and garble the
+file - a well-formed two-hunk diff of the real controller produces
+"unterminated triple-quoted string literal" and the syntax check rejects it
+(`changes=0`, no-op patch). Single-hunk diffs are unaffected. This is the
+signature behind the LLM arm's 0/9 on the fully-fixed base. Fix direction:
+reverse-order or delta-tracked hunk application.
+
+**Status of the decisive claim:** 0 of 9 measured repairs stands from the
+driver-level criteria (the acceptance of record) in both arms on the fully-fixed
+base - A2 stays "scaffolded, not yet demonstrated". The decisive re-run is held
+until A's applier fix (and the class-selection fix) merge, so that the loop's
+verdict is produced by a real detector check rather than a crash.
+
+## The decisive two-arm re-run on origin/main (PM GO, prerequisites met) - 0/9 both arms, A2 stays scaffolded
+
+Base: `origin/main` at run time (my detector wiring merged at `9a044109a`;
+A's offset-aware multi-hunk applier `a9b32b633`, diff-format validation
+`bc0744bed`, strengthened prompt `7160f596a`). Harness deltas applied on top
+(pushed with this doc): the detector adapter resolves the concrete controller
+class from the verifier's abstract `BaseController` hand-off so the in-loop
+detector runs for real, and the negative-control detector uses the same
+orientation as the measured tasks so the loop cannot claim success on a no-op.
 
 **Deterministic comparator (10 cells, 0 LLM calls, budget 5): 10/10 loop/driver
 agreement, `loop_claimed_success=False` on all 10, 0/9 measured repairs,
-negative control `keep=True` = valid honest-failure cell, and zero
-"Can't instantiate abstract class" events in the log - for the first time the
-loop's verdict is produced by a genuinely running in-loop detector check (the
-driver criteria (a)-(f), the acceptance of record, agree).**
+negative control `keep=True` = valid honest-failure cell, ZERO instantiation
+errors - the loop's verdict is produced by a genuinely running in-loop detector
+check.**
 
-**LLM arm (60 calls, 0 backend errors, budget 5 fully used per cell): 0/9
-measured repairs, negative control `keep=True`, 10/10 agreement, zero
-instantiation/unpack errors.** One cell (task_8) remains the only cell ever to
-record an LLM-produced change; none repaired.
+**LLM arm (configured product path, 60 calls, 0 backend errors, full
+5-iteration budget per cell): 0/9 measured repairs, negative control
+`keep=True`, 10/10 loop/driver agreement.** Every cell used the whole budget
+with the accumulated failure history; no cell recorded an applicable LLM change
+(`changes=0` in all 10). Standalone probe on task_4 (4,388 prompt / 1,867
+completion tokens): the model's unified diff still applies to syntactically
+invalid code (`SyntaxError: unexpected indent` at line 208), so A's syntax
+rejection drops it and each iteration is a no-op the detector rejects. The
+applier and the in-loop acceptance are now correct; the model's diff content
+remains the binding defect.
 
-**Located blocker (A-side, reproduced standalone):**
-`_generate_llm_changes_real_code` calls
-`self._parse_llm_response_function_replacement(...)` (src/agents/llm_coder.py
-line 185) but that method is **not defined** on `LLMCoderAgent` - the
-function-replacement primary path raises
-`AttributeError: 'LLMCoderAgent' object has no attribute
-'_parse_llm_response_function_replacement'` on every attempt, which the coder
-records as a failed iteration and returns None (no silent fallback), so
-`changes=0` and the patch is a no-op the detector rejects. Standalone probe on
-task_4: 4,273 prompt / 2,236 completion tokens spent, then the AttributeError.
-
-**Claim decision: 0 of 9 measured repairs in BOTH arms - threshold >= 7/9 not
-met - A2 stays "scaffolded, not yet demonstrated"** (reported either way; both
-arms unpooled; acceptance of record = driver criteria (a)-(f); the loop's own
-verdict now agrees with the driver in both arms, 10/10).
+**Claim decision: 0 of 9 measured repairs in BOTH arms - the pre-registered
+threshold >= 7/9 is not met - the paper's A2 sentence stays "scaffolded, not
+yet demonstrated".** Reported either way; both arms unpooled; acceptance of
+record = driver criteria (a)-(f); `loop_claimed_success` recorded beside every
+verdict and agreeing with the driver in both arms (10/10).
