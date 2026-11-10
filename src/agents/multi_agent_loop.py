@@ -179,6 +179,16 @@ class MultiAgentRepairLoop:
             for change in coder_output.code_changes:
                 print(f"    - {change['function']}: {change['change'][:80]}...")
 
+            # DEBUG: Log diff and patched code info
+            print(f"  [DEBUG] Diff produced: {'YES' if coder_output.diff else 'NO'}")
+            if coder_output.diff:
+                diff_lines = coder_output.diff.count("\n")
+                print(f"  [DEBUG] Diff lines: {diff_lines}")
+            print(
+                f"  [DEBUG] Patched code length: {len(state.patched_code) if state.patched_code else 0}"
+            )
+            print(f"  [DEBUG] Code changes recorded: {len(state.code_changes)}")
+
             # === EXECUTOR ===
             print("\n[EXECUTOR] Running sandbox validation...")
             executor_output = self.executor.execute(state)

@@ -261,11 +261,13 @@ def detect_overcharge_spike(controller_cls, config) -> Tuple[bool, str]:
 
 
 def detect_redispatch_call_removed(controller_cls, config) -> Tuple[bool, str]:
-    """NEGATIVE CONTROL detector: PASSES only while the defect is present
-    (re-dispatch inert under an overvoltage diagnostic). A repair makes it
-    FAIL - which is the required, honest outcome for this probe."""
-    ok, detail = detect_voltage_response(controller_cls, config)
-    return (not ok, f"negative control (re-dispatch inert required): {detail}")
+    """NEGATIVE CONTROL detector - same orientation as the measured tasks:
+    passes ONLY if the defect is FIXED (the removed re-dispatch call site is
+    restored and the actions respond to the diagnostic). The transformation
+    vocabulary cannot restore a deleted call site, so a passing patch here
+    would be a manufactured repair; the required outcome is an honest
+    failure (the detector fails on the patched controller)."""
+    return detect_voltage_response(controller_cls, config)
 
 
 DETECTORS = {
