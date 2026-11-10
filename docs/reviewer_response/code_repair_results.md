@@ -431,6 +431,15 @@ deterministic run log, 2 in the LLM log). That is an A-side class-selection
 defect (dispatched with the repro): select the concrete class that implements
 `get_actions`.
 
+**Resolution (merged):** the class-selection fix is on main (`032bda941` -
+`verifier.py` and `verification_harness.py` now skip abstract `BaseController`
+and require `get_actions`), and the code-level selection genuinely
+discriminates: the PM's probe on main gives pristine -> (True, magnitude
+10.00 kW...) and broken -> (False, magnitude 2.50 kW...). The runs above were
+covered at the runner level meanwhile by the detector adapter in this repo
+(resolving the concrete class from the verifier's abstract hand-off), which is
+why they show zero instantiation events; the adapter stays as belt-and-braces.
+
 **The applier defect (located by the PM, reproduced on main, dispatched to A
 with the fix direction):** `_apply_unified_diff` applies every hunk at
 original-file coordinates against the already-modified buffer, so after the
@@ -441,18 +450,35 @@ file - a well-formed two-hunk diff of the real controller produces
 signature behind the LLM arm's 0/9 on the fully-fixed base. Fix direction:
 reverse-order or delta-tracked hunk application.
 
+**Resolution (merged + verified):** the applier now applies hunks in REVERSE
+order with original line numbers preserved, and the multi-hunk path is green on
+current main - verified at zero LLM cost by
+`experiments/verify_diff_path_matrix.py`: a two-hunk diff of the real
+controller with a +2 line delta in the earlier hunk applies EXACTLY
+(`patched == target`, ast-valid), which is only possible with the reverse-order
+applier. (The PM's 2-hunk probe failure was measured on the pre-fix rewrite
+base; the applier line that resolved it is now on main.)
+
 **Status of the decisive claim:** 0 of 9 measured repairs stands from the
 driver-level criteria (the acceptance of record) in both arms on the fully-fixed
-base - A2 stays "scaffolded, not yet demonstrated". The decisive re-run is held
-until A's applier fix (and the class-selection fix) merge, so that the loop's
-verdict is produced by a real detector check rather than a crash.
+base - A2 stays "scaffolded, not yet demonstrated". **Correction (2026-11-10):
+both defects named above have since merged** - the applier fix (reverse-order
+multi-hunk application) and the class-selection fix (`032bda941`) - so the
+"held until" sentence is discharged; the decisive re-run was subsequently
+executed on the converting contract line (see the converting-contract section:
+LLM arm 5/9 measured repairs, threshold >= 7/9 not met, A2 unchanged), and the
+in-loop verdict is now produced by a genuine detector check at the code level.
 
 ## The decisive two-arm re-run on origin/main (PM GO, prerequisites met) - 0/9 both arms, A2 stays scaffolded
 
-Base: `origin/main` at run time (my detector wiring merged at `9a044109a`;
-A's offset-aware multi-hunk applier `a9b32b633`, diff-format validation
-`bc0744bed`, strengthened prompt `7160f596a`). Harness deltas applied on top
-(pushed with this doc): the detector adapter resolves the concrete controller
+**Base (pinned, per the Project Partner's verification): this run's merge-base
+is `1de82a231`** - the applier/validator/prompt era (my detector wiring merged
+at `9a044109a`; A's offset-aware multi-hunk applier `a9b32b633`, diff-format
+validation `bc0744bed`, strengthened prompt `7160f596a`). It **PREDATES** both
+the class-selection code merge (`032bda941`) and A's function-replacement
+rewrite (`648f7bf0e`); the detector adapter below compensates for the former at
+the runner level, which is why this run shows zero instantiation events.
+Harness deltas applied on top (pushed with this doc): the detector adapter resolves the concrete controller
 class from the verifier's abstract `BaseController` hand-off so the in-loop
 detector runs for real, and the negative-control detector uses the same
 orientation as the measured tasks so the loop cannot claim success on a no-op.
