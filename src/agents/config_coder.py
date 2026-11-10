@@ -154,33 +154,46 @@ class ConfigCoderAgent:
 
             # PV
             if "pv" in plan.get("target_assets", []) and plan.get("pv_configs"):
-                pv = plan["pv_configs"][i % len(plan["pv_configs"])]
-                building["pv"] = pv
+                pvs = plan["pv_configs"]
+                if i < len(pvs) and pvs[i]:
+                    building["pv"] = pvs[i]
 
             # Battery
             if "battery" in plan.get("target_assets", []) and plan.get(
                 "battery_configs"
             ):
-                battery = plan["battery_configs"][i % len(plan["battery_configs"])]
-                building["battery"] = battery
+                batteries = plan["battery_configs"]
+                if i < len(batteries) and batteries[i]:
+                    building["battery"] = batteries[i]
 
             # EV
             if "ev" in plan.get("target_assets", []) and plan.get("ev_configs"):
-                building["evs"] = plan["ev_configs"]
+                # ev_configs is a list of EV configs (one per building)
+                evs = plan["ev_configs"]
+                if i < len(evs) and evs[i]:
+                    building["evs"] = [evs[i]]
 
             # Flexible loads
             if "flexible_load" in plan.get("target_assets", []) and plan.get(
                 "flexible_load_configs"
             ):
-                building["flexible_loads"] = plan["flexible_load_configs"]
+                fls = plan["flexible_load_configs"]
+                if i < len(fls) and fls[i]:
+                    building["flexible_loads"] = [fls[i]]
 
             # Tariff
             if "tariff" in plan.get("target_assets", []) and plan.get("tariff_configs"):
-                building["tariff"] = plan["tariff_configs"][0]
+                tariffs = plan["tariff_configs"]
+                if i < len(tariffs) and tariffs[i]:
+                    building["tariff"] = tariffs[i]
 
             # Location/simulation
             if plan.get("location"):
                 building["location"] = plan["location"]
+
+            # Weather file (from plan)
+            if plan.get("weather_file"):
+                building["weather_file"] = plan["weather_file"]
 
             buildings.append(building)
 
