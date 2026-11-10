@@ -417,6 +417,18 @@ four merged commits (`2e3da578b` lookahead, `dc111db62` de-indent,
 content is the applier defect, located below. Their "10/10 agreement" headlines
 were crash-produced, not detector-produced, and must not be cited.
 
+**Tree (corrected 2026-11-10, per the Project Partner's merge verification):
+main has NEVER contained the function-replacement switch (verified: zero
+references to the two undefined methods on main; main keeps the verified
+strengthened-prompt diff path). The invalid-state tree carried it only because
+that branch merged A's BRANCH (`8def38842`) on top of `origin/main` - A's
+offset-aware multi-hunk applier `a9b32b633`, diff-format validation `bc0744bed`,
+strengthened prompt `7160f596a`, function-replacement primary path `4bb1add9a`,
+additions/deletions-only rejection `8def38842`. The PM's merge of that
+experiments layer took `experiments/` + `docs/` ONLY and deliberately left
+`src/agents/llm_coder.py` at main's clean state, so main was never given the
+broken switch.**
+
 **Mechanism correction for the latest two-arm run (on `origin/main`, all four
 fixes present):** the **driver-level criteria (a)-(f) are genuine** - the driver
 loads `RuleBasedController` from the patched source and the detector genuinely
@@ -598,3 +610,33 @@ dominant live shape.
 **Envelope accounting:** this round 4 backend calls (3-task probe + 1
 single-task recapture whose shape had scrolled off the captured output);
 cumulative probe usage 23 calls; no new full-arm spend.
+
+## Record alignment: `signature_present` on the negative control (runner fix, main `450d999d8`)
+
+The PM flagged that after the negative-control detector flip, the negative
+control's `signature_present` field reported False - the runner's stale special
+case (`run_code_repair.py` ~line 388) still forced the OLD inverted-detector
+semantics (`broken_ok is True`), which no longer matches the flipped detector.
+Diagnostic field only (`keep` and `f` unaffected). Fixed on main (`450d999d8`):
+the defect signature is now "present" whenever the detector fails on the broken
+controller and ran clean - uniformly for measured and negative-control tasks,
+mirroring the detector's now-shared orientation. Verified with the PM's own
+spot cells on the merged runner (deterministic, zero LLM calls):
+`task_6_voltage_response` keep=False loop=False signature_present=True
+broken=False patched=False iters=5; `task_10_NEG_redispatch_removed`
+keep=True loop=False **signature_present=True** broken=False patched=False
+iters=5; zero "Can't instantiate abstract class" events in the log.
+
+## Parser-contract regression test on A's current tip (`ce987e856` + main) - association closed; the echo semantics is the one open item
+
+`experiments/verify_function_replacement_parser.py` (zero LLM calls) run against
+`ce987e856` merged with `origin/main`: **all five must-apply shapes APPLIED**
+(fenced/unfenced single, col-0 and indent-4; multi-pair with both functions
+genuinely modified - applied as 2 changes). For the record: the markers-BEFORE-
+fence shape now APPLIES (the association gap `ce987e856` closed), and the
+multi-fenced markers-outside extraction failure (the fence slice returns the
+opening fence, so later blocks capture block 0's code) remains the open
+parser item together with the echo semantics: a modified replacement beside one
+unchanged echo is still rejected wholesale in both layouts. The updated
+verifier carries the echo case as REPORTED; promoting it to a must-apply is one
+line once A's echo-skip fix lands.

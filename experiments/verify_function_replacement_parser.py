@@ -89,13 +89,30 @@ MUST_APPLY = {
 }
 
 REPORTED = {
+    # closed on A's ce987e856 (layout-independent parser): markers before the
+    # fence are now associated with the fence - with a genuine modification
+    # this shape applies
+    "markers BEFORE fence, modified": (
+        f"{MARKER}# FUNCTION: _apply_grid_limits\n" f"```python\n{GRID_MOD}\n```\n"
+    ),
+    # open: an unchanged echo next to a genuine modification rejects the WHOLE
+    # response (the dominant live failure on ce987e856)
     "modified + unchanged echo (unfenced)": (
         f"{MARKER}# FUNCTION: _apply_grid_limits\n{GRID_MOD}\n"
         f"{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n{REDISP}\n"
     ),
-    "markers OUTSIDE fenced blocks": (
-        f"{MARKER}# FUNCTION: _control_ev\n"
-        f"```python\n{body_of('_control_ev')}\n```\n"
+    "modified + unchanged echo (fenced)": (
+        f"```python\n{MARKER}# FUNCTION: _apply_grid_limits\n{GRID_MOD}\n```\n\n"
+        f"```python\n{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n{REDISP}\n```\n"
+    ),
+}
+
+PENDING = {
+    # must-apply once A's echo-skip fix lands: the modified replacement is
+    # applied and the unchanged echo is skipped, not fatal to the response
+    "modified + echo -> apply modified, skip echo": (
+        f"{MARKER}# FUNCTION: _apply_grid_limits\n{GRID_MOD}\n"
+        f"{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n{REDISP}\n"
     ),
 }
 
@@ -125,8 +142,11 @@ def main() -> int:
     coder = LLMCoderAgent(preflight_probe=False)
     print("shapes that MUST apply:")
     ok = all(run(k, v, coder) for k, v in MUST_APPLY.items())
-    print("shapes reported for A's re-decision (not asserted):")
+    print("shapes reported for the record (not asserted):")
     for k, v in REPORTED.items():
+        run(k, v, coder)
+    print("PENDING - must apply once A's echo-skip fix lands (not asserted):")
+    for k, v in PENDING.items():
         run(k, v, coder)
     print("\nverdict:", "PASS - all must-apply shapes apply" if ok else "FAIL")
     return 0 if ok else 1
