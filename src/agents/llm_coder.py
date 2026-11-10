@@ -228,6 +228,355 @@ class LLMCoderAgent:
             )
             return None
 
+    def _try_unified_diff_fallback(
+        self,
+        controller_code: str,
+        plan: PlannerOutput,
+        controller_file: str,
+    ) -> Optional[tuple]:
+        """Try unified diff as fallback when function replacement fails."""
+        prompt = self._build_coder_prompt_real_code(plan, controller_code)
+
+        backend = self._get_backend()
+        if backend is None:
+            return None
+
+        try:
+            if hasattr(backend, "__call__"):
+                raw_response = backend(prompt)
+            elif hasattr(backend, "generate_actions"):
+                return None
+            else:
+                return None
+
+            result = self._parse_llm_response_real_code(
+                raw_response, controller_code, controller_file
+            )
+            if result:
+                patched_code, diff, changes, notes = result
+                try:
+                    ast.parse(patched_code)
+                except SyntaxError as e:
+                    self.previous_failures.append(
+                        {
+                            "iteration": self.iteration,
+                            "error": f"SyntaxError: {e}",
+                            "test_output": f"LLM generated syntactically invalid code: {e}",
+                            "verifier_feedback": "Generated code failed syntax validation",
+                        }
+                    )
+                    return None
+                return patched_code, diff, changes, notes
+
+            return None
+
+        except TimeoutError as e:
+            self.previous_failures.append(
+                {
+                    "iteration": self.iteration,
+                    "error": f"TimeoutError: {e}",
+                    "test_output": "LLM API request timed out",
+                    "verifier_feedback": "LLM API request timed out",
+                }
+            )
+            return None
+        except Exception as e:
+            self.previous_failures.append(
+                {
+                    "iteration": self.iteration,
+                    "error": f"{type(e).__name__}: {e}",
+                    "test_output": str(e)[:500],
+                    "verifier_feedback": f"LLM backend exception: {e}",
+                }
+            )
+            return None
+
+    def _parse_llm_response_function_replacement(
+        self, response: str, original_code: str, controller_file: str
+    ) -> Optional[tuple]:
+        """Parse LLM response expecting function replacement format.
+
+        Expected format:
+        ```python
+        # FILE: controllers/__init__.py
+        # FUNCTION: _apply_grid_limits
+        def _apply_grid_limits(self, actions):
+            # ... new function body ...
+        ```
+
+        Returns (patched_code, diff, changes, notes) or None if failed.
+        """
+        # First, do a global de-indent of the entire response to handle over-indented responses
+        response_lines = response.splitlines(keepends=True)
+        min_indent = min(
+            (len(line) - len(line.lstrip()) for line in response_lines if line.strip()),
+            default=0,
+        )
+        if min_indent > 0:
+            response = "\n".join(line[min_indent:] for line in response_lines)
+
+        # Try to find function replacement format
+        # Format: # FILE: <file>\n# FUNCTION: <name>\n```python\n<code>\n```
+        file_match = re.search(r"# FILE:\s*(.+)", response)
+        func_match = re.search(r"# FUNCTION:\s*(\w+)", response)
+        code_match = re.search(r"```python\n(.*?)\n```", response, re.DOTALL)
+
+        if not (file_match and func_match and code_match):
+            parse_error = "Could not extract function replacement format (missing FILE/FUNCTION/code)"
+            if self.previous_failures is not None:
+                self.previous_failures.append(
+                    {
+                        "iteration": self.iteration,
+                        "error": parse_error,
+                        "test_output": response[:500],
+                        "verifier_feedback": "LLM response did not contain valid function replacement format",
+                    }
+                )
+            return None
+
+        new_func_code = code_match.group(1).strip()
+        func_name = func_match.group(1)
+
+        # Strip FILE/FUNCTION marker lines from the function code
+        # The LLM includes them in the fenced block but they shouldn't be in the actual code
+        func_lines = new_func_code.splitlines()
+        # Remove leading marker lines (# FILE: and # FUNCTION:)
+        while func_lines and func_lines[0].strip().startswith("# FILE:"):
+            func_lines.pop(0)
+        while func_lines and func_lines[0].strip().startswith("# FUNCTION:"):
+            func_lines.pop(0)
+        new_func_code = "\n".join(func_lines).strip()
+
+        # Validate the new function code is syntactically valid
+        try:
+            ast.parse(new_func_code)
+        except SyntaxError as e:
+            parse_error = f"Generated function code has syntax error: {e}"
+            if self.previous_failures is not None:
+                self.previous_failures.append(
+                    {
+                        "iteration": self.iteration,
+                        "error": f"SyntaxError: {e}",
+                        "test_output": f"Generated function has syntax error: {e}",
+                        "verifier_feedback": "Generated function code has syntax error",
+                    }
+                )
+            return None
+
+        # Check interface compatibility - verify function signature matches
+        if not self._verify_function_signature(
+            new_func_code, original_code, func_match.group(1)
+        ):
+            parse_error = (
+                "Function signature mismatch - parameter names must match original"
+            )
+            if self.previous_failures is not None:
+                self.previous_failures.append(
+                    {
+                        "iteration": self.iteration,
+                        "error": "Signature mismatch",
+                        "test_output": "Function signature mismatch - parameter names must match original",
+                        "verifier_feedback": "Function signature mismatch - parameter names must match original",
+                    }
+                )
+            return None
+
+        # Replace the function in the original code
+        patched_code = self._replace_function(
+            original_code, func_match.group(1), new_func_code
+        )
+        if patched_code is None or patched_code == original_code:
+            parse_error = "Function replacement did not modify the code"
+            if self.previous_failures is not None:
+                self.previous_failures.append(
+                    {
+                        "iteration": self.iteration,
+                        "error": "Function replacement did not modify the code",
+                        "test_output": "Function replacement produced no changes",
+                        "verifier_feedback": "Function replacement produced no changes",
+                    }
+                )
+            return None
+
+        # Generate diff for the change
+        diff = self._generate_diff(original_code, patched_code)
+        changes = [
+            {
+                "file": controller_file,
+                "function": func_match.group(1),
+                "change": f"Replaced {func_match.group(1)} with new implementation",
+                "type": "modification",
+                "location": "function_body",
+            }
+        ]
+
+        return patched_code, diff, changes, "function replacement"
+
+    def _verify_function_signature(
+        self, new_func_code: str, original_code: str, func_name: str
+    ) -> bool:
+        """Verify that the new function has the same signature as the original."""
+        try:
+            # Parse original code to find the function
+            tree = ast.parse(original_code)
+            original_func = None
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) and node.name == func_name:
+                    original_func = node
+                    break
+
+            if original_func is None:
+                return False
+
+            # Parse new function
+            new_tree = ast.parse(new_func_code)
+            new_func = None
+            for node in ast.walk(new_tree):
+                if isinstance(node, ast.FunctionDef) and node.name == func_name:
+                    new_func = node
+                    break
+
+            if new_func is None:
+                return False
+
+            # Compare argument names (excluding self)
+            original_args = [
+                arg.arg for arg in original_func.args.args if arg.arg != "self"
+            ]
+            new_args = [arg.arg for arg in new_func.args.args if arg.arg != "self"]
+
+            return original_args == new_args
+        except Exception:
+            return False
+
+    def _try_unified_diff_fallback(
+        self,
+        controller_code: str,
+        plan: PlannerOutput,
+        controller_file: str,
+    ) -> Optional[tuple]:
+        """Try unified diff as fallback when function replacement fails."""
+        prompt = self._build_coder_prompt_real_code(plan, controller_code)
+
+        backend = self._get_backend()
+        if backend is None:
+            return None
+
+        try:
+            if hasattr(backend, "__call__"):
+                raw_response = backend(prompt)
+            elif hasattr(backend, "generate_actions"):
+                return None
+            else:
+                return None
+
+            result = self._parse_llm_response_real_code(
+                raw_response, controller_code, controller_file
+            )
+            if result:
+                patched_code, diff, changes, notes = result
+                try:
+                    ast.parse(patched_code)
+                except SyntaxError as e:
+                    self.previous_failures.append(
+                        {
+                            "iteration": self.iteration,
+                            "error": f"SyntaxError: {e}",
+                            "test_output": f"LLM generated syntactically invalid code: {e}",
+                            "verifier_feedback": "Generated code failed syntax validation",
+                        }
+                    )
+                    return None
+                return patched_code, diff, changes, notes
+
+            return None
+
+        except TimeoutError as e:
+            self.previous_failures.append(
+                {
+                    "iteration": self.iteration,
+                    "error": f"TimeoutError: {e}",
+                    "test_output": "LLM API request timed out",
+                    "verifier_feedback": "LLM API request timed out",
+                }
+            )
+            return None
+        except Exception as e:
+            self.previous_failures.append(
+                {
+                    "iteration": self.iteration,
+                    "error": f"{type(e).__name__}: {e}",
+                    "test_output": str(e)[:500],
+                    "verifier_feedback": f"LLM backend exception: {e}",
+                }
+            )
+            return None
+
+    def _build_coder_prompt_function_replacement(
+        self, plan: PlannerOutput, controller_code: str
+    ) -> str:
+        """Build TEST-DRIVEN prompt demanding strict function replacement format."""
+        failure_context = ""
+        if self.previous_failures:
+            failure_context = "\n\nPREVIOUS FAILURES (fix these):\n"
+            for i, failure in enumerate(self.previous_failures):
+                failure_context += (
+                    f"\n--- Iteration {failure.get('iteration', '?')} ---\n"
+                )
+                failure_context += f"Error: {failure.get('error', 'Unknown')}\n"
+                if failure.get("test_output"):
+                    failure_context += f"Test output: {failure['test_output'][:1000]}\n"
+                if failure.get("verifier_feedback"):
+                    failure_context += f"Verifier: {failure['verifier_feedback']}\n"
+
+        return f"""You are an expert Python developer fixing energy community controllers.
+
+TASK: Fix the following issue by providing a COMPLETE FUNCTION REPLACEMENT.
+
+ISSUE: {plan.primary_issue}
+STRATEGY: {plan.repair_strategy}
+TARGET FUNCTIONS: {plan.target_functions}
+SUCCESS CRITERIA: {plan.success_criteria}
+RISK: {plan.risk_assessment}
+{failure_context}
+
+CURRENT CONTROLLER CODE:
+```python
+{controller_code}
+```
+
+REQUIREMENTS:
+1. Return ONLY a COMPLETE FUNCTION REPLACEMENT (with FILE/FUNCTION markers)
+2. Target functions: {plan.target_functions}
+3. Fix: {plan.repair_strategy}
+4. Changes must be BEHAVIOR-CHANGING (not cosmetic) - the sandbox will verify
+
+FORMAT - Return EXACTLY ONE function replacement:
+
+```python
+# FILE: controllers/__init__.py
+# FUNCTION: _apply_grid_limits
+def _apply_grid_limits(self, actions):
+    \"\"\"Enforce grid voltage and loading limits.\"\"\"
+    # Voltage-triggered load reduction
+    if self.last_grid_diagnostics:
+        diagnostics = self.last_grid_diagnostics.get("diagnostics", [])
+        for d in diagnostics:
+            if d.get("severity") in ["violation", "critical"] and d.get("category") == "voltage":
+                # ... reduction logic
+    return actions
+```
+
+CRITICAL RULES - VIOLATION WILL CAUSE REJECTION:
+- Use EXACTLY this format: # FILE: <path> then # FUNCTION: <name> then fenced python
+- The function code MUST be syntactically valid Python
+- Indentation MUST match the target file (4 spaces per level)
+- NO markdown fences other than the required ```python fence
+- NO additional text, explanations, or apologies
+- Changes must be BEHAVIOR-CHANGING (not cosmetic) - the sandbox will verify
+
+Return ONLY the function replacement. NO additional text."""
+
     def _build_coder_prompt_real_code(
         self, plan: PlannerOutput, controller_code: str
     ) -> str:
@@ -389,7 +738,7 @@ Return ONLY the unified diff. NO additional text."""
         """Apply unified diff to original code."""
         try:
             original_lines = original_code.splitlines(keepends=True)
-            # Parse and apply diff using difflib
+            # Parse and apply diff
 
             # First, parse all hunks
             diff_lines = diff_text.splitlines(keepends=True)
@@ -428,22 +777,22 @@ Return ONLY the unified diff. NO additional text."""
                 i += 1
 
             # Apply hunks in REVERSE order so that line numbers for earlier hunks remain valid
-            patched_lines = list(original_code.splitlines(keepends=True))
+            patched_lines = list(original_lines)
             for hunk in reversed(hunks):
                 old_start = hunk["old_start"]
                 old_count = hunk["old_count"]
                 hunk_lines = hunk["lines"]
 
-                # Apply hunk by processing each line
-                # We build the new lines for this hunk by processing the diff operations
+                # Build the new lines for this hunk by processing the diff operations
+                # We read from the ORIGINAL lines for context/deletions
                 new_hunk_lines = []
                 src_idx = 0  # index into original lines (relative to old_start)
 
-                for diff_line in hunk["lines"]:
+                for diff_line in hunk_lines:
                     if diff_line.startswith(" "):
-                        # Context line - copy from original
-                        if old_start + src_idx < len(patched_lines):
-                            new_hunk_lines.append(patched_lines[old_start + src_idx])
+                        # Context line - copy from original source
+                        if old_start + src_idx < len(original_lines):
+                            new_hunk_lines.append(original_lines[old_start + src_idx])
                         src_idx += 1
                     elif diff_line.startswith("-"):
                         # Deletion - skip in source, don't add to output
@@ -452,11 +801,13 @@ Return ONLY the unified diff. NO additional text."""
                         # Addition - add to output, don't advance source
                         new_hunk_lines.append(diff_line[1:])
 
-                # Replace the old lines with new hunk lines
+                # Replace the old lines with new hunk lines in patched_lines
+                # Since we're applying in reverse order, old_start/old_count are still valid
+                # for the current patched_lines (later hunks don't shift earlier line numbers)
                 patched_lines = (
-                    patched_lines[: hunk["old_start"]]
+                    patched_lines[:old_start]
                     + new_hunk_lines
-                    + patched_lines[hunk["old_start"] + hunk["old_count"] :]
+                    + patched_lines[old_start + old_count :]
                 )
 
             return "".join(patched_lines)
@@ -518,6 +869,15 @@ Return ONLY the unified diff. NO additional text."""
         # At least some changes should exist
         if additions == 0 and deletions == 0:
             return False
+
+        # Check for additions-only or deletions-only (both suggest malformed diff)
+        # A valid unified diff should have BOTH additions and deletions
+        if additions > 0 and deletions == 0:
+            return (
+                False  # Additions-only suggests whole-function dump, not a proper diff
+            )
+        if deletions > 0 and additions == 0:
+            return False  # Deletions-only suggests incomplete diff
 
         # Check for wildly unbalanced hunks (more than 10:1 ratio suggests malformed)
         if additions > 0 and deletions > 0:
