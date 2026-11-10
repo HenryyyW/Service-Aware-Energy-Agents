@@ -673,6 +673,35 @@ validation -> applier -> cosmetic gate), zero API calls:
 Mapping to the PM's precondition matrix ("column-0 + file-indented replacements
 apply; single + multi-hunk diffs convert; reject gates work"): **all covered and
 green on current main** - the caveat being that this is the zero-cost matrix;
-the PM's own probe confirmation remains their gate. The echo semantics is not
-part of that matrix and remains the one open conversion gap on the live model
-path.
+the PM's own probe confirmation remains their gate. **Correction (2026-11-10, per
+the PM's re-verification on current main): there are TWO open parser gaps, not
+one, and both are now guarded as REPORTED cases in the replacement verifier (the
+registry): (1) the echo semantics (a modified replacement beside one unchanged
+echo is rejected wholesale - the dominant live failure, dispatched to A as
+echo-skip), and (2) the multi-fenced-markers-outside shape - a REPLACEMENT-layout
+case, distinct from both the diff path and the echo case: three python fences,
+each preceded by its own marker pair, where the closing-fence search returns the
+OPENING fence so blocks 1..N capture block 0's code (live signature SyntaxError
+line 93, the PM's constructed probe changes=0 with 'unexpected indent line 1',
+dispatched to A as block-local fence slicing). The matrix's green results above
+therefore stand exactly as scoped - replacements (column-0/file-indented), the
+multi-hunk DIFF path (patched == target; that regression measured the pre-fix
+rewrite base), and the six reject gates - while gap (2) sits in the replacement
+layout, not the diff path. Both gaps show REJECTED on current main with those
+signatures; the suite's must-apply set stays green (5/5), and each gap is
+promoted to must-apply on landing.
+
+## Registry update: both dispatched gap families CLOSED on main `07fa66512` and promoted to must-apply
+
+The PM integrated A's `94eb70fda` llm_coder delta (extracted from the shared
+repo; A could not push) with the block-local fallback resolution, on main
+`07fa66512`. Verified from my side at zero cost on that integrated tree: the
+multi-fenced-markers-outside case now **APPLIES 3** (block-local fence slicing),
+both echo layouts **APPLY** (modified function applied, unchanged echo skipped),
+and "fenced, two modified" **APPLIES 2** (the markers-inside multi-block
+regression). The registry suite therefore promotes all three gap cases from
+REPORTED to MUST_APPLY - the suite is now eight must-apply shapes, all green on
+main, so a future regression in any of these families fails the gate.
+Provenance note: the fix reached main through the PM's extraction of A's
+unreachable commit, with A's credits intact; my `benchmark/a-parser-fix-0086b98`
+push of A's branch tip remains as a fallback reference.

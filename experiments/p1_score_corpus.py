@@ -320,27 +320,99 @@ def main() -> int:
             entry["pass"] = False
             report["items"].append(entry)
             continue
-        cfg = json.loads(cfg_path.read_text())
+        loaded = json.loads(cfg_path.read_text())
+        # A's pipeline (run_nl_to_config) returns a RESULT dict - final_config
+        # plus the run record (execution / verification / schema_errors /
+        # manifest with provenance). Accept both shapes; the record is used as
+        # SOURCED evidence for C4 (simulated) and for the rejection-path
+        # naming, never as a substitute for the C5 API round-trip.
+        record = None
+        if isinstance(loaded, dict) and isinstance(loaded.get("final_config"), dict):
+            record = loaded
+            cfg = loaded["final_config"]
+        else:
+            cfg = loaded
         ok1, iss1 = check_c1(item, cfg)
         ok2, iss2 = check_c2(item, cfg)
         ok3, iss3 = check_c3(item, cfg)
         rt = runtime.get(iid, {})
+        notes = []
         if item["kind"] == "complete":
             c4 = rt.get("simulates_clean")
             c5 = rt.get("post_round_trip")
+            c4_src = "runtime record"
+            c5_src = "runtime record"
+            if c4 is None and record is not None:
+                ex = record.get("execution") or {}
+                if ex:
+                    c4 = bool(
+                        ex.get("success")
+                        and ex.get("power_flow_converged")
+                        and ex.get("energy_balance_ok")
+                        and (ex.get("steps") or 0) > 0
+                    )
+                    c4_src = (
+                        "pipeline record execution "
+                        "(success+power_flow_converged+energy_balance_ok+steps>0)"
+                    )
+            if record is not None:
+                v = record.get("verification") or {}
+                if v.get("round_trip") is not None:
+                    notes.append(
+                        f"pipeline record verification.round_trip={v['round_trip']} "
+                        "is a SERIALIZATION round-trip (pydantic parse/dump/reparse), "
+                        "NOT the POST /scenarios API round-trip C5 requires - "
+                        "reported, not scored"
+                    )
+                prov = (record.get("manifest") or {}).get("provenance")
+                if prov:
+                    notes.append(f"pipeline manifest provenance: {prov}")
             c4_v = "PASS" if c4 is True else ("UNCHECKED" if c4 is None else "FAIL")
             c5_v = "PASS" if c5 is True else ("UNCHECKED" if c5 is None else "FAIL")
+            notes.insert(0, f"C4 source: {c4_src}")
+            notes.insert(1, f"C5 source: {c5_src}")
         else:
             # rejection items: C4 = the run was blocked before starting WITH the
             # named field surfaced; C5 = the validate gate returns the named
             # error (POST itself may legitimately succeed - schema-valid)
             named = rt.get("blocked_with_named_field")
             blocked = rt.get("validate_returns_error")
+            if named is None and record is not None:
+                # sourced from the pipeline record: the named field(s) in
+                # schema_errors / mapping_errors / the failure summary
+                cands = []
+                for key in ("schema_errors", "mapping_errors"):
+                    for e in record.get(key) or []:
+                        cands.append(str(e))
+                summary = str((record.get("final_report") or {}).get("summary") or "")
+                if summary and "failed" in summary.lower():
+                    cands.append(summary)
+                expected = item.get("expected_named_fields") or []
+                hit = [c for c in cands if any(f in c for f in expected)]
+                if hit:
+                    named = f"{hit[0]} (source: pipeline record)"
+                elif cands:
+                    notes.append(
+                        "pipeline record names other errors but not the expected "
+                        f"field(s) {expected}: {cands[:2]}"
+                    )
+                if cands and record.get("success") is False:
+                    blocked = True
+                    notes.append(
+                        "validate-gate rejection sourced from the pipeline record "
+                        "(success=False with named errors)"
+                    )
             c4_v = (
                 "PASS"
                 if named
                 else ("UNCHECKED" if named is None and blocked is None else "FAIL")
             )
+            if record is not None and record.get("success") is True:
+                c4_v = "FAIL"
+                notes.append(
+                    "pipeline record shows success=True on a rejection-path item: "
+                    "the invalid artifact was produced/run"
+                )
             c5_v = (
                 "PASS"
                 if blocked is True
@@ -354,6 +426,8 @@ def main() -> int:
             "C5_round_trips": c5_v,
         }
         entry["pass"] = all(v == "PASS" for v in entry["criteria"].values())
+        if notes:
+            entry["record_notes"] = notes
         passed += 1 if entry["pass"] else 0
         report["items"].append(entry)
 

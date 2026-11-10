@@ -41,12 +41,19 @@ A run of the corpus = for each item: A's pipeline parses the NL text into a `Sce
 ## 4. Running it
 
 ```bash
-# 1. Run A's pipeline over the corpus, dumping one ScenarioConfig JSON per item:
+# 1. Run A's pipeline over the corpus, dumping one file per item:
 #    experiments/p1_pipeline_output/<item_id>.json   (produced by A's harness)
-# 2. Deterministic checks (C1-C3 + expected-validation), no server, no LLM:
+# 2. Score (deterministic C1-C3, LLM-free; C4/C5 sourced per the rules below):
 python3 experiments/p1_score_corpus.py --configs experiments/p1_pipeline_output --report experiments/p1_score_report.json
-# 3. Runtime checks (C4 simulate-clean, C5 POST round-trip) recorded by A/PM into the report's runtime section; the scorer merges both into the item verdicts.
 ```
+
+**Accepted input shapes** (auto-detected): a bare `ScenarioConfig` JSON, or the pipeline's own result dict (`run_nl_to_config` returns `{success, final_config, iterations, final_report, manifest, audit_trail}`) - the scorer extracts `final_config` and keeps the rest as the run record.
+
+**C4/C5 sourcing rules (never invented):**
+- **C4 (simulates clean)** - complete items: PASS when the record's `execution` shows `success` + `power_flow_converged` + `energy_balance_ok` + `steps > 0` (source quoted in the report), or when the verifier's `--runtime` record says so (the runtime record wins if present). Rejection items: PASS when the record shows the invalid artifact was not run AND the expected field is named in `schema_errors`/`mapping_errors`.
+- **C5 (POST /scenarios round-trip)** - scored ONLY from the verifier's `--runtime` record (live endpoint evidence). The pipeline's own `verification.round_trip` is a **serialization** round-trip (pydantic parse/dump/reparse), not the API round-trip the criterion requires: it is reported as a note, never scored as C5. A pilot run therefore reads C5 UNCHECKED until the endpoint evidence is recorded - by design, so the full bar cannot be reached on serialization evidence alone.
+- A pipeline record showing `success=True` on a rejection-path item fails that item's C4 with the reason quoted (the invalid artifact was produced/run).
+- The manifest's `provenance` (e.g. `rule_based_fallback`) is surfaced as a note - context for reading the pilot, not a criterion.
 
 The scorer is deterministic and mock-free: it reads the corpus, the produced configs, and (optionally) a runtime-results JSON, and emits per-item, per-criterion verdicts plus the corpus score against the acceptance bar.
 

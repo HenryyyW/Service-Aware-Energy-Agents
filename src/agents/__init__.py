@@ -50,6 +50,38 @@ from src.agents.backend import (
     PROMPT_REGISTRY,
 )
 
+# NL -> Scenario Config pipeline
+from src.agents.config_roles import (
+    ConfigAgentRole,
+    ConfigAgentState,
+    ConfigMessage,
+    ConfigPlannerOutput,
+    ConfigCoderOutput,
+    ConfigExecutorOutput,
+    ConfigVerifierOutput,
+    ConfigReporterOutput,
+)
+from src.agents.config_planner import ConfigPlannerAgent, create_config_planner
+from src.agents.config_coder import ConfigCoderAgent
+from src.agents.config_executor import ConfigExecutorAgent, create_config_executor
+from src.agents.config_verifier import ConfigVerifierAgent, create_config_verifier
+from src.agents.config_reporter import ConfigReporterAgent
+from src.agents.config_mapping import (
+    map_weather_to_climate_zone,
+    map_grid_to_pandapower,
+    map_building_type,
+    map_tariff_type,
+    map_market_type,
+    extract_numeric_values,
+    parse_location,
+    extract_asset_counts,
+)
+from src.agents.nl_config_pipeline import (
+    NLConfigPipeline,
+    run_nl_to_config,
+    create_nl_config_pipeline,
+)
+
 __all__ = [
     # Roles
     "AgentRole",
@@ -98,4 +130,32 @@ __all__ = [
     "get_llm_config_for_scenario",
     "PromptTemplate",
     "PROMPT_REGISTRY",
+    # NL -> Scenario Config pipeline
+    "ConfigAgentRole",
+    "ConfigAgentState",
+    "ConfigMessage",
+    "ConfigPlannerOutput",
+    "ConfigCoderOutput",
+    "ConfigExecutorOutput",
+    "ConfigVerifierOutput",
+    "ConfigReporterOutput",
+    "ConfigPlannerAgent",
+    "create_config_planner",
+    "ConfigCoderAgent",
+    "ConfigExecutorAgent",
+    "create_config_executor",
+    "ConfigVerifierAgent",
+    "create_config_verifier",
+    "ConfigReporterAgent",
+    "NLConfigPipeline",
+    "run_nl_to_config",
+    "create_nl_config_pipeline",
+    "map_weather_to_climate_zone",
+    "map_grid_to_pandapower",
+    "map_building_type",
+    "map_tariff_type",
+    "map_market_type",
+    "extract_numeric_values",
+    "parse_location",
+    "extract_asset_counts",
 ]

@@ -58,6 +58,14 @@ def tweak(grid_body: str) -> str:
     return out
 
 
+EV = body_of("_control_ev")
+EV_MOD = EV.replace(
+    "connected = arrival_hour <= hour_of_day < departure_hour",
+    "connected = arrival_hour <= hour_of_day <= departure_hour",
+    1,
+)
+assert EV_MOD != EV, "EV tweak did not apply - controller changed?"
+
 GRID = body_of("_apply_grid_limits")
 GRID_MOD = tweak(GRID)
 REDISP = body_of("_apply_grid_violation_redispatch")
@@ -86,6 +94,26 @@ MUST_APPLY = {
         f"```python\n{MARKER}# FUNCTION: _apply_grid_limits\n{GRID_MOD}\n```\n\n"
         f"```python\n{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n{REDISP_MOD}\n```\n"
     ),
+    # CLOSED on main 07fa66512 (the integrated markers-inside fix) and verified
+    # there at zero cost - now must-apply so a future regression is caught
+    "modified + unchanged echo (unfenced)": (
+        f"{MARKER}# FUNCTION: _apply_grid_limits\n{GRID_MOD}\n"
+        f"{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n{REDISP}\n"
+    ),
+    "modified + unchanged echo (fenced)": (
+        f"```python\n{MARKER}# FUNCTION: _apply_grid_limits\n{GRID_MOD}\n```\n\n"
+        f"```python\n{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n{REDISP}\n```\n"
+    ),
+    # CLOSED on main 07fa66512 (block-local fence slicing) - was the task_8
+    # family: 3 marker pairs each followed by its OWN fence, all modified
+    "multi-fenced, markers outside each fence, 3 modified": (
+        f"{MARKER}# FUNCTION: _apply_grid_limits\n"
+        f"```python\n{GRID_MOD}\n```\n\n"
+        f"{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n"
+        f"```python\n{REDISP_MOD}\n```\n\n"
+        f"{MARKER}# FUNCTION: _control_ev\n"
+        f"```python\n{EV_MOD}\n```\n"
+    ),
 }
 
 REPORTED = {
@@ -101,19 +129,8 @@ REPORTED = {
         f"{MARKER}# FUNCTION: _apply_grid_limits\n{GRID_MOD}\n"
         f"{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n{REDISP}\n"
     ),
-    "modified + unchanged echo (fenced)": (
-        f"```python\n{MARKER}# FUNCTION: _apply_grid_limits\n{GRID_MOD}\n```\n\n"
-        f"```python\n{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n{REDISP}\n```\n"
-    ),
-}
-
-PENDING = {
-    # must-apply once A's echo-skip fix lands: the modified replacement is
-    # applied and the unchanged echo is skipped, not fatal to the response
-    "modified + echo -> apply modified, skip echo": (
-        f"{MARKER}# FUNCTION: _apply_grid_limits\n{GRID_MOD}\n"
-        f"{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n{REDISP}\n"
-    ),
+    # (the echo and multi-fenced gap cases moved to MUST_APPLY when they closed
+    # on main 07fa66512 - verified there at zero cost)
 }
 
 
@@ -142,11 +159,13 @@ def main() -> int:
     coder = LLMCoderAgent(preflight_probe=False)
     print("shapes that MUST apply:")
     ok = all(run(k, v, coder) for k, v in MUST_APPLY.items())
-    print("shapes reported for the record (not asserted):")
+    print(
+        "shapes reported for the record (not asserted): the two dispatched gap"
+        " families (echo-skip; block-local fence slicing) CLOSED on main"
+        " 07fa66512 and were promoted to MUST_APPLY above - verified there at"
+        " zero cost."
+    )
     for k, v in REPORTED.items():
-        run(k, v, coder)
-    print("PENDING - must apply once A's echo-skip fix lands (not asserted):")
-    for k, v in PENDING.items():
         run(k, v, coder)
     print("\nverdict:", "PASS - all must-apply shapes apply" if ok else "FAIL")
     return 0 if ok else 1
