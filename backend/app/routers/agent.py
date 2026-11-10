@@ -172,6 +172,8 @@ class AgentTask(BaseModel):
     verification: Optional[Dict[str, Any]] = None
     repairs: List[Dict[str, Any]] = []
     report: Optional[str] = None
+    metrics_comparison: Optional[Dict[str, Any]] = None
+    masked_violation_detected: Optional[bool] = None
 
 
 def _shape_repair_records(result) -> List[Dict[str, Any]]:
