@@ -858,14 +858,22 @@ Return ONLY the unified diff. NO additional text."""
         if additions == 0 and deletions == 0:
             return False
 
-        # Check for additions-only or deletions-only (both suggest malformed diff)
-        # A valid unified diff should have BOTH additions and deletions
+        # Check for context lines (lines starting with space) - proper diffs have context
+        context_lines = sum(
+            1 for line in lines if line.startswith(" ") and not line.startswith("@@")
+        )
+
+        # Check for additions-only or deletions-only
+        # Allow additions-only if there are context lines (legitimate insertion)
+        # Reject if no context lines (whole-function dump)
         if additions > 0 and deletions == 0:
-            return (
-                False  # Additions-only suggests whole-function dump, not a proper diff
-            )
+            if context_lines == 0:
+                return (
+                    False  # Additions-only with no context suggests whole-function dump
+                )
         if deletions > 0 and additions == 0:
-            return False  # Deletions-only is also malformed
+            if context_lines == 0:
+                return False  # Deletions-only with no context suggests incomplete diff
 
         # Check for wildly unbalanced hunks (more than 10:1 ratio suggests malformed)
         if additions > 0 and deletions > 0:
