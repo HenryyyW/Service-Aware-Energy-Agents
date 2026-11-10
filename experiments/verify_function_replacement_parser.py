@@ -58,6 +58,14 @@ def tweak(grid_body: str) -> str:
     return out
 
 
+EV = body_of("_control_ev")
+EV_MOD = EV.replace(
+    "connected = arrival_hour <= hour_of_day < departure_hour",
+    "connected = arrival_hour <= hour_of_day <= departure_hour",
+    1,
+)
+assert EV_MOD != EV, "EV tweak did not apply - controller changed?"
+
 GRID = body_of("_apply_grid_limits")
 GRID_MOD = tweak(GRID)
 REDISP = body_of("_apply_grid_violation_redispatch")
@@ -114,6 +122,21 @@ PENDING = {
         f"{MARKER}# FUNCTION: _apply_grid_limits\n{GRID_MOD}\n"
         f"{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n{REDISP}\n"
     ),
+    # must-apply once A's block-local fence slicing lands: the live task_8
+    # family - three marker pairs, each followed by its OWN fence, all three
+    # genuinely modified. The current closing-fence search returns the opening
+    # fence, so later blocks capture block 0's code (live probe: SyntaxError
+    # line 93; constructed probe: 'unexpected indent line 1'). All three
+    # replacements are genuine modifications, so this case isolates the
+    # fence-slicing defect from the echo semantics.
+    "multi-fenced, markers outside each fence, 3 modified": (
+        f"{MARKER}# FUNCTION: _apply_grid_limits\n"
+        f"```python\n{GRID_MOD}\n```\n\n"
+        f"{MARKER}# FUNCTION: _apply_grid_violation_redispatch\n"
+        f"```python\n{REDISP_MOD}\n```\n\n"
+        f"{MARKER}# FUNCTION: _control_ev\n"
+        f"```python\n{EV_MOD}\n```\n"
+    ),
 }
 
 
@@ -145,7 +168,10 @@ def main() -> int:
     print("shapes reported for the record (not asserted):")
     for k, v in REPORTED.items():
         run(k, v, coder)
-    print("PENDING - must apply once A's echo-skip fix lands (not asserted):")
+    print(
+        "PENDING - must apply once A's echo-skip + block-local fence-slicing "
+        "fixes land (not asserted):"
+    )
     for k, v in PENDING.items():
         run(k, v, coder)
     print("\nverdict:", "PASS - all must-apply shapes apply" if ok else "FAIL")
