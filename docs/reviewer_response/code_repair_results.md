@@ -322,11 +322,32 @@ the transformation vocabulary - and is **not a counted repair**. Repair counts
 are read from the 9 measured tasks only; this applies to every section of this
 document.
 
-The LLM arm is held until A's remaining diff-application defect is fixed; the
-decisive two-arm re-run (deterministic comparator first, then the LLM arm via
-the configured product path, <= 10 tasks x <= 5 iterations, both arms unpooled,
-`loop_claimed_success` beside every verdict, threshold >= 7/9 reported either
-way) runs on the PM's GO.
+**Correction (2026-11-10, per the Project Partner):** the hold reason above was
+stale. A's diff re-indent fix and the multi-hunk applier fix were long merged
+(main `7d15c8515`); the binding blocker had moved to the **model's output
+format** (additions-only / unbalanced / comment-edit diffs that pass validation
+but fail downstream with `changes=0`). The correct hold reason was **"held for
+the output-contract fix"** (function replacement as primary, strict diff as
+fallback, accepted via the PM's zero-LLM-call mock probes).
+
+**Current state (this supersedes the hold):** the output-contract fix landed and
+the decisive two-arm re-run has been executed. Headline - deterministic
+comparator: 10/10 loop/driver agreement, 0/9 measured repairs, negative control
+`keep=True` (valid honest-failure cell), zero instantiation errors; LLM arm:
+**5/9 measured repairs** (tasks 1/2/4/5/7, each detector-verified
+broken -> patched), 44 calls, 0 backend errors, 10/10 loop/driver agreement,
+negative control `keep=True`. The pre-registered threshold >= 7/9 is **not
+met**, so the paper's A2 sentence stays "scaffolded, not yet demonstrated"
+(reported either way; both arms unpooled; acceptance of record = driver
+criteria (a)-(f) with `loop_claimed_success` beside every verdict). A later
+probe on A's `29c9b22c2` (unfenced + multi-replacement handling) converts 2/3
+tasks with a new failure shape (marker pairs emitted OUTSIDE the fenced
+blocks); no gain over the 5/9 run, so no further full-arm spend - see the
+re-decision asks in that section. Evidence branches (pending the PM's merge):
+`benchmark/f3-decisive` (run + runner `coder_source` label fix),
+`benchmark/probe-f4` (latest probe + zero-cost parser verification
+`experiments/verify_function_replacement_parser.py`); base notes (the run used
+A's fix before it was merged to main) are recorded in those branches.
 
 
 ## LLM-arm probe after A's conversion fixes (main 160893e71) - the blocker moved to the model's diff format
