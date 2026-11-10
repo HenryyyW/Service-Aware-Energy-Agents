@@ -554,14 +554,24 @@ Return ONLY the unified diff. NO additional text."""
             # Check if the code starts with a fence (```python)
             code = raw_code
             if code.lstrip().startswith("```python"):
-                # Fenced block - extract content between ```python and ```
-                fence_end = code.find("```")
-                if fence_end >= 0:
-                    code = code[len("```python") : fence_end]
-                    # Only strip trailing whitespace, preserve leading indentation
-                    code = code.rstrip()
+                # Fenced block - extract content between ```python and the matching ```
+                # Skip the opening ```python\n
+                after_python = (
+                    code.split("```python", 1)[1] if "```python" in code else ""
+                )
+                if after_python:
+                    # Find the closing ``` AFTER the opening one
+                    fence_end = after_python.find("```")
+                    if fence_end >= 0:
+                        code = after_python[:fence_end]
+                        # Only strip trailing whitespace, preserve leading indentation
+                        code = code.rstrip()
+                    else:
+                        # No closing fence found, take everything after ```python
+                        code = after_python.rstrip()
                 else:
-                    code = code[len("```python") :].rstrip()
+                    # Fallback: no content after ```python
+                    code = ""
             else:
                 # Unfenced - take from after the marker newline until next marker or EOF
                 # The marker pattern includes the trailing newline, so code starts at the right place
@@ -580,13 +590,13 @@ Return ONLY the unified diff. NO additional text."""
 
             # Handle case where the code might be in a separate fenced block
             # (markers before fence, fence contains only code)
-            if not code and func_name in response:
-                # Try to find a fenced block for this function
-                # Look for ```python ... ``` that contains the function name
+            # Search only within this marker's code region to avoid cross-block capture
+            if not code and func_name in response[match.end() : code_end]:
+                region = response[match.end() : code_end]
                 fence_pattern = (
                     r"```python\n(.*?def\s+" + re.escape(func_name) + r"\b.*?)```"
                 )
-                fence_match = re.search(fence_pattern, response, re.DOTALL)
+                fence_match = re.search(fence_pattern, region, re.DOTALL)
                 if fence_match:
                     # Only strip trailing whitespace, preserve leading indentation
                     code = fence_match.group(1).rstrip()
