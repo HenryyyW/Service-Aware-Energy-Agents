@@ -74,7 +74,7 @@ NATURAL LANGUAGE DESCRIPTION:
 
 REQUIRED OUTPUT FORMAT (JSON):
 {{
-    "target_assets": [],  // ONLY include assets explicitly mentioned in the description (subset of: pv, battery, ev, flexible_load, tariff, grid)
+    "target_assets": [],  // ONLY include assets explicitly mentioned in the description (subset of: pv, battery, ev, flexible_load, tariff, grid, buildings)
     "building_count": 1,
     "building_types": ["residential"],
     "pv_configs": [],  // Only include if "pv" in target_assets
@@ -99,26 +99,43 @@ REQUIRED OUTPUT FORMAT (JSON):
     "out_of_scope": ["detailed grid topology", "custom market mechanisms"]
 }}
 
+FIELD REFERENCE - for every asset you include, its config list must carry ALL required fields (marked *); fields with defaults may be omitted:
+- pv_configs[]: capacity_kw*, azimuth (default 180), tilt (default 30), efficiency (default 0.20)
+- battery_configs[]: capacity_kwh*, power_kw*, efficiency_charge (default 0.95), efficiency_discharge (default 0.95), soc_min (default 0.1), soc_max (default 0.9), initial_soc (default 0.5)
+- ev_configs[]: capacity_kwh*, max_charge_kw*, arrival_time* (HH:MM), departure_time* (HH:MM), efficiency (default 0.90), target_soc (default 0.8), initial_soc (default 0.3), connected_days (default [0,1,2,3,4,5,6])
+- flexible_load_configs[]: power_kw*, energy_kwh*, earliest_start* (HH:MM), latest_end* (HH:MM), duration_hours*
+- tariff_configs[]: type (default "time_of_use"), import_prices (period -> price), export_prices, demand_charge ($/kW)
+- grid_configs[]: network_type ("ieee_13"/"ieee_34"/"simbench"), voltage_limits (min/max), line_loading_limit
+
+ASSET TRIGGERS - include a token in target_assets ONLY when the description clearly indicates it:
+- "pv": PV / solar / rooftop panels described
+- "battery": battery / storage described
+- "ev": EV / electric car / vehicle described
+- "flexible_load": deferrable / shiftable load or appliance described
+- "tariff": tariff / electricity prices / demand charge described
+- "grid": feeder / network / node connection described
+- "buildings": the description sets up the community itself (building count, building types, or the run period). Include it even when no on-site assets are mentioned, so a buildings-only community is still configured.
+If the description mentions NO on-site assets, target_assets must be [] or ["buildings"] only. NEVER invent assets.
+
+WEATHER: If a weather file or a city is mentioned (e.g., "Singapore weather file"), set weather_file to it AND set location to that city (lat/lon/timezone) AND climate_zone to a matching CityLearn zone.
+
 MAPPING RULES:
 1. ONLY include assets explicitly mentioned in the description. Do NOT add default assets.
-2. target_assets should ONLY contain assets explicitly mentioned in the description.
-3. For each asset in target_assets, include its corresponding config section with values from the description (or sensible defaults if specific values not given).
-4. Weather descriptions ("sunny California", "Mediterranean climate", "Singapore weather") -> CityLearn climate zones (use tmy3 zones). If specific weather file mentioned (e.g., "Singapore weather file"), include in weather_file field.
-5. Grid descriptions -> pandapower network types (ieee_13, ieee_34, simbench)
-6. Building types: residential, commercial, industrial, mixed
-7. Asset mentions -> corresponding config sections
-8. Community limits -> import/export limits
-9. Energy sharing -> enabled flag + market type
-10. Dynamic pricing -> enabled flag + pricing type
-11. Failure mentions -> failure_injections list
+2. For each asset in target_assets, include its corresponding config section with ALL required fields, using values from the description (or the documented defaults when specific values are not given).
+3. Weather descriptions ("sunny California", "Mediterranean climate") -> CityLearn climate zones (use tmy3 zones)
+4. Grid descriptions -> pandapower network types (ieee_13, ieee_34, simbench)
+5. Building types: residential, commercial, industrial, mixed
+6. Community limits -> import/export limits
+7. Energy sharing -> enabled flag + market type
+8. Dynamic pricing -> enabled flag + pricing type
+9. Failure mentions -> failure_injections list
 
 CRITICAL RULES:
 - ONLY include assets explicitly mentioned in the description
 - Do NOT add default assets that are not mentioned
 - If an asset is not mentioned, do NOT include it in target_assets or its config section
-- If specific values are not given for an asset, use sensible defaults but still include the asset (since it was mentioned)
+- If specific values are not given for a required field of a mentioned asset, use the documented default - but NEVER omit a required (starred) field
 - For missing info: Use sensible defaults, document assumptions, note out_of_scope items
-- If weather file is explicitly mentioned (e.g., "Singapore weather file"), include in weather_file field
 
 OUTPUT ONLY THE JSON. NO EXPLANATIONS.
 """

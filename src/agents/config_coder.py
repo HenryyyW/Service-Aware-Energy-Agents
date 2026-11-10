@@ -164,9 +164,9 @@ class ConfigCoderAgent:
                 battery = plan["battery_configs"][i % len(plan["battery_configs"])]
                 building["battery"] = battery
 
-            # EV
+            # EV (per building, like pv/battery: one config per building)
             if "ev" in plan.get("target_assets", []) and plan.get("ev_configs"):
-                building["evs"] = plan["ev_configs"]
+                building["evs"] = [plan["ev_configs"][i % len(plan["ev_configs"])]]
 
             # Flexible loads
             if "flexible_load" in plan.get("target_assets", []) and plan.get(
@@ -181,6 +181,8 @@ class ConfigCoderAgent:
             # Location/simulation
             if plan.get("location"):
                 building["location"] = plan["location"]
+            if plan.get("weather_file"):
+                building["weather_file"] = plan["weather_file"]
 
             buildings.append(building)
 

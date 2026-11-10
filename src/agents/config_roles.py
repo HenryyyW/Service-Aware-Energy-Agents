@@ -112,6 +112,7 @@ class ConfigPlannerOutput(BaseModel):
     # Weather/Location
     location: Dict[str, Any] = Field(default_factory=dict)  # lat, lon, timezone
     climate_zone: Optional[str] = None  # CityLearn climate zone
+    weather_file: Optional[str] = None  # CityLearn weather file (e.g. Singapore)
 
     # Metadata
     confidence: float = 0.8

@@ -72,6 +72,11 @@ def main() -> int:
     parser.add_argument(
         "--iterations", type=int, default=3, help="max pipeline iterations per item"
     )
+    parser.add_argument(
+        "--only",
+        default="",
+        help="comma-separated corpus item ids (e.g. c03_battery_arbitrage,c07_weather); overrides --items/--offset",
+    )
     parser.add_argument("--out", default=str(ROOT / "experiments" / "p1_probe"))
     parser.add_argument("--list", action="store_true")
     parser.add_argument(
@@ -103,6 +108,14 @@ def main() -> int:
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     selected = items[args.offset : args.offset + args.items]
+    if args.only:
+        wanted = [s.strip() for s in args.only.split(",") if s.strip()]
+        by_id = {it["id"]: it for it in items}
+        missing = [w for w in wanted if w not in by_id]
+        if missing:
+            print(f"[probe] unknown item ids: {missing}", flush=True)
+            return 2
+        selected = [by_id[w] for w in wanted]
     records = []
     for it in selected:
         item_id = it["id"]
