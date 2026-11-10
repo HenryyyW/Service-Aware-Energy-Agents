@@ -78,6 +78,47 @@ def count_section(cfg, section):
     return 1 if cfg.get(section) is not None else 0
 
 
+# Sections whose plans_complete_config demand is a COUNT (how many buildings
+# carry it). Every other int demand is a scalar VALUE (e.g. timestep_minutes:
+# 60) - comparing that against count_section's presence-count read as
+# "planned 1, expected 60".
+COUNT_SECTIONS = (
+    "buildings",
+    "failures",
+    "pv",
+    "battery",
+    "evs",
+    "flexible_loads",
+    "tariff",
+    "pandapower",
+    "energy_sharing",
+    "weather_file",
+)
+
+# ScenarioConfig keeps these on BuildingConfig, never at the top level, so a
+# bare path in a rubric resolves across buildings when the top level has none.
+BUILDING_FIELDS = ("simulation_start", "simulation_end", "weather_file")
+
+
+def resolve_field(cfg, path):
+    """Resolve a (bare or dotted) path with a building-level fallback.
+
+    Returns (found, value, uniform): uniform is False when buildings that
+    carry the field disagree on the value."""
+    ok, got = get_path(cfg, path)
+    if ok or "[" in path:
+        return ok, got, True
+    if path in BUILDING_FIELDS:
+        vals = [
+            b.get(path)
+            for b in cfg.get("buildings", []) or []
+            if b.get(path) is not None
+        ]
+        if vals:
+            return True, vals[0], len({str(v) for v in vals}) == 1
+    return ok, got, True
+
+
 REJECTION_RULES = {
     # rejection items: the invalid artifact must NOT be silently planned.
     # Each rule returns a list of issues ([] = correctly not planned).
@@ -192,9 +233,15 @@ def check_c1(item, cfg):
                 )
     for section, demand in plan.items():
         if isinstance(demand, int):
-            actual = count_section(cfg, section)
-            if actual != demand:
-                issues.append(f"{section}: planned {actual}, expected {demand}")
+            if section in COUNT_SECTIONS:
+                actual = count_section(cfg, section)
+                if actual != demand:
+                    issues.append(f"{section}: planned {actual}, expected {demand}")
+            else:
+                # scalar-valued demand: compare the value, not a presence count
+                got = cfg.get(section)
+                if got != demand:
+                    issues.append(f"{section}: planned {got!r}, expected {demand}")
         elif isinstance(demand, dict):
             for key, val in demand.items():
                 if key == "count":
@@ -239,9 +286,13 @@ def check_c2(item, cfg):
                 if not ok:
                     missing.append(f"{base}[{i}]{rest}")
         else:
-            ok, _ = get_path(cfg, path)
+            ok, _, _ = resolve_field(cfg, path)
             if not ok:
                 missing.append(path)
+            elif path in BUILDING_FIELDS and not all(
+                b.get(path) is not None for b in cfg.get("buildings", []) or []
+            ):
+                missing.append(f"{path} (not on every building)")
     return (not missing), missing
 
 
@@ -250,10 +301,12 @@ def check_c3(item, cfg):
     values satisfy the domain-wide semantic rules."""
     issues = []
     for path, want in item.get("stated_values", {}).items():
-        ok, got = get_path(cfg, path)
+        ok, got, uniform = resolve_field(cfg, path)
         if not ok:
             issues.append(f"{path}: missing (stated {want!r})")
             continue
+        if not uniform:
+            issues.append(f"{path}: buildings disagree (e.g. {got!r})")
         if path == "buildings":
             continue
         if isinstance(want, dict):

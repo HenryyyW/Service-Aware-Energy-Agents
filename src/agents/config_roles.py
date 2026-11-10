@@ -107,6 +107,8 @@ class ConfigPlannerOutput(BaseModel):
     # Simulation settings
     timestep_minutes: int = 15
     simulation_duration_days: int = 7
+    simulation_start: Optional[str] = None  # 'YYYY-MM-DD' when the NL states it
+    simulation_end: Optional[str] = None  # 'YYYY-MM-DD' (derived from duration)
     random_seed: int = 42
 
     # Weather/Location

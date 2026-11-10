@@ -218,6 +218,12 @@ class ConfigCoderAgent:
                 building["location"] = plan["location"]
             if plan.get("weather_file"):
                 building["weather_file"] = plan["weather_file"]
+            # Simulation window (c11): the NL-stated run period must reach the
+            # buildings - BuildingConfig carries simulation_start/end.
+            if plan.get("simulation_start"):
+                building["simulation_start"] = plan["simulation_start"]
+            if plan.get("simulation_end"):
+                building["simulation_end"] = plan["simulation_end"]
 
             buildings.append(building)
 

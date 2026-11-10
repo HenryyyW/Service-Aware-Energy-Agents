@@ -87,8 +87,10 @@ REQUIRED OUTPUT FORMAT (JSON):
     "community_export_limit_kw": null,  // Only include if mentioned
     "energy_sharing_enabled": false,
     "dynamic_pricing_enabled": false,
-    "timestep_minutes": 15,
+    "timestep_minutes": 15,  // The stated step when the description gives one (5/15/30/60)
     "simulation_duration_days": 7,
+    "simulation_start": null,  // 'YYYY-MM-DD' only if a start date is stated (e.g. 2023-03-01)
+    "simulation_end": null,  // 'YYYY-MM-DD' - derive from the stated duration when only that is given
     "random_seed": 42,
     "location": {{"lat": 34.05, "lon": -118.24, "timezone": "America/Los_Angeles"}},
     "climate_zone": "tmy3_722950",
@@ -108,6 +110,8 @@ FIELD REFERENCE - for every asset you include, its config list must carry ALL re
 - grid_configs[]: network_type ("ieee_13"/"ieee_34"/"simbench"), voltage_limits (a DICT with min/max like {{"min": 0.95, "max": 1.05}} - NEVER a list), line_loading_limit (a number like 1.0 - NEVER null)
 
 Per-asset placement: when an asset is described for only SOME buildings, add a 1-based "building" key to each config of that asset naming the building it belongs to; when every building has the asset, emit one config per building.
+
+SIMULATION WINDOW: when the description states a start date and a run length (e.g. "two weeks from 2023-03-01"), set simulation_start ("YYYY-MM-DD") and simulation_end - if only the duration is stated, add it to the start date. Set timestep_minutes to the stated step when given (allowed values: 5, 15, 30, 60).
 
 ASSET TRIGGERS - include a token in target_assets ONLY when the description clearly indicates it:
 - "pv": PV / solar / rooftop panels described
