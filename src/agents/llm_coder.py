@@ -534,6 +534,11 @@ Return ONLY the unified diff. NO additional text."""
                 )
             return None
 
+        # Find all fenced blocks in the response
+        fence_positions = []
+        for m in re.finditer(r"```python\n(.*?)\n```", response, re.DOTALL):
+            fence_positions.append((m.start(), m.end()))
+
         # Extract code blocks for each marker pair
         replacements = []
         for i, match in enumerate(matches):
@@ -547,46 +552,33 @@ Return ONLY the unified diff. NO additional text."""
             else:
                 code_end = len(response)
 
-            # Extract the raw code region after the markers
-            raw_code = response[match.end() : code_end]
+            # Check if there's a fenced block immediately after this marker (markers OUTSIDE fence)
+            # Look for a fenced block that starts after this marker's end and before the next marker
+            code = None
+            for fence_start, fence_end in fence_positions:
+                if fence_start >= match.end() and (
+                    i + 1 >= len(matches) or fence_start < matches[i + 1].start()
+                ):
+                    # This fenced block belongs to this marker
+                    fence_content = response[fence_start:fence_end]
+                    if fence_content.lstrip().startswith("```python\n"):
+                        code = fence_content[len("```python\n") : -len("\n```")]
+                        break
 
-            # Check if the code starts with a fence (```python)
-            code = raw_code
-            if code.lstrip().startswith("```python"):
-                # Fenced block - extract content between ```python and the matching ```
-                # Split by ``` and take the first segment after "python\n"
-                # This handles multiple fenced blocks correctly (markers outside fences)
-                after_python = (
-                    code.split("```python", 1)[1] if "```python" in code else ""
-                )
-                if after_python:
-                    # Split by ``` and take the first segment (content of first fence)
-                    code = after_python.split("```", 1)[0]
-                    # Only strip trailing whitespace, preserve leading indentation
-                    code = code.rstrip()
-                else:
-                    # Fallback: try to extract up to first ```
-                    fence_end = code.find("```")
-                    if fence_end >= 0:
-                        code = code[len("```python") : fence_end]
-                    else:
-                        code = code[len("```python") :]
-                    code = code.rstrip()
-            else:
-                # Unfenced - take from after the marker newline until next marker or EOF
-                # The marker pattern includes the trailing newline, so code starts at the right place
-                code = code.lstrip("\n").rstrip()
+            # If no fenced block found, try unfenced extraction
+            if code is None:
+                raw_code = response[match.end() : code_end]
+                code = raw_code.lstrip("\n").rstrip()
 
-            # Remove any trailing ``` fence that might have been included
-            # (when markers are inside a fenced block, the closing ``` may be included)
-            code_lines = code.splitlines()
-            cleaned_lines = []
-            for line in code_lines:
-                stripped = line.strip()
-                if stripped == "```" or stripped.startswith("```"):
-                    break
-                cleaned_lines.append(line)
-            code = "\n".join(cleaned_lines)
+                # Remove any trailing ``` fence that might have been included
+                code_lines = code.splitlines()
+                cleaned_lines = []
+                for line in code_lines:
+                    stripped = line.strip()
+                    if stripped == "```" or stripped.startswith("```"):
+                        break
+                    cleaned_lines.append(line)
+                code = "\n".join(cleaned_lines)
 
             # Handle case where the code might be in a separate fenced block
             # (markers before fence, fence contains only code)
