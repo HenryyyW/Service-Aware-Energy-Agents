@@ -19,6 +19,7 @@ runtime (C4/C5) results, with zero mocks and zero LLM spend.
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -75,6 +76,9 @@ def count_section(cfg, section):
         return 1 if cfg.get(section) else 0
     if section == "weather_file":
         return sum(1 for b in cfg.get("buildings", []) or [] if b.get("weather_file"))
+    if section == "timestep_minutes":
+        # a scalar value, not a section: its correctness is a stated-value check
+        return 1 if cfg.get(section) is not None else 0
     return 1 if cfg.get(section) is not None else 0
 
 
@@ -198,13 +202,55 @@ def _verification_block(record):
     return _last_iteration(record).get("verifier_output") or {}
 
 
-def check_c1(item, cfg):
+def _rejection_evidence(item, record):
+    """For a rejection-path item: (named_field_or_None, validate_blocked_bool)
+    sourced from the record - schema_errors / mapping_errors / the last
+    verifier's out_of_range_fields, schema_rejections, required_fields_missing,
+    or a failure summary - matching the corpus's expected_named_fields."""
+    if record is None:
+        return None, None
+    cands = []
+    for key in ("schema_errors", "mapping_errors"):
+        for e in record.get(key) or []:
+            cands.append(str(e))
+    last_verifier = _last_iteration(record).get("verifier_output") or {}
+    for key in (
+        "schema_errors",
+        "out_of_range_fields",
+        "schema_rejections",
+        "required_fields_missing",
+    ):
+        for e in last_verifier.get(key) or []:
+            cands.append(str(e))
+    fr = record.get("final_report")
+    summary = (
+        str(fr.get("summary") or "")
+        if isinstance(fr, dict)
+        else (str(fr) if fr else "")
+    )
+    if summary and "failed" in summary.lower():
+        cands.append(summary)
+    expected = item.get("expected_named_fields") or []
+    hit = [c for c in cands if any(f in c for f in expected)]
+    named = f"{hit[0]} (source: record)" if hit else None
+    blocked = bool(cands) and record.get("success") is False
+    return named, blocked
+
+
+def check_c1(item, cfg, named_rejected=False, record_success=None):
     """Plans a complete config: section counts as demanded (or, for rejection
     items, that the invalid artifact is NOT planned)."""
     issues = []
     if item["kind"] != "complete":
+        # Rejection-path semantics (aligned with the PM's stated acceptance: the
+        # correct handling is a NAMED validator error + escalation, not the
+        # absence of the invalid value from the draft): the invalid artifact in
+        # the config is a failure ONLY when it was silently accepted (record
+        # success=True) or when no named rejection exists in the record.
         rule = REJECTION_RULES.get(item["id"])
-        issues = rule(cfg) if rule else []
+        planned = rule(cfg) if rule else []
+        if planned and not (named_rejected or record_success is False):
+            issues = planned
         return (not issues), issues
     plan = item["rubric"].get("plans_complete_config", {})
     if item["kind"] == "complete":
@@ -296,7 +342,7 @@ def check_c2(item, cfg):
     return (not missing), missing
 
 
-def check_c3(item, cfg):
+def check_c3(item, cfg, reject_named=False):
     """Values in range: the stated values match the NL text; the unstated
     values satisfy the domain-wide semantic rules."""
     issues = []
@@ -365,6 +411,14 @@ def check_c3(item, cfg):
                     len(t) == 5 and t[2] == ":" and t[:2].isdigit() and t[3:].isdigit()
                 ):
                     issues.append(f"buildings[{i}].evs[{j}] bad HH:MM time {t!r}")
+        wf = b.get("weather_file")
+        if wf is not None:
+            # the value must be a resolvable filename, not the NL phrase echoed
+            # back (e.g. 'Singapore weather file' does not name a file)
+            if not re.fullmatch(r"[A-Za-z0-9_.\-]+\.(csv|epw|json|zip)", str(wf)):
+                issues.append(
+                    f"buildings[{i}].weather_file not a resolvable filename: {wf!r}"
+                )
         for j, fl in enumerate(b.get("flexible_loads") or []):
             pk, ek, dur = (
                 fl.get("power_kw"),
@@ -384,14 +438,31 @@ def check_c3(item, cfg):
         for k in ("line_loading_limit", "transformer_loading_limit"):
             if k in pv_cfg and pv_cfg[k] <= 0:
                 issues.append(f"pandapower.{k} non-positive: {pv_cfg[k]}")
-        for k in ("min", "max"):
-            v = (pv_cfg.get("voltage_limits") or {}).get(k)
-            if v is not None and not (0.5 < v < 1.5):
-                issues.append(f"pandapower.voltage_limits.{k} implausible: {v}")
+        vl = pv_cfg.get("voltage_limits")
+        if isinstance(vl, dict):
+            for k in ("min", "max"):
+                v = vl.get(k)
+                if v is not None and not (0.5 < v < 1.5):
+                    issues.append(f"pandapower.voltage_limits.{k} implausible: {v}")
+        elif vl is not None:
+            # the schema types voltage_limits as Dict[str, float]; a list (or
+            # any non-dict) is a shape violation the endpoint will reject
+            issues.append(
+                f"pandapower.voltage_limits wrong shape: {type(vl).__name__} "
+                "(schema expects a dict with min/max)"
+            )
     for k in ("community_import_limit_kw", "community_export_limit_kw"):
         v = cfg.get(k)
         if v is not None and v <= 0:
-            issues.append(f"{k} non-positive: {v}")
+            # for a rejection item whose record carries the NAMED rejection,
+            # the invalid value is the designed honest artifact (planned, then
+            # named and refused by the validator) - note it, do not fail C3
+            if reject_named and any(
+                (f in k) or (k in f) for f in (item.get("expected_named_fields") or [])
+            ):
+                issues.append(f"NOTE-designed rejection value {k}={v}")
+            else:
+                issues.append(f"{k} non-positive: {v}")
     es = cfg.get("energy_sharing")
     if es:
         if es.get("market_type") not in MARKET_TYPES:
@@ -404,7 +475,8 @@ def check_c3(item, cfg):
                 issues.append(f"energy_sharing.{k} non-positive: {v}")
     if cfg.get("timestep_minutes") not in (5, 15, 30, 60):
         issues.append(f"timestep_minutes unusual: {cfg.get('timestep_minutes')}")
-    return (not issues), issues
+    real = [i for i in issues if not i.startswith("NOTE-")]
+    return (not real), real
 
 
 def main() -> int:
@@ -445,9 +517,19 @@ def main() -> int:
             cfg = loaded["final_config"]
         else:
             cfg = loaded
-        ok1, iss1 = check_c1(item, cfg)
+        rec_named, _rec_blocked = (
+            _rejection_evidence(item, record)
+            if item["kind"] != "complete"
+            else (None, None)
+        )
+        ok1, iss1 = check_c1(
+            item,
+            cfg,
+            named_rejected=rec_named,
+            record_success=(record or {}).get("success"),
+        )
         ok2, iss2 = check_c2(item, cfg)
-        ok3, iss3 = check_c3(item, cfg)
+        ok3, iss3 = check_c3(item, cfg, reject_named=bool(rec_named))
         rt = runtime.get(iid, {})
         notes = []
         plan_source = None
@@ -535,6 +617,15 @@ def main() -> int:
                 cands = []
                 for key in ("schema_errors", "mapping_errors"):
                     for e in record.get(key) or []:
+                        cands.append(str(e))
+                last_verifier = _last_iteration(record).get("verifier_output") or {}
+                for key in (
+                    "schema_errors",
+                    "out_of_range_fields",
+                    "schema_rejections",
+                    "required_fields_missing",
+                ):
+                    for e in last_verifier.get(key) or []:
                         cands.append(str(e))
                 # the pipeline's final_report is a dict WITHOUT a 'summary' key;
                 # the probe driver also stores the last reporter summary as a
