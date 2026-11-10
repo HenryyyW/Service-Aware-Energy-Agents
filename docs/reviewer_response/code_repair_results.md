@@ -597,6 +597,25 @@ docs have changed on main since): **no hunks are emitted at all**
 detector-passing. Conversion is per-call stochastic, and the full two-arm run
 for this contract is already on record (5/9, threshold >= 7/9 not met).
 
+**Base-specific clarification (2026-11-10, per the PM's verification on current
+main):** that `task_4` unfenced `changes=0` observation measured the main of the
+probe's day, which PREDATES the merge of A's `ce987e856` (`42bea37d5`) - the
+build whose layout-independent parser handles unfenced multi-block responses.
+On current main the unfenced shape APPLIES: the PM verified a 3-fence
+unfenced-multi-block response with real signatures ("SUCCESS: 3 changes",
+ast-valid), and the zero-cost matrix (`experiments/verify_function_replacement_parser.py`
+/ `verify_diff_path_matrix.py`, merged at `81d70c8f2`) passes every must-apply
+shape on current main - unfenced single and multi-pair, fenced with markers
+inside or before the fence, column-0 and file-indented bodies. The gap that
+REMAINS on current main is the **multi-fenced-markers-outside** family (3
+fences, each preceded by its own markers; the fence slice returns the opening
+fence and the fallback captures block 0's code) - root cause and fix direction
+dispatched to A; my live `task_8` observation (`changes=1`, single-fence
+association) differs from the constructed 3-fence shape in detail, but both sit
+in that dispatched family. The dead-code finding (the balanced-hunk prompt
+builder defined and never called) is confirmed by the PM from their side, and
+the builder's retirement is on A's list - no prompt iteration.
+
 **A's newest tip `ce987e856` ("complete layout-independent function replacement
 parser") - the dispatched association fix.** Zero-cost verification (my
 regression test plus a markers-before-fence case, no LLM calls): all three
