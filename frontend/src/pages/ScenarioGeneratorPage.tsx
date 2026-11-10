@@ -486,6 +486,14 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
             </Button>
           </div>
         </div>
+        {!propGenerate && (
+          <div className="mt-3 p-3 bg-sun/10 border border-sun/30 text-sun rounded-lg">
+            <p className="text-caption font-medium text-sun flex items-center gap-1">
+              <span>Preview builder active (deterministic template).</span>{' '}
+              <span>The coding agent&apos;s natural-language &rarr; config pipeline lands in Phase 1.</span>
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 flex overflow-hidden">
