@@ -353,3 +353,46 @@ would spend ~60 calls recording the same parse failures (the exact case the PM
 excluded). Recommended next step (A's decision): either change the output
 contract to function replacement (the coder already has `_replace_function`),
 or re-prompt for strict `@@ -a,b +c,d @@` hunks with balanced -/+ counts.
+
+## The in-envelope probe on origin/main `8de66b7e7` (A's de-indent fix + merged detector wiring) - NEITHER unanchored contract converts; the replacement prompt must be anchored on the exact function text
+
+Tree: `origin/main` `8de66b7e7` - A's global de-indent fix for over-indented
+responses (the extraction layer now finds `---/+++` and `@@` headers in
+shifted output) plus the PM-merged detector wiring. Probe: 7 backend calls
+(1 pre-flight + 2 per task across 3 tasks - the function-replacement attempt
+and the unified-diff fallback), configured product path, in-envelope.
+
+**Extraction is fixed; the model's hunk CONTENT is the binding defect:**
+- task_4's diff response: **12 `-` lines vs 330 `+` lines** - a whole-function
+  dump emitted as additions - so the applied code is syntactically invalid
+  (**unmatched ')' at line 239**) and A's syntax rejection correctly drops it
+  -> `changes=0` -> no-op patch -> the detector rejects it. The parser extracts
+  1-2 changes per task, but no applicable, behavior-changing patch survives.
+- The function-replacement contract probe: syntactically **valid** Python with a
+  **hallucinated interface** (`self.import_limit`, list comprehensions over
+  `Action` objects) - valid syntax, wrong signature; the syntax gate would pass
+  it and the detector would reject it.
+
+**Conclusion held:** the model can echo valid-looking code but cannot author
+either a coherent unified diff or a faithful function replacement at this
+prompt. The full LLM arm stays held (~60 calls would buy the same recorded
+failures); the deterministic comparator is sound (10/10 agreement, negative
+control `keep=True` = valid honest-failure cell) and GO-ready.
+
+**Decision-record significance (why this section is in the record):** this is
+the evidence that **neither unanchored contract converts** - the unanchored
+diff prompt yields whole-function dumps (12 `-` vs 330 `+`, invalid code), and
+the unanchored replacement prompt yields hallucinated interfaces. The
+consequence is the anchored-replacement direction: the replacement prompt must
+carry the **exact function text** plus the interface constraint, with the
+existing syntax + interface + detector gates. Probe recorded here so the
+decision to hold (and the direction given to A) is traceable to the observed
+shapes rather than to the applier/extraction layer, which is fixed.
+
+**Superseded in part, for continuity:** the extraction and applier layers have
+since been repaired and the contract has since converted - the decisive
+two-arm re-run executed on the converting contract (deterministic 10/10, LLM
+arm 5/9 measured repairs, threshold >= 7/9 not met, A2 "scaffolded, not yet
+demonstrated"; evidence branches `benchmark/f3-decisive`,
+`benchmark/probe-main-decision`). The shapes above remain the record of why
+the unanchored contracts were abandoned.
