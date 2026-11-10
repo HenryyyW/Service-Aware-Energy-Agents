@@ -535,3 +535,43 @@ direction or insufficient magnitude) are recorded for the re-decision.
 **Envelope accounting:** probe rounds 11 + 3 = 14 backend calls; full LLM arm 44 calls
 (within <= 10 tasks x <= 5 iterations, `poolside/laguna-xs-2.1` on NIM, code-repair
 benchmark only); deterministic arms LLM-free.
+
+## Zero-cost verification of A's parser fix (`feat/nl-config-pipeline` @`56d75156f`) - both dispatched gaps closed, one regression found; probe gate NOT met
+
+Tree: A's `56d75156f` (Issue A `0f75861dc` markers-outside-fence association + Issue B
+`56d75156f` skip-unchanged-echoes) with the verifier from
+`benchmark/verifier-multifence` checked out. Zero LLM calls.
+
+**Both dispatched gaps are closed in code:**
+- Issue B: "modified + echo -> apply modified, skip echo" **APPLIES** (the modified
+  function is applied; the unchanged echo is skipped - DEBUG "Skipping unchanged
+  function: `_apply_grid_violation_redispatch`").
+- Issue A: "multi-fenced, markers outside each fence, 3 modified" **APPLIES 3**
+  (all three functions recorded, patched code parses).
+
+**One regression in a must-apply shape (exact, reproducible):** "fenced, two
+modified" - two fenced blocks, each with its `# FILE:`/`# FUNCTION:` markers
+INSIDE the fence, both functions genuinely modified - is REJECTED with
+"Signature mismatch". Instrumented pairing evidence: the signature check is
+called with `func='_apply_grid_limits'` but
+`code_head='def _apply_grid_violation_redispatch(self, actions: List[Action]) -> L'`
+-> block 1's function NAME is paired with block 2's CODE (an off-by-one in the
+fenced-markers-inside multi-block path). The same family also fails "modified +
+unchanged echo (fenced)". Still passing on this tip: fenced-markers-inside
+SINGLE, unfenced single and multi-pair (column-0 and indent-4), and
+markers-before-fence. This exact case passed on main and on every earlier tip -
+a regression from the fix, not a new shape.
+
+**Gate consequence:** the verifier's must-apply set fails, so the parser is not
+landing-ready; per the PM's gate the small probe does NOT fire and no LLM calls
+were spent. Dispatched to A with the instrumented pairing and the ask: pair each
+block's own markers with that block's own sliced code (block-local, as the
+markers-outside path now does).
+
+**P1 note:** A's branch also carries the P1 NL -> ScenarioConfig pipeline
+(`src/agents/nl_config_pipeline.py`, entry `run_nl_to_config(nl_description,
+baseline_config, scenario_id, max_iterations, project_root)` returning the final
+config, manifest, and iteration history), so the corpus scoring path is one small
+adapter away - the scorer is ready and LLM-free; who runs the 16 items (A's
+harness under their authorization vs a written authorization for Research) is the
+PM's call.
