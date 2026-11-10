@@ -434,3 +434,62 @@ task_4: 4,273 prompt / 2,236 completion tokens spent, then the AttributeError.
 met - A2 stays "scaffolded, not yet demonstrated"** (reported either way; both
 arms unpooled; acceptance of record = driver criteria (a)-(f); the loop's own
 verdict now agrees with the driver in both arms, 10/10).
+
+## In-envelope probe on main `648f7bf0e` (A's function-replacement contract) - NO conversion; exact blocker located; full arm NOT spent (per the PM sequence)
+
+Tree: `origin/main` `648f7bf0e` (A's function-replacement primary path
+`4bb1add9a` + the missing parser methods `4bbcf33be`, class-selection fix
+`c21d55e3f`, additions/deletions-only rejection `8def38842`), which already
+carries my two harness deltas via the merged detector wiring (concrete-class
+resolution, negative-control orientation).
+
+**Probe 1 - 3 tasks (task_1, task_4, task_8), budget 5, pre-flight on: 7 backend
+calls (1 pre-flight + 2 per task: primary + diff fallback), 28,388 prompt /
+6,363 completion tokens.** No task converted: task_4 and task_1 both ended
+`changes=0` with notes "LLM REAL-CODE PATH FAILED: no valid function replacement
+or unified diff produced"; task_8 was in-flight when the probe output was
+truncated, with the identical primary-then-fallback trace. Per the PM sequence
+(no conversion -> do NOT spend the full arm), the full two-arm run was NOT
+executed.
+
+**Probes 2+3 - single task (task_4), pre-flight off, transparent recording
+backend: 2 + 2 backend calls, 8,766/2,420 and 8,762/2,210 tokens.** Exact raw
+shapes (reproducible with `experiments/probe_llm_output_shape.py`):
+
+1. **Function-replacement response (primary, 8,080 chars):** THREE
+   `# FILE: controllers/__init__.py` / `# FUNCTION: <name>` marker pairs
+   (`_control_ev`, `_control_battery`, `_apply_grid_limits`) followed by
+   **unfenced** code, and **ZERO backtick fences in the entire response**
+   (`fence variants found: []`). The parser's `code_match` requires a
+   ```` ```python\n...``` ```` block, so it can never match: the failure message
+   "Could not extract function replacement format (missing FILE/FUNCTION/code)"
+   is misleading - FILE and FUNCTION both matched; the missing element is the
+   fence. A second defect in the same path: the model returns THREE function
+   replacements in one response while the parser extracts one.
+2. **Unified-diff fallback response (529 chars):** a fenced ```diff with a
+   single ADDITIONS-ONLY hunk whose added lines are comments
+   ("# ... reduction logic") - correctly rejected by A's additions-only
+   validation (`8def38842`) and cosmetic anyway. So the fallback cannot convert
+   either.
+
+**Exact blocker (A-side):** the function-replacement parser requires a
+```python fenced block; the model now emits the `# FILE:`/`# FUNCTION:` markers
+(A's strengthened prompt partially works) but no fence, and emits multiple
+replacements per response. The contract must either accept marker-delimited
+UNFENCED blocks (with multi-replacement support), or the prompt must actually
+produce fences.
+
+**Envelope accounting (honest):** the probe used 11 backend calls in total
+(7 + 2 + 2) against the <= 6-call probe guidance - the per-task cost turned out
+to be 2 calls (primary + fallback), which the <= 6 figure did not anticipate,
+and 2 extra single-task calls were spent to capture the exact raw shapes for
+A's repro rather than an inference. The full-arm budget (<= 10 tasks x <= 5
+iterations, `poolside/laguna-xs-2.1` on NIM, code-repair benchmark only) was
+NOT touched this round; deterministic-arm runs stay LLM-free.
+
+**Claim decision: no conversion in the probe -> the full two-arm re-run was not
+spent -> the pre-registered threshold >= 7/9 is untested this round and the
+paper's A2 sentence stays "scaffolded, not yet demonstrated"** (reported either
+way; both arms unpooled; acceptance of record = driver criteria (a)-(f) with
+`loop_claimed_success` beside every verdict - unchanged from the last decisive
+run: deterministic 10/10, LLM 0/9).
