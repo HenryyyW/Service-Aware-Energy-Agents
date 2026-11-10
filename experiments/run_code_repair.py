@@ -463,11 +463,17 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
                     "target_functions": it.planner_output.target_functions,
                     "coder_changes": len(it.coder_output.code_changes),
                     "coder_source": (
+                        # the function-replacement path (A's b014d421c) reports
+                        # "LLM REAL-CODE PATH: function replacement", the diff
+                        # path reported "LLM-generated ..." - both are LLM output
                         "LLM"
                         if "LLM-generated"
                         in (it.coder_output.implementation_notes or "")
+                        or "LLM REAL-CODE PATH:"
+                        in (it.coder_output.implementation_notes or "")
                         else "deterministic"
                     ),
+                    "coder_notes": it.coder_output.implementation_notes,
                     "diff": it.coder_output.diff,
                     "verifier_violations_resolved": it.verifier_output.violations_resolved,
                     "success": it.success,
