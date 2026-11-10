@@ -356,10 +356,21 @@ or re-prompt for strict `@@ -a,b +c,d @@` hunks with balanced -/+ counts.
 
 ## Decisive two-arm re-run on origin/main (A's full fix line merged) - the run that decides the A2 sentence
 
-Base: `origin/main` as of this run (A's full real-code fix line: re-indent,
-de-indent, double-newline, diff look-ahead, 300s timeouts, detector-path and
-arity unification; plus the merged detector wiring and the truthful
-`wiring_workaround` field). Envelope: <= 10 tasks x <= 5 iterations,
+**Base (pinned, per the Project Partner's merge-base verification): this run's
+merge-base is `a86ffccbc1`.** That base carries A's earlier real-code fix line
+(re-indent, de-indent, double-newline, diff look-ahead, 300s timeouts,
+detector-path and arity unification; plus the merged detector wiring and the
+truthful `wiring_workaround` field) and an earlier prompt "CRITICAL RULES"
+block (exact diff format, hunk-header counts, indentation, no fences, no extra
+text) - but it does **NOT** carry the strengthened prompt's constraint set
+(per-hunk balance max 3:1, no additions-only/deletions-only hunks, mandatory
+context lines, no whole-function dumps): `7160f596a` reached main only with
+`ac39b5814`, which is not an ancestor of `a86ffccbc1` (verified:
+`git merge-base --is-ancestor ac39b5814 a86ffccbc1` -> false, and the
+"CRITICAL RULES - VIOLATION WILL CAUSE REJECTION" balanced-hunk block is absent
+from that base's `src/agents/llm_coder.py`). **The "structurally unbalanced
+12 `-` vs 330 `+`" observation in this section therefore predates the
+strengthened prompt and does not test it.** Envelope: <= 10 tasks x <= 5 iterations,
 `poolside/laguna-xs-2.1` on NVIDIA NIM via the **configured product path**
 (`AGENT_BACKEND=api:poolside/laguna-xs-2.1`, NIM key from the key store,
 `DASHSCOPE_API_KEY` unset, 1-token pre-flight per cell, `timeout_s=300`),
@@ -535,3 +546,55 @@ direction or insufficient magnitude) are recorded for the re-decision.
 **Envelope accounting:** probe rounds 11 + 3 = 14 backend calls; full LLM arm 44 calls
 (within <= 10 tasks x <= 5 iterations, `poolside/laguna-xs-2.1` on NIM, code-repair
 benchmark only); deterministic arms LLM-free.
+
+## Probe on current origin/main + A's layout-independent tip (`ce987e856`) - the live prompt is the replacement prompt (the balanced-hunk prompt is unreachable); association now works, echoes and model content are the remaining failures
+
+**Code-level facts (zero-cost, on `origin/main` `4ee6538e0`, `llm_coder.py`
+byte-identical to the probe bases):**
+- The coder calls `_build_coder_prompt_function_replacement`
+  (`src/agents/llm_coder.py:178`) - the prompt the model actually receives is
+  the FUNCTION-REPLACEMENT prompt, and it carries its own "CRITICAL RULES -
+  VIOLATION WILL CAUSE REJECTION" block (exact FILE/FUNCTION + fenced-python
+  format, syntax validity, 4-space indentation, behavior-changing).
+- The strengthened prompt's balanced-hunk constraints (`7160f596a`: hunks
+  balanced <= 3:1, no additions-only/deletions-only, mandatory context, no
+  whole-function dumps) live in `_build_coder_prompt_real_code`, which is
+  **defined and never called** on main (the diff fallback parses the primary
+  response; it does not re-prompt). **A probe on origin/main therefore cannot
+  test the balanced-hunk prompt without a code change making it reachable.**
+
+**The PM-requested probe on origin/main was already executed on this code** (2
+tasks, 2 backend calls, shape record in the decision-probe section above; only
+docs have changed on main since): **no hunks are emitted at all**
+(`hunks=0 plus=0 minus=0` in both responses); `task_4` unfenced 4-pair ->
+`changes=0`; `task_8` fenced blocks with markers outside -> `changes=1`,
+detector-passing. Conversion is per-call stochastic, and the full two-arm run
+for this contract is already on record (5/9, threshold >= 7/9 not met).
+
+**A's newest tip `ce987e856` ("complete layout-independent function replacement
+parser") - the dispatched association fix.** Zero-cost verification (my
+regression test plus a markers-before-fence case, no LLM calls): all three
+live association shapes now APPLY with a genuine modification - markers BEFORE
+the fence (the live task_8 shape), markers INSIDE the fence, and unfenced
+multi-pair - each `changes>=1`, patched code parses. Live probe (3 tasks, 3
+backend calls, on `ce987e856` merged with main):
+- `task_1_ev_deadline_soc`: 1 fenced block, 1 pair -> **converts**
+  (`changes=1`, detector passes).
+- `task_4_import_limit`: unfenced, 4 marker pairs -> all four are now
+  associated, but one is an unchanged echo -> **"Function replacement did not
+  modify the code for `_apply_grid_limits`"** -> the whole response is
+  rejected -> `changes=0`.
+- `task_8_flex_deadline`: 3 fenced blocks, markers outside (the shape that
+  failed at association before) -> association now works, but the extracted
+  code is invalid -> **SyntaxError at line 93** -> `changes=0`.
+
+**Remaining gap (A-side, one ask):** the association gap is closed; what
+remains is (i) skip unchanged echoes and apply the modified replacements
+instead of rejecting the whole multi-pair response, and (ii) the model's code
+content (a syntactically invalid body survived into the extracted block).
+Without (i), every multi-pair response containing one echo is lost - the
+dominant live shape.
+
+**Envelope accounting:** this round 4 backend calls (3-task probe + 1
+single-task recapture whose shape had scrolled off the captured output);
+cumulative probe usage 23 calls; no new full-arm spend.
