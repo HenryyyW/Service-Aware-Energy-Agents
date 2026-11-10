@@ -535,3 +535,21 @@ direction or insufficient magnitude) are recorded for the re-decision.
 **Envelope accounting:** probe rounds 11 + 3 = 14 backend calls; full LLM arm 44 calls
 (within <= 10 tasks x <= 5 iterations, `poolside/laguna-xs-2.1` on NIM, code-repair
 benchmark only); deterministic arms LLM-free.
+
+## Parser-contract regression test on A's current tip (`ce987e856` + main) - association closed; the echo semantics is the one open item
+
+`experiments/verify_function_replacement_parser.py` (zero LLM calls) run against
+`ce987e856` merged with `origin/main`: **all five must-apply shapes APPLIED**
+(fenced/unfenced single, col-0 and indent-4; multi-pair with both functions
+genuinely modified - applied as 2 changes). For the record: the markers-BEFORE-
+fence shape now APPLIES (the association gap `ce987e856` closed), and the
+modified+unchanged-echo shapes are REJECTED wholesale ("Function replacement
+did not modify the code for X") in both the unfenced and fenced layouts. A
+PENDING case (not asserted, so the suite stays green on the current tip) encodes
+the echo-skip expectation: apply the modified replacement, skip the unchanged
+echo. When A's echo-skip fix lands, moving that case into the must-apply set is
+a one-line change and the suite then guards it.
+
+Tree note: this branch is `origin/fix/llm-real-code-path` (`ce987e856`) merged
+with `origin/main` (`llm_coder.py` identical to the branch tip; main has since
+moved only docs/frontend).
