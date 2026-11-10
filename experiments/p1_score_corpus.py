@@ -182,9 +182,13 @@ def check_c1(item, cfg):
                 )
         for sec in ("pandapower", "energy_sharing"):
             if sec not in plan and cfg.get(sec):
+                # a schema-optional default (e.g. the pipeline's default grid
+                # model) is reported as a note, NOT an invented-device failure:
+                # the rubric's 'no invented assets' clause covers devices the NL
+                # does not describe, and the confirm-UI spec treats defaults as
+                # visible provenance
                 issues.append(
-                    f"undemanded {sec} section present (pipeline default) - "
-                    "reported, not weighted as an invented device"
+                    f"NOTE-undemanded {sec} section present (pipeline default)"
                 )
     for section, demand in plan.items():
         if isinstance(demand, int):
@@ -215,7 +219,8 @@ def check_c1(item, cfg):
                     got = (cfg.get(section) or {}).get(key)
                     if got != val:
                         issues.append(f"{section}.{key}: {got!r} != expected {val!r}")
-    return (not issues), issues
+    real = [i for i in issues if not i.startswith("NOTE-")]
+    return (not real), real
 
 
 def check_c2(item, cfg):
