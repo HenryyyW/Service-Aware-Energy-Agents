@@ -468,3 +468,70 @@ threshold >= 7/9 is not met - the paper's A2 sentence stays "scaffolded, not
 yet demonstrated".** Reported either way; both arms unpooled; acceptance of
 record = driver criteria (a)-(f); `loop_claimed_success` recorded beside every
 verdict and agreeing with the driver in both arms (10/10).
+
+## The converting contract: probe on A's `b014d421c` and the full two-arm re-run - LLM arm 5/9 measured repairs (threshold >= 7/9 NOT met, reported either way)
+
+**Base (disclosed):** A's `b014d421c` ("complete function replacement implementation with
+proper indentation handling" - dedent-to-column-0 validation, re-indent to the original
+function, real signature comparison, and a unified-diff fallback that parses the SAME
+response so an iteration costs ONE backend call) was NOT yet merged to `origin/main`
+(`45ae93771`) at run time, so the tree was `origin/fix/llm-real-code-path` merged with
+`origin/main` (only main's DEBUG logging in `multi_agent_loop.py` differs from A's tip;
+`src/agents/llm_coder.py` is byte-identical to A's tested commit; targeted tests
+38 passed).
+
+**Probe (conversion confirmed, 3 tasks, 3 backend calls - one per task on the new
+no-second-call fallback):** all three tasks now convert. Raw responses are fenced
+```python blocks carrying `# FILE:` / `# FUNCTION:` markers (2-4 marker pairs per
+response; the parser applies the first fenced block), the function-replacement path
+applies (`changes=1`), the patched controller is syntactically valid, and the detector
+still passes on the controller handed to the probe (no regression). Conversion
+confirmed, so per the PM sequence the full two-arm re-run was executed.
+
+**Deterministic comparator (10 cells, 0 LLM calls, budget 5): 10/10 loop/driver
+agreement, `loop_claimed_success=False` on all 10, 0/9 measured repairs, negative
+control `keep=True` = valid honest-failure cell, zero instantiation errors.**
+
+**LLM arm (44 backend calls, 0 backend errors, full 5-iteration budget per cell):
+5/9 measured repairs, 10/10 loop/driver agreement, negative control `keep=True`.**
+Per-cell (driver criteria (a)-(f); `loop_claimed_success` beside every verdict):
+
+| task | iters | keep | loop | detector: broken -> patched |
+|---|---|---|---|---|
+| task_1_ev_deadline_soc | 1 | True | True | EV SOC 0.4296 -> 0.7998 (target 0.800, tol 0.02) |
+| task_2_ev_urgent_power | 3 | True | True | charge 3.30 kW vs required 11.00 -> charge 30.00 kW vs required 3.00 (1h-to-departure) |
+| task_4_import_limit | 1 | True | True | import 5.0 kW vs limit 3 -> 3.0 kW vs 3 kW |
+| task_5_export_limit | 3 | True | True | export 5.0 kW vs limit 3 -> 3.0 kW vs 3 kW |
+| task_7_line_loading_response | 1 | True | True | magnitude 2.50 kW -> 0.50 kW (expected 0.1x baseline) |
+| task_3_battery_soc_floor | 5 | False | False | overshoot 1.350 -> 1.350 kWh/step (LLM change, defect unfixed) |
+| task_6_voltage_response | 5 | False | False | magnitude 2.50 -> 0.50 kW (expected 2.0x baseline 5.00) |
+| task_9_overcharge_spike | 5 | False | False | overshoot 10.93 -> 7.38 kW (improved, still failing) |
+| task_8_flex_deadline | 5 | False | False | never converted (`changes=0` all 5 iterations) |
+| task_10_NEG_redispatch_removed | 5 | True | False | unrepairable-by-construction; loop correctly refused success |
+
+8 of 10 cells recorded LLM-produced changes (2 never converted). Every repair passed
+`e_harness_accepts` and `f_service_preserved`; 4 of the 5 repairs show
+`c_output_differs=False` (outputs identical on the comparison scenario - the fix only
+triggers under the defect diagnostic) with `d_not_cosmetic=True`, i.e. behavior-changing
+where it matters.
+
+**Runner defect found and fixed (pushed with this doc):** the audit's `coder_source`
+label only recognised the old diff-path notes string ("LLM-generated"), so every
+function-replacement success was mislabelled "deterministic". The label now matches
+"LLM REAL-CODE PATH:" too, and `coder_notes` is recorded. For THIS run the labels in
+the (untracked) cells are stale; the changes are LLM-produced, evidenced by: the LLM
+arm's calls = 1 + iterations per cell (the LLM ran every iteration), the deterministic
+arm produced `changes=0` on all 10 cells with the same runner, and the diffs paraphrase
+the planner strategy verbatim (LLM-style output).
+
+**Claim decision: 5 of 9 measured repairs - the pre-registered threshold >= 7/9 is NOT
+met - the paper's A2 sentence stays "scaffolded, not yet demonstrated"** (reported
+either way; both arms unpooled; acceptance of record = driver criteria (a)-(f) with
+`loop_claimed_success` agreeing with the driver 10/10 in both arms). This is the first
+run in which the LLM arm produced genuine detector-verified repairs; the margin
+(5 vs 7) and the failure modes (one non-converting cell; three repairs in the wrong
+direction or insufficient magnitude) are recorded for the re-decision.
+
+**Envelope accounting:** probe rounds 11 + 3 = 14 backend calls; full LLM arm 44 calls
+(within <= 10 tasks x <= 5 iterations, `poolside/laguna-xs-2.1` on NIM, code-repair
+benchmark only); deterministic arms LLM-free.
