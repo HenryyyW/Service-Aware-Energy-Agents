@@ -4,6 +4,8 @@ Owner: Research Engineer · Date: 2026-11-10 · Status: draft for the PM's merge
 Decision basis: user recalibration (2026-11-10) — the project is the **Renewable Energy Community Virtual Simulator**: NL scenario description → Coding Agent → executable sim config → virtual community; rule-based / MPC / single-RL / multi-RL strategies; the agent is the **workflow assistant**, not a fifth algorithm. No arXiv upload (user decision, PM holds).
 Constraint honoured: every number below is copied verbatim from `arxiv_submission/arxiv_main.tex` or from the benchmark record (`docs/reviewer_response/code_repair_results.md`); nothing is newly computed, and nothing is claimed that a run has not produced.
 
+**Positioning of record (recalibrated on `origin/main` `cda47891a4`, cited per the PM):** `project brief.md` (its "Current status and phase plan" table, the five workflow stages, and the agent-as-assistant section), `README.md`, `README.zh-CN.md`. The five workflow stages are **Scenario Construction → Simulation → Visualization → Strategy Comparison → Agent-assisted Optimization**; the control strategies of record are **rule-based, MPC, single-agent RL, multi-agent RL, plus the centralized heuristic**; the coding agent is the **engineering assistant, explicitly NOT a fifth control baseline**, and its own evaluation is by workflow capability (scenario-construction success rate, strategy-modification verification rate under the physics/service gates, diagnosis quality, report completeness) — never by energy performance as a controller. The brief's phase table places the strategy-modification benchmark under **P3** as "real capability, below threshold" (5/9 detector-verified modifications, pre-registered ≥7/9 not met) and this reframe under **P4**.
+
 ---
 
 ## 1. Drop-in abstract (platform-first)
@@ -12,8 +14,9 @@ Constraint honoured: every number below is copied verbatim from `arxiv_submissio
 > workflow is assisted by a coding agent: an engineer describes a community in
 > natural language, the agent produces an executable simulation configuration,
 > the engineer confirms it field-by-field before anything runs, and the
-> simulator then evaluates rule-based, multi-agent, centralized, MPC, and RL
-> strategies across five scenarios (A--E) covering coordination baselines,
+> simulator then evaluates the control strategies of record --- rule-based, MPC,
+> single-agent RL, and multi-agent RL, plus the centralized heuristic --- across
+> five scenarios (A--E) covering coordination baselines,
 > battery/PV assets, deferrable loads, energy sharing with community
 > settlement, and mid-run component failures. The simulator couples CityLearn
 > building-level simulation with pandapower grid validation across three
@@ -57,10 +60,15 @@ Constraint honoured: every number below is copied verbatim from `arxiv_submissio
 > half-width ratio from five to ten seeds.
 
 **Changes vs. the current abstract:** opening re-centered on the NL → agent →
-config → simulate workflow; the 150-cell real-LLM screen and 60-cell
-hostile-proposer study kept with their numbers but folded into one "agent
-layer" sentence; the code-repair sentence replaced by the component-result
-sentence (Section 4 below); everything else verbatim.
+config → simulate workflow (the brief's five stages, with Visualization as the
+platform's presentation stage rather than a paper result); the strategy list
+renamed to the four strategies of record plus the centralized heuristic (the
+paper's measured controllers map one-to-one: multi-agent → multi-agent RL, RL →
+single-agent RL, centralized → the centralized heuristic, so the 750-run matrix
+and every number in it stay traceable); the 150-cell real-LLM screen and
+60-cell hostile-proposer study kept with their numbers but folded into one
+"agent layer" sentence; the code-repair sentence replaced by the
+component-result sentence (Section 4 below); everything else verbatim.
 
 ## 2. Introduction restructure
 
@@ -95,6 +103,18 @@ Rationale: the old sentence claims nothing (correctly), but under the reframe th
 
 - Keywords: drop "LLM code agents" from the lead; proposed set — *renewable energy communities, virtual simulator, LLM-assisted scenario authoring, multi-agent control, power system simulation, pricing regimes, verification*.
 - Title direction (user's recalibration): lead with the simulator/workflow, keep the strategy result as the second clause. Two candidates in the migration notes below.
+
+## 5a. Alignment with the positioning of record (checked against `project brief.md`, `README.md`, `README.zh-CN.md`, main `cda47891a4`)
+
+| Reframe element | Positioning of record | This draft |
+|---|---|---|
+| Platform identity | Renewable Energy Community Virtual Simulator | §1 abstract opening; title direction |
+| Workflow | five stages: Scenario Construction → Simulation → Visualization → Strategy Comparison → Agent-assisted Optimization | §1/§2 follow the five stages; Visualization is the platform's stage (P2, last per the phase table) and carries no paper result |
+| Strategies | four of record (rule-based, MPC, single-agent RL, multi-agent RL) + centralized heuristic | §1 abstract + §3 strategy comparison; mapping to the paper's five measured controllers in §1's changes note |
+| Agent role | engineering assistant, NOT a fifth control baseline; "the agent's code never enters the results as a control strategy" (binding) | §2 item 4 and the new Discussion limitation |
+| Agent evaluation | workflow capability metrics (scenario-construction success rate, strategy-modification verification rate under the gates, diagnosis quality, report completeness) — never energy performance | §3 agent-layer sections; the corpus supplies the scenario-construction metric |
+| Component number | P3: 5/9 detector-verified strategy modifications, threshold ≥7/9 not met — "real capability, below threshold" | §3 component section + §4 A2 sentence, worded at exactly that level |
+| Phase order | P1 → P3 → P4 → P2 | the reframe cites the phase table rather than re-justifying the order |
 
 ## 6. Open items for the PM (not decided unilaterally)
 

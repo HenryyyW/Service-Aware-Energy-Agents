@@ -3,6 +3,7 @@
 Owner: Research Engineer · Date: 2026-11-10 · Status: ready for verification
 Companion data: `experiments/p1_nl_corpus.json` (16 items) · Deterministic checks: `experiments/p1_score_corpus.py`
 Consumers: Backend/Simulation Engineer A (pipeline owner) and Project Partner (verification gate) — mock-free; every criterion is checkable against the real pipeline with no LLM spend in the checking itself.
+Positioning of record: `project brief.md` (phase **P1**, "Current status and phase plan"), `README.md`, `README.zh-CN.md` (recalibrated on main `cda47891a4`). This corpus operationalizes the agent's scenario-construction workflow-capability metric named there.
 
 ---
 
