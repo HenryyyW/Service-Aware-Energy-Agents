@@ -553,14 +553,25 @@ Return ONLY the unified diff. NO additional text."""
             # Check if the code starts with a fence (```python)
             code = raw_code
             if code.lstrip().startswith("```python"):
-                # Fenced block - extract content between ```python and ```
-                fence_end = code.find("```")
-                if fence_end >= 0:
-                    code = code[len("```python") : fence_end]
+                # Fenced block - extract content between ```python and the matching ```
+                # Split by ``` and take the first segment after "python\n"
+                # This handles multiple fenced blocks correctly (markers outside fences)
+                after_python = (
+                    code.split("```python", 1)[1] if "```python" in code else ""
+                )
+                if after_python:
+                    # Split by ``` and take the first segment (content of first fence)
+                    code = after_python.split("```", 1)[0]
                     # Only strip trailing whitespace, preserve leading indentation
                     code = code.rstrip()
                 else:
-                    code = code[len("```python") :].rstrip()
+                    # Fallback: try to extract up to first ```
+                    fence_end = code.find("```")
+                    if fence_end >= 0:
+                        code = code[len("```python") : fence_end]
+                    else:
+                        code = code[len("```python") :]
+                    code = code.rstrip()
             else:
                 # Unfenced - take from after the marker newline until next marker or EOF
                 # The marker pattern includes the trailing newline, so code starts at the right place
