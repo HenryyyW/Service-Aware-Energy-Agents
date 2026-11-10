@@ -65,6 +65,11 @@ class ApiClient {
     await this.client.delete(`/api/scenarios/${scenarioId}`);
   }
 
+  async validateScenario(scenarioId: string): Promise<{ valid: boolean; errors: string[]; warnings: string[] }> {
+    const response = await this.client.get(`/api/scenarios/${scenarioId}/validate`);
+    return response.data;
+  }
+
   // Network geometry endpoints
   async getNetworkGeometry(scenarioId: string): Promise<NetworkGeometry> {
     const response = await this.client.get('/api/network/geometry', {
