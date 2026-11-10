@@ -479,13 +479,31 @@ Return ONLY the unified diff. NO additional text."""
     ) -> Optional[tuple]:
         """Parse LLM response expecting function replacement format.
 
-        Expected format:
-        ```python
-        # FILE: controllers/__init__.py
-        # FUNCTION: _apply_grid_limits
-        def _apply_grid_limits(self, actions):
-            # ... new function body ...
-        ```
+        Layout-independent parser that handles multiple formats:
+
+        1. Fenced with markers BEFORE fence:
+           # FILE: controllers/__init__.py
+           # FUNCTION: _apply_grid_limits
+           ```python
+           def _apply_grid_limits(self, actions):
+               ...
+
+        2. Fenced with markers INSIDE fence:
+           ```python
+           # FILE: controllers/__init__.py
+           # FUNCTION: _apply_grid_limits
+           def _apply_grid_limits(self, actions):
+               ...
+
+        3. Unfenced with multiple replacements:
+           # FILE: controllers/__init__.py
+           # FUNCTION: _apply_grid_limits
+           def _apply_grid_limits(self, actions):
+               ...
+           # FILE: controllers/__init__.py
+           # FUNCTION: _control_ev
+           def _control_ev(self, state):
+               ...
 
         Returns (patched_code, diff, changes, notes) or None if failed.
         """
@@ -498,14 +516,14 @@ Return ONLY the unified diff. NO additional text."""
         if min_indent > 0:
             response = "\n".join(line[min_indent:] for line in response_lines)
 
-        # Try to find function replacement format
-        # Format: # FILE: <file>\n# FUNCTION: <name>\n```python\n<code>\n```
-        file_match = re.search(r"# FILE:\s*(.+)", response)
-        func_match = re.search(r"# FUNCTION:\s*(\w+)", response)
-        code_match = re.search(r"```python\n(.*?)```", response, re.DOTALL)
+        # Find all FILE/FUNCTION marker pairs in the response, regardless of position
+        # Pattern matches both: # FILE: ... # FUNCTION: ...\n  (with trailing newline)
+        # and # FILE: ... # FUNCTION: ... (at end of response)
+        marker_pattern = r"# FILE:\s*(.+?)\s*\n# FUNCTION:\s*(\w+)\n?"
+        matches = list(re.finditer(marker_pattern, response))
 
-        if not (file_match and func_match and code_match):
-            parse_error = "Could not extract function replacement format (missing FILE/FUNCTION/code)"
+        if not matches:
+            parse_error = "Could not extract function replacement format (missing FILE/FUNCTION markers)"
             if self.previous_failures is not None:
                 self.previous_failures.append(
                     {
@@ -517,113 +535,250 @@ Return ONLY the unified diff. NO additional text."""
                 )
             return None
 
-        new_func_code = code_match.group(1).strip()
-        func_name = func_match.group(1)
+        # Extract code blocks for each marker pair
+        replacements = []
+        for i, match in enumerate(matches):
+            file_path = match.group(1).strip()
+            func_name = match.group(2).strip()
+            marker_end = match.end()
 
-        # Strip FILE/FUNCTION marker lines from the function code
-        # The LLM includes them in the fenced block but they shouldn't be in the actual code
-        func_lines = new_func_code.splitlines()
-        # Remove leading marker lines (# FILE: and # FUNCTION:)
-        while func_lines and func_lines[0].strip().startswith("# FILE:"):
-            func_lines.pop(0)
-        while func_lines and func_lines[0].strip().startswith("# FUNCTION:"):
-            func_lines.pop(0)
+            # Find the end of this marker's code block
+            if i + 1 < len(matches):
+                code_end = matches[i + 1].start()
+            else:
+                code_end = len(response)
 
-        # Join the function code (still has the model's indentation, e.g., 4 spaces for class methods)
-        new_func_code = "\n".join(line.rstrip() for line in func_lines)
+            # Extract the raw code region after the markers
+            raw_code = response[match.end() : code_end]
 
-        # DEDENT the function code to column 0 for syntax validation and signature checking
-        # The model's fenced body is typically indented (e.g., 4 spaces for class methods)
-        # We need to strip the common leading whitespace from all lines
-        if new_func_code:
-            code_lines = new_func_code.splitlines()
-            # Find minimum indentation of non-empty lines
-            min_indent = min(
-                (len(line) - len(line.lstrip()) for line in code_lines if line.strip()),
-                default=0,
-            )
-            if min_indent > 0:
-                new_func_code = "\n".join(line[min_indent:] for line in code_lines)
+            # Check if the code starts with a fence (```python)
+            code = raw_code
+            if code.lstrip().startswith("```python"):
+                # Fenced block - extract content between ```python and ```
+                fence_end = code.find("```")
+                if fence_end >= 0:
+                    code = code[len("```python") : fence_end]
+                    # Only strip trailing whitespace, preserve leading indentation
+                    code = code.rstrip()
+                else:
+                    code = code[len("```python") :].rstrip()
+            else:
+                # Unfenced - take from after the marker newline until next marker or EOF
+                # The marker pattern includes the trailing newline, so code starts at the right place
+                code = code.lstrip("\n").rstrip()
 
-        # Validate the new function code is syntactically valid (at column 0)
-        try:
-            ast.parse(new_func_code)
-        except SyntaxError as e:
-            parse_error = f"Generated function code has syntax error: {e}"
-            if self.previous_failures is not None:
-                self.previous_failures.append(
-                    {
-                        "iteration": self.iteration,
-                        "error": f"SyntaxError: {e}",
-                        "test_output": f"Generated function has syntax error: {e}",
-                        "verifier_feedback": "Generated function code has syntax error",
-                    }
+            # Remove any trailing ``` fence that might have been included
+            # (when markers are inside a fenced block, the closing ``` may be included)
+            code_lines = code.splitlines()
+            cleaned_lines = []
+            for line in code_lines:
+                stripped = line.strip()
+                if stripped == "```" or stripped.startswith("```"):
+                    break
+                cleaned_lines.append(line)
+            code = "\n".join(cleaned_lines)
+
+            # Handle case where the code might be in a separate fenced block
+            # (markers before fence, fence contains only code)
+            if not code and func_name in response:
+                # Try to find a fenced block for this function
+                # Look for ```python ... ``` that contains the function name
+                fence_pattern = (
+                    r"```python\n(.*?def\s+" + re.escape(func_name) + r"\b.*?)```"
                 )
-            return None
+                fence_match = re.search(fence_pattern, response, re.DOTALL)
+                if fence_match:
+                    # Only strip trailing whitespace, preserve leading indentation
+                    code = fence_match.group(1).rstrip()
 
-        # Check interface compatibility - verify function signature matches
-        if not self._verify_function_signature(
-            new_func_code, original_code, func_match.group(1)
-        ):
-            parse_error = (
-                "Function signature mismatch - parameter names must match original"
+            if not code:
+                # No code found for this marker
+                parse_error = f"Could not extract code for function {func_name}"
+                if self.previous_failures is not None:
+                    self.previous_failures.append(
+                        {
+                            "iteration": self.iteration,
+                            "error": parse_error,
+                            "test_output": response[:500],
+                            "verifier_feedback": f"No code found for function {func_name}",
+                        }
+                    )
+                return None
+
+            replacements.append(
+                {
+                    "file": file_path,
+                    "function": func_name,
+                    "code": code,
+                }
             )
-            if self.previous_failures is not None:
-                self.previous_failures.append(
-                    {
-                        "iteration": self.iteration,
-                        "error": "Signature mismatch",
-                        "test_output": "Function signature mismatch - parameter names must match original",
-                        "verifier_feedback": "Function signature mismatch - parameter names must match original",
-                    }
-                )
-            return None
 
-        # Now RE-INDENT the function code to match the original function's indentation
-        # Find the original function's leading whitespace
-        original_indent = self._get_function_indentation(
-            original_code, func_match.group(1)
-        )
-        if original_indent > 0:
-            # Indent every non-empty line by the original function's indentation
-            reindented_lines = []
+        # Apply all replacements sequentially
+        patched_code = original_code
+        all_changes = []
+        applied_count = 0
+
+        for repl in replacements:
+            func_name = repl["function"]
+            new_func_code = repl["code"]
+
+            # Strip FILE/FUNCTION marker lines from the function code (in case they're in the code)
+            func_lines = new_func_code.splitlines()
+            while func_lines and func_lines[0].strip().startswith("# FILE:"):
+                func_lines.pop(0)
+            while func_lines and func_lines[0].strip().startswith("# FUNCTION:"):
+                func_lines.pop(0)
+
+            # Join the function code (still has the model's indentation)
+            new_func_code = "\n".join(line.rstrip() for line in func_lines)
+
+            # Save the model's indentation for each line for later restoration
+            model_indents = []
             for line in new_func_code.splitlines():
                 if line.strip():
-                    reindented_lines.append(" " * original_indent + line)
+                    model_indents.append(len(line) - len(line.lstrip()))
                 else:
-                    reindented_lines.append(line)
-            new_func_code = "\n".join(reindented_lines)
+                    model_indents.append(0)
 
-        # Replace the function in the original code
-        patched_code = self._replace_function(
-            original_code, func_match.group(1), new_func_code
-        )
-        if patched_code is None or patched_code == original_code:
-            parse_error = "Function replacement did not modify the code"
+            # DEDENT the function code to column 0 for syntax validation and signature checking
+            if new_func_code:
+                code_lines = new_func_code.splitlines()
+                min_indent = min(
+                    (
+                        len(line) - len(line.lstrip())
+                        for line in code_lines
+                        if line.strip()
+                    ),
+                    default=0,
+                )
+                if min_indent > 0:
+                    # Dedent to column 0 for validation
+                    dedented_code = "\n".join(line[min_indent:] for line in code_lines)
+                else:
+                    dedented_code = new_func_code
+            else:
+                dedented_code = new_func_code
+                min_indent = 0
+
+            # Validate the dedented function code is syntactically valid
+            try:
+                ast.parse(dedented_code)
+            except SyntaxError as e:
+                parse_error = f"Generated function code has syntax error: {e}"
+                if self.previous_failures is not None:
+                    self.previous_failures.append(
+                        {
+                            "iteration": self.iteration,
+                            "error": f"SyntaxError: {e}",
+                            "test_output": f"Generated function has syntax error: {e}",
+                            "verifier_feedback": "Generated function code has syntax error",
+                        }
+                    )
+                return None
+
+            # Check interface compatibility - verify function signature matches
+            if not self._verify_function_signature(
+                dedented_code, original_code, func_name
+            ):
+                parse_error = (
+                    "Function signature mismatch - parameter names must match original"
+                )
+                if self.previous_failures is not None:
+                    self.previous_failures.append(
+                        {
+                            "iteration": self.iteration,
+                            "error": "Signature mismatch",
+                            "test_output": "Function signature mismatch - parameter names must match original",
+                            "verifier_feedback": "Function signature mismatch - parameter names must match original",
+                        }
+                    )
+                return None
+
+            # RESTORE the model's original indentation (don't re-indent to original function's indent)
+            # The model's response should already have correct indentation from the prompt
+            if min_indent > 0:
+                # Restore the exact indentation the model used
+                # We need to re-apply the model's indentation to the dedented code
+                dedented_lines = dedented_code.splitlines()
+                reindented_lines = []
+                for i, line in enumerate(dedented_lines):
+                    if i < len(model_indents):
+                        if line.strip():
+                            reindented_lines.append(
+                                " " * model_indents[i] + line.lstrip()
+                            )
+                        else:
+                            reindented_lines.append(line)
+                    else:
+                        reindented_lines.append(line)
+                new_func_code = "\n".join(reindented_lines)
+            # If min_indent == 0, the code was at column 0, so we need to add indentation
+            else:
+                # Add indentation based on the original function's indentation
+                original_indent = self._get_function_indentation(
+                    original_code, func_name
+                )
+                reindented_lines = []
+                for line in dedented_code.splitlines():
+                    if line.strip():
+                        reindented_lines.append(" " * original_indent + line)
+                    else:
+                        reindented_lines.append(line)
+                new_func_code = "\n".join(reindented_lines)
+
+            # Replace the function in the current patched code
+            new_patched_code = self._replace_function(
+                patched_code, func_name, new_func_code
+            )
+            if new_patched_code is None or new_patched_code == patched_code:
+                parse_error = (
+                    f"Function replacement did not modify the code for {func_name}"
+                )
+                if self.previous_failures is not None:
+                    self.previous_failures.append(
+                        {
+                            "iteration": self.iteration,
+                            "error": f"Function replacement did not modify the code for {func_name}",
+                            "test_output": f"Function replacement produced no changes for {func_name}",
+                            "verifier_feedback": f"Function replacement produced no changes for {func_name}",
+                        }
+                    )
+                return None
+
+            patched_code = new_patched_code
+            all_changes.append(
+                {
+                    "file": controller_file,
+                    "function": func_name,
+                    "change": f"Replaced {func_name} with new implementation",
+                    "type": "modification",
+                    "location": "function_body",
+                }
+            )
+            applied_count += 1
+
+        if applied_count == 0:
+            parse_error = "No function replacements were successfully applied"
             if self.previous_failures is not None:
                 self.previous_failures.append(
                     {
                         "iteration": self.iteration,
-                        "error": "Function replacement did not modify the code",
-                        "test_output": "Function replacement produced no changes",
-                        "verifier_feedback": "Function replacement produced no changes",
+                        "error": parse_error,
+                        "test_output": response[:500],
+                        "verifier_feedback": "No function replacements were successfully applied",
                     }
                 )
             return None
 
-        # Generate diff for the change
+        # Generate diff for all changes
         diff = self._generate_diff(original_code, patched_code)
-        changes = [
-            {
-                "file": controller_file,
-                "function": func_match.group(1),
-                "change": f"Replaced {func_match.group(1)} with new implementation",
-                "type": "modification",
-                "location": "function_body",
-            }
-        ]
 
-        return patched_code, diff, changes, "function replacement"
+        return (
+            patched_code,
+            diff,
+            all_changes,
+            f"function replacement ({applied_count} functions)",
+        )
 
     def _get_function_indentation(self, code: str, func_name: str) -> int:
         """Get the leading indentation (in spaces) of a function in the code."""
@@ -864,13 +1019,23 @@ Return ONLY the unified diff. NO additional text."""
         )
 
         # Check for additions-only or deletions-only
-        # Allow additions-only if there are context lines (legitimate insertion)
-        # Reject if no context lines (whole-function dump)
+        # Allow additions-only if there are context lines AND (multiple hunks OR substantial context)
+        # Reject comment-only diffs (all additions are comments)
         if additions > 0 and deletions == 0:
-            if context_lines == 0:
-                return (
-                    False  # Additions-only with no context suggests whole-function dump
-                )
+            addition_lines = [
+                line
+                for line in lines
+                if line.startswith("+") and not line.startswith("+++")
+            ]
+            if addition_lines and all(
+                line.lstrip("+ ").startswith("#") for line in addition_lines
+            ):
+                return False  # Comment-only diff
+            # Allow additions-only if multiple hunks (multi-function change) or substantial context
+            if hunk_count >= 2 or context_lines > additions:
+                pass  # Allow legitimate multi-function insertions or substantial context
+            else:
+                return False  # Single-hunk additions-only with minimal context suggests whole-function dump
         if deletions > 0 and additions == 0:
             if context_lines == 0:
                 return False  # Deletions-only with no context suggests incomplete diff
