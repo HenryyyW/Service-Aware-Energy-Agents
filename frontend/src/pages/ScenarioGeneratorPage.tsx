@@ -6,10 +6,15 @@ import {
   Zap,
   Play,
   AlertTriangle,
+  AlertCircle,
   CheckCircle,
   Copy,
-  Menu,
   RefreshCw,
+  Building2,
+  Sun,
+  Battery,
+  Car,
+  Network,
 } from '../utils/lucide';
 import { Button } from '../components/ui/Button';
 import { Textarea } from '../components/ui/Input';
@@ -18,61 +23,7 @@ import { useScenarioStore } from '../store/scenarioStore';
 import type { ScenarioConfig } from '../api/types';
 
 /* -------------------------------------------------------------------------- */
-/* Default / reference ScenarioConfig used for the diffable preview.          */
-/* -------------------------------------------------------------------------- */
-const DEFAULT_SCENARIO: ScenarioConfig = {
-  scenario_id: '',
-  name: 'New Community',
-  description: '',
-  community: {
-    name: 'New Community',
-    buildings: 5,
-    simulation_period: '7_days',
-    timestep_minutes: 15,
-  },
-  assets: {
-    pv: { penetration: 0.4, orientation: 'rooftop' },
-    batteries: { community_capacity_kwh: 800, max_power_kw: 250 },
-    evs: { number: 35, charging_power_kw: [7, 22, 60], departure_soc_requirement: 0.8 },
-    flexible_loads: { share: 0.15 },
-  },
-  grid: {
-    model: 'simbench_lv_grid_1',
-    transformer_capacity_kva: 630,
-    voltage_limits_pu: [0.95, 1.05],
-    import_limit_kw: 500,
-    export_limit_kw: 200,
-  },
-  control: {
-    strategy: 'rule_based',
-    objective: [
-      'minimize_cost',
-      'minimize_peak',
-      'maximize_renewable_self_consumption',
-      'preserve_ev_service',
-      'preserve_comfort',
-    ],
-  },
-  energy_sharing: {
-    enabled: false,
-    market_type: 'uniform_price',
-    settlement_interval: '1h',
-    dynamic_pricing: {
-      enabled: false,
-      pricing_type: 'lmp',
-      lmp_update_interval_minutes: 60,
-      congestion_cost_method: 'dc_approx',
-      loss_factor: 1.0,
-      price_cap_per_kwh: 1.0,
-      fallback_to_tariff: true,
-    },
-  },
-  random_seed: 42,
-  timestep_minutes: 15,
-};
-
-/* -------------------------------------------------------------------------- */
-/* Mock NL -> config agent. Replace with the real pipeline (Backend A).       */
+/* Mock NL -> config agent. Replace with Backend A's real pipeline via prop.   */
 /* -------------------------------------------------------------------------- */
 const EXAMPLES = [
   {
@@ -92,10 +43,6 @@ const EXAMPLES = [
   },
 ];
 
-function deepGet(obj: any, path: string): any {
-  return path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : undefined), obj);
-}
-
 function flatten(obj: any, prefix = ''): [string, any][] {
   let out: [string, any][] = [];
   for (const [k, v] of Object.entries(obj ?? {})) {
@@ -111,134 +58,260 @@ function flatten(obj: any, prefix = ''): [string, any][] {
 
 function mockGenerateScenario(description: string): ScenarioConfig {
   const d = description.toLowerCase();
-  const config = JSON.parse(JSON.stringify(DEFAULT_SCENARIO));
+  const buildings: any[] = [
+    {
+      building_id: 'building_1',
+      building_type: 'residential',
+      location: { lat: 0, lon: 0, timezone: 'UTC' },
+      simulation_start: '2023-01-01',
+      simulation_end: '2023-01-08',
+      pv: undefined,
+      battery: undefined,
+      evs: undefined,
+      flexible_loads: undefined,
+      tariff: undefined,
+      weather_file: undefined,
+    },
+  ];
   const hasEv = /ev|electric.?vehicle|charg/.test(d);
   const hasPv = /pv|solar|photovolta/.test(d);
   const hasBattery = /battery|storage/.test(d);
   const hasSharing = /sharing|settlement|p2p|community pool/.test(d);
   const hasLimit = /limit|cap|kW|kw/.test(d);
-
-  config.name = description.slice(0, 60).trim() || 'Generated Community';
-  config.description = description;
-  config.random_seed = 42;
-
   if (hasEv) {
-    config.assets.evs.number = 50;
-    config.assets.evs.charging_power_kw = [7, 11, 22];
-    config.assets.evs.departure_soc_requirement = 0.8;
+    buildings[0].evs = [
+      {
+        capacity_kwh: 60,
+        max_charge_kw: 22,
+        efficiency: 0.9,
+        arrival_time: '18:00',
+        departure_time: '07:00',
+        target_soc: 0.8,
+        initial_soc: 0.3,
+        connected_days: [0, 1, 2, 3, 4, 5, 6],
+      },
+    ];
   }
   if (hasPv) {
-    config.assets.pv.penetration = 0.8;
-    config.assets.pv.orientation = 'south';
+    buildings[0].pv = { capacity_kw: 8, azimuth: 180, tilt: 30, efficiency: 0.2, inverter_efficiency: 0.96 };
   }
   if (hasBattery) {
-    config.assets.batteries.community_capacity_kwh = 1000;
-    config.assets.batteries.max_power_kw = 500;
+    buildings[0].battery = {
+      capacity_kwh: 10,
+      power_kw: 5,
+      efficiency_charge: 0.95,
+      efficiency_discharge: 0.95,
+      soc_min: 0.1,
+      soc_max: 0.9,
+      initial_soc: 0.5,
+    };
   }
-  if (hasSharing) {
-    config.energy_sharing.enabled = true;
-    config.energy_sharing.market_type = 'uniform_price';
-  }
-  if (hasLimit) {
-    const m = d.match(/(\d+)\s*kW/);
-    if (m) config.community_import_limit_kw = parseInt(m[1], 10);
-  }
-
+  const config: ScenarioConfig = {
+    scenario_id: '',
+    name: description.slice(0, 60).trim() || 'Generated Community',
+    description,
+    buildings,
+    community: {
+      name: description.slice(0, 60).trim() || 'Generated Community',
+      buildings: buildings.length,
+      simulation_period: '7_days',
+      timestep_minutes: 15,
+    },
+    assets: {
+      pv: { penetration: hasPv ? 0.8 : 0.4, orientation: 'rooftop' },
+      batteries: { community_capacity_kwh: hasBattery ? 1000 : 800, max_power_kw: hasBattery ? 500 : 250 },
+      evs: { number: hasEv ? 50 : 35, charging_power_kw: [7, 22, 60], departure_soc_requirement: 0.8 },
+      flexible_loads: { share: 0.15 },
+    },
+    grid: {
+      model: 'simbench_lv_grid_1',
+      transformer_capacity_kva: 630,
+      voltage_limits_pu: [0.95, 1.05],
+      import_limit_kw: 500,
+      export_limit_kw: 200,
+    },
+    control: {
+      strategy: 'rule_based',
+      objective: ['minimize_cost', 'minimize_peak'],
+    },
+    pandapower: undefined,
+    energy_sharing: hasSharing
+      ? { enabled: true, market_type: 'uniform_price', settlement_interval: '1h', dynamic_pricing: undefined }
+      : undefined,
+    community_import_limit_kw: hasLimit ? (() => { const m = d.match(/(\d+)\s*kW/); return m ? parseInt(m[1], 10) : undefined; })() : undefined,
+    community_export_limit_kw: undefined,
+    random_seed: 42,
+    timestep_minutes: 15,
+  };
   return config;
 }
 
 /* -------------------------------------------------------------------------- */
-/* Diffable config preview                                                    */
+/* Provenance / confidence chip                                               */
 /* -------------------------------------------------------------------------- */
-type Leaf = { path: string; label: string; generated: any; default: any; changed: boolean };
+type Provenance = 'given' | 'assumed' | 'default' | 'missing';
 
-function buildLeaves(generated: ScenarioConfig): Leaf[] {
-  const genLeaves = flatten(generated);
-  return genLeaves.map(([path, value]) => {
-    const label = path
-      .split('.')
-      .map((s) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' '))
-      .join(' > ');
-    const def = deepGet(DEFAULT_SCENARIO, path);
-    return { path, label, generated: value, default: def, changed: JSON.stringify(value) !== JSON.stringify(def) };
-  });
-}
-
-const TYPE_LABEL: Record<string, string> = {
-  community: 'Community',
-  assets: 'Assets',
-  grid: 'Grid',
-  control: 'Control',
-  energy_sharing: 'Energy Sharing',
+const PROVENANCE_CHIP: Record<Provenance, { glyph: string; label: string }> = {
+  given: { glyph: '✓', label: 'given' },
+  assumed: { glyph: '~', label: 'assumed' },
+  default: { glyph: '↻', label: 'default' },
+  missing: { glyph: '!', label: 'missing' },
 };
 
-function ConfigPreview({ generated }: { generated: ScenarioConfig }) {
-  const leaves = buildLeaves(generated);
-  const bySection = new Map<string, Leaf[]>();
-  for (const leaf of leaves) {
-    const section = leaf.path.split('.')[0];
-    if (!bySection.has(section)) bySection.set(section, []);
-    bySection.get(section)!.push(leaf);
+const CONFIDENCE_STYLE: Record<Provenance, string> = {
+  given: 'bg-transparent border-border text-text-muted',
+  assumed: 'bg-sun/10 border-sun/30 text-sun',
+  default: 'bg-grid/10 border-grid/30 text-grid',
+  missing: 'bg-violation/10 border-violation/30 text-violation',
+};
+
+function ConfidenceChip({ prov, tooltip }: { prov: Provenance; tooltip?: string }) {
+  const chip = PROVENANCE_CHIP[prov];
+  return (
+    <span
+      className={clsx(
+        'inline-flex items-center gap-1 px-2 py-0.5 rounded text-caption font-medium border',
+        CONFIDENCE_STYLE[prov]
+      )}
+      title={tooltip}
+    >
+      <span className="text-caption">{chip.glyph}</span>
+      {chip.label}
+    </span>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Field-level diff vs. existing scenario                                     */
+/* -------------------------------------------------------------------------- */
+type DiffKind = 'added' | 'removed' | 'changed';
+
+function buildDiff(existing: ScenarioConfig, parsed: ScenarioConfig) {
+  const oldLeaves = new Map(flatten(existing));
+  const newLeaves = new Map(flatten(parsed));
+  const sections: { section: string; rows: { path: string; kind: DiffKind; old: any; new: any }[] }[] = [];
+  for (const [path, newVal] of newLeaves) {
+    const oldVal = oldLeaves.get(path);
+    if (oldVal === undefined) {
+      const section = path.split('.')[0];
+      let s = sections.find((x) => x.section === section);
+      if (!s) { s = { section, rows: [] }; sections.push(s); }
+      s.rows.push({ path, kind: 'added', old: undefined, new: newVal });
+    } else if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+      const section = path.split('.')[0];
+      let s = sections.find((x) => x.section === section);
+      if (!s) { s = { section, rows: [] }; sections.push(s); }
+      s.rows.push({ path, kind: 'changed', old: oldVal, new: newVal });
+    }
   }
+  for (const [path] of oldLeaves) {
+    if (!newLeaves.has(path)) {
+      const section = path.split('.')[0];
+      let s = sections.find((x) => x.section === section);
+      if (!s) { s = { section, rows: [] }; sections.push(s); }
+      s.rows.push({ path, kind: 'removed', old: oldLeaves.get(path), new: undefined });
+    }
+  }
+  return sections;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Left panel — community summary cards                                       */
+/* -------------------------------------------------------------------------- */
+const ICON_FOR: Record<string, any> = {
+  community: Building2,
+  buildings: Building2,
+  pv: Sun,
+  battery: Battery,
+  ev: Car,
+  evs: Car,
+  flexible_load: Zap,
+  flexible_loads: Zap,
+  tariff: FileText,
+  grid: Network,
+  sharing: Zap,
+};
+
+function SummaryCard({ title, icon: Icon, rows }: { title: string; icon: any; rows: { label: string; value: string; prov: Provenance }[] }) {
+  return (
+    <div className="glass-card overflow-hidden">
+      <div className="flex items-center gap-2 p-3 bg-surface/50 border-b border-border/30">
+        <Icon className="w-4 h-4 text-text-muted" />
+        <h4 className="font-body font-medium text-body-sm text-text">{title}</h4>
+      </div>
+      <div className="p-3 space-y-2">
+        {rows.map((r, i) => (
+          <div key={i} className="flex items-center gap-3">
+            <span className="w-40 flex-shrink-0 text-caption text-text-muted leading-none">{r.label}</span>
+            <span className="flex-1 font-mono text-body-sm text-text truncate">{r.value}</span>
+            <ConfidenceChip prov={r.prov} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CommunitySummary({ config }: { config: ScenarioConfig }) {
+  const b = (config.buildings ?? [])[0] ?? {};
+  const pv = b.pv ?? {};
+  const bat = b.battery ?? {};
+  const ev = b.evs?.[0] ?? {};
+  const grid = config.pandapower ?? ({} as any);
+  const sharing = config.energy_sharing ?? ({} as any);
+
+  const rows = {
+    community: [
+      { label: 'Name', value: config.name, prov: 'given' as Provenance },
+      { label: 'Description', value: config.description || '\u2014', prov: 'given' as Provenance },
+      { label: 'Timestep', value: config.timestep_minutes + ' min', prov: 'default' as Provenance },
+      { label: 'Random seed', value: String(config.random_seed), prov: 'default' as Provenance },
+    ],
+    buildings: [
+      { label: 'Building ID', value: b.building_id, prov: 'given' as Provenance },
+      { label: 'Type', value: b.building_type, prov: 'given' as Provenance },
+      { label: 'Location', value: (b.location?.lat ?? '\u2014') + ', ' + (b.location?.lon ?? '\u2014'), prov: 'given' as Provenance },
+    ],
+    pv: [
+      { label: 'Capacity (kW)', value: pv.capacity_kw ?? '\u2014', prov: pv.capacity_kw ? ('given' as Provenance) : ('missing' as Provenance) },
+      { label: 'Azimuth (\u00B0)', value: pv.azimuth ?? '\u2014', prov: pv.azimuth ? ('given' as Provenance) : ('assumed' as Provenance) },
+      { label: 'Tilt (\u00B0)', value: pv.tilt ?? '\u2014', prov: pv.tilt ? ('given' as Provenance) : ('assumed' as Provenance) },
+    ],
+    battery: [
+      { label: 'Capacity (kWh)', value: bat.capacity_kwh ?? '\u2014', prov: bat.capacity_kwh ? ('given' as Provenance) : ('missing' as Provenance) },
+      { label: 'Power (kW)', value: bat.power_kw ?? '\u2014', prov: bat.power_kw ? ('given' as Provenance) : ('missing' as Provenance) },
+    ],
+    ev: [
+      { label: 'Count', value: ev.capacity_kwh ? '1' : '\u2014', prov: ev.capacity_kwh ? ('given' as Provenance) : ('missing' as Provenance) },
+      { label: 'Max charge (kW)', value: ev.max_charge_kw ?? '\u2014', prov: ev.max_charge_kw ? ('given' as Provenance) : ('missing' as Provenance) },
+      { label: 'Target SOC', value: ev.target_soc ?? '\u2014', prov: ev.target_soc ? ('given' as Provenance) : ('assumed' as Provenance) },
+    ],
+    grid: [
+      { label: 'Network', value: grid.network_type ?? '\u2014', prov: 'assumed' as Provenance },
+      { label: 'Import limit (kW)', value: config.community_import_limit_kw ?? '\u2014', prov: config.community_import_limit_kw ? ('given' as Provenance) : ('missing' as Provenance) },
+      { label: 'Export limit (kW)', value: config.community_export_limit_kw ?? '\u2014', prov: config.community_export_limit_kw ? ('given' as Provenance) : ('missing' as Provenance) },
+    ],
+    sharing: [
+      { label: 'Enabled', value: sharing.enabled ? 'yes' : 'no', prov: 'assumed' as Provenance },
+      { label: 'Market', value: sharing.market_type ?? '\u2014', prov: 'assumed' as Provenance },
+    ],
+  };
+
+  const sections = [
+    { title: 'Community', icon: Building2, rows: rows.community },
+    { title: 'Buildings', icon: Building2, rows: rows.buildings },
+    { title: 'PV', icon: Sun, rows: rows.pv },
+    { title: 'Battery', icon: Battery, rows: rows.battery },
+    { title: 'EV', icon: Car, rows: rows.ev },
+    { title: 'Grid', icon: Network, rows: rows.grid },
+    { title: 'Sharing', icon: Zap, rows: rows.sharing },
+  ];
 
   return (
     <div className="space-y-3">
-      {leaves.length === 0 ? (
-        <div className="glass-card p-8 text-center text-text-muted">
-          <FileText className="w-16 h-16 mx-auto mb-3 text-text-muted/30" />
-          <p className="text-body">Generate a config to preview it here.</p>
-        </div>
-      ) : (
-        <>
-          <div className="flex items-center gap-2 mb-2">
-            <CheckCircle className="w-4 h-4 text-energy" />
-            <span className="font-body font-medium text-body-sm text-text">
-              Generated configuration ({leaves.filter((l) => l.changed).length} of {leaves.length} fields changed from default)
-            </span>
-          </div>
-          {[...bySection.entries()].map(([section, sectionLeaves]) => (
-            <div key={section} className="glass-card overflow-hidden">
-              <div className="flex items-center gap-2 p-3 bg-surface/50 border-b border-border/30">
-                <Menu className="w-4 h-4 text-text-muted" />
-                <h4 className="font-body font-medium text-body-sm text-text">
-                  {TYPE_LABEL[section] || section}
-                </h4>
-              </div>
-              <div className="p-3 space-y-1.5">
-                {sectionLeaves.map((leaf) => (
-                  <div
-                    key={leaf.path}
-                    className={clsx(
-                      'flex items-start gap-2 text-body-sm',
-                      leaf.changed ? 'bg-sun/10 border-l-2 border-l-sun pl-2' : 'bg-transparent',
-                    )}
-                  >
-                    <span className="flex-shrink-0 w-48 text-caption text-text-muted leading-none">
-                      {leaf.label}
-                    </span>
-                    {leaf.changed ? (
-                      <span className="flex-1 font-mono text-sun">{JSON.stringify(leaf.generated)}</span>
-                    ) : (
-                      <span className="flex-1 font-mono text-text-muted">{JSON.stringify(leaf.generated)}</span>
-                    )}
-                    {leaf.changed && <span className="text-caption text-sun">● changed</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-          <div className="mt-3 flex items-center gap-2">
-            <Copy className="w-4 h-4 text-text-muted" />
-            <button
-              className="text-caption text-text-muted hover:text-sun transition-colors"
-              onClick={() => navigator.clipboard.writeText(JSON.stringify(generated, null, 2))}
-              title="Copy config JSON"
-            >
-              Copy config JSON
-            </button>
-          </div>
-        </>
-      )}
+      {sections.map((s) => (
+        <SummaryCard key={s.title} title={s.title} icon={ICON_FOR[s.title]} rows={s.rows} />
+      ))}
     </div>
   );
 }
@@ -258,12 +331,17 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
   }));
   const generate = propGenerate ?? mockGenerateScenario;
 
+  const [step, setStep] = useState<'input' | 'confirm'>('input');
   const [description, setDescription] = useState('');
-  const [generated, setGenerated] = useState<ScenarioConfig | null>(null);
+  const [parsed, setParsed] = useState<ScenarioConfig | null>(null);
+  const [existing, setExisting] = useState<ScenarioConfig | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
+  const [validation, setValidation] = useState<{ valid: boolean; errors: string[]; warnings: string[] } | null>(null);
   const [error, setError] = useState<{ message: string; field?: string } | null>(null);
   const [lastRunId, setLastRunId] = useState<string | null>(null);
+  const [showDiff, setShowDiff] = useState(false);
 
   const handleExample = useCallback((ex: (typeof EXAMPLES)[number]) => {
     setDescription(ex.description);
@@ -276,8 +354,11 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
     setIsGenerating(true);
     try {
       const config = await generate(description.trim());
-      setGenerated(config);
+      setParsed(config);
       setCurrentScenario(config);
+      setStep('confirm');
+      setValidation(null);
+      setLastRunId(null);
     } catch (e) {
       setError({ message: e instanceof Error ? e.message : 'Failed to generate config' });
     } finally {
@@ -285,15 +366,28 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
     }
   }, [description, isGenerating, generate, setCurrentScenario]);
 
+  const handleValidate = useCallback(async () => {
+    if (!parsed?.scenario_id) return;
+    setIsValidating(true);
+    try {
+      const v = await api.validateScenario(parsed.scenario_id);
+      setValidation(v);
+    } catch (e: any) {
+      setError({ message: e.response?.data?.detail || 'Validation failed' });
+    } finally {
+      setIsValidating(false);
+    }
+  }, [parsed?.scenario_id]);
+
   const handleRun = useCallback(async () => {
-    if (!generated || isRunning) return;
+    if (!parsed || isRunning) return;
     setError(null);
     setIsRunning(true);
     try {
-      const created = await api.createScenario(generated);
-      addScenario(generated);
-      setLastRunId((created.scenario_id ?? generated.scenario_id) ?? null);
-      navigate(`/scenarios/${created.scenario_id || generated.scenario_id}`);
+      const created = await api.createScenario(parsed);
+      addScenario(parsed);
+      setLastRunId((created.scenario_id ?? parsed.scenario_id) ?? null);
+      navigate(`/scenarios/${created.scenario_id ?? parsed.scenario_id}`);
     } catch (e: any) {
       const detail = e.response?.data?.detail || e.message || 'Run rejected';
       let field: string | undefined;
@@ -303,28 +397,91 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
     } finally {
       setIsRunning(false);
     }
-  }, [generated, isRunning, addScenario, navigate]);
+  }, [parsed, isRunning, addScenario, navigate]);
+
+  const handleEdit = useCallback(() => {
+    setStep('input');
+    setValidation(null);
+    setError(null);
+  }, []);
 
   const handleClear = useCallback(() => {
     setDescription('');
-    setGenerated(null);
+    setParsed(null);
+    setExisting(null);
     setError(null);
+    setValidation(null);
     setLastRunId(null);
+    setStep('input');
   }, []);
+
+  const diff = existing && parsed ? buildDiff(existing, parsed) : null;
+
+  if (step === 'input') {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="p-4 border-b border-border/30 bg-surface/50">
+          <h1 className="font-display font-semibold text-heading-1 text-text">Generate Scenario</h1>
+          <p className="text-caption text-text-muted">Describe an energy community in natural language, review the generated config, then run it.</p>
+        </div>
+        <div className="flex-1 flex overflow-hidden">
+          <div className="w-2/5 flex-shrink-0 border-r border-border/30 bg-surface/30 p-4 overflow-y-auto">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="block text-caption text-text-muted">Community description</label>
+                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the community you want to simulate" rows={6} className="font-body" />
+                <p className="text-caption text-text-muted">The agent turns this into an executable ScenarioConfig you can review before running.</p>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="ghost" size="sm" disabled={isGenerating} onClick={handleGenerate} leftIcon={<Zap className="w-4 h-4 mr-1" />}>
+                    {isGenerating ? 'Generating...' : 'Generate config'}
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-caption text-text-muted">Examples</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {EXAMPLES.map((ex) => (
+                    <button key={ex.title} onClick={() => handleExample(ex)} className="glass-card p-3 text-left hover:border-sun/50 transition-colors border border-border/30">
+                      <p className="font-body font-medium text-body-sm text-text mb-1">{ex.title}</p>
+                      <p className="text-caption text-text-muted line-clamp-2">{ex.description}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {error && (
+                <div className="p-3 rounded-lg border border-violation/30 bg-violation/10">
+                  <div className="flex items-start gap-2 mb-1">
+                    <AlertTriangle className="w-4 h-4 mt-0.5 text-violation" />
+                    <p className="font-body font-medium text-body-sm text-violation">Generation failed</p>
+                  </div>
+                  <p className="text-caption text-violation/80">{error.message}</p>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex-1 min-w-0 p-4 overflow-y-auto">
+            <div className="glass-card p-8 text-center text-text-muted">
+              <FileText className="w-16 h-16 mx-auto mb-3 text-text-muted/30" />
+              <p className="text-body">Generate a config to preview it here.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
       <div className="p-4 border-b border-border/30 bg-surface/50">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-display font-semibold text-heading-1 text-text">Generate Scenario</h1>
-            <p className="text-caption text-text-muted">
-              Describe an energy community in natural language, review the generated config, then run it.
-            </p>
+            <h1 className="font-display font-semibold text-heading-1 text-text">Confirm Scenario</h1>
+            <p className="text-caption text-text-muted">Review the generated config before running. No scenario runs until you approve it.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={handleClear} disabled={!generated && !description} aria-label="Clear">
+            <Button variant="ghost" size="icon" onClick={handleClear} aria-label="Clear">
               <RefreshCw className="w-4 h-4" />
             </Button>
           </div>
@@ -332,79 +489,95 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Left: input + examples */}
         <div className="w-2/5 flex-shrink-0 border-r border-border/30 bg-surface/30 p-4 overflow-y-auto">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="block text-caption text-text-muted">Community description</label>
-              <Textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe the community you want to simulate"
-                rows={6}
-                className="font-body"
-              />
-              <p className="text-caption text-text-muted">
-                The agent turns this into an executable ScenarioConfig you can review before running.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={isGenerating}
-                  onClick={handleGenerate}
-                  leftIcon={<Zap className="w-4 h-4 mr-1" />}
-                >
-                  {isGenerating ? 'Generating...' : 'Generate config'}
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-caption text-text-muted">Examples</p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {EXAMPLES.map((ex) => (
-                  <button
-                    key={ex.title}
-                    onClick={() => handleExample(ex)}
-                    className="glass-card p-3 text-left hover:border-sun/50 transition-colors border border-border/30"
-                  >
-                    <p className="font-body font-medium text-body-sm text-text mb-1">{ex.title}</p>
-                    <p className="text-caption text-text-muted line-clamp-2">{ex.description}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {error && (
-              <div className="p-3 rounded-lg border border-violation/30 bg-violation/10">
-                <div className="flex items-start gap-2 mb-1">
-                  <AlertTriangle className="w-4 h-4 mt-0.5 text-violation" />
-                  <p className="font-body font-medium text-body-sm text-violation">Generation failed</p>
-                </div>
-                <p className="text-caption text-violation/80">{error.message}</p>
-              </div>
-            )}
-          </div>
+          {parsed && <CommunitySummary config={parsed} />}
         </div>
-
-        {/* Right: config preview */}
         <div className="flex-1 min-w-0 p-4 overflow-y-auto">
-          <ConfigPreview generated={generated ?? DEFAULT_SCENARIO} />
+          {parsed && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-body font-medium text-body text-text">Configuration preview</h3>
+                  <p className="text-caption text-text-muted">Review field-by-field before running.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setShowDiff(!showDiff)} className="text-caption text-text-muted hover:text-sun transition-colors">
+                    {showDiff ? 'Show summary' : 'Show diff'}
+                  </button>
+                  <button className="text-caption text-text-muted hover:text-sun transition-colors" onClick={() => navigator.clipboard.writeText(JSON.stringify(parsed, null, 2))} title="Copy config JSON">
+                    <Copy className="w-4 h-4 mr-1" />
+                    Copy JSON
+                  </button>
+                </div>
+              </div>
+              {showDiff && diff && diff.length > 0 ? (
+                <div className="glass-card overflow-hidden">
+                  <div className="p-3 bg-surface/50 border-b border-border/30">
+                    <h4 className="font-body font-medium text-body-sm text-text">Changed fields</h4>
+                  </div>
+                  <div className="p-3 space-y-2">
+                    {diff.map((s) => (
+                      <div key={s.section} className="mb-2">
+                        <h5 className="text-caption text-text-muted mb-1">{s.section}</h5>
+                        {s.rows.map((r) => (
+                          <div key={r.path} className="flex items-start gap-2 text-body-sm">
+                            <span className="flex-shrink-0 w-48 text-caption text-text-muted leading-none">{r.path}</span>
+                            <span className={clsx('flex-1 font-mono', r.kind === 'added' ? 'text-energy' : r.kind === 'removed' ? 'text-violation' : 'text-sun')}>
+                              {JSON.stringify(r.new)}
+                            </span>
+                            {r.kind === 'changed' && <span className="text-caption text-sun">~\u2192 {JSON.stringify(r.old)}</span>}
+                            {r.kind === 'added' && <span className="text-caption text-sun">+ added</span>}
+                            {r.kind === 'removed' && <span className="text-caption text-violation">- removed</span>}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-caption text-text-muted">No diff available against an existing scenario.</p>
+                </div>
+              )}
+              {validation && (
+                <div className={clsx('p-3 rounded-lg border', validation.valid ? 'border-energy/30 bg-energy/10' : 'border-violation/30 bg-violation/10')}>
+                  <div className="flex items-start gap-2 mb-1">
+                    {validation.valid ? <CheckCircle className="w-4 h-4 mt-0.5 text-energy" /> : <AlertCircle className="w-4 h-4 mt-0.5 text-violation" />}
+                    <p className="font-body font-medium text-body-sm">{validation.valid ? 'Valid — ready to run' : 'Validation failed — fix before running'}</p>
+                  </div>
+                  {validation.errors.length > 0 && (
+                    <ul className="text-caption text-violation/80 mt-1 list-disc list-inside space-y-1">
+                      {validation.errors.map((e) => <li key={e}>{e}</li>)}
+                    </ul>
+                  )}
+                  {validation.warnings.length > 0 && (
+                    <ul className="text-caption text-text-muted mt-1 list-disc list-inside space-y-1">
+                      {validation.warnings.map((w) => <li key={w}>{w}</li>)}
+                    </ul>
+                  )}
+                </div>
+              )}
+              {error && (
+                <div className="p-3 rounded-lg border border-violation/30 bg-violation/10">
+                  <div className="flex items-start gap-2 mb-1">
+                    <AlertCircle className="w-4 h-4 mt-0.5 text-violation" />
+                    <p className="font-body font-medium text-body-sm text-violation">{error.field ? `Run rejected — ${error.field}` : 'Run rejected'}</p>
+                  </div>
+                  <p className="text-caption text-violation/80">{error.message}</p>
+                  {error.field && <p className="text-caption text-violation/80 mt-1">Fix <span className="font-mono">{error.field}</span> and regenerate.</p>}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Bottom bar: RUN + failure + status */}
       <div className="border-t border-border/30 bg-surface/50 p-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Button
               variant="primary"
-              disabled={!generated || isRunning}
+              disabled={!parsed || isRunning || Boolean(validation?.valid === false)}
               onClick={handleRun}
               leftIcon={<Play className="w-4 h-4 mr-2" />}
             >
@@ -419,6 +592,10 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
                 </>
               )}
             </Button>
+            <Button variant="secondary" onClick={handleEdit}>Edit / reject</Button>
+            <Button variant="ghost" size="sm" disabled={!parsed?.scenario_id || isValidating} onClick={handleValidate}>
+              {isValidating ? 'Validating...' : 'Validate now'}
+            </Button>
             {lastRunId && (
               <div className="flex items-center gap-2 bg-energy/10 border border-energy/30 rounded-lg px-3 py-2">
                 <CheckCircle className="w-4 h-4 text-energy" />
@@ -429,21 +606,6 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
               </div>
             )}
           </div>
-
-          {error && (
-            <div className="flex items-start gap-2 w-full sm:w-auto">
-              <AlertTriangle className="w-5 h-5 mt-0.5 text-violation" />
-              <div>
-                <p className="font-body font-medium text-body-sm text-violation">Run rejected</p>
-                <p className="text-caption text-violation/80">{error.message}</p>
-                {error.field && (
-                  <p className="text-caption text-violation/80 mt-1">
-                    Fix <span className="font-mono">{error.field}</span> and regenerate.
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
