@@ -182,7 +182,9 @@ class ConfigCoderAgent:
             if plan.get("location"):
                 building["location"] = plan["location"]
 
-            return buildings
+            buildings.append(building)
+
+        return buildings
 
     def _build_energy_sharing(self, plan: Dict[str, Any]) -> Dict[str, Any]:
         """Build energy sharing config."""
