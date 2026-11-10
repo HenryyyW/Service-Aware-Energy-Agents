@@ -110,11 +110,26 @@ class VerificationHarness:
                 spec.loader.exec_module(module)
 
                 # Find controller class
+                # Skip abstract BaseController - find concrete class that implements get_actions
                 controller_cls = None
                 for name, obj in module.__dict__.items():
                     if isinstance(obj, type) and name.endswith("Controller"):
-                        controller_cls = obj
-                        break
+                        # Check if it's a concrete class (not abstract) and has get_actions
+                        import inspect
+
+                        if not inspect.isabstract(obj) and hasattr(obj, "get_actions"):
+                            controller_cls = obj
+                            break
+
+                # Fallback: if no concrete class found, try any non-abstract Controller
+                if controller_cls is None:
+                    for name, obj in module.__dict__.items():
+                        if isinstance(obj, type) and name.endswith("Controller"):
+                            import inspect
+
+                            if not inspect.isabstract(obj):
+                                controller_cls = obj
+                                break
 
                 if controller_cls is not None:
                     # Run detector
@@ -122,6 +137,11 @@ class VerificationHarness:
                     if not ok:
                         detector_passed = False
                         detector_detail = detail or "Detector failed"
+                else:
+                    detector_passed = False
+                    detector_detail = (
+                        "No concrete controller class found in patched code"
+                    )
             except Exception as e:
                 logger.warning(f"Detector execution failed: {e}")
                 detector_passed = False
