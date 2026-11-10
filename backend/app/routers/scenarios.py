@@ -13,6 +13,8 @@ from src.schemas.scenario import (
     PandapowerConfig,
     PVConfig,
     BatteryConfig,
+    EnergySharingConfig,
+    FailureConfig,
 )
 
 router = APIRouter()
@@ -178,6 +180,13 @@ def _scenario_to_dict(scenario: ScenarioConfig) -> dict:
             "objective": ["cost_minimization", "carbon_reduction"],
         },
         "pandapower": scenario.pandapower.model_dump() if scenario.pandapower else None,
+        # Top-level config the GET serializer used to drop entirely - an
+        # energy-sharing scenario came back without its market definition.
+        "energy_sharing": (
+            scenario.energy_sharing.model_dump() if scenario.energy_sharing else None
+        ),
+        "failures": [f.model_dump() for f in scenario.failures],
+        "carbon_intensity_file": scenario.carbon_intensity_file,
         "random_seed": scenario.random_seed,
         "timestep_minutes": scenario.timestep_minutes,
     }
@@ -231,6 +240,16 @@ async def create_scenario(scenario_data: dict):
         ),
         community_import_limit_kw=scenario_data.get("community_import_limit_kw"),
         community_export_limit_kw=scenario_data.get("community_export_limit_kw"),
+        # Top-level fields the API used to drop at the door (c10's C5 failure:
+        # an energy-sharing config POSTed then GET-back-less). Buildings already
+        # carry pv/battery/evs/flexible_loads/tariff/weather_file through.
+        energy_sharing=(
+            EnergySharingConfig(**scenario_data["energy_sharing"])
+            if scenario_data.get("energy_sharing")
+            else None
+        ),
+        failures=[FailureConfig(**f) for f in scenario_data.get("failures") or []],
+        carbon_intensity_file=scenario_data.get("carbon_intensity_file"),
         random_seed=scenario_data.get("random_seed", 42),
         timestep_minutes=scenario_data.get("timestep_minutes", 15),
     )

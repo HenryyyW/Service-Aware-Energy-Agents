@@ -99,6 +99,8 @@ def main() -> int:
         BuildingConfig,
         PandapowerConfig,
         ScenarioConfig,
+        EnergySharingConfig,
+        FailureConfig,
     )
 
     client = TestClient(main_module.app)
@@ -152,6 +154,16 @@ def main() -> int:
                 ),
                 community_import_limit_kw=payload.get("community_import_limit_kw"),
                 community_export_limit_kw=payload.get("community_export_limit_kw"),
+                # 2026-11-10: the scenario API reads these now (they used to be
+                # dropped at the POST door) - the normalisation must mirror the
+                # fixed endpoint, else every energy-sharing item diffs.
+                energy_sharing=(
+                    EnergySharingConfig(**payload["energy_sharing"])
+                    if payload.get("energy_sharing")
+                    else None
+                ),
+                failures=[FailureConfig(**f) for f in payload.get("failures") or []],
+                carbon_intensity_file=payload.get("carbon_intensity_file"),
                 random_seed=payload.get("random_seed", 42),
                 timestep_minutes=payload.get("timestep_minutes", 15),
             )
@@ -167,9 +179,11 @@ def main() -> int:
             for k in set(list(got.keys()) + list(expected.keys())):
                 if got.get(k) != expected.get(k):
                     diffs.append(f"{k} differs after round-trip")
-        dropped = [k for k in DROPPED_TOP if cfg.get(k)]
-        if dropped:
-            diffs.append(f"endpoint dropped (not read on POST): {dropped}")
+        # 2026-11-10: the API reads these fields now; only flag one when the
+        # endpoint still fails to return a value that was posted.
+        still_dropped = [k for k in DROPPED_TOP if cfg.get(k) and not got.get(k)]
+        if still_dropped:
+            diffs.append(f"endpoint still drops: {still_dropped}")
         v = client.get(f"/api/scenarios/{sid}/validate")
         entry["validate"] = (
             v.json() if v.status_code == 200 else {"status": v.status_code}
