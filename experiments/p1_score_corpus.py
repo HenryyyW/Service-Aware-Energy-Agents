@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CORPUS = ROOT / "experiments" / "p1_nl_corpus.json"
+CORPUS = ROOT / "experiments" / "reference" / "p1_nl_corpus.json"
 
 DOMAIN_TARIF_TYPES = {"time_of_use", "real_time", "flat"}
 MARKET_TYPES = {

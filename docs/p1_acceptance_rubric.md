@@ -1,7 +1,7 @@
 # P1 — NL → ScenarioConfig acceptance rubric (corpus + scoring)
 
 Owner: Research Engineer · Date: 2026-11-10 · Status: ready for verification
-Companion data: `experiments/p1_nl_corpus.json` (16 items) · Deterministic checks: `experiments/p1_score_corpus.py`
+Companion data: `experiments/reference/p1_nl_corpus.json` (16 items) · Deterministic checks: `experiments/p1_score_corpus.py`
 Consumers: Backend/Simulation Engineer A (pipeline owner) and Project Partner (verification gate) — mock-free; every criterion is checkable against the real pipeline with no LLM spend in the checking itself.
 
 ---
