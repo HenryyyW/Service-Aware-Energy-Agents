@@ -384,11 +384,13 @@ def run_cell(task, max_iterations: int = 5, sandbox: bool = True) -> dict:
     broken_ok, broken_detail, broken_exc = run_detector_safe(
         task.detector_fn(), _load_controller(broken, f"broken_{run_id}"), config
     )
-    signature_present = (broken_exc is None) and (broken_ok is True)
-    if task.negative_control:
-        signature_present = (broken_exc is None) and (broken_ok is True)
-    else:
-        signature_present = (broken_exc is None) and (broken_ok is False)
+    # The defect's signature is present on the broken controller when the
+    # detector - which since the negative-control flip uses the SAME
+    # orientation for measured and negative-control tasks (passes only when
+    # the defect is fixed) - fails on it and ran without error. The old
+    # special case for negative controls matched the OLD inverted detector and
+    # now reports False, which reads as a signature-less control.
+    signature_present = (broken_exc is None) and (broken_ok is False)
 
     # 2) repair loop (sandbox memory limit raised: the 512 MB default makes the
     # sandbox's pytest subprocess fail in this container - jemalloc arena /
