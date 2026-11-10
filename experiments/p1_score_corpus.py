@@ -122,6 +122,38 @@ REJECTION_RULES = {
 }
 
 
+def _iterations(record):
+    """The pipeline's per-iteration records: top-level 'iterations' (the
+    run_nl_to_config result shape) or nested under 'final_report'."""
+    its = record.get("iterations")
+    if its is None and isinstance(record.get("final_report"), dict):
+        its = record["final_report"].get("iterations")
+    return its or []
+
+
+def _last_iteration(record):
+    its = _iterations(record)
+    return its[-1] if its else {}
+
+
+def _execution_block(record):
+    """Execution evidence: a top-level 'execution' block, or the last
+    iteration's 'executor_output' (the real pipeline record shape)."""
+    ex = record.get("execution")
+    if ex:
+        return ex
+    return _last_iteration(record).get("executor_output") or {}
+
+
+def _verification_block(record):
+    """Verification evidence: top-level 'verification', or the last
+    iteration's 'verifier_output' (the real shape)."""
+    v = record.get("verification")
+    if v:
+        return v
+    return _last_iteration(record).get("verifier_output") or {}
+
+
 def check_c1(item, cfg):
     """Plans a complete config: section counts as demanded (or, for rejection
     items, that the invalid artifact is NOT planned)."""
@@ -337,36 +369,58 @@ def main() -> int:
         ok3, iss3 = check_c3(item, cfg)
         rt = runtime.get(iid, {})
         notes = []
+        plan_source = None
         if item["kind"] == "complete":
             c4 = rt.get("simulates_clean")
             c5 = rt.get("post_round_trip")
             c4_src = "runtime record"
             c5_src = "runtime record"
             if c4 is None and record is not None:
-                ex = record.get("execution") or {}
+                ex = _execution_block(record)
                 if ex:
+                    steps = ex.get("simulation_steps", ex.get("steps", 0)) or 0
                     c4 = bool(
                         ex.get("success")
                         and ex.get("power_flow_converged")
                         and ex.get("energy_balance_ok")
-                        and (ex.get("steps") or 0) > 0
+                        and steps > 0
                     )
                     c4_src = (
                         "pipeline record execution "
-                        "(success+power_flow_converged+energy_balance_ok+steps>0)"
+                        "(success+power_flow_converged+energy_balance_ok+"
+                        f"simulation_steps={steps}>0)"
                     )
             if record is not None:
-                v = record.get("verification") or {}
-                if v.get("round_trip") is not None:
+                v = _verification_block(record)
+                rt = v.get("round_trip_valid", v.get("round_trip"))
+                if rt is not None:
                     notes.append(
-                        f"pipeline record verification.round_trip={v['round_trip']} "
+                        f"pipeline record verification.round_trip_valid={rt} "
                         "is a SERIALIZATION round-trip (pydantic parse/dump/reparse), "
                         "NOT the POST /scenarios API round-trip C5 requires - "
                         "reported, not scored"
                     )
-                prov = (record.get("manifest") or {}).get("provenance")
+                man = record.get("manifest") or {}
+                prov = man.get("provenance") or man.get("plan_source")
                 if prov:
                     notes.append(f"pipeline manifest provenance: {prov}")
+                plan_source = (
+                    man.get("plan_source")
+                    or (record.get("plan") or {}).get("plan_source")
+                    or _last_iteration(record)
+                    .get("planner_output", {})
+                    .get("plan_source")
+                )
+                if plan_source == "rule_based_fallback":
+                    # the planner fell back to the keyword path (LLM call raised
+                    # or its response did not parse) - this item does NOT
+                    # measure the agent's planning; report, never pool silently
+                    notes.append(
+                        "PLANNED BY rule_based_fallback - not an agent "
+                        "measurement (LLM call raised or response unparsable)"
+                    )
+                elif plan_source:
+                    notes.append(f"planned by: {plan_source}")
             c4_v = "PASS" if c4 is True else ("UNCHECKED" if c4 is None else "FAIL")
             c5_v = "PASS" if c5 is True else ("UNCHECKED" if c5 is None else "FAIL")
             notes.insert(0, f"C4 source: {c4_src}")
@@ -426,6 +480,8 @@ def main() -> int:
             "C5_round_trips": c5_v,
         }
         entry["pass"] = all(v == "PASS" for v in entry["criteria"].values())
+        if plan_source:
+            entry["plan_source"] = plan_source
         if notes:
             entry["record_notes"] = notes
         passed += 1 if entry["pass"] else 0
@@ -470,6 +526,13 @@ def main() -> int:
         pilot_rejection = sum(
             1 for it in produced if it["pass"] and it["kind"] != "complete"
         )
+
+        def _plan_source(it):
+            return it.get("plan_source")
+
+        fallback_items = [
+            it["id"] for it in produced if _plan_source(it) == "rule_based_fallback"
+        ]
         report["score"]["pilot_reading"] = {
             "scope": f"{len(produced)}/{total} items produced; the remaining "
             f"{len(missing)} are MISSING-CONFIG and are NOT evidence about the "
@@ -477,8 +540,16 @@ def main() -> int:
             "items_passed_over_produced": sum(1 for it in produced if it["pass"]),
             "domains_covered": sorted(pilot_domains),
             "rejection_items_passed": pilot_rejection,
+            "planned_by_fallback": fallback_items,
+            "llm_planned_passed": sum(
+                1
+                for it in produced
+                if it["pass"] and _plan_source(it) != "rule_based_fallback"
+            ),
             "note": "pilot reading only - the acceptance bar is evaluated over "
-            "the full 16-item corpus and is the record of decision",
+            "the full 16-item corpus and is the record of decision; items whose "
+            "plan_source is rule_based_fallback are listed separately and never "
+            "pooled as agent measurements",
         }
     text = json.dumps(report, indent=2)
     if args.report:
