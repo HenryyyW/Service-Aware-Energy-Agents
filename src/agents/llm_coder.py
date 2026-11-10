@@ -211,9 +211,9 @@ class LLMCoderAgent:
                     print(
                         "  [LLM_CODER DEBUG] Function replacement syntax error, trying unified diff fallback"
                     )
-                    # Try unified diff as fallback
+                    # Try unified diff as fallback with SAME raw_response
                     return self._try_unified_diff_fallback(
-                        controller_code, plan, controller_file
+                        controller_code, plan, controller_file, raw_response
                     )
 
                 print(
@@ -224,9 +224,9 @@ class LLMCoderAgent:
             print(
                 "  [LLM_CODER DEBUG] Function replacement failed, trying unified diff fallback"
             )
-            # If function replacement failed, try unified diff as fallback
+            # If function replacement failed, try unified diff fallback with SAME raw_response
             return self._try_unified_diff_fallback(
-                controller_code, plan, controller_file
+                controller_code, plan, controller_file, raw_response
             )
 
         except TimeoutError as e:
@@ -528,10 +528,24 @@ Return ONLY the unified diff. NO additional text."""
             func_lines.pop(0)
         while func_lines and func_lines[0].strip().startswith("# FUNCTION:"):
             func_lines.pop(0)
-        # Preserve indentation of the function - only strip trailing whitespace from each line
+
+        # Join the function code (still has the model's indentation, e.g., 4 spaces for class methods)
         new_func_code = "\n".join(line.rstrip() for line in func_lines)
 
-        # Validate the new function code is syntactically valid
+        # DEDENT the function code to column 0 for syntax validation and signature checking
+        # The model's fenced body is typically indented (e.g., 4 spaces for class methods)
+        # We need to strip the common leading whitespace from all lines
+        if new_func_code:
+            code_lines = new_func_code.splitlines()
+            # Find minimum indentation of non-empty lines
+            min_indent = min(
+                (len(line) - len(line.lstrip()) for line in code_lines if line.strip()),
+                default=0,
+            )
+            if min_indent > 0:
+                new_func_code = "\n".join(line[min_indent:] for line in code_lines)
+
+        # Validate the new function code is syntactically valid (at column 0)
         try:
             ast.parse(new_func_code)
         except SyntaxError as e:
@@ -565,6 +579,21 @@ Return ONLY the unified diff. NO additional text."""
                 )
             return None
 
+        # Now RE-INDENT the function code to match the original function's indentation
+        # Find the original function's leading whitespace
+        original_indent = self._get_function_indentation(
+            original_code, func_match.group(1)
+        )
+        if original_indent > 0:
+            # Indent every non-empty line by the original function's indentation
+            reindented_lines = []
+            for line in new_func_code.splitlines():
+                if line.strip():
+                    reindented_lines.append(" " * original_indent + line)
+                else:
+                    reindented_lines.append(line)
+            new_func_code = "\n".join(reindented_lines)
+
         # Replace the function in the original code
         patched_code = self._replace_function(
             original_code, func_match.group(1), new_func_code
@@ -596,10 +625,29 @@ Return ONLY the unified diff. NO additional text."""
 
         return patched_code, diff, changes, "function replacement"
 
+    def _get_function_indentation(self, code: str, func_name: str) -> int:
+        """Get the leading indentation (in spaces) of a function in the code."""
+        try:
+            tree = ast.parse(code)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) and node.name == func_name:
+                    # Get the line where the function definition starts
+                    lines = code.splitlines(keepends=True)
+                    if node.lineno - 1 < len(lines):
+                        line = lines[node.lineno - 1]
+                        # Count leading spaces
+                        return len(line) - len(line.lstrip())
+        except Exception:
+            pass
+        return 4  # Default to 4 spaces
+
     def _verify_function_signature(
         self, new_func_code: str, original_code: str, func_name: str
     ) -> bool:
-        """Verify that the new function has the same signature as the original."""
+        """Verify that the new function has the same signature as the original.
+
+        The new_func_code should already be dedented to column 0.
+        """
         try:
             # Parse original code to find the function
             tree = ast.parse(original_code)
@@ -612,7 +660,7 @@ Return ONLY the unified diff. NO additional text."""
             if original_func is None:
                 return False
 
-            # Parse new function
+            # Parse new function (already dedented to column 0)
             new_tree = ast.parse(new_func_code)
             new_func = None
             for node in ast.walk(new_tree):
@@ -638,6 +686,7 @@ Return ONLY the unified diff. NO additional text."""
         controller_code: str,
         plan: PlannerOutput,
         controller_file: str,
+        raw_response: str = None,
     ) -> Optional[tuple]:
         """Try unified diff as fallback when function replacement fails.
 
@@ -646,76 +695,34 @@ Return ONLY the unified diff. NO additional text."""
         arm's spend (10 cells x 5 iterations x 2 = 100 calls, over the <=50 envelope);
         pass the raw_response into the fallback instead.
         """
-        # We need to re-prompt with the unified diff prompt since the original
-        # response was in function replacement format. However, the requirement is
-        # to NOT make a second API call. So we'll use the existing
-        # _parse_llm_response_real_code which can extract a diff from the response
-        # if it happens to contain one, or we could parse the function replacement
-        # and convert it to a diff. But the simplest approach per the requirement:
-        # try to extract a unified diff from the SAME response that was already received.
-
-        # Since we don't have the raw_response here, we need to re-call the backend.
-        # But the requirement says "do NOT re-prompt the backend".
-        # The actual implementation should receive the raw_response from the caller.
-        # However, the current architecture calls this as a fallback.
-        # For now, we'll make a new call but with the unified diff prompt.
-        # This is a limitation of the current architecture.
-
-        prompt = self._build_coder_prompt_real_code(plan, controller_code)
-
-        backend = self._get_backend()
-        if backend is None:
+        # If raw_response is provided, use it; otherwise we can't do the fallback without a second call
+        if raw_response is None:
+            print(
+                "  [LLM_CODER DEBUG] No raw_response provided for unified diff fallback, skipping"
+            )
             return None
 
-        try:
-            if hasattr(backend, "__call__"):
-                raw_response = backend(prompt)
-            elif hasattr(backend, "generate_actions"):
+        # Parse the SAME raw response as a unified diff
+        result = self._parse_llm_response_real_code(
+            raw_response, controller_code, controller_file
+        )
+        if result:
+            patched_code, diff, changes, notes = result
+            try:
+                ast.parse(patched_code)
+            except SyntaxError as e:
+                self.previous_failures.append(
+                    {
+                        "iteration": self.iteration,
+                        "error": f"SyntaxError: {e}",
+                        "test_output": f"LLM generated syntactically invalid code: {e}",
+                        "verifier_feedback": "Generated code failed syntax validation",
+                    }
+                )
                 return None
-            else:
-                return None
+            return patched_code, diff, changes, notes
 
-            result = self._parse_llm_response_real_code(
-                raw_response, controller_code, controller_file
-            )
-            if result:
-                patched_code, diff, changes, notes = result
-                try:
-                    ast.parse(patched_code)
-                except SyntaxError as e:
-                    self.previous_failures.append(
-                        {
-                            "iteration": self.iteration,
-                            "error": f"SyntaxError: {e}",
-                            "test_output": f"LLM generated syntactically invalid code: {e}",
-                            "verifier_feedback": "Generated code failed syntax validation",
-                        }
-                    )
-                    return None
-                return patched_code, diff, changes, notes
-
-            return None
-
-        except TimeoutError as e:
-            self.previous_failures.append(
-                {
-                    "iteration": self.iteration,
-                    "error": f"TimeoutError: {e}",
-                    "test_output": "LLM API request timed out",
-                    "verifier_feedback": "LLM API request timed out",
-                }
-            )
-            return None
-        except Exception as e:
-            self.previous_failures.append(
-                {
-                    "iteration": self.iteration,
-                    "error": f"{type(e).__name__}: {e}",
-                    "test_output": str(e)[:500],
-                    "verifier_feedback": f"LLM backend exception: {e}",
-                }
-            )
-            return None
+        return None
 
     def _apply_unified_diff(self, original_code: str, diff_text: str) -> Optional[str]:
         """Apply unified diff to original code."""
