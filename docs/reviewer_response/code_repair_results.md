@@ -356,10 +356,21 @@ or re-prompt for strict `@@ -a,b +c,d @@` hunks with balanced -/+ counts.
 
 ## Decisive two-arm re-run on origin/main (A's full fix line merged) - the run that decides the A2 sentence
 
-Base: `origin/main` as of this run (A's full real-code fix line: re-indent,
-de-indent, double-newline, diff look-ahead, 300s timeouts, detector-path and
-arity unification; plus the merged detector wiring and the truthful
-`wiring_workaround` field). Envelope: <= 10 tasks x <= 5 iterations,
+**Base (pinned, per the Project Partner's merge-base verification): this run's
+merge-base is `a86ffccbc1`.** That base carries A's earlier real-code fix line
+(re-indent, de-indent, double-newline, diff look-ahead, 300s timeouts,
+detector-path and arity unification; plus the merged detector wiring and the
+truthful `wiring_workaround` field) and an earlier prompt "CRITICAL RULES"
+block (exact diff format, hunk-header counts, indentation, no fences, no extra
+text) - but it does **NOT** carry the strengthened prompt's constraint set
+(per-hunk balance max 3:1, no additions-only/deletions-only hunks, mandatory
+context lines, no whole-function dumps): `7160f596a` reached main only with
+`ac39b5814`, which is not an ancestor of `a86ffccbc1` (verified:
+`git merge-base --is-ancestor ac39b5814 a86ffccbc1` -> false, and the
+"CRITICAL RULES - VIOLATION WILL CAUSE REJECTION" balanced-hunk block is absent
+from that base's `src/agents/llm_coder.py`). **The "structurally unbalanced
+12 `-` vs 330 `+`" observation in this section therefore predates the
+strengthened prompt and does not test it.** Envelope: <= 10 tasks x <= 5 iterations,
 `poolside/laguna-xs-2.1` on NVIDIA NIM via the **configured product path**
 (`AGENT_BACKEND=api:poolside/laguna-xs-2.1`, NIM key from the key store,
 `DASHSCOPE_API_KEY` unset, 1-token pre-flight per cell, `timeout_s=300`),
@@ -395,146 +406,195 @@ artifact**, not evidence about the model. The decisive numbers are the ones
 above, produced on the fully-fixed base. The negative control's `keep=True` is
 labelled throughout as a valid honest-failure cell, not a counted repair.
 
-## Decisive two-arm re-run v3 on A's latest tree (applier fix + function-replacement primary path) - mechanism now real, blocker precisely located
+## State corrections and the two located defects (2026-11-10, after the PM's independent verification)
 
-Tree: `origin/fix/llm-real-code-path` merged with `origin/main` (A's
-offset-aware multi-hunk applier `a9b32b633`, diff-format validation
-`bc0744bed`, strengthened prompt `7160f596a`, function-replacement primary path
-`4bb1add9a`, additions/deletions-only rejection `8def38842`). Harness changes on
-this branch: the detector adapter resolves the concrete controller class from
-the verifier's abstract `BaseController` hand-off (the in-loop detector now runs
-for real), and the negative-control detector uses the same orientation as the
-measured tasks (passes only when the unrepairable defect is fixed), so the loop
-cannot claim success on a no-op patch there.
+**Invalid-state runs (labelled, not deleted):** the runs produced on
+`benchmark/decisive-rerun` @5acc8ef5e and the earlier `e7434ae` base are
+**invalid-state runs** - that branch carried an unpack regression
+(`verifier.py` unpacking 3 values from `_run_detector`'s 2-tuple) and lacked
+four merged commits (`2e3da578b` lookahead, `dc111db62` de-indent,
+`3eb0e4455` unpack fix, `7d0c1047f` applier double-newline). Their only durable
+content is the applier defect, located below. Their "10/10 agreement" headlines
+were crash-produced, not detector-produced, and must not be cited.
+
+**Mechanism correction for the latest two-arm run (on `origin/main`, all four
+fixes present):** the **driver-level criteria (a)-(f) are genuine** - the driver
+loads `RuleBasedController` from the patched source and the detector genuinely
+fails on the unrepaired patches (`f_service_preserved=False` on all 9 measured
+cells; negative control `keep=True` = honest non-repair). The **in-loop
+verifier verdict is still fail-closed**, one level deeper: `_run_detector`
+selects the first class whose name ends with `Controller` - in the patched file
+that is abstract `BaseController`, so the detector call dies with "Can't
+instantiate abstract class BaseController without an implementation for abstract
+method 'get_actions'" and the iteration is rejected (15 such events in the
+deterministic run log, 2 in the LLM log). That is an A-side class-selection
+defect (dispatched with the repro): select the concrete class that implements
+`get_actions`.
+
+**The applier defect (located by the PM, reproduced on main, dispatched to A
+with the fix direction):** `_apply_unified_diff` applies every hunk at
+original-file coordinates against the already-modified buffer, so after the
+first hunk changes the line count the later hunks land wrong and garble the
+file - a well-formed two-hunk diff of the real controller produces
+"unterminated triple-quoted string literal" and the syntax check rejects it
+(`changes=0`, no-op patch). Single-hunk diffs are unaffected. This is the
+signature behind the LLM arm's 0/9 on the fully-fixed base. Fix direction:
+reverse-order or delta-tracked hunk application.
+
+**Status of the decisive claim:** 0 of 9 measured repairs stands from the
+driver-level criteria (the acceptance of record) in both arms on the fully-fixed
+base - A2 stays "scaffolded, not yet demonstrated". The decisive re-run is held
+until A's applier fix (and the class-selection fix) merge, so that the loop's
+verdict is produced by a real detector check rather than a crash.
+
+## The decisive two-arm re-run on origin/main (PM GO, prerequisites met) - 0/9 both arms, A2 stays scaffolded
+
+Base: `origin/main` at run time (my detector wiring merged at `9a044109a`;
+A's offset-aware multi-hunk applier `a9b32b633`, diff-format validation
+`bc0744bed`, strengthened prompt `7160f596a`). Harness deltas applied on top
+(pushed with this doc): the detector adapter resolves the concrete controller
+class from the verifier's abstract `BaseController` hand-off so the in-loop
+detector runs for real, and the negative-control detector uses the same
+orientation as the measured tasks so the loop cannot claim success on a no-op.
 
 **Deterministic comparator (10 cells, 0 LLM calls, budget 5): 10/10 loop/driver
 agreement, `loop_claimed_success=False` on all 10, 0/9 measured repairs,
-negative control `keep=True` = valid honest-failure cell, and zero
-"Can't instantiate abstract class" events in the log - for the first time the
-loop's verdict is produced by a genuinely running in-loop detector check (the
-driver criteria (a)-(f), the acceptance of record, agree).**
+negative control `keep=True` = valid honest-failure cell, ZERO instantiation
+errors - the loop's verdict is produced by a genuinely running in-loop detector
+check.**
 
-**LLM arm (60 calls, 0 backend errors, budget 5 fully used per cell): 0/9
-measured repairs, negative control `keep=True`, 10/10 agreement, zero
-instantiation/unpack errors.** One cell (task_8) remains the only cell ever to
-record an LLM-produced change; none repaired.
+**LLM arm (configured product path, 60 calls, 0 backend errors, full
+5-iteration budget per cell): 0/9 measured repairs, negative control
+`keep=True`, 10/10 loop/driver agreement.** Every cell used the whole budget
+with the accumulated failure history; no cell recorded an applicable LLM change
+(`changes=0` in all 10). Standalone probe on task_4 (4,388 prompt / 1,867
+completion tokens): the model's unified diff still applies to syntactically
+invalid code (`SyntaxError: unexpected indent` at line 208), so A's syntax
+rejection drops it and each iteration is a no-op the detector rejects. The
+applier and the in-loop acceptance are now correct; the model's diff content
+remains the binding defect.
 
-**Located blocker (A-side, reproduced standalone):**
-`_generate_llm_changes_real_code` calls
-`self._parse_llm_response_function_replacement(...)` (src/agents/llm_coder.py
-line 185) but that method is **not defined** on `LLMCoderAgent` - the
-function-replacement primary path raises
-`AttributeError: 'LLMCoderAgent' object has no attribute
-'_parse_llm_response_function_replacement'` on every attempt, which the coder
-records as a failed iteration and returns None (no silent fallback), so
-`changes=0` and the patch is a no-op the detector rejects. Standalone probe on
-task_4: 4,273 prompt / 2,236 completion tokens spent, then the AttributeError.
+**Claim decision: 0 of 9 measured repairs in BOTH arms - the pre-registered
+threshold >= 7/9 is not met - the paper's A2 sentence stays "scaffolded, not
+yet demonstrated".** Reported either way; both arms unpooled; acceptance of
+record = driver criteria (a)-(f); `loop_claimed_success` recorded beside every
+verdict and agreeing with the driver in both arms (10/10).
 
-**Claim decision: 0 of 9 measured repairs in BOTH arms - threshold >= 7/9 not
-met - A2 stays "scaffolded, not yet demonstrated"** (reported either way; both
-arms unpooled; acceptance of record = driver criteria (a)-(f); the loop's own
-verdict now agrees with the driver in both arms, 10/10).
+## The converting contract: probe on A's `b014d421c` and the full two-arm re-run - LLM arm 5/9 measured repairs (threshold >= 7/9 NOT met, reported either way)
 
-## In-envelope probe on main `648f7bf0e` (A's function-replacement contract) - NO conversion; exact blocker located; full arm NOT spent (per the PM sequence)
+**Base (disclosed):** A's `b014d421c` ("complete function replacement implementation with
+proper indentation handling" - dedent-to-column-0 validation, re-indent to the original
+function, real signature comparison, and a unified-diff fallback that parses the SAME
+response so an iteration costs ONE backend call) was NOT yet merged to `origin/main`
+(`45ae93771`) at run time, so the tree was `origin/fix/llm-real-code-path` merged with
+`origin/main` (only main's DEBUG logging in `multi_agent_loop.py` differs from A's tip;
+`src/agents/llm_coder.py` is byte-identical to A's tested commit; targeted tests
+38 passed).
 
-Tree: `origin/main` `648f7bf0e` (A's function-replacement primary path
-`4bb1add9a` + the missing parser methods `4bbcf33be`, class-selection fix
-`c21d55e3f`, additions/deletions-only rejection `8def38842`), which already
-carries my two harness deltas via the merged detector wiring (concrete-class
-resolution, negative-control orientation).
+**Probe (conversion confirmed, 3 tasks, 3 backend calls - one per task on the new
+no-second-call fallback):** all three tasks now convert. Raw responses are fenced
+```python blocks carrying `# FILE:` / `# FUNCTION:` markers (2-4 marker pairs per
+response; the parser applies the first fenced block), the function-replacement path
+applies (`changes=1`), the patched controller is syntactically valid, and the detector
+still passes on the controller handed to the probe (no regression). Conversion
+confirmed, so per the PM sequence the full two-arm re-run was executed.
 
-**Probe 1 - 3 tasks (task_1, task_4, task_8), budget 5, pre-flight on: 7 backend
-calls (1 pre-flight + 2 per task: primary + diff fallback), 28,388 prompt /
-6,363 completion tokens.** No task converted: task_4 and task_1 both ended
-`changes=0` with notes "LLM REAL-CODE PATH FAILED: no valid function replacement
-or unified diff produced"; task_8 was in-flight when the probe output was
-truncated, with the identical primary-then-fallback trace. Per the PM sequence
-(no conversion -> do NOT spend the full arm), the full two-arm run was NOT
-executed.
+**Deterministic comparator (10 cells, 0 LLM calls, budget 5): 10/10 loop/driver
+agreement, `loop_claimed_success=False` on all 10, 0/9 measured repairs, negative
+control `keep=True` = valid honest-failure cell, zero instantiation errors.**
 
-**Probes 2+3 - single task (task_4), pre-flight off, transparent recording
-backend: 2 + 2 backend calls, 8,766/2,420 and 8,762/2,210 tokens.** Exact raw
-shapes (reproducible with `experiments/probe_llm_output_shape.py`):
+**LLM arm (44 backend calls, 0 backend errors, full 5-iteration budget per cell):
+5/9 measured repairs, 10/10 loop/driver agreement, negative control `keep=True`.**
+Per-cell (driver criteria (a)-(f); `loop_claimed_success` beside every verdict):
 
-1. **Function-replacement response (primary, 8,080 chars):** THREE
-   `# FILE: controllers/__init__.py` / `# FUNCTION: <name>` marker pairs
-   (`_control_ev`, `_control_battery`, `_apply_grid_limits`) followed by
-   **unfenced** code, and **ZERO backtick fences in the entire response**
-   (`fence variants found: []`). The parser's `code_match` requires a
-   ```` ```python\n...``` ```` block, so it can never match: the failure message
-   "Could not extract function replacement format (missing FILE/FUNCTION/code)"
-   is misleading - FILE and FUNCTION both matched; the missing element is the
-   fence. A second defect in the same path: the model returns THREE function
-   replacements in one response while the parser extracts one.
-2. **Unified-diff fallback response (529 chars):** a fenced ```diff with a
-   single ADDITIONS-ONLY hunk whose added lines are comments
-   ("# ... reduction logic") - correctly rejected by A's additions-only
-   validation (`8def38842`) and cosmetic anyway. So the fallback cannot convert
-   either.
+| task | iters | keep | loop | detector: broken -> patched |
+|---|---|---|---|---|
+| task_1_ev_deadline_soc | 1 | True | True | EV SOC 0.4296 -> 0.7998 (target 0.800, tol 0.02) |
+| task_2_ev_urgent_power | 3 | True | True | charge 3.30 kW vs required 11.00 -> charge 30.00 kW vs required 3.00 (1h-to-departure) |
+| task_4_import_limit | 1 | True | True | import 5.0 kW vs limit 3 -> 3.0 kW vs 3 kW |
+| task_5_export_limit | 3 | True | True | export 5.0 kW vs limit 3 -> 3.0 kW vs 3 kW |
+| task_7_line_loading_response | 1 | True | True | magnitude 2.50 kW -> 0.50 kW (expected 0.1x baseline) |
+| task_3_battery_soc_floor | 5 | False | False | overshoot 1.350 -> 1.350 kWh/step (LLM change, defect unfixed) |
+| task_6_voltage_response | 5 | False | False | magnitude 2.50 -> 0.50 kW (expected 2.0x baseline 5.00) |
+| task_9_overcharge_spike | 5 | False | False | overshoot 10.93 -> 7.38 kW (improved, still failing) |
+| task_8_flex_deadline | 5 | False | False | never converted (`changes=0` all 5 iterations) |
+| task_10_NEG_redispatch_removed | 5 | True | False | unrepairable-by-construction; loop correctly refused success |
 
-**Exact blocker (A-side):** the function-replacement parser requires a
-```python fenced block; the model now emits the `# FILE:`/`# FUNCTION:` markers
-(A's strengthened prompt partially works) but no fence, and emits multiple
-replacements per response. The contract must either accept marker-delimited
-UNFENCED blocks (with multi-replacement support), or the prompt must actually
-produce fences.
+8 of 10 cells recorded LLM-produced changes (2 never converted). Every repair passed
+`e_harness_accepts` and `f_service_preserved`; 4 of the 5 repairs show
+`c_output_differs=False` (outputs identical on the comparison scenario - the fix only
+triggers under the defect diagnostic) with `d_not_cosmetic=True`, i.e. behavior-changing
+where it matters.
 
-**Envelope accounting (honest):** the probe used 11 backend calls in total
-(7 + 2 + 2) against the <= 6-call probe guidance - the per-task cost turned out
-to be 2 calls (primary + fallback), which the <= 6 figure did not anticipate,
-and 2 extra single-task calls were spent to capture the exact raw shapes for
-A's repro rather than an inference. The full-arm budget (<= 10 tasks x <= 5
-iterations, `poolside/laguna-xs-2.1` on NIM, code-repair benchmark only) was
-NOT touched this round; deterministic-arm runs stay LLM-free.
+**Runner defect found and fixed (pushed with this doc):** the audit's `coder_source`
+label only recognised the old diff-path notes string ("LLM-generated"), so every
+function-replacement success was mislabelled "deterministic". The label now matches
+"LLM REAL-CODE PATH:" too, and `coder_notes` is recorded. For THIS run the labels in
+the (untracked) cells are stale; the changes are LLM-produced, evidenced by: the LLM
+arm's calls = 1 + iterations per cell (the LLM ran every iteration), the deterministic
+arm produced `changes=0` on all 10 cells with the same runner, and the diffs paraphrase
+the planner strategy verbatim (LLM-style output).
 
-**Claim decision: no conversion in the probe -> the full two-arm re-run was not
-spent -> the pre-registered threshold >= 7/9 is untested this round and the
-paper's A2 sentence stays "scaffolded, not yet demonstrated"** (reported either
-way; both arms unpooled; acceptance of record = driver criteria (a)-(f) with
-`loop_claimed_success` beside every verdict - unchanged from the last decisive
-run: deterministic 10/10, LLM 0/9).
+**Claim decision: 5 of 9 measured repairs - the pre-registered threshold >= 7/9 is NOT
+met - the paper's A2 sentence stays "scaffolded, not yet demonstrated"** (reported
+either way; both arms unpooled; acceptance of record = driver criteria (a)-(f) with
+`loop_claimed_success` agreeing with the driver 10/10 in both arms). This is the first
+run in which the LLM arm produced genuine detector-verified repairs; the margin
+(5 vs 7) and the failure modes (one non-converting cell; three repairs in the wrong
+direction or insufficient magnitude) are recorded for the re-decision.
 
-## Probe f4 on A's `29c9b22c2` (unfenced + multi-replacement handling) - 2/3 convert, NEW failure shape, no full-arm spend (re-decide with A)
+**Envelope accounting:** probe rounds 11 + 3 = 14 backend calls; full LLM arm 44 calls
+(within <= 10 tasks x <= 5 iterations, `poolside/laguna-xs-2.1` on NIM, code-repair
+benchmark only); deterministic arms LLM-free.
 
-A shipped two further fixes after the f3 run: `c64c35d1d` (multi-hunk applier +
-diff validator for insertions) and `29c9b22c2` (handles UNFENCED
-marker-delimited responses and MULTIPLE replacements per response - the exact
-dispatch from the earlier probe). Probe tree: `origin/fix/llm-real-code-path`
-(`29c9b22c2`) merged with `origin/main` (src byte-identical to A's tip).
+## Probe on current origin/main + A's layout-independent tip (`ce987e856`) - the live prompt is the replacement prompt (the balanced-hunk prompt is unreachable); association now works, echoes and model content are the remaining failures
 
-**Zero-cost parser verification (committed as
-`experiments/verify_function_replacement_parser.py`, no LLM calls, exit 0):**
-fenced/unfenced single replacements apply (col-0 and indent-4 code);
-multi-replacement responses with genuinely-modified functions apply ALL of
-them; two open shapes are reported, not asserted: (i) a modified replacement
-plus a byte-identical echo of another function is REJECTED wholesale
-("Function replacement did not modify the code for X"), and (ii) markers
-OUTSIDE the fenced blocks are rejected ("Could not extract function
-replacement format (missing FILE/FUNCTION/code)") because the fenced path
-requires the markers inside the block.
+**Code-level facts (zero-cost, on `origin/main` `4ee6538e0`, `llm_coder.py`
+byte-identical to the probe bases):**
+- The coder calls `_build_coder_prompt_function_replacement`
+  (`src/agents/llm_coder.py:178`) - the prompt the model actually receives is
+  the FUNCTION-REPLACEMENT prompt, and it carries its own "CRITICAL RULES -
+  VIOLATION WILL CAUSE REJECTION" block (exact FILE/FUNCTION + fenced-python
+  format, syntax validity, 4-space indentation, behavior-changing).
+- The strengthened prompt's balanced-hunk constraints (`7160f596a`: hunks
+  balanced <= 3:1, no additions-only/deletions-only, mandatory context, no
+  whole-function dumps) live in `_build_coder_prompt_real_code`, which is
+  **defined and never called** on main (the diff fallback parses the primary
+  response; it does not re-prompt). **A probe on origin/main therefore cannot
+  test the balanced-hunk prompt without a code change making it reachable.**
 
-**Live probe (3 tasks, 3 backend calls - one per task on the same-response
-fallback): 2/3 convert.**
-- `task_1_ev_deadline_soc`: UNFENCED response, 2 marker pairs, BOTH
-  replacements applied (`changes=2`, notes "function replacement (2
-  functions)"), detector passes (EV SOC 0.8002 vs target 0.800). The new
-  unfenced multi-replacement capability works live.
-- `task_4_import_limit`: fenced block with the marker inside, `changes=1`,
-  detector passes (import 3.0 kW vs limit 3 kW).
-- `task_8_flex_deadline`: FAILS on the new shape - 3 fenced blocks with the
-  3 marker pairs OUTSIDE the fences -> the fenced path finds no markers inside
-  any block -> "missing FILE/FUNCTION/code" -> `changes=0`. task_8 has now
-  failed to convert on both trees (different reasons).
+**The PM-requested probe on origin/main was already executed on this code** (2
+tasks, 2 backend calls, shape record in the decision-probe section above; only
+docs have changed on main since): **no hunks are emitted at all**
+(`hunks=0 plus=0 minus=0` in both responses); `task_4` unfenced 4-pair ->
+`changes=0`; `task_8` fenced blocks with markers outside -> `changes=1`,
+detector-passing. Conversion is per-call stochastic, and the full two-arm run
+for this contract is already on record (5/9, threshold >= 7/9 not met).
 
-**Decision: no demonstrated gain over the f3 run (5/9 on `b014d421c`) - the
-full LLM arm was NOT spent; re-decide with A.** Two concrete asks for A, both
-evidence-backed: (1) associate each marker pair with the FOLLOWING fenced
-block when the block itself carries no markers (the task_8 shape); (2) skip
-unchanged echoes and apply the modified replacements instead of rejecting the
-whole response (the echo shape - under `b014d421c` the first block was applied
-and the rest ignored, so this is a regression risk if the model echoes).
+**A's newest tip `ce987e856` ("complete layout-independent function replacement
+parser") - the dispatched association fix.** Zero-cost verification (my
+regression test plus a markers-before-fence case, no LLM calls): all three
+live association shapes now APPLY with a genuine modification - markers BEFORE
+the fence (the live task_8 shape), markers INSIDE the fence, and unfenced
+multi-pair - each `changes>=1`, patched code parses. Live probe (3 tasks, 3
+backend calls, on `ce987e856` merged with main):
+- `task_1_ev_deadline_soc`: 1 fenced block, 1 pair -> **converts**
+  (`changes=1`, detector passes).
+- `task_4_import_limit`: unfenced, 4 marker pairs -> all four are now
+  associated, but one is an unchanged echo -> **"Function replacement did not
+  modify the code for `_apply_grid_limits`"** -> the whole response is
+  rejected -> `changes=0`.
+- `task_8_flex_deadline`: 3 fenced blocks, markers outside (the shape that
+  failed at association before) -> association now works, but the extracted
+  code is invalid -> **SyntaxError at line 93** -> `changes=0`.
 
-**Envelope accounting:** probe f4 = 3 backend calls; cumulative probe usage 17
-calls; NO new full-arm spend this round (the f3 record - deterministic 10/10,
-LLM 5/9, threshold >= 7/9 not met, A2 "scaffolded, not yet demonstrated" -
-stands).
+**Remaining gap (A-side, one ask):** the association gap is closed; what
+remains is (i) skip unchanged echoes and apply the modified replacements
+instead of rejecting the whole multi-pair response, and (ii) the model's code
+content (a syntactically invalid body survived into the extracted block).
+Without (i), every multi-pair response containing one echo is lost - the
+dominant live shape.
+
+**Envelope accounting:** this round 4 backend calls (3-task probe + 1
+single-task recapture whose shape had scrolled off the captured output);
+cumulative probe usage 23 calls; no new full-arm spend.
