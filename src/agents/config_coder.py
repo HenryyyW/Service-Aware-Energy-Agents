@@ -138,6 +138,34 @@ class ConfigCoderAgent:
 
         return patched
 
+    @staticmethod
+    def _config_for_building(configs, i):
+        """The single-slot asset config (pv, battery, tariff) for building i (0-based).
+
+        A config may name its building with a 1-based 'building' key (the
+        planner prompt asks for it when an asset sits on only some buildings).
+        With no hints, configs are dealt to buildings in order (round-robin),
+        the pre-hint behaviour."""
+        if not configs:
+            return None
+        hinted = [c for c in configs if isinstance(c, dict) and c.get("building")]
+        if not hinted:
+            return configs[i % len(configs)]
+        for c in configs:
+            if isinstance(c, dict) and c.get("building") == i + 1:
+                return c
+        return None
+
+    @staticmethod
+    def _config_list_for_building(configs, i):
+        """The list-slot asset configs (evs, flexible_loads) for building i."""
+        if not configs:
+            return []
+        hinted = [c for c in configs if isinstance(c, dict) and c.get("building")]
+        if not hinted:
+            return [configs[i % len(configs)]]
+        return [c for c in configs if c.get("building") == i + 1]
+
     def _build_buildings(self, plan: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Build building configurations from plan."""
         buildings = []
@@ -154,29 +182,37 @@ class ConfigCoderAgent:
 
             # PV
             if "pv" in plan.get("target_assets", []) and plan.get("pv_configs"):
-                pv = plan["pv_configs"][i % len(plan["pv_configs"])]
-                building["pv"] = pv
+                pv = self._config_for_building(plan["pv_configs"], i)
+                if pv:
+                    building["pv"] = pv
 
             # Battery
             if "battery" in plan.get("target_assets", []) and plan.get(
                 "battery_configs"
             ):
-                battery = plan["battery_configs"][i % len(plan["battery_configs"])]
-                building["battery"] = battery
+                battery = self._config_for_building(plan["battery_configs"], i)
+                if battery:
+                    building["battery"] = battery
 
             # EV (per building, like pv/battery: one config per building)
             if "ev" in plan.get("target_assets", []) and plan.get("ev_configs"):
-                building["evs"] = [plan["ev_configs"][i % len(plan["ev_configs"])]]
+                evs = self._config_list_for_building(plan["ev_configs"], i)
+                if evs:
+                    building["evs"] = evs
 
             # Flexible loads
             if "flexible_load" in plan.get("target_assets", []) and plan.get(
                 "flexible_load_configs"
             ):
-                building["flexible_loads"] = plan["flexible_load_configs"]
+                loads = self._config_list_for_building(plan["flexible_load_configs"], i)
+                if loads:
+                    building["flexible_loads"] = loads
 
             # Tariff
             if "tariff" in plan.get("target_assets", []) and plan.get("tariff_configs"):
-                building["tariff"] = plan["tariff_configs"][0]
+                tariff = self._config_for_building(plan["tariff_configs"], i)
+                if tariff:
+                    building["tariff"] = tariff
 
             # Location/simulation
             if plan.get("location"):

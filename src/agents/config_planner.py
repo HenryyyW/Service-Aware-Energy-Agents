@@ -107,6 +107,8 @@ FIELD REFERENCE - for every asset you include, its config list must carry ALL re
 - tariff_configs[]: type (default "time_of_use"), import_prices (period -> price), export_prices, demand_charge ($/kW)
 - grid_configs[]: network_type ("ieee_13"/"ieee_34"/"simbench"), voltage_limits (min/max), line_loading_limit
 
+Per-asset placement: when an asset is described for only SOME buildings, add a 1-based "building" key to each config of that asset naming the building it belongs to; when every building has the asset, emit one config per building.
+
 ASSET TRIGGERS - include a token in target_assets ONLY when the description clearly indicates it:
 - "pv": PV / solar / rooftop panels described
 - "battery": battery / storage described
