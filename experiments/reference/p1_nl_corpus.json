@@ -620,6 +620,7 @@
         "notes": "Clamping -5 to 0 or 5 is a silent auto-correction and FAILS; the named rejection is the pass."
       },
       "expected_named_fields": [
+        "community_import_limit_kw",
         "energy_sharing.import_limit_kw"
       ]
     }

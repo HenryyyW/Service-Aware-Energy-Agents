@@ -331,10 +331,19 @@ def check_c3(item, cfg):
         for k in ("line_loading_limit", "transformer_loading_limit"):
             if k in pv_cfg and pv_cfg[k] <= 0:
                 issues.append(f"pandapower.{k} non-positive: {pv_cfg[k]}")
-        for k in ("min", "max"):
-            v = (pv_cfg.get("voltage_limits") or {}).get(k)
-            if v is not None and not (0.5 < v < 1.5):
-                issues.append(f"pandapower.voltage_limits.{k} implausible: {v}")
+        vl = pv_cfg.get("voltage_limits")
+        if isinstance(vl, dict):
+            for k in ("min", "max"):
+                v = vl.get(k)
+                if v is not None and not (0.5 < v < 1.5):
+                    issues.append(f"pandapower.voltage_limits.{k} implausible: {v}")
+        elif vl is not None:
+            # the schema types voltage_limits as Dict[str, float]; a list (or
+            # any non-dict) is a shape violation the endpoint will reject
+            issues.append(
+                f"pandapower.voltage_limits wrong shape: {type(vl).__name__} "
+                "(schema expects a dict with min/max)"
+            )
     for k in ("community_import_limit_kw", "community_export_limit_kw"):
         v = cfg.get(k)
         if v is not None and v <= 0:
@@ -483,7 +492,21 @@ def main() -> int:
                 for key in ("schema_errors", "mapping_errors"):
                     for e in record.get(key) or []:
                         cands.append(str(e))
-                summary = str((record.get("final_report") or {}).get("summary") or "")
+                last_verifier = _last_iteration(record).get("verifier_output") or {}
+                for key in (
+                    "schema_errors",
+                    "out_of_range_fields",
+                    "schema_rejections",
+                    "required_fields_missing",
+                ):
+                    for e in last_verifier.get(key) or []:
+                        cands.append(str(e))
+                fr = record.get("final_report")
+                summary = (
+                    str(fr.get("summary") or "")
+                    if isinstance(fr, dict)
+                    else (str(fr) if fr else "")
+                )
                 if summary and "failed" in summary.lower():
                     cands.append(summary)
                 expected = item.get("expected_named_fields") or []
