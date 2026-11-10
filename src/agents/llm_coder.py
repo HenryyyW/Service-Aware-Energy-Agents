@@ -987,8 +987,7 @@ Return ONLY the unified diff. NO additional text."""
         )
 
         # Check for additions-only or deletions-only
-        # Allow additions-only if there are context lines (legitimate insertion)
-        # Reject if no context lines (whole-function dump)
+        # Reject if no context lines (whole-function dump or incomplete diff)
         if additions > 0 and deletions == 0:
             if context_lines == 0:
                 return (
