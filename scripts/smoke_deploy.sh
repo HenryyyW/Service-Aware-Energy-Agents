@@ -244,14 +244,20 @@ if [[ "$RECORDS_OK" != "True" ]]; then
 fi
 log "Repair records carry per-iteration diff/code_changes content"
 
-# NOTE: metrics_comparison is deliberately NOT asserted here. The product
-# endpoint computes and persists it on task_data, but the GET
-# /api/agent/tasks/{id} response model (AgentTask) has no such field, so
-# FastAPI strips it from every response (verified 2026-11-10, pydantic
-# model_validate drops unknown keys). An assertion on the GET response was
-# born unsatisfiable (added 18953484d) — the false-green era predates it.
-# Exposing metrics_comparison via AgentTask is a product-side improvement
-# request with the owning engineer.
+# Verify metrics_comparison is exposed on the response (AgentTask field
+# since 4a090209c; computed and persisted by the endpoint on both terminal
+# paths — was previously stripped by response validation, see 18953484d).
+METRICS_COMP=$(echo "$TASK_DETAIL" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+mc = d.get('metrics_comparison') or {}
+print(bool(mc.get('baseline')) and bool(mc.get('repaired')))
+")
+if [[ "$METRICS_COMP" == "True" ]]; then
+    log "Task has metrics_comparison with real before/after data"
+else
+    fail "Task missing metrics_comparison with baseline/repaired KPIs"
+fi
 
 log "Smoke test PASSED"
 exit 0
