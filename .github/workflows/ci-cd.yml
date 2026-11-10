@@ -430,6 +430,14 @@ jobs:
           export IMAGE_TAG=latest
           bash scripts/smoke_deploy.sh
 
+      - name: Upload smoke logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-logs
+          path: smoke-logs/
+          if-no-files-found: ignore
+
   # ============================================================
   # ALEMBIC MIGRATION TEST
   # ============================================================

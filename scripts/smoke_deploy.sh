@@ -19,6 +19,12 @@ cleanup() {
     if [ "${SMOKE_STARTED:-0}" = "1" ]; then
         docker compose -f "$COMPOSE_FILE" logs --tail 40 api frontend db redis 2>/dev/null || true
         [ -f rq_worker.log ] && echo "=== rq_worker.log (tail) ===" && tail -20 rq_worker.log || true
+        # Preserve FULL logs for CI artifact upload: the repair-loop banners
+        # and coder DEBUG lines land in rq_worker.log, but only its tail
+        # prints above (console keeps the short tail; the artifact has all).
+        mkdir -p smoke-logs
+        cp -f rq_worker.log smoke-logs/ 2>/dev/null || true
+        docker compose -f "$COMPOSE_FILE" logs api frontend db redis > smoke-logs/compose.log 2>/dev/null || true
     fi
     [ -n "${RQ_PID:-}" ] && kill "$RQ_PID" 2>/dev/null || true
     docker compose -f "$COMPOSE_FILE" down -v --remove-orphans 2>/dev/null || true
