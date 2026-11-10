@@ -93,6 +93,9 @@ class NLConfigPipeline:
             print("\n[PLANNER] Analyzing NL description...")
             plan = self.planner.plan(state)
             state.config_plan = plan.model_dump()
+            # Provenance in the manifest: a rule_based_fallback plan must never
+            # be silent in the pilot record (Research's scorer reads this).
+            state.add_manifest_entry("plan_source", plan.plan_source)
             print(f"  Target assets: {plan.target_assets}")
             print(f"  Building count: {plan.building_count}")
             print(f"  Confidence: {plan.confidence:.0%}")
