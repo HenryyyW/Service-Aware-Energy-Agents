@@ -1,11 +1,92 @@
 """Config Planner agent - converts natural language to scenario configuration plan."""
 
-from typing import Dict, Any
+from typing import Dict, Any, List
 import json
+import re
 from src.agents.config_roles import (
     ConfigAgentState,
     ConfigPlannerOutput,
 )
+
+# Per-asset required fields: required by the schema with no default, so an
+# unstated value must be NAMED, never silently invented (r01).
+_REQUIRED_ASSET_FIELDS = {
+    "pv_configs": ("capacity_kw",),
+    "battery_configs": ("capacity_kwh", "power_kw"),
+    "ev_configs": ("capacity_kwh", "max_charge_kw", "arrival_time", "departure_time"),
+    "flexible_load_configs": (
+        "power_kw",
+        "energy_kwh",
+        "earliest_start",
+        "latest_end",
+        "duration_hours",
+    ),
+}
+_ASSET_FIELD_PREFIX = {
+    "pv_configs": "pv",
+    "battery_configs": "battery",
+    "ev_configs": "evs",
+    "flexible_load_configs": "flexible_loads",
+}
+# Any of these WORDS in the NL signals a described building scope; without
+# them and without the planner's own 'buildings' token, a buildings-scoped
+# edit names its missing buildings (r02) instead of defaulting one into
+# existence. Word-boundary matched: 'community' contains 'unit' as a
+# substring, so plain substring matching would false-positive.
+_BUILDING_WORDS = ("building", "buildings", "house", "unit", "floor", "premises")
+_BUILDING_RE = re.compile(r"\b(" + "|".join(_BUILDING_WORDS) + r")\b", re.IGNORECASE)
+
+
+def _nl_describes_buildings(nl: str) -> bool:
+    return bool(_BUILDING_RE.search(nl or ""))
+
+
+def name_rejections(data: Dict[str, Any], nl: str = "") -> List[str]:
+    """Name required-but-unstated fields, out-of-range values, and a missing
+    building scope. Recording is the P1 rejection-path contract: the pipeline
+    records these and refuses to accept the iteration; it never auto-fills."""
+    named: List[str] = []
+
+    target = [str(t).lower() for t in (data.get("target_assets") or [])]
+    for key, fields in _REQUIRED_ASSET_FIELDS.items():
+        prefix = _ASSET_FIELD_PREFIX[key]
+        asset = key[: -len("_configs")]  # 'pv_configs' -> 'pv'
+        configs = [c for c in (data.get(key) or []) if isinstance(c, dict)]
+        # Asset targeted (even with no config) or a config list present but
+        # incomplete: name every required field that no config supplies.
+        # Asset neither targeted nor configured: nothing to name.
+        targeted = asset in target or bool(data.get(key))
+        if not targeted:
+            continue
+        for f in fields:
+            if not any(c.get(f) is not None for c in configs):
+                named.append(f"{prefix}.{f}")
+
+    for cfg in data.get("battery_configs") or []:
+        if not isinstance(cfg, dict):
+            continue
+        for f in ("soc_min", "soc_max"):
+            v = cfg.get(f)
+            if v is not None and not 0.0 <= float(v) <= 1.0:
+                named.append(f"battery.{f}")
+        lo, hi = cfg.get("soc_min"), cfg.get("soc_max")
+        if lo is not None and hi is not None and not float(lo) < float(hi):
+            named.append("battery.soc_min")
+            named.append("battery.soc_max")
+
+    target = data.get("target_assets") or []
+    if target and "buildings" not in target and not _nl_describes_buildings(nl):
+        # A buildings-scoped edit with no building scope anywhere in the NL
+        # and none planned: name it (r02) rather than default a building in.
+        named.append("buildings")
+
+    seen, out = set(), []
+    for n in named:
+        if n not in seen:
+            seen.add(n)
+            out.append(n)
+    return out
+    ConfigAgentState,
 
 
 class ConfigPlannerAgent:
@@ -250,6 +331,17 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
                         if canonical in wf_lower:
                             data["weather_file"] = canonical.upper()
                             break
+                # Named rejections (P1 rejection-path spec): a required
+                # per-asset field the description does not state, or a value
+                # outside its domain, is NAMED - never silently auto-filled.
+                # Naming is recorded (plan.rejected_fields -> manifest); the
+                # pipeline's repair loop still runs, so a complete item the
+                # LLM merely dropped a field from still recovers, while a
+                # rejection item carries the name through every iteration.
+                # Named rejections are computed by the pipeline (the single
+                # call site that covers the LLM, fallback and any constructed
+                # plan - see nl_config_pipeline).
+                data.pop("rejected_fields", None)
                 return ConfigPlannerOutput(**data)
         except Exception:
             pass

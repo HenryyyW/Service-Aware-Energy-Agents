@@ -1,7 +1,7 @@
 """Scenario configuration schemas for CityLearn and pandapower."""
 
 from typing import Optional, List, Dict, Any, Literal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from enum import Enum
 
 
@@ -33,6 +33,19 @@ class BatteryConfig(BaseModel):
     soc_max: float = 0.9
     initial_soc: float = 0.5
     degradation_model: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _soc_bounds_named(self):
+        # r03: out-of-range or inverted SOC bounds must be NAMED at schema
+        # validation (the P1 rejection-path spec), not silently carried into
+        # a simulation.
+        for name in ("soc_min", "soc_max"):
+            v = getattr(self, name)
+            if not 0.0 <= v <= 1.0:
+                raise ValueError(f"battery.{name} out of [0,1]: {v}")
+        if self.soc_min >= self.soc_max:
+            raise ValueError(f"battery soc inverted: {self.soc_min} >= {self.soc_max}")
+        return self
 
 
 class EVConfig(BaseModel):

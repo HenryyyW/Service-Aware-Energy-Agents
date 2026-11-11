@@ -6,7 +6,11 @@ import os
 from src.agents.config_roles import (
     ConfigAgentState,
 )
-from src.agents.config_planner import ConfigPlannerAgent, create_config_planner
+from src.agents.config_planner import (
+    ConfigPlannerAgent,
+    create_config_planner,
+    name_rejections,
+)
 from src.agents.config_coder import ConfigCoderAgent
 from src.agents.config_executor import ConfigExecutorAgent
 from src.agents.config_verifier import ConfigVerifierAgent
@@ -81,6 +85,7 @@ class NLConfigPipeline:
         self._preprocess_nl(state)
 
         # Main loop
+        accepted = False
         for iteration in range(self.max_iterations):
             state.iteration = iteration
             iter_start = time.time()
@@ -92,10 +97,24 @@ class NLConfigPipeline:
             # === PLANNER ===
             print("\n[PLANNER] Analyzing NL description...")
             plan = self.planner.plan(state)
+            # P1 rejection path (single call site: covers the LLM, the
+            # rule-based fallback and any constructed plan): name required-but
+            # -unstated fields, out-of-range values and a missing building
+            # scope - recorded, never auto-filled.
+            if not plan.rejected_fields:
+                plan.rejected_fields = name_rejections(
+                    plan.model_dump(), state.nl_description
+                )
             state.config_plan = plan.model_dump()
             # Provenance in the manifest: a rule_based_fallback plan must never
             # be silent in the pilot record (Research's scorer reads this).
             state.add_manifest_entry("plan_source", plan.plan_source)
+            # P1 rejection path: named rejections are recorded in the manifest
+            # (the record of decision for rejection items) and block this
+            # iteration from being accepted - never silently auto-filled.
+            if plan.rejected_fields:
+                state.add_manifest_entry("rejected_fields", plan.rejected_fields)
+                print(f"  Named rejections: {plan.rejected_fields}")
             print(f"  Target assets: {plan.target_assets}")
             print(f"  Building count: {plan.building_count}")
             print(f"  Confidence: {plan.confidence:.0%}")
@@ -166,11 +185,19 @@ class NLConfigPipeline:
             )
 
             # Check if repair successful
-            if executor_output.success and verifier_output.recommendation == "accept":
+            # Check if repair successful - a named rejection (P1 rejection
+            # path) also blocks acceptance: the invalid ask is never run to
+            # completion silently.
+            if (
+                executor_output.success
+                and verifier_output.recommendation == "accept"
+                and not plan.rejected_fields
+            ):
                 print(
                     f"\n\u2713 CONFIG GENERATION SUCCESSFUL in iteration {iteration + 1}"
                 )
                 state.add_manifest_entry("final", True)
+                accepted = True
                 break
 
             # Check if should continue
@@ -190,7 +217,10 @@ class NLConfigPipeline:
                 break
 
         total_time = time.time() - start_time
-        success = any(i.get("success", False) for i in self.iteration_history)
+        # The pipeline succeeds only when an iteration was ACCEPTED (executor
+        # green + verifier accepts + no named rejection) - an executor-clean
+        # but rejected plan (P1 rejection path) is not pipeline success.
+        success = accepted
 
         # Generate final report
         final_report = self.reporter.generate_final_report(

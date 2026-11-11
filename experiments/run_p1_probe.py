@@ -149,6 +149,12 @@ def main() -> int:
                 "final_verdict": (last_it.get("verifier_output") or {}).get(
                     "recommendation"
                 ),
+                # The planner's named rejections, in the field the scorer's
+                # rejection-evidence path reads (rejection items' record of
+                # decision).
+                "schema_errors": list(
+                    (out.get("manifest") or {}).get("rejected_fields") or []
+                ),
                 "error": None,
             }
         except Exception as e:  # noqa: BLE001 - recorded, never swallowed silently

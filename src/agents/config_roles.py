@@ -82,6 +82,12 @@ class ConfigPlannerOutput(BaseModel):
     # 'rule_based_fallback' when the keyword fallback produced it (never silent)
     plan_source: str = "llm"
 
+    # Named rejections: required-but-unstated fields and out-of-range values
+    # found in the LLM's plan (e.g. ['pv.capacity_kw', 'battery.soc_min']).
+    # Recorded, never silently auto-filled - the P1 rejection-path spec. An
+    # empty list means nothing to name.
+    rejected_fields: List[str] = Field(default_factory=list)
+
     # What needs to be built/configured
     target_assets: List[str] = Field(
         default_factory=list
