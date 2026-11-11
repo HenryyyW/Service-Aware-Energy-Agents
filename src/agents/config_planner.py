@@ -272,6 +272,11 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
                     plan.weather_file = f"{canonical}.csv"
                     break
 
+        # A setup description with no detected assets still needs its
+        # buildings constructed (same rule as the LLM path).
+        if not plan.target_assets and _nl_is_setup(nl):
+            plan.target_assets.append("buildings")
+
         # Detect assets
         if any(kw in nl_lower for kw in ["pv", "solar", "photovoltaic"]):
             plan.target_assets.append("pv")
@@ -380,6 +385,17 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
                         if canonical in nl_low:
                             data["weather_file"] = f"{canonical}.csv"
                             break
+
+                # Deterministic community-setup rule: a setup description
+                # whose plan came back with no targets still needs its
+                # buildings constructed (LLM variance returned [] for c01,
+                # and the pipeline read that as 'no configuration needed').
+                if (
+                    not data.get("target_assets")
+                    and _nl_is_setup(nl)
+                    and "buildings" not in (data.get("target_assets") or [])
+                ):
+                    data["target_assets"] = ["buildings"]
                 # Named rejections (P1 rejection-path spec): a required
                 # per-asset field the description does not state, or a value
                 # outside its domain, is NAMED - never silently auto-filled.
