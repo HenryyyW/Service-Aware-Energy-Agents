@@ -290,6 +290,13 @@ class CityLearnAdapter:
                     buildings_to_keep[new_name] = {}
                 # Always use our building name for energy simulation file
                 buildings_to_keep[new_name]["energy_simulation"] = f"{new_name}.csv"
+                # Set weather file if specified in building config
+                if building_config.weather_file:
+                    # Use the canonical filename (e.g., singapore.csv)
+                    weather_filename = building_config.weather_file
+                    if not weather_filename.endswith(".csv"):
+                        weather_filename = f"{weather_filename.lower()}.csv"
+                    buildings_to_keep[new_name]["weather"] = weather_filename
                 # Ensure building is included
                 buildings_to_keep[new_name]["include"] = True
                 # Apply the scenario YAML's device parameters (battery, PV, EVs,
@@ -736,10 +743,40 @@ class CityLearnAdapter:
         """Copy dataset files to our schema directory."""
         source_dir = Path(source_dir)
 
-        # Copy weather file
-        weather_src = source_dir / "weather.csv"
-        if weather_src.exists():
-            shutil.copy2(weather_src, schema_dir / "weather.csv")
+        # Copy weather files - each building can have its own weather file
+        # First, collect all unique weather files needed
+        weather_files_to_copy = set()
+        for building_name in self.building_ids:
+            if building_name in schema["buildings"]:
+                building_schema = schema["buildings"][building_name]
+                weather_file = building_schema.get("weather", "weather.csv")
+                weather_files_to_copy.add(weather_file)
+
+        # Copy each unique weather file
+        for weather_file in weather_files_to_copy:
+            weather_src = None
+            # First check in our custom weather_files directory
+            custom_weather_dir = Path(self.data_dir) / "weather_files"
+            if custom_weather_dir.exists():
+                weather_src = custom_weather_dir / weather_file
+            # Fall back to source dataset directory
+            if not weather_src or not weather_src.exists():
+                weather_src = source_dir / weather_file
+            if weather_src and weather_src.exists():
+                shutil.copy2(weather_src, schema_dir / weather_file)
+            elif weather_file == "weather.csv":
+                # Default weather.csv must exist
+                raise FileNotFoundError(
+                    f"Default weather file not found: {source_dir / 'weather.csv'}"
+                )
+            else:
+                print(
+                    f"[WARNING] Custom weather file not found: {weather_file}, using default"
+                )
+                # Copy default as fallback
+                default_weather = source_dir / "weather.csv"
+                if default_weather.exists():
+                    shutil.copy2(default_weather, schema_dir / weather_file)
 
         # Copy carbon intensity file
         ci_src = source_dir / "carbon_intensity.csv"

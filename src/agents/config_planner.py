@@ -358,7 +358,9 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
                     wf_lower = str(data["weather_file"]).lower()
                     for canonical in ("singapore", "tokyo"):
                         if canonical in wf_lower:
-                            data["weather_file"] = canonical.upper()
+                            # the canonical RESOLVABLE name - a real file the
+                            # scorer resolves and the adapter loads
+                            data["weather_file"] = f"{canonical}.csv"
                             break
                 # Named rejections (P1 rejection-path spec): a required
                 # per-asset field the description does not state, or a value
