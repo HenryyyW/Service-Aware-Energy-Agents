@@ -41,16 +41,33 @@ def _nl_describes_buildings(nl: str) -> bool:
     return bool(_BUILDING_RE.search(nl or ""))
 
 
+# Setup-language verbs: a description that CREATES a community may legitimately
+# leave asset values to sensible defaults (c07 'Create one ... with PV',
+# c12 'Create a mixed-use community'); an EDIT of an existing community
+# (/r01 'Add rooftop PV to building 2') that states no quantity must name the
+# missing value instead of inventing one.
+_SETUP_VERBS = ("create", "build", "set up", "design", "establish")
+# Word-boundary matched: 'building' contains 'build' as a substring, so plain
+# substring matching would call every edit a setup description.
+_SETUP_RE = re.compile(r"\b(" + "|".join(_SETUP_VERBS) + r")\b", re.IGNORECASE)
+
+
+def _nl_is_setup(nl: str) -> bool:
+    return bool(_SETUP_RE.search(nl or ""))
+
+
 def name_rejections(data: Dict[str, Any], nl: str = "") -> List[str]:
     """Name required-but-unstated fields, out-of-range values, and a missing
     building scope. Recording is the P1 rejection-path contract: the pipeline
     records these and refuses to accept the iteration; it never auto-fills."""
     named: List[str] = []
 
-    # An NL that states no unit-bearing quantity cannot ground a numeric asset
-    # value: any number the plan carries for a required field of a targeted
-    # asset is invented (r01: 'Add rooftop PV to building 2' - the 2 is a
-    # building index, not a quantity; there is no capacity anywhere).
+    # An EDIT to an existing community that states no unit-bearing quantity
+    # cannot ground a numeric asset value: any number the plan carries for a
+    # required field of a targeted asset is invented (r01: 'Add rooftop PV to
+    # building 2' - the 2 is a building index, not a quantity; there is no
+    # capacity anywhere). Setup descriptions are exempt: their rubric asks for
+    # the block to exist with sensible defaults (c07/c12).
     nl_states_quantities = bool(
         re.search(
             r"\d+(?:\.\d+)?\s*(?:kw|kwh|wh|mw|mwh|mva|kva|usd|%|hz|hours?|h|minutes?|min|days?|weeks?|months?)",
@@ -58,6 +75,7 @@ def name_rejections(data: Dict[str, Any], nl: str = "") -> List[str]:
             re.IGNORECASE,
         )
     )
+    quantityless_edit = not nl_states_quantities and not _nl_is_setup(nl)
     target = [str(t).lower() for t in (data.get("target_assets") or [])]
     for key, fields in _REQUIRED_ASSET_FIELDS.items():
         prefix = _ASSET_FIELD_PREFIX[key]
@@ -70,9 +88,7 @@ def name_rejections(data: Dict[str, Any], nl: str = "") -> List[str]:
         if not targeted:
             continue
         for f in fields:
-            if not nl_states_quantities or not any(
-                c.get(f) is not None for c in configs
-            ):
+            if quantityless_edit or not any(c.get(f) is not None for c in configs):
                 named.append(f"{prefix}.{f}")
 
     for cfg in data.get("battery_configs") or []:

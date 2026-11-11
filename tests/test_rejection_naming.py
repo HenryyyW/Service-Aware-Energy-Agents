@@ -33,6 +33,36 @@ def test_r01_invented_capacity_for_a_quantityless_nl_is_named():
     )
 
 
+def test_setup_description_without_quantities_is_not_named():
+    # c12's shape: a CREATE description leaving asset values to defaults must
+    # NOT trip the quantityless rule.
+    data = {
+        "target_assets": ["pv", "battery"],
+        "pv_configs": [{"capacity_kw": 6.0}],
+        "battery_configs": [{"capacity_kwh": 10, "power_kw": 4}],
+    }
+    assert (
+        name_rejections(
+            data,
+            "Create a mixed-use community: one commercial building with PV, one industrial with a battery.",
+        )
+        == []
+    )
+
+
+def test_setup_pv_without_capacity_is_not_named():
+    # c07's shape: 'Create one residential building with PV' - the block is
+    # demanded; the capacity is a sensible default, not an invention.
+    data = {"target_assets": ["pv"], "pv_configs": [{"capacity_kw": 5.0}]}
+    assert (
+        name_rejections(
+            data,
+            "Create one residential building with PV and run it under the Singapore weather file.",
+        )
+        == []
+    )
+
+
 def test_building_index_is_not_a_stated_quantity():
     # 'building 2' must not count as a stated quantity - the quantityless rule
     # has to fire for r01's NL.
