@@ -30,15 +30,15 @@ User compares scenarios and asks follow-up questions
 Code agent constructs, diagnoses, repairs, and explains simulations
 ```
 
-## Current status and phase plan (2026-11-10)
+## Current status and phase plan (updated 2026-11-12)
 
 The project is deliberately re-centred on this brief: the platform is the product, and the coding agent is the engineering assistant inside it. Phase order (set by the project owner):
 
 | Phase | Content | Status |
 |---|---|---|
-| **P1** | Natural-language → ScenarioConfig pipeline (the agent's scenario-construction front door) + confirmation UX | **In progress** — backend pipeline (A), evaluation corpus (Research), confirmation interaction (Product Design, spec merged at `docs/nl_config_confirm_design.md`), input UX (Frontend) |
+| **P1** | Natural-language → ScenarioConfig pipeline (the agent's scenario-construction front door) + confirmation UX | **DONE (2026-11-12)** — pipeline + corpus + scoring instruments + rejection path all on main; one clean full-16 batch scored **15/16 full-bar / 4/4 rejection items / 7/8 domains**, confirmed by Research's independent re-score; the single non-pass (c07) is the stated LIMIT-weather environment gap (no Singapore weather file ships with the CityLearn datasets) — a paper limitation, not a defect. Confirmation spec merged (`docs/nl_config_confirm_design.md`), input UX landed (Frontend, `ScenarioGeneratorPage.tsx`). Records: `/home/box/OpenBot/Shared/probe_out_full16c` |
 | **P3** | Agent-assistant scope: strategy generation/modification with the physics/service gates; result analysis; diagnostics; verifiable proposals | Component exists (the plan→code→execute→verify→repair workflow). Measured on the strategy-modification component benchmark: **5/9 detector-verified modifications** (pre-registered threshold ≥7/9 not met, reported either way) — real capability, below threshold |
-| **P4** | Paper reframe around the platform; the code-repair/strategy-modification result becomes a supporting result, not the headline | Pending (Research) |
+| **P4** | Paper reframe around the platform; the code-repair/strategy-modification result becomes a supporting result, not the headline | **Decisions confirmed** (2026-11-11/12): title confirmed by the user (*A Renewable Energy Community Virtual Simulator with a Physics-Grounded Coding-Agent Assistant*); Core 3 (authoring acceptance) has its confirmed value (15/16 / 4/4 / 7/8, Research's number). Spec: `docs/paper_reframe_p4.md`. **In flight**: Research weaving the reframe into `arxiv_submission/arxiv_main.tex` (still carries the old title and no authoring content) |
 | **P2** | Spatiotemporal virtual-community visualization and strategy comparison view | Last (Frontend + Product Design) |
 
 Already built and tested (verified on `origin/main`): the physics core (CityLearn adapter + pandapower coupling + closed re-dispatch loop), the full scenario schema (buildings, PV, battery, EV, flexible load, tariff, weather-file, failure injection), the scenario CRUD API (`POST/PATCH /scenarios` + `GET /scenarios/{id}/validate`), the four control strategies (rule-based, MPC, single-agent RL, multi-agent RL, plus the centralized heuristic), the agent workflow with its verification gates, and the React community canvas. LLM authorization of record: `poolside/laguna-xs-2.1` on NVIDIA NIM (fallback DeepSeek 4.1 if inadequate).
