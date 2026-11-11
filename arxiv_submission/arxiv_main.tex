@@ -58,7 +58,8 @@ workflow is assisted by a coding agent: an engineer describes a community in
 natural language, the agent produces an executable simulation configuration,
 the engineer confirms it field-by-field before anything runs, and the
 simulator then evaluates the control strategies of record --- rule-based,
-MPC, single-agent RL, and multi-agent RL, plus the centralized heuristic ---
+MPC, tabular RL, the distributed multi-agent heuristic (per-building agents
+with consensus; no multi-agent RL training), and the centralized heuristic ---
 across five scenarios (A--E) covering coordination baselines, battery/PV
 assets, deferrable loads, energy sharing with community settlement, and
 mid-run component failures. The simulator couples CityLearn building-level
@@ -95,12 +96,14 @@ cost of recovery. The agent's scenario-authoring front door is held to an
 explicit acceptance standard rather than trust: a 16-item natural-language
 corpus with five criteria (complete-config planning, required fields,
 in-range values, clean simulation, API round-trip), scored on one clean
-full-16 batch on the final code --- 15 of 16 items pass the full bar, 4 of
-4 rejection-path items behave correctly, 7 of 8 domains covered; the
-single non-passing item is an environment data gap (no Singapore weather
-file ships with the CityLearn datasets, and the field is inert in the
-code), reported as a limitation rather than ``fixed'' by inventing a
-filename. The agent's autonomous strategy-modification component is
+full-16 batch on the final code --- 15 of 16 items are item-level successes,
+4 of 4 rejection-path items behave correctly, and 7 of 8 domains are covered,
+so the overall pre-set acceptance (at least 14 of 16 AND all 8 domains AND 4
+of 4 rejections) is not met; the
+single non-passing item is both a data-availability gap (no Singapore
+weather file ships with the CityLearn datasets) and a config-to-engine
+wiring gap (no simulator code reads the weather field), reported as a
+limitation rather than ``fixed'' by inventing a filename. The agent's autonomous strategy-modification component is
 measured, not assumed: a two-arm benchmark of the five-agent repair loop
 repairs 5 of 9 seeded controller defects against a pre-registered bar of
 7 of 9 (deterministic comparator 0 of 9, loop and driver verdicts
@@ -185,20 +188,23 @@ the injection. Repair is \emph{measured and sub-bar}: the commissioned
 code-repair benchmark repairs 5 of 9 seeded controller defects with the agent
 arm against a pre-registered bar of 7 of 9 (deterministic comparator 0 of 9; 44
 backend calls, zero backend errors, loop and driver verdicts agreeing 10 of
-10), so the repair workflow is demonstrated at a measured level below its bar
-rather than left unmeasured.
-Maintaining constraints and service is trivially satisfied because no injected
-failure produced a violation in these runs. We claim no detection and no
-recovery for any failure type.
+10), which supports repair capability on the specified defect set but not
+autonomous strategy improvement.
+No grid-level violations were observed in these runs; service impacts
+(EV undelivered energy, load completion, battery availability) require
+separate evaluation and are reported as planned work. We claim no detection
+and no recovery for any failure type.
 
 \textbf{(3) Verified LLM code agents.} This is the paper's contribution.
 Control code is executable, so an emitted ``change'' that does not change
 behaviour is not a repair: without an executable check the failure mode is
 silent. Our own instrumented coder produced comment-level patches until an
 AST-transformation layer was restored, and the ten-task code-repair benchmark
-measured zero of nine measured repairs with a hosted model in the loop, because
-the model emitted change descriptions while the edit was applied by a fixed
-transformation vocabulary. Adjacent verification layers exist in the
+repairs five of nine seeded defects with a hosted model in the loop against a
+pre-registered bar of seven of nine (deterministic comparator zero of nine;
+loop and driver verdicts agreeing ten of ten; both arms unpooled), which
+supports repair capability on the specified defect set but not autonomous
+strategy improvement. Adjacent verification layers exist in the
 literature --- solver-grounded reporting \cite{rojas2026smartgridllm},
 intent-driven separation of planning from solver-side execution
 \cite{mao2026intent}, and runtime interception of proposed actions against
@@ -379,9 +385,13 @@ is at least 14 of 16 items, all eight domains covered, and all four rejection
 items behaving correctly.
 
 \textbf{Result (one clean full-16 batch on the final code, scored with the
-benchmark's own instruments, no stitched numbers): 15 of 16 items pass the
-full bar, 4 of 4 rejection items behave correctly, and 7 of 8 domains are
-covered.} The single non-passing item is a data gap, not a pipeline defect:
+benchmark's own instruments, no stitched numbers): 15 of 16 items are
+item-level successes, 4 of 4 rejection items behave correctly, and 7 of 8
+domains are covered. The overall pre-set acceptance (at least 14 of 16 items
+AND all 8 domains AND 4 of 4 rejection items) is therefore NOT met, because
+the weather domain is uncovered; we report the item-level success and the
+failed domain condition together, and no partial pass is presented as
+acceptance.} The single non-passing item is a data gap, not a pipeline defect:
 no Singapore weather file ships with the CityLearn datasets in this
 environment (each dataset carries one weather.csv) and no simulator code
 reads \texttt{BuildingConfig.weather\_file}, so the canonical weather token
@@ -720,7 +730,7 @@ The arm difference (unverified $-$ verified) is $+23.05 \pm 21.32$ USD
 the two percentage-point clauses: proceed to a full-week confirmation only if
 the arms differ by $\geq 10$ points on \texttt{llm\_unrepaired\_violations} or
 \texttt{llm\_fallback\_step\_share}. Both are far below the threshold
-($0.02$ and $0.0017$ points; unrepaired violations are nonzero in 1 of 50
+($2$ and $0.17$ percentage points; unrepaired violations are nonzero in 1 of 50
 unverified runs and 0 of 49 verified runs), so the gate is \emph{not met} and
 the screen reports a null result on the safety metrics: under this proposer the
 verification machinery has nothing to catch. The KPI differences above are
@@ -772,8 +782,11 @@ quarantined cells was applied in place: C/42 promoted at 0 errors, C/123 and
 E/42 remain quarantined at 3 endpoint errors and are published per cell, not
 pooled). The unfiltered as-run sets are published alongside for audit
 (detection: 360/360 steps, 203.44 USD; recovery: 15/360 steps, 442.11 USD).
-Repair success in the detection epoch is derived (720 repair iterations minus
-360 deterministic replacements; the recorded field is null in that build).
+The detection epoch's repair field was never populated in that build (the
+recorded field is null), so no repair rate is derived for it: re-prompting
+under a corrupted proposer is not a repair mechanism, and the epoch's 360 of
+360 deterministic-replacement steps are reported as replacement, not
+recovery.
 Reference = 65.52 USD over exactly 15 cells: the deterministic
 \texttt{multi\_agent} 24-step pool-TOU runs at seeds 42/123/456 across
 scenarios A--E in \texttt{experiments/m2a\_rerun\_laguna} (per-scenario means
@@ -796,7 +809,7 @@ Unsafe acceptance, unverified (per step) & 10.60 & 10.30 & --- \\
 Unsafe acceptance, verified (per step) & 0.0000 & 0.0000 & --- \\
 Paired directional wins & 15/15 & 13/13 & --- \\
 Bound-violation detections (per cell) & 24/24 & 24/24 & --- \\
-Repair success rate (verified) & 0.500 (derived) & 0.909--1.000 (mean 0.970) & --- \\
+Repair success rate (verified) & not measured (field null in that build) & 0.909--1.000 (mean 0.970) & --- \\
 Fallback steps (verified total) & 360/360 (all 15 cells) & 9/312 (13 keep; 15/360 as-run all-15) & --- \\
 Cost, verified (USD, mean) & 203.44 (all 15 cells) & 440.85 (13 keep; 442.11 as-run all-15) & 65.52 \\
 Cost, unverified (USD, mean) & 440.79 & 437.15 & --- \\
@@ -819,10 +832,10 @@ in-bounds proposal that was applied in 0.909--1.000 of attempts (recorded
 \texttt{repair\_success\_rate}; mean 0.970 over the 13 kept cells; the 0.880
 floor belongs to the two quarantined cells), so the loop demonstrably repairs
 rather than only rejects. The detection epoch --- whose re-prompts were
-themselves corrupted --- could not repair by construction (derived repair
-success 0.500) and ended every attempt on the deterministic replacement
-dispatch (360/360 steps); we report that epoch as detection-plus-replacement,
-not recovery, with 15 of 15 verified cells kept.
+themselves corrupted --- could not repair by construction (its repair field
+is null in that build, so no rate is derived) and ended every attempt on the
+deterministic replacement dispatch (360/360 steps); we report that epoch as
+detection-plus-replacement, not recovery, with 15 of 15 verified cells kept.
 
 \textbf{The cost of recovery.} The verified arm's KPIs track the unverified
 arm rather than the deterministic reference: cost 440.85 USD vs.\ 437.15
@@ -1023,8 +1036,10 @@ verified cells kept), at the measured cost that
 the accepted dispatch remains the LLM's repaired proposal; the clamp the
 simulation adapter applies is shared by both arms, so these are
 proposal-layer results, not physical-safety results. The five-agent code-repair
-loop is implemented and instrumented but not yet demonstrated to change
-behaviour; a code-repair benchmark is future work. Thermal comfort is
+loop is measured at its sub-bar level (five of nine seeded defects repaired
+against the pre-registered seven of nine, reported per cell in
+Section~\ref{sec:repairloop}); the result supports repair capability on the
+specified defect set, not autonomous strategy improvement. Thermal comfort is
 unmeasurable on this dataset and no comfort claim is made. All artifacts are
 reproducible from manifests, committed summaries, and checksummed release
 artifacts.
