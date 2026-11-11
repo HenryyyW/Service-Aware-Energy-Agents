@@ -357,6 +357,17 @@ def check_c3(item, cfg, reject_named=False):
         elif isinstance(want, (int, float)) and isinstance(got, (int, float)):
             if abs(float(got) - float(want)) > 1e-6:
                 issues.append(f"{path}: {got} != stated {want}")
+        elif "weather_file" in path:
+            # any naming that resolves to the same file is a match (the
+            # corpus's own values_in_range note) - the canonical token
+            # SINGAPORE and the filename singapore.csv resolve to one file
+            got_r = _resolve_weather_file(str(got))
+            want_r = _resolve_weather_file(str(want))
+            if not (got_r and want_r and got_r == want_r):
+                issues.append(
+                    f"{path}: {got!r} does not resolve to the stated "
+                    f"weather file ({want!r})"
+                )
         elif str(got) != str(want):
             issues.append(f"{path}: {got!r} != stated {want!r}")
     # domain-wide rules
