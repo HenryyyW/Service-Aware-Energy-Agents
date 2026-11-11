@@ -119,3 +119,10 @@ def test_intended_authorized_model_passes_even_with_paid_defaults(monkeypatch):
 def test_intended_paid_model_still_aborts(monkeypatch):
     with pytest.raises(SystemExit):
         enforce_authorized_llm(intended="kimi-k2.7-code")
+
+
+def test_non_hosted_run_skips_the_guard(monkeypatch):
+    # A rule_based run never calls a hosted LLM: paid defaults must not block it.
+    monkeypatch.setenv("LLM_PROVIDER", "dashscope")
+    status = enforce_authorized_llm(hosted_call_expected=False)
+    assert "skipped" in status

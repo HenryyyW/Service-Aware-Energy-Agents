@@ -92,12 +92,19 @@ def _is_authorized_model(model: str) -> bool:
     return any(marker in low for marker in AUTHORIZED_MODEL_MARKERS)
 
 
-def enforce_authorized_llm(intended: str | None = None) -> str:
+def enforce_authorized_llm(
+    intended: str | None = None, hosted_call_expected: bool = True
+) -> str:
     """Abort the process when a paid-vendor call would happen without opt-in.
 
     `intended` is the model a runner is hard-wired to use (e.g. the NIM model
     constant), so a runner that already enforces the authorization itself
-    never trips the guard. Returns a one-line status when the run may go."""
+    never trips the guard. `hosted_call_expected=False` marks a run that will
+    not call a hosted LLM at all (e.g. --controller rule_based) - the guard
+    then reports and steps aside. Returns a one-line status when the run may
+    go."""
+    if not hosted_call_expected:
+        return "[spend-guard] no hosted LLM call in this run (skipped)"
     model = intended if intended is not None else _configured_model()
     if _is_authorized_model(model):
         return "[spend-guard] authorized model configured (NIM/laguna)"

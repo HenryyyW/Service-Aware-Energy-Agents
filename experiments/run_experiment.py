@@ -941,13 +941,6 @@ def load_scenario(config_path: str) -> ScenarioConfig:
 
 
 def main():
-    # Paid-LLM spend guard: abort before any LLM setup when the resolved
-    # endpoint is a paid hosted vendor without an explicit opt-in
-    # (docs/incident_2026-11-08_dashscope_spend.md).
-    from experiments.llm_spend_guard import enforce_authorized_llm
-
-    enforce_authorized_llm()
-
     parser = argparse.ArgumentParser(description="Run energy community experiment")
     parser.add_argument(
         "--config", type=str, required=True, help="Path to scenario YAML config"
@@ -1033,6 +1026,19 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Paid-LLM spend guard (docs/incident_2026-11-08_dashscope_spend.md):
+    # enforced only when THIS run will actually call a hosted LLM - an LLM
+    # controller, or the deterministic safety proposer configured as an LLM.
+    from experiments.llm_spend_guard import enforce_authorized_llm
+
+    _LLM_CONTROLLERS = ("llm_agent", "llm_agent_verified")
+    enforce_authorized_llm(
+        hosted_call_expected=(
+            args.controller in _LLM_CONTROLLERS
+            or os.environ.get("SAEA_DET_SAFETY_PROPOSER", "") in _LLM_CONTROLLERS
+        )
+    )
 
     # Load scenario
     scenario = load_scenario(args.config)
