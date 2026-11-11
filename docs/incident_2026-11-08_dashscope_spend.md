@@ -67,7 +67,8 @@ tokens were spent outside the recorded authorization.
    into `run_experiment.py` and `run_code_repair.py`; suite 518 green.
 3. Team notification: not requested by the user (the incident record itself is
    the audit trail).
-4. The 5 `wan2.7-image-pro` calls remain unattributed (outside this project's
+4. **Disclosure, settled 2026-11-12 (user decision):** the paper may now NAME the hosted model and endpoint of record — `poolside/laguna-xs-2.1` on NVIDIA NIM. The incident-era secrecy is lifted; the guard and the authorized-model list are unchanged. (The reviewer had challenged the digest-only reproducibility claim; this closes it.)
+5. The 5 `wan2.7-image-pro` calls remain unattributed (outside this project's
    image surface); noted for the record, not blocking.
 
 ## Follow-up for the paper
