@@ -30,7 +30,15 @@ export function MetricCell({
     typeof value === 'number' &&
     typeof limit === 'number' &&
     value > limit;
+  // Spec (docs/p2_strategy_comparison_design.md §5, acceptance line 133): the
+  // Violating value is shown in the violation color AND the limit is struck
+  // through ('520' / '500 kW') - the strike-through is the accessible cue, the
+  // color is reinforcement only. Colour-only fails the spec.
   const valueClass = clsx('font-mono text-data', isExceedingLimit ? 'text-violation' : 'text-text');
+  const limitClass = clsx(
+    'text-[10px]',
+    isExceedingLimit ? 'line-through text-violation' : 'text-text-muted'
+  );
 
   return (
     <div className="flex flex-col gap-1">
@@ -55,9 +63,7 @@ export function MetricCell({
         )}
       </div>
       {limit !== undefined && hasValue && typeof value === 'number' && typeof limit === 'number' ? (
-        <p className="text-[10px] text-text-muted">
-          {`limit: ${format(limit)} ${unit}`}
-        </p>
+        <p className={limitClass}>{`limit: ${format(limit)} ${unit}`}</p>
       ) : null}
     </div>
   );
