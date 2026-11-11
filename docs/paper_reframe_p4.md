@@ -74,7 +74,7 @@ Keep the three literature-established gaps (they are the intro's spine) and add 
 
 ## 3. Results restructure (section map) — per the PM's call: the 750-run matrix is NOT the sole quantitative core
 
-**Cores of record:** **two cores today** — (1) the **strategy comparison**, frozen and cited at its recorded level (the PM's record: 83/67/0); and (2) the **agent layer**: the strategy-modification component at its measured level (LLM arm 5/9 detector-verified repairs vs the pre-registered 7/9; deterministic comparator 0/9; loop/driver agreement 10/10; both arms unpooled) plus the dispatch-verification results. A **third core — authoring acceptance** — arrives once A's pipeline passes verification and the in-envelope probe runs the corpus through it. Section order: platform/provenance → strategy comparison → agent layer → the two agent-result sections.
+**Cores of record:** **two cores today** — (1) the **strategy comparison**, frozen and cited at its recorded level (the PM's record: 83/67/0); and (2) the **agent layer**: the strategy-modification component at its measured level (LLM arm 5/9 detector-verified repairs vs the pre-registered 7/9; deterministic comparator 0/9; loop/driver agreement 10/10; both arms unpooled) plus the dispatch-verification results. A **third core — authoring acceptance** — arrives once A's pipeline passes verification and the in-envelope probe runs the corpus through it. **[2026-11-11 UPDATE: the probe has run — one clean full-16 batch on the final code scored 15/16 full-bar / 4/4 rejections / 7/8 domains with your instruments; see Core 3's row and the records below. Only c07 fails, on a data gap.]** Section order: platform/provenance → strategy comparison → agent layer → the two agent-result sections.
 
 | Current | Reframed |
 |---|---|
@@ -82,7 +82,7 @@ Keep the three literature-established gaps (they are the intro's spine) and add 
 | Cost, Peak and Service; LMP; P2P; Scenario E | **Core 1 — Strategy comparison** (same subsections, same numbers, same within-scenario basis; frozen, cited at the recorded 83/67/0 level) |
 | Ablation: Verified vs Unverified; Real-LLM Screen; Hostile-Proposer | **Core 2 (agent layer, part 1) — Dispatch verification** (same subsections; the 150/50/49 and 13-cell numbers verbatim) |
 | — | **Core 2 (agent layer, part 2) — Strategy modification (component result)** (new §) — the two-arm benchmark: acceptance of record = driver criteria (a)–(f) with `loop_claimed_success` beside every verdict; LLM arm 5/9 detector-verified repairs on the converting contract vs the pre-registered ≥7/9 (not met); deterministic comparator 0/9 with 10/10 loop/driver agreement; both arms unpooled; earlier bases' 0/9 labelled as located-defect evidence, not model measurement |
-| — | **Core 3 (after the probe) — Scenario authoring acceptance** (new §) — the 16-item corpus, the five criteria, the pre-registered bar (≥14/16, all 8 domains, all 4 rejection items), and the pipeline score; **instrument-level until the in-envelope probe reports; no authoring numbers before it** (PM's call (a)) |
+| — | **Core 3 (after the probe) — Scenario authoring acceptance** (new §) — the 16-item corpus, the five criteria, the pre-registered bar (≥14/16, all 8 domains, all 4 rejection items), and the pipeline score; **the probe has reported: one clean full-16 batch on the final code (main `802e55372e93`), scored with Research's own instruments, 15/16 items full-bar / 4/4 rejection items / 7/8 domains; the single failing item (c07) is a DATA gap — no Singapore weather file ships with the CityLearn datasets and the field is inert in the code — reported as a limitation, not a pipeline defect. Records: `/home/box/OpenBot/Shared/probe_out_full16c` (batch), `probe_out_rerun12` (post-gate-fix re-runs); Research's official re-score is the remaining step.** |
 | Service-Level Constraints; Reproducibility | unchanged |
 | Discussion/Limitations; Case Study; Conclusion | Discussion gains one limitation paragraph: the authoring-acceptance results are pending the probe; the code-repair component is below its pre-registered bar |
 
@@ -95,7 +95,7 @@ Rationale: the old sentence claims nothing (correctly), but under the reframe th
 
 ## 5. Keywords / title
 
-- **Title (PROPOSAL — the PM's wording, held until the user weighs in; the PM is flagging it upward):** *A Renewable Energy Community Virtual Simulator with a Physics-Grounded Coding-Agent Assistant*.
+- **Title (CONFIRMED by the user 2026-11-11 — no longer a proposal):** *A Renewable Energy Community Virtual Simulator with a Physics-Grounded Coding-Agent Assistant*.
 - **Subtitle (kept from the platform-first draft, carrying the service-awareness / grid-compliance clause):** *service-aware multi-agent control, failure injection, and agent-assisted scenario authoring under grid-compliance verification*. The current paper's title (Service-Aware Energy Agents: Pricing Regimes, Failure Injection, and a Verified LLM Code-Agent Workflow for Community Energy Simulation) is the "before" text this replaces.
 - Keywords: drop "LLM code agents" from the lead; proposed set — *renewable energy communities, virtual simulator, LLM-assisted scenario authoring, multi-agent control, power system simulation, pricing regimes, verification*.
 
@@ -105,7 +105,7 @@ Rationale: the old sentence claims nothing (correctly), but under the reframe th
 2. **Title is a proposal held for the user** (call (b)): the PM's wording is in §5 as a proposal, flagged upward; the platform-first subtitle with the service-awareness/grid-compliance clause is kept.
 3. **The 750-run matrix is not the sole quantitative core** (call (c)): two cores today (strategy comparison frozen at 83/67/0; agent layer with the 5/9-vs-7/9 component and the dispatch-verification results), a third (authoring acceptance) after the probe; the results map in §3 is restructured to that order.
 
-**Remaining hold (not mine to decide):** the title wording awaits the user's call — the PM's proposal stands until then.
+**Remaining hold (not mine to decide):** resolved 2026-11-11 — the user confirmed the title.
 
 ## 7. Migration notes (mechanical, for the merge)
 
