@@ -56,95 +56,6 @@ function flatten(obj: any, prefix = ''): [string, any][] {
   return out;
 }
 
-function mockGenerateScenario(description: string): ScenarioConfig {
-  const d = description.toLowerCase();
-  const buildings: any[] = [
-    {
-      building_id: 'building_1',
-      building_type: 'residential',
-      location: { lat: 0, lon: 0, timezone: 'UTC' },
-      simulation_start: '2023-01-01',
-      simulation_end: '2023-01-08',
-      pv: undefined,
-      battery: undefined,
-      evs: undefined,
-      flexible_loads: undefined,
-      tariff: undefined,
-      weather_file: undefined,
-    },
-  ];
-  const hasEv = /ev|electric.?vehicle|charg/.test(d);
-  const hasPv = /pv|solar|photovolta/.test(d);
-  const hasBattery = /battery|storage/.test(d);
-  const hasSharing = /sharing|settlement|p2p|community pool/.test(d);
-  const hasLimit = /limit|cap|kW|kw/.test(d);
-  if (hasEv) {
-    buildings[0].evs = [
-      {
-        capacity_kwh: 60,
-        max_charge_kw: 22,
-        efficiency: 0.9,
-        arrival_time: '18:00',
-        departure_time: '07:00',
-        target_soc: 0.8,
-        initial_soc: 0.3,
-        connected_days: [0, 1, 2, 3, 4, 5, 6],
-      },
-    ];
-  }
-  if (hasPv) {
-    buildings[0].pv = { capacity_kw: 8, azimuth: 180, tilt: 30, efficiency: 0.2, inverter_efficiency: 0.96 };
-  }
-  if (hasBattery) {
-    buildings[0].battery = {
-      capacity_kwh: 10,
-      power_kw: 5,
-      efficiency_charge: 0.95,
-      efficiency_discharge: 0.95,
-      soc_min: 0.1,
-      soc_max: 0.9,
-      initial_soc: 0.5,
-    };
-  }
-  const config: ScenarioConfig = {
-    scenario_id: '',
-    name: description.slice(0, 60).trim() || 'Generated Community',
-    description,
-    buildings,
-    community: {
-      name: description.slice(0, 60).trim() || 'Generated Community',
-      buildings: buildings.length,
-      simulation_period: '7_days',
-      timestep_minutes: 15,
-    },
-    assets: {
-      pv: { penetration: hasPv ? 0.8 : 0.4, orientation: 'rooftop' },
-      batteries: { community_capacity_kwh: hasBattery ? 1000 : 800, max_power_kw: hasBattery ? 500 : 250 },
-      evs: { number: hasEv ? 50 : 35, charging_power_kw: [7, 22, 60], departure_soc_requirement: 0.8 },
-      flexible_loads: { share: 0.15 },
-    },
-    grid: {
-      model: 'simbench_lv_grid_1',
-      transformer_capacity_kva: 630,
-      voltage_limits_pu: [0.95, 1.05],
-      import_limit_kw: 500,
-      export_limit_kw: 200,
-    },
-    control: {
-      strategy: 'rule_based',
-      objective: ['minimize_cost', 'minimize_peak'],
-    },
-    pandapower: undefined,
-    energy_sharing: hasSharing
-      ? { enabled: true, market_type: 'uniform_price', settlement_interval: '1h', dynamic_pricing: undefined }
-      : undefined,
-    community_import_limit_kw: hasLimit ? (() => { const m = d.match(/(\d+)\s*kW/); return m ? parseInt(m[1], 10) : undefined; })() : undefined,
-    community_export_limit_kw: undefined,
-    random_seed: 42,
-    timestep_minutes: 15,
-  };
-  return config;
-}
 
 /* -------------------------------------------------------------------------- */
 /* Provenance / confidence chip                                               */
@@ -329,7 +240,6 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
     setCurrentScenario: s.setCurrentScenario,
     addScenario: s.addScenario,
   }));
-  const generate = propGenerate ?? mockGenerateScenario;
 
   const [step, setStep] = useState<'input' | 'confirm'>('input');
   const [description, setDescription] = useState('');
@@ -341,6 +251,8 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
   const [validation, setValidation] = useState<{ valid: boolean; errors: string[]; warnings: string[] } | null>(null);
   const [error, setError] = useState<{ message: string; field?: string } | null>(null);
   const [lastRunId, setLastRunId] = useState<string | null>(null);
+  const [planSource, setPlanSource] = useState<string | null>(null);
+  const [rejectedFields, setRejectedFields] = useState<string[]>([]);
   const [showDiff, setShowDiff] = useState(false);
 
   const handleExample = useCallback((ex: (typeof EXAMPLES)[number]) => {
@@ -353,18 +265,37 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
     setError(null);
     setIsGenerating(true);
     try {
-      const config = await generate(description.trim());
+      let config: ScenarioConfig | null = null;
+      if (propGenerate) {
+        // injected generator (tests / previews): returns a config directly
+        config = await propGenerate(description.trim());
+        setPlanSource('injected');
+        setRejectedFields([]);
+      } else {
+        // the real path: the verified NL->config pipeline behind the API
+        const res = await api.generateScenario(description.trim());
+        setPlanSource(res.plan_source ?? null);
+        setRejectedFields(res.rejected_fields ?? []);
+        config = res.config ?? null;
+        if (!config) {
+          throw new Error(
+            res.rejected_fields?.length
+              ? `The description cannot be configured as written: ${res.rejected_fields.join(', ')} must be stated`
+              : 'The pipeline produced no configuration for this description'
+          );
+        }
+      }
       setParsed(config);
       setCurrentScenario(config);
       setStep('confirm');
       setValidation(null);
       setLastRunId(null);
-    } catch (e) {
-      setError({ message: e instanceof Error ? e.message : 'Failed to generate config' });
+    } catch (e: any) {
+      setError({ message: e.response?.data?.detail || e.message || 'Failed to generate config' });
     } finally {
       setIsGenerating(false);
     }
-  }, [description, isGenerating, generate, setCurrentScenario]);
+  }, [description, isGenerating, propGenerate, setCurrentScenario]);
 
   const handleValidate = useCallback(async () => {
     if (!parsed?.scenario_id) return;
@@ -486,11 +417,27 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
             </Button>
           </div>
         </div>
-        {!propGenerate && (
+        {planSource === 'rule_based_fallback' && (
           <div className="mt-3 p-3 bg-sun/10 border border-sun/30 text-sun rounded-lg">
             <p className="text-caption font-medium text-sun flex items-center gap-1">
-              <span>Preview builder active (deterministic template).</span>{' '}
-              <span>The coding agent&apos;s natural-language &rarr; config pipeline lands in Phase 1.</span>
+              <span aria-hidden="true">&#9888;</span>
+              <span>Preview mode: the coding agent was unavailable for this description, so a deterministic keyword builder produced it. Review every field before running.</span>
+            </p>
+          </div>
+        )}
+        {planSource === 'llm' && (
+          <div className="mt-3 p-3 bg-energy/10 border border-energy/30 text-energy rounded-lg">
+            <p className="text-caption font-medium text-energy flex items-center gap-1">
+              <span aria-hidden="true">&#10003;</span>
+              <span>Planned by the coding agent (natural-language &rarr; config pipeline).</span>
+            </p>
+          </div>
+        )}
+        {rejectedFields.length > 0 && (
+          <div className="mt-3 p-3 bg-violation/10 border border-violation/30 text-violation rounded-lg">
+            <p className="text-caption font-medium text-violation flex items-center gap-1">
+              <span aria-hidden="true">&#9888;</span>
+              <span>Named rejections (must be stated before this description can run): {rejectedFields.join(', ')}</span>
             </p>
           </div>
         )}

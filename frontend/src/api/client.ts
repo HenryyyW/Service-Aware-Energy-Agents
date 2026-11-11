@@ -46,6 +46,26 @@ class ApiClient {
     return response.data;
   }
 
+  // NL -> config through the verified pipeline (planner + coder + executor +
+  // verifier). plan_source tells the UI whether the agent planned it ('llm')
+  // or the rule-based fallback did ('rule_based_fallback' - preview mode);
+  // rejected_fields carries the named rejections for the confirm screen.
+  async generateScenario(nl: string, maxIterations = 2): Promise<{
+    config: ScenarioConfig | null;
+    plan_source: string | null;
+    rejected_fields: string[];
+    success: boolean;
+    iterations: number;
+    final_verdict: string | null;
+    elapsed_s: number;
+  }> {
+    const response = await this.client.post('/api/scenarios/generate', {
+      nl,
+      max_iterations: maxIterations,
+    });
+    return response.data;
+  }
+
   async createScenario(scenario: ScenarioConfig): Promise<ScenarioConfig> {
     const response = await this.client.post('/api/scenarios', {
       scenario_id: scenario.scenario_id,

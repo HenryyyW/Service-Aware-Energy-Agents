@@ -192,6 +192,53 @@ def _scenario_to_dict(scenario: ScenarioConfig) -> dict:
     }
 
 
+@router.post("/scenarios/generate", response_model=dict)
+async def generate_scenario(request: dict):
+    """NL -> executable scenario config through the verified pipeline.
+
+    The planner (LLM with the rule-based fallback) + coder + executor +
+    verifier run here; the response carries the config for the confirm step
+    AND the provenance (plan_source) plus any named rejections, so the UI can
+    show a degraded 'preview' mode instead of pretending it is the agent."""
+    import time
+
+    nl = (request.get("nl") or request.get("description") or "").strip()
+    if not nl:
+        raise HTTPException(status_code=422, detail="nl (the natural-language description) is required")
+
+    max_iterations = int(request.get("max_iterations", 2))
+    project_root = os.environ.get(
+        "PROJECT_ROOT", str(Path(__file__).resolve().parents[3])
+    )
+    started = time.time()
+    try:
+        from src.agents.nl_config_pipeline import run_nl_to_config
+
+        result = run_nl_to_config(
+            nl,
+            scenario_id=f"gen_{uuid4().hex[:8]}",
+            max_iterations=max_iterations,
+            project_root=project_root,
+        )
+    except Exception as exc:  # noqa: BLE001 - surfaced, never a silent 500
+        raise HTTPException(
+            status_code=500, detail=f"NL->config pipeline failed: {exc}"
+        ) from exc
+
+    manifest = result.get("manifest") or {}
+    iterations = result.get("iterations") or []
+    last = iterations[-1] if iterations else {}
+    return {
+        "config": result.get("final_config"),
+        "plan_source": manifest.get("plan_source"),
+        "rejected_fields": manifest.get("rejected_fields") or [],
+        "success": bool(result.get("success")),
+        "iterations": len(iterations),
+        "final_verdict": (last.get("verifier_output") or {}).get("recommendation"),
+        "elapsed_s": round(time.time() - started, 1),
+    }
+
+
 @router.get("/scenarios", response_model=List[dict])
 async def get_scenarios():
     """Get all scenarios."""
