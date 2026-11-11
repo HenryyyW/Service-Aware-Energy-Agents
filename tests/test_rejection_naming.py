@@ -21,6 +21,39 @@ def test_r01_pv_without_capacity_is_named():
     assert "pv.capacity_kw" in name_rejections(data, "Add rooftop PV to building 2.")
 
 
+def test_r01_invented_capacity_for_a_quantityless_nl_is_named():
+    # r01's live shape: the LLM invents 5.0 kW for an NL that states no
+    # quantities at all - the invented value must be named, not accepted.
+    data = {
+        "target_assets": ["pv"],
+        "pv_configs": [{"capacity_kw": 5.0, "azimuth": 180}],
+    }
+    assert "pv.capacity_kw" in name_rejections(
+        data, "Add rooftop PV to building 2 of the community."
+    )
+
+
+def test_building_index_is_not_a_stated_quantity():
+    # 'building 2' must not count as a stated quantity - the quantityless rule
+    # has to fire for r01's NL.
+    data = {
+        "target_assets": ["pv"],
+        "pv_configs": [{"capacity_kw": 5.0, "azimuth": 180}],
+    }
+    named = name_rejections(data, "Add rooftop PV to building 2 of the community.")
+    assert "pv.capacity_kw" in named
+
+
+def test_r01_stated_capacity_is_not_named():
+    # The same plan shape with an NL that states the capacity: grounded.
+    data = {
+        "target_assets": ["pv"],
+        "pv_configs": [{"capacity_kw": 5.0, "azimuth": 180}],
+    }
+    named = name_rejections(data, "Add a 5 kW rooftop PV to building 2.")
+    assert "pv.capacity_kw" not in named
+
+
 def test_r01_pv_with_no_configs_at_all_is_named():
     data = {"target_assets": ["pv"], "pv_configs": []}
     assert "pv.capacity_kw" in name_rejections(data, "Add rooftop PV to building 2.")
@@ -106,7 +139,13 @@ def test_complete_multi_asset_plan_is_not_named():
         ],
         "tariff_configs": [{"type": "time_of_use", "import_prices": {"peak": 0.3}}],
     }
-    assert name_rejections(data, "a two-building community with all these assets") == []
+    assert (
+        name_rejections(
+            data,
+            "a two-building community: 6 kW PV, a 10 kWh battery, a 40 kWh EV, a 2 kW flexible load and a TOU tariff",
+        )
+        == []
+    )
 
 
 def test_battery_schema_names_out_of_range_soc():

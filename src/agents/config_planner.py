@@ -47,19 +47,32 @@ def name_rejections(data: Dict[str, Any], nl: str = "") -> List[str]:
     records these and refuses to accept the iteration; it never auto-fills."""
     named: List[str] = []
 
+    # An NL that states no unit-bearing quantity cannot ground a numeric asset
+    # value: any number the plan carries for a required field of a targeted
+    # asset is invented (r01: 'Add rooftop PV to building 2' - the 2 is a
+    # building index, not a quantity; there is no capacity anywhere).
+    nl_states_quantities = bool(
+        re.search(
+            r"\d+(?:\.\d+)?\s*(?:kw|kwh|wh|mw|mwh|mva|kva|usd|%|hz|hours?|h|minutes?|min|days?|weeks?|months?)",
+            nl or "",
+            re.IGNORECASE,
+        )
+    )
     target = [str(t).lower() for t in (data.get("target_assets") or [])]
     for key, fields in _REQUIRED_ASSET_FIELDS.items():
         prefix = _ASSET_FIELD_PREFIX[key]
         asset = key[: -len("_configs")]  # 'pv_configs' -> 'pv'
         configs = [c for c in (data.get(key) or []) if isinstance(c, dict)]
         # Asset targeted (even with no config) or a config list present but
-        # incomplete: name every required field that no config supplies.
-        # Asset neither targeted nor configured: nothing to name.
+        # incomplete: name every required field that no config supplies, or -
+        # when the NL states no quantities at all - every required field.
         targeted = asset in target or bool(data.get(key))
         if not targeted:
             continue
         for f in fields:
-            if not any(c.get(f) is not None for c in configs):
+            if not nl_states_quantities or not any(
+                c.get(f) is not None for c in configs
+            ):
                 named.append(f"{prefix}.{f}")
 
     for cfg in data.get("battery_configs") or []:
