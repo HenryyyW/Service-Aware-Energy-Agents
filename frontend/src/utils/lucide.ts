@@ -39,3 +39,5 @@ export const Battery = icons.Battery;
 export const Car = icons.Car;
 export const Network = icons.Network;
 export const GitCompare = icons.GitCompare;
+export const ExternalLink = icons.ExternalLink;
+export const Shield = icons.Shield;
