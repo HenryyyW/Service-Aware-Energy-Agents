@@ -1,6 +1,6 @@
 # Incident record: unauthorized paid-LLM spend (2026-11-08)
 
-Status: contained (no live spend path), guard in place; user-side actions open.
+Status: CLOSED on the spend path (2026-11-12) - containment complete, key rotation user-confirmed.
 Authorization of record: **poolside/laguna-xs-2.1 on NVIDIA NIM only**;
 hosted qwen/kimi vendors are not authorized.
 
@@ -56,16 +56,19 @@ tokens were spent outside the recorded authorization.
   the bare-defaults case, the maas/dashscope/dashscope-intl hosts, the NIM
   base URL, the authorized-model pass-through, and the opt-in path.
 
-## Open items (user-side)
+## Resolution (2026-11-12)
 
-1. **Rotate the DashScope API key** in the Alibaba console - the only action
-   that definitively kills further spend (the current key is in agent key
-   stores on this machine).
-2. Decide the per-agent key-store cleanup (DASHSCOPE_API_KEY exists in the
-   Research Engineer's, this agent's, and one other agent's store).
-3. Team notification: who is told, in what wording (evidence ready; no
-   accusation of intent is supported).
-4. The 5 `wan2.7-image-pro` calls have no identified source.
+1. **Key rotation: DONE - user-confirmed.** The user rotated the DashScope
+   key on the Alibaba console; every local copy (deleted from this agent's and
+   the Research Engineer's stores; the copy in `agent-4e203eca`'s store, which
+   the user directed to leave in place) is now inert. Combined with the spend
+   guard, no un-opted-in DashScope call can be made from this repo's runners.
+2. Containment of record: `experiments/llm_spend_guard.py` (15 tests) wired
+   into `run_experiment.py` and `run_code_repair.py`; suite 518 green.
+3. Team notification: not requested by the user (the incident record itself is
+   the audit trail).
+4. The 5 `wan2.7-image-pro` calls remain unattributed (outside this project's
+   image surface); noted for the record, not blocking.
 
 ## Follow-up for the paper
 
