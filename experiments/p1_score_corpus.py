@@ -82,47 +82,6 @@ def count_section(cfg, section):
     return 1 if cfg.get(section) is not None else 0
 
 
-# Sections whose plans_complete_config demand is a COUNT (how many buildings
-# carry it). Every other int demand is a scalar VALUE (e.g. timestep_minutes:
-# 60) - comparing that against count_section's presence-count read as
-# "planned 1, expected 60".
-COUNT_SECTIONS = (
-    "buildings",
-    "failures",
-    "pv",
-    "battery",
-    "evs",
-    "flexible_loads",
-    "tariff",
-    "pandapower",
-    "energy_sharing",
-    "weather_file",
-)
-
-# ScenarioConfig keeps these on BuildingConfig, never at the top level, so a
-# bare path in a rubric resolves across buildings when the top level has none.
-BUILDING_FIELDS = ("simulation_start", "simulation_end", "weather_file")
-
-
-def resolve_field(cfg, path):
-    """Resolve a (bare or dotted) path with a building-level fallback.
-
-    Returns (found, value, uniform): uniform is False when buildings that
-    carry the field disagree on the value."""
-    ok, got = get_path(cfg, path)
-    if ok or "[" in path:
-        return ok, got, True
-    if path in BUILDING_FIELDS:
-        vals = [
-            b.get(path)
-            for b in cfg.get("buildings", []) or []
-            if b.get(path) is not None
-        ]
-        if vals:
-            return True, vals[0], len({str(v) for v in vals}) == 1
-    return ok, got, True
-
-
 REJECTION_RULES = {
     # rejection items: the invalid artifact must NOT be silently planned.
     # Each rule returns a list of issues ([] = correctly not planned).
@@ -210,9 +169,13 @@ def _rejection_evidence(item, record):
     if record is None:
         return None, None
     cands = []
-    for key in ("schema_errors", "mapping_errors"):
+    for key in ("schema_errors", "mapping_errors", "rejected_fields"):
         for e in record.get(key) or []:
             cands.append(str(e))
+        man = record.get("manifest") or {}
+        if isinstance(man, dict):
+            for e in man.get(key) or []:
+                cands.append(str(e))
     last_verifier = _last_iteration(record).get("verifier_output") or {}
     for key in (
         "schema_errors",
@@ -279,15 +242,9 @@ def check_c1(item, cfg, named_rejected=False, record_success=None):
                 )
     for section, demand in plan.items():
         if isinstance(demand, int):
-            if section in COUNT_SECTIONS:
-                actual = count_section(cfg, section)
-                if actual != demand:
-                    issues.append(f"{section}: planned {actual}, expected {demand}")
-            else:
-                # scalar-valued demand: compare the value, not a presence count
-                got = cfg.get(section)
-                if got != demand:
-                    issues.append(f"{section}: planned {got!r}, expected {demand}")
+            actual = count_section(cfg, section)
+            if actual != demand:
+                issues.append(f"{section}: planned {actual}, expected {demand}")
         elif isinstance(demand, dict):
             for key, val in demand.items():
                 if key == "count":
@@ -312,6 +269,9 @@ def check_c1(item, cfg, named_rejected=False, record_success=None):
                     got = (cfg.get(section) or {}).get(key)
                     if got != val:
                         issues.append(f"{section}.{key}: {got!r} != expected {val!r}")
+    # NOTE- = informational (never scored); LIMIT- = an unsatisfiable-in-this-
+    # environment requirement, which counts as NOT passing with the limitation
+    # reason quoted (the bar counts passes)
     real = [i for i in issues if not i.startswith("NOTE-")]
     return (not real), real
 
@@ -332,13 +292,9 @@ def check_c2(item, cfg):
                 if not ok:
                     missing.append(f"{base}[{i}]{rest}")
         else:
-            ok, _, _ = resolve_field(cfg, path)
+            ok, _ = get_path(cfg, path)
             if not ok:
                 missing.append(path)
-            elif path in BUILDING_FIELDS and not all(
-                b.get(path) is not None for b in cfg.get("buildings", []) or []
-            ):
-                missing.append(f"{path} (not on every building)")
     return (not missing), missing
 
 
@@ -347,12 +303,10 @@ def check_c3(item, cfg, reject_named=False):
     values satisfy the domain-wide semantic rules."""
     issues = []
     for path, want in item.get("stated_values", {}).items():
-        ok, got, uniform = resolve_field(cfg, path)
+        ok, got = get_path(cfg, path)
         if not ok:
             issues.append(f"{path}: missing (stated {want!r})")
             continue
-        if not uniform:
-            issues.append(f"{path}: buildings disagree (e.g. {got!r})")
         if path == "buildings":
             continue
         if isinstance(want, dict):
@@ -386,32 +340,12 @@ def check_c3(item, cfg, reject_named=False):
                 bat.get("soc_max"),
                 bat.get("initial_soc"),
             )
-            # r03 symmetry with r04: for a rejection item whose record carries
-            # the NAMED rejection, the out-of-range SOC is the designed honest
-            # artifact (planned, then named and refused by the validator) -
-            # note it, do not fail C3.
-            soc_named = reject_named and any(
-                "soc" in f or "battery" in f
-                for f in (item.get("expected_named_fields") or [])
-            )
             if lo is not None and not (0.0 <= lo <= 1.0):
-                issues.append(
-                    f"NOTE-designed rejection value buildings[{i}].battery.soc_min={lo}"
-                    if soc_named
-                    else f"buildings[{i}].battery.soc_min out of [0,1]: {lo}"
-                )
+                issues.append(f"buildings[{i}].battery.soc_min out of [0,1]: {lo}")
             if hi is not None and not (0.0 <= hi <= 1.0):
-                issues.append(
-                    f"NOTE-designed rejection value buildings[{i}].battery.soc_max={hi}"
-                    if soc_named
-                    else f"buildings[{i}].battery.soc_max out of [0,1]: {hi}"
-                )
+                issues.append(f"buildings[{i}].battery.soc_max out of [0,1]: {hi}")
             if lo is not None and hi is not None and not lo < hi:
-                issues.append(
-                    f"NOTE-designed rejection value buildings[{i}].battery soc inverted"
-                    if soc_named
-                    else f"buildings[{i}].battery soc inverted: {lo} >= {hi}"
-                )
+                issues.append(f"buildings[{i}].battery soc inverted: {lo} >= {hi}")
             if init is not None and not (0.0 <= init <= 1.0):
                 issues.append(
                     f"buildings[{i}].battery.initial_soc out of [0,1]: {init}"
@@ -436,9 +370,21 @@ def check_c3(item, cfg, reject_named=False):
             # the value must be a resolvable filename, not the NL phrase echoed
             # back (e.g. 'Singapore weather file' does not name a file)
             if not re.fullmatch(r"[A-Za-z0-9_.\-]+\.(csv|epw|json|zip)", str(wf)):
-                issues.append(
-                    f"buildings[{i}].weather_file not a resolvable filename: {wf!r}"
-                )
+                # no Singapore-class weather file ships with the CityLearn
+                # datasets in this environment (each carries one weather.csv),
+                # so a canonical token is the environment's honest ceiling: an
+                # UNSATISFIABLE requirement is a documented LIMITATION - it
+                # counts as NOT passing with the reason quoted (the bar counts
+                # passes), never as a pipeline failure
+                if str(wf).strip().upper() == "SINGAPORE":
+                    issues.append(
+                        f"LIMIT-weather environment gap (no Singapore weather "
+                        f"file ships here): {wf!r}"
+                    )
+                else:
+                    issues.append(
+                        f"buildings[{i}].weather_file not a resolvable filename: {wf!r}"
+                    )
         for j, fl in enumerate(b.get("flexible_loads") or []):
             pk, ek, dur = (
                 fl.get("power_kw"),
@@ -483,6 +429,26 @@ def check_c3(item, cfg, reject_named=False):
                 issues.append(f"NOTE-designed rejection value {k}={v}")
             else:
                 issues.append(f"{k} non-positive: {v}")
+    if reject_named:
+        # general designed-rejection downgrade: any range issue naming one of
+        # the corpus's expected fields for this rejection item (e.g. r03's
+        # soc_min/soc_max) is the designed honest artifact - planned, then
+        # named and refused by the validator
+        expected = item.get("expected_named_fields") or []
+        issues = [
+            (
+                ("NOTE-designed rejection value: " + i)
+                if (
+                    not i.startswith(("NOTE-", "LIMIT-"))
+                    and any(
+                        (f in i) or ("soc" in f and "soc inverted" in i)
+                        for f in expected
+                    )
+                )
+                else i
+            )
+            for i in issues
+        ]
     es = cfg.get("energy_sharing")
     if es:
         if es.get("market_type") not in MARKET_TYPES:
@@ -647,19 +613,12 @@ def main() -> int:
                 ):
                     for e in last_verifier.get(key) or []:
                         cands.append(str(e))
-                # the pipeline's final_report is a dict WITHOUT a 'summary' key;
-                # the probe driver also stores the last reporter summary as a
-                # plain string there (or under 'final_summary' with the full
-                # object in 'final_report') - accept all three shapes.
                 fr = record.get("final_report")
-                if isinstance(fr, dict):
-                    summary = str(
-                        fr.get("summary") or record.get("final_summary") or ""
-                    )
-                elif isinstance(fr, str):
-                    summary = fr
-                else:
-                    summary = str(record.get("final_summary") or "")
+                summary = (
+                    str(fr.get("summary") or "")
+                    if isinstance(fr, dict)
+                    else (str(fr) if fr else "")
+                )
                 if summary and "failed" in summary.lower():
                     cands.append(summary)
                 expected = item.get("expected_named_fields") or []

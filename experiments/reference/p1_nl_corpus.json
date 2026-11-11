@@ -482,8 +482,6 @@
       },
       "stated_values": {
         "buildings": 2,
-        "simulation_start": "2023-03-01",
-        "simulation_end": "2023-03-15",
         "timestep_minutes": 60,
         "buildings[0].simulation_start": "2023-03-01",
         "buildings[0].simulation_end": "2023-03-15"

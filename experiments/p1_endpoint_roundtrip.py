@@ -26,17 +26,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+# the endpoint now READS these (main 268bbfb1b), so they are preserved, not
+# dropped - a config field the endpoint genuinely ignores still fails C5
 PRESERVED_TOP = [
     "scenario_id",
     "name",
     "description",
     "pandapower",
+    "energy_sharing",
     "community_import_limit_kw",
     "community_export_limit_kw",
     "random_seed",
     "timestep_minutes",
 ]
-DROPPED_TOP = ["energy_sharing", "failures", "carbon_intensity_file"]
+DROPPED_TOP = ["failures", "carbon_intensity_file"]
 
 
 def load_configs(cfg_dir: Path):
@@ -97,30 +100,48 @@ def main() -> int:
     from backend.app.routers.scenarios import _scenario_to_dict
     from src.schemas.scenario import (
         BuildingConfig,
+        EnergySharingConfig,
         PandapowerConfig,
         ScenarioConfig,
-        EnergySharingConfig,
-        FailureConfig,
     )
 
     client = TestClient(main_module.app)
     configs = load_configs(Path(args.configs))
+    corpus_items = {
+        it["id"]: it
+        for it in json.loads(
+            (ROOT / "experiments" / "reference" / "p1_nl_corpus.json").read_text()
+        )["items"]
+    }
     record = {}
     print(f"round-tripping {len(configs)} configs through the scenario API")
     for item_id, cfg in configs.items():
         sid = f"p1rt_{item_id}"
         payload = dict(cfg)
         payload["scenario_id"] = sid
+        item = corpus_items.get(item_id, {})
+        rejection_item = item.get("kind") != "complete"
         r = None
         try:
             r = client.post("/api/scenarios", json=payload)
         except Exception as exc:  # pydantic ValidationError -> 500 surface
-            entry = {
+            msg = f"{type(exc).__name__}: {str(exc)[:300]}"
+            expected = item.get("expected_named_fields") or []
+            if rejection_item and any(f in msg for f in expected):
+                # the DESIGNED rejection: the endpoint refuses the invalid
+                # config and names the offending field (the validate-gate
+                # criterion for a rejection item)
+                record[item_id] = {
+                    "post_round_trip": True,
+                    "rejection_at_post": msg,
+                }
+                print(f"  {item_id:<28} designed rejection at POST (named) - PASS")
+                continue
+            record[item_id] = {
                 "post_round_trip": False,
                 "post_status": 500,
-                "post_error": f"{type(exc).__name__}: {str(exc)[:300]}",
+                "post_error": msg,
             }
-            record[item_id] = entry
             print(f"  {item_id:<28} POST raised {type(exc).__name__} - FAIL")
             continue
         entry = {"post_round_trip": False}
@@ -152,18 +173,13 @@ def main() -> int:
                     if payload.get("pandapower")
                     else None
                 ),
-                community_import_limit_kw=payload.get("community_import_limit_kw"),
-                community_export_limit_kw=payload.get("community_export_limit_kw"),
-                # 2026-11-10: the scenario API reads these now (they used to be
-                # dropped at the POST door) - the normalisation must mirror the
-                # fixed endpoint, else every energy-sharing item diffs.
                 energy_sharing=(
                     EnergySharingConfig(**payload["energy_sharing"])
                     if payload.get("energy_sharing")
                     else None
                 ),
-                failures=[FailureConfig(**f) for f in payload.get("failures") or []],
-                carbon_intensity_file=payload.get("carbon_intensity_file"),
+                community_import_limit_kw=payload.get("community_import_limit_kw"),
+                community_export_limit_kw=payload.get("community_export_limit_kw"),
                 random_seed=payload.get("random_seed", 42),
                 timestep_minutes=payload.get("timestep_minutes", 15),
             )
@@ -179,11 +195,9 @@ def main() -> int:
             for k in set(list(got.keys()) + list(expected.keys())):
                 if got.get(k) != expected.get(k):
                     diffs.append(f"{k} differs after round-trip")
-        # 2026-11-10: the API reads these fields now; only flag one when the
-        # endpoint still fails to return a value that was posted.
-        still_dropped = [k for k in DROPPED_TOP if cfg.get(k) and not got.get(k)]
-        if still_dropped:
-            diffs.append(f"endpoint still drops: {still_dropped}")
+        dropped = [k for k in DROPPED_TOP if cfg.get(k)]
+        if dropped:
+            diffs.append(f"endpoint dropped (not read on POST): {dropped}")
         v = client.get(f"/api/scenarios/{sid}/validate")
         entry["validate"] = (
             v.json() if v.status_code == 200 else {"status": v.status_code}
