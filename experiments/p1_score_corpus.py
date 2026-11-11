@@ -386,12 +386,32 @@ def check_c3(item, cfg, reject_named=False):
                 bat.get("soc_max"),
                 bat.get("initial_soc"),
             )
+            # r03 symmetry with r04: for a rejection item whose record carries
+            # the NAMED rejection, the out-of-range SOC is the designed honest
+            # artifact (planned, then named and refused by the validator) -
+            # note it, do not fail C3.
+            soc_named = reject_named and any(
+                "soc" in f or "battery" in f
+                for f in (item.get("expected_named_fields") or [])
+            )
             if lo is not None and not (0.0 <= lo <= 1.0):
-                issues.append(f"buildings[{i}].battery.soc_min out of [0,1]: {lo}")
+                issues.append(
+                    f"NOTE-designed rejection value buildings[{i}].battery.soc_min={lo}"
+                    if soc_named
+                    else f"buildings[{i}].battery.soc_min out of [0,1]: {lo}"
+                )
             if hi is not None and not (0.0 <= hi <= 1.0):
-                issues.append(f"buildings[{i}].battery.soc_max out of [0,1]: {hi}")
+                issues.append(
+                    f"NOTE-designed rejection value buildings[{i}].battery.soc_max={hi}"
+                    if soc_named
+                    else f"buildings[{i}].battery.soc_max out of [0,1]: {hi}"
+                )
             if lo is not None and hi is not None and not lo < hi:
-                issues.append(f"buildings[{i}].battery soc inverted: {lo} >= {hi}")
+                issues.append(
+                    f"NOTE-designed rejection value buildings[{i}].battery soc inverted"
+                    if soc_named
+                    else f"buildings[{i}].battery soc inverted: {lo} >= {hi}"
+                )
             if init is not None and not (0.0 <= init <= 1.0):
                 issues.append(
                     f"buildings[{i}].battery.initial_soc out of [0,1]: {init}"
