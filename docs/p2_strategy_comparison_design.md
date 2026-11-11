@@ -1,7 +1,7 @@
 # P2 — Strategy Comparison View (interaction spec)
 
 Owner: Product Design Lead (spec) · Frontend Engineer (build) · Date: 2026-11-12
-Status: spec delivered for build; awaiting P1 pipeline verification per Project Partner
+Status: spec delivered for build. Integrated by the PM from the designer's shared-dir delivery (her local commit 11d90c245 was not pushed; verified: 144 lines, grounded in src/controllers/, backend/app/routers/, experiments/make_figures.py). P1's verification dependency is RESOLVED - the NL pipeline is verified at 15/16 full-bar (one clean batch, confirmed by Research's independent re-score; the single non-pass is the stated LIMIT-weather environment gap).
 Source: docs/p2_visualization_plan.md (main @ 5cbbdc452082); Grounded in src/controllers/ (rule_based, mpc, rl, multi_agent), backend/app/routers/scenarios.py, backend/app/routers/simulations.py, experiments/make_figures.py (F1/F3 figure patterns)
 
 ---
