@@ -64,6 +64,11 @@ def _endpoint_host() -> str:
 
 
 def is_paid_vendor_endpoint() -> bool:
+    backend = os.getenv("AGENT_BACKEND", "")
+    if backend and not backend.startswith("api:"):
+        # An explicit non-api backend (ollama:, fallback:, ...) is not a
+        # hosted-vendor call at all, whatever the provider default says.
+        return False
     base = os.getenv("LLM_BASE_URL", "")
     if base:
         host = _endpoint_host()
