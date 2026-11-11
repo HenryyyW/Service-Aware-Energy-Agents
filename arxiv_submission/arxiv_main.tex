@@ -33,7 +33,7 @@
 \newcommand{\agent}[1]{\texttt{#1}}
 \newcommand{\scenario}[1]{\textsc{#1}}
 
-\title{Service-Aware Energy Agents: Pricing Regimes, Failure Injection, and a Verified LLM Code-Agent Workflow for Community Energy Simulation}
+\title{A Renewable Energy Community Virtual Simulator with a Physics-Grounded Coding-Agent Assistant:\\ service-aware multi-agent control, failure injection, and agent-assisted scenario authoring under grid-compliance verification}
 
 \author{
     Wong Wah Cheung \\
@@ -53,64 +53,99 @@
 \maketitle
 
 \begin{abstract}
-We present a service-aware multi-agent framework for renewable energy community
-optimization that couples CityLearn building-level simulation with pandapower
-grid validation across five scenarios (A--E) covering coordination baselines,
-battery/PV assets, deferrable loads, energy sharing with community settlement,
-and mid-run component failures. We evaluate five controllers (rule-based,
-multi-agent, centralized, MPC, RL) across three pricing regimes --- pool TOU,
-locational marginal prices (LMP), and bilateral P2P --- at ten seeds each (750
-runs), with a further 150-run scenario-D re-run after an energy-sharing
-configuration defect was fixed, a 150-cell real-LLM screen (100 LLM-arm and 50
-reference cells), and a 60-cell hostile-proposer study in two 30-cell pilots;
-every run carries a manifest recording its full provenance (Section
-\ref{sec:repro}). The multi-agent controller is cost- and peak-minimal in every
-scenario (paired cost delta vs.\ rule-based $-11.95$ to $-43.03$ USD across
-A/B/C/E on the grid-only cost basis, $-78.56$ USD in scenario D on the
-settlement-inclusive basis, $p_{\mathrm{Holm}} < 0.0001$, $n{=}10$) with an
-explicit EV-completion trade-off ($0.057$ vs.\ $1.000$ for MPC) that we report
-rather than resolve; scenario D rows are settlement-inclusive while A/B/C/E are
+We present a renewable energy community virtual simulator whose authoring
+workflow is assisted by a coding agent: an engineer describes a community in
+natural language, the agent produces an executable simulation configuration,
+the engineer confirms it field-by-field before anything runs, and the
+simulator then evaluates the control strategies of record --- rule-based,
+MPC, single-agent RL, and multi-agent RL, plus the centralized heuristic ---
+across five scenarios (A--E) covering coordination baselines, battery/PV
+assets, deferrable loads, energy sharing with community settlement, and
+mid-run component failures. The simulator couples CityLearn building-level
+simulation with pandapower grid validation across three pricing regimes ---
+pool TOU, locational marginal prices (LMP), and bilateral P2P --- at ten
+seeds each (750 runs), with a further 150-run scenario-D re-run after an
+energy-sharing configuration defect was fixed, a 150-cell real-LLM screen
+(100 LLM-arm and 50 reference cells), and a 60-cell hostile-proposer study
+in two 30-cell pilots; every run carries a manifest recording its full
+provenance (Section~\ref{sec:repro}). The multi-agent controller is cost-
+and peak-minimal in every scenario (paired cost delta vs.\ rule-based
+$-11.95$ to $-43.03$ USD across A/B/C/E on the grid-only cost basis,
+$-78.56$ USD in scenario D on the settlement-inclusive basis,
+$p_{\mathrm{Holm}} < 0.0001$, $n{=}10$) with an explicit EV-completion
+trade-off ($0.057$ vs.\ $1.000$ for MPC) that we report rather than
+resolve; scenario D rows are settlement-inclusive while A/B/C/E are
 grid-only, and all cost comparisons are within-scenario. Only price-aware
-controllers (MPC, RL) change dispatch when the pricing regime changes; a fixed
-trajectory still bills differently under different price series, so dispatch
-identity never implies cost identity. Under P2P clearing the A/B/C/E community
-aggregates are bit-identical to pool clearing while member bills redistribute
-significantly, and scenario D --- whose settlement is already active ---
-diverges at the aggregate as well, through the real grid-cost change from
-energy sharing. Thermal comfort is unmeasurable on the stock dataset (the
-indoor-temperature series is entirely NaN), so no comfort claim is made. The
-real-LLM screen is a safety-metrics null on the agent layer: unrepaired
-violations occur in 1 of 50 unverified runs (run-level rate 0.0200) and 0 of 49
-verified runs (0.0000), with repair iterations zero in both arms (gate: 10 pp);
-KPI differences are reported as context only. The hostile-proposer study then
-forces verifier engagement: at the proposal layer, the verified arm accepted
-zero out-of-bounds proposals in every kept cell while the unverified arm
-accepted 9.2--13.0 per step, with corrective re-prompt recovering 0.909--1.000
-of corrupted proposals (mean 0.970; 13 kept cells after a confirmation re-run of
-the three quarantined cells) --- while the accepted dispatch stayed the LLM's
-repaired proposal (cost 440.85 vs.\ 437.15 USD unverified on the kept cells,
-65.52 deterministic reference), which we report as the cost of recovery. The
-five-agent code-repair loop is implemented and instrumented but its
-behaviour-changing code patches are scaffolded, not yet demonstrated; the
-results reported here cover runtime verification of LLM dispatch proposals. All
-artifacts are reproducible: manifests throughout, bit-identical same-seed
-repeats, and a measured 0.539 median CI half-width ratio from five to ten
-seeds.
+controllers (MPC, RL) change dispatch when the pricing regime changes; a
+fixed trajectory still bills differently under different price series, so
+dispatch identity never implies cost identity. Under P2P clearing the
+A/B/C/E community aggregates are bit-identical to pool clearing while
+member bills redistribute significantly, and scenario D --- whose
+settlement is already active --- diverges at the aggregate as well,
+through the real grid-cost change from energy sharing. Thermal comfort is
+unmeasurable on the stock dataset (the indoor-temperature series is
+entirely NaN), so no comfort claim is made. On the agent layer, the
+real-LLM dispatch screen is a safety-metrics null (unrepaired violations
+in 1 of 50 unverified runs, 0 of 49 verified runs; repair iterations zero
+in both arms; gate: 10 pp), and the hostile-proposer study shows the
+verified arm accepting zero out-of-bounds proposals in every kept cell
+against 9.2--13.0 per step unverified, with corrective re-prompt
+recovering 0.909--1.000 of corrupted proposals (mean 0.970) at a reported
+cost of recovery. The agent's scenario-authoring front door is held to an
+explicit acceptance standard rather than trust: a 16-item natural-language
+corpus with five criteria (complete-config planning, required fields,
+in-range values, clean simulation, API round-trip), scored on one clean
+full-16 batch on the final code --- 15 of 16 items pass the full bar, 4 of
+4 rejection-path items behave correctly, 7 of 8 domains covered; the
+single non-passing item is an environment data gap (no Singapore weather
+file ships with the CityLearn datasets, and the field is inert in the
+code), reported as a limitation rather than ``fixed'' by inventing a
+filename. The agent's autonomous strategy-modification component is
+measured, not assumed: a two-arm benchmark of the five-agent repair loop
+repairs 5 of 9 seeded controller defects against a pre-registered bar of
+7 of 9 (deterministic comparator 0 of 9, loop and driver verdicts
+agreeing 10 of 10), a component result we report at its measured level
+rather than as a platform claim; the repair component's earlier
+``scaffolded'' status is superseded by this sub-bar measurement. All
+artifacts are reproducible: manifests
+throughout, bit-identical same-seed repeats, and a measured 0.539 median
+CI half-width ratio from five to ten seeds.
 \end{abstract}
 
-\keywords{Multi-agent systems, renewable energy communities, LLM code agents, power system simulation, failure injection, pricing regimes}
+\keywords{renewable energy communities, virtual simulator, LLM-assisted scenario authoring, multi-agent control, power system simulation, pricing regimes, verification}
 
 \section{Introduction}
 \label{sec:intro}
 
-Renewable energy communities (RECs) require coordinated control of distributed
-energy resources (DERs) under physical grid constraints, service-level
-commitments, and a market mechanism that prices energy. Existing approaches
-typically optimize a single objective (cost, peak, or carbon) within one fixed
-setting --- one tariff, one device mix, one assumption that controllers execute
-what they compute. Three research questions follow, each established by a
-distinct literature, and this paper answers the parts of them our experiments
-actually support.
+Renewable energy community studies presuppose an executable scenario: a device
+mix, a tariff, a grid model, a weather file. Building that scenario is expert
+busywork, and it is the part practitioners cannot check. We present a virtual
+simulator whose authoring step is itself assisted by a coding agent and gated
+by field-level confirmation, so the scenario an experiment runs is the scenario
+the engineer approved; the agent is the engineering assistant inside the
+workflow, not a fifth control strategy, and its code never enters the strategy
+comparison. Renewable energy communities (RECs) then require coordinated
+control of distributed energy resources (DERs) under physical grid
+constraints, service-level commitments, and a market mechanism that prices
+energy, and existing approaches typically optimize a single objective (cost,
+peak, or carbon) within one fixed setting --- one tariff, one device mix, one
+assumption that controllers execute what they compute. Four research questions
+follow, each established by a distinct literature, and this paper answers the
+parts of them our experiments actually support.
+
+\textbf{(0) Scenario authoring acceptance.} A scenario configuration is an
+artifact with required structure: buildings with devices, tariffs, a grid
+model, a weather file, and a simulation window, all in range. The research
+question is whether an agent-authored configuration can be held to an
+acceptance standard that names its own failures rather than silently
+auto-correcting them. Our answer is an instrument and a measurement: a
+16-item natural-language corpus with five criteria (complete-config
+planning, required fields, in-range values, clean simulation, API
+round-trip), including deliberately incomplete and out-of-range
+descriptions whose rejection must name the offending field. The authoring
+acceptance number is reported in Section~\ref{sec:authoring} at its
+measured level, and the paper claims no authoring number the corpus has
+not produced.
 
 \textbf{(1) Pricing-regime diversity.} Community-control benchmarks and datasets
 fix a single price-formation mechanism: the CityLearn challenge series ships
@@ -146,9 +181,12 @@ the grid level is \emph{empty} --- power flow converges in every step of all
 150 runs with zero voltage, line and transformer violations and zero
 re-dispatches, so no controller observes the failures and detection is
 configuration-oracle only. Localisation is oracle-side only, by construction of
-the injection. Repair is \emph{not demonstrated}: the commissioned code-repair
-benchmark measured zero of nine seeded defects repaired with the current
-pipeline, so the repair workflow is reported as scaffolded, not demonstrated.
+the injection. Repair is \emph{measured and sub-bar}: the commissioned
+code-repair benchmark repairs 5 of 9 seeded controller defects with the agent
+arm against a pre-registered bar of 7 of 9 (deterministic comparator 0 of 9; 44
+backend calls, zero backend errors, loop and driver verdicts agreeing 10 of
+10), so the repair workflow is demonstrated at a measured level below its bar
+rather than left unmeasured.
 Maintaining constraints and service is trivially satisfied because no injected
 failure produced a violation in these runs. We claim no detection and no
 recovery for any failure type.
@@ -190,6 +228,17 @@ Related work spans four areas. For building- and home-scale agentic energy manag
 \subsection{Simulation Coupling}
 CityLearn handles building-level DER dynamics (battery SOC, EV charging, flexible loads, thermal comfort) \cite{citylearn2021}. pandapower validates grid physics (power flow convergence, voltage limits $\pm 5\%$, line/transformer thermal limits) \cite{pandapower2018}. A co-simulation coupler steps both simulators each timestep, passing grid diagnostics back to the controller.
 
+\subsection{Scenario-Authoring Pipeline}
+The coding agent converts a natural-language description into an executable
+\texttt{ScenarioConfig} through a plan--code--execute--verify--report loop:
+a planner extracts the target assets and per-building device parameters, a
+coder writes the configuration, an executor runs a quick simulation, and a
+verifier checks schema validity, serialization round-trip, and determinism
+before the engineer confirms the configuration field-by-field. A rule-based
+keyword planner is the fallback only when the LLM backend is unavailable, and
+the fallback is recorded per item in the manifest's planner provenance rather
+than silently substituted.
+
 \subsection{Controller Suite}
 \begin{description}
     \item[\agent{rule\_based}] Heuristic priority: charge battery from excess PV, charge EVs by departure deadline, shift flexible loads to solar hours, enforce community import/export limits.
@@ -206,6 +255,7 @@ clamped values. The verified/unverified difference is entirely in the
 proposal-layer check (Section~\ref{sec:m2a}), not in post-clamp execution.
 
 \subsection{Verified LLM Dispatch Verification and the Code-Repair Loop}
+\label{sec:repairloop}
 A five-agent loop iteratively repairs controller code:
 \begin{enumerate}
     \item \textbf{Planner}: Diagnoses violations, identifies root cause, proposes repair strategy.
@@ -215,12 +265,14 @@ A five-agent loop iteratively repairs controller code:
     \item \textbf{Reporter}: Generates comprehensive report with diffs and recommendations.
 \end{enumerate}
 The loop runs for max 3 iterations or until \texttt{violations\_resolved=true}.
-\textbf{Scope statement:} the loop is implemented and instrumented, but the
-patches it has emitted to date are not yet behaviour-changing (comment-level
-edits before the AST-transformation layer), so this paper reports no
-code-repair outcome. What we measure is the runtime verification layer that
-guards LLM \emph{dispatch proposals} at every step; a code-repair benchmark
-against seeded controller defects is future work.
+\textbf{Scope statement:} the loop's strategy-modification component is
+measured at its benchmark level, not assumed: a two-arm benchmark against
+nine seeded controller defects repairs 5 of 9 defects with the agent arm
+against a pre-registered bar of 7 of 9 (deterministic comparator 0 of 9;
+loop and driver verdicts agreeing 10 of 10, both arms unpooled). The
+sub-bar result is reported rather than resolved; what the paper additionally
+measures is the runtime verification layer that guards LLM \emph{dispatch
+proposals} at every step (Sections~\ref{sec:m2a} and~\ref{sec:m2b}).
 
 The ablation compares \agent{llm\_agent} (single-pass, execute-as-proposed) vs.
 \agent{llm\_agent\_verified} (per-step verification, re-prompt once, fallback
@@ -307,6 +359,38 @@ E & Full + Failures & Mid-run component failures \\
 
 \section{Results}
 \label{sec:results}
+
+\subsection{Scenario Authoring Acceptance (Core 3)}
+\label{sec:authoring}
+
+The coding agent's front door is natural language: an engineer describes the
+community and the agent produces an executable \texttt{ScenarioConfig}, which
+the engineer confirms field-by-field before anything runs. Acceptance is not
+trust: a 16-item natural-language corpus (twelve complete descriptions
+covering buildings, PV, battery, EV, flexible loads, tariff, weather and grid,
+plus two deliberately incomplete and two out-of-range descriptions) is scored
+under five criteria --- the plan is a complete configuration, required fields
+are present, values are in range, the scenario simulates clean, and the config
+round-trips through \texttt{POST /api/scenarios} and
+\texttt{GET /api/scenarios/\{id\}/validate}. Rejection-path items invert the
+first three: an invalid or incomplete description must not be silently
+auto-corrected, and the offending field must be named. The pre-registered bar
+is at least 14 of 16 items, all eight domains covered, and all four rejection
+items behaving correctly.
+
+\textbf{Result (one clean full-16 batch on the final code, scored with the
+benchmark's own instruments, no stitched numbers): 15 of 16 items pass the
+full bar, 4 of 4 rejection items behave correctly, and 7 of 8 domains are
+covered.} The single non-passing item is a data gap, not a pipeline defect:
+no Singapore weather file ships with the CityLearn datasets in this
+environment (each dataset carries one weather.csv) and no simulator code
+reads \texttt{BuildingConfig.weather\_file}, so the canonical weather token
+is the environment's honest ceiling. We report it as a limitation in the
+Limitations section rather than ``fix'' it by inventing a filename. Every
+item's plan is agent-produced (planner provenance recorded per item as
+\texttt{llm}, with the rule-based keyword fallback never silently
+substituted). The measurements, the corpus, and the scorer are released with
+the paper's artifacts.
 
 \subsection{Cost, Peak and Service}
 \label{sec:costpeak}
@@ -883,6 +967,14 @@ grid-limit reductions, component failures. Attacks limited to failure-injection 
     \item \textbf{Horizon and seeds}: 24-step (one-day) horizons and 3-seed pilots; the pre-registered significance criterion is reserved for the full-length run.
     \item \textbf{Endpoint degradation}: 16 of 30 recovery-epoch cells and one M2a cell took 1--3 transient endpoint errors; cells are quarantined under a published rule (errors $\leq 2$ AND calls $\geq$ steps AND telemetry) and error/fallback shares are reported per cell (Appendix~\ref{app:cells}). A confirmation re-run of the three quarantined verified cells promoted one to keep (0 errors of 24 steps); the other two still show 3 of 24 and remain quarantined.
     \item \textbf{Gini measurement gap}: the fairness coefficient does not reflect settlement redistribution; inequality claims are deferred until a settlement-aware metric exists.
+    \item \textbf{Weather data gap (authoring acceptance)}: no Singapore-class
+    weather file ships with the CityLearn datasets in this environment (each
+    dataset carries one weather.csv) and no simulator code reads
+    \texttt{BuildingConfig.weather\_file}, so the canonical weather token is
+    the environment's honest ceiling: the weather item of the authoring corpus
+    is reported as an environment limitation rather than passed by inventing a
+    filename, and the authoring-acceptance coverage is 7 of 8 domains
+    accordingly.
     \item \textbf{Failure-injection coverage}: the reported scenario-E runs use the paper's aggressive failure configuration (EV charger severity 1.0, grid-service limit reduced to 95\% of the import limit, identical in all three regime legs; A/B/C/D use the standard configuration). No injected failure produces a grid-level violation in any of the 150 runs, so detection and recovery are reported as empty rather than claimed.
 \end{enumerate}
 
