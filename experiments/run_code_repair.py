@@ -712,6 +712,12 @@ def _git_dirty() -> Optional[bool]:
 
 
 def main() -> int:
+    # Paid-LLM spend guard. This runner is hard-wired to the authorized NIM
+    # model (NIM_MODEL); passing it as `intended` keeps the guard meaningful
+    # (it still fires if this file's env wiring is ever changed back).
+    from experiments.llm_spend_guard import enforce_authorized_llm
+
+    enforce_authorized_llm(intended=NIM_MODEL)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tasks", nargs="*", default=None)
     parser.add_argument("--all", action="store_true")

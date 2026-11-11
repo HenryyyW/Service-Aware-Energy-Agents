@@ -941,6 +941,13 @@ def load_scenario(config_path: str) -> ScenarioConfig:
 
 
 def main():
+    # Paid-LLM spend guard: abort before any LLM setup when the resolved
+    # endpoint is a paid hosted vendor without an explicit opt-in
+    # (docs/incident_2026-11-08_dashscope_spend.md).
+    from experiments.llm_spend_guard import enforce_authorized_llm
+
+    enforce_authorized_llm()
+
     parser = argparse.ArgumentParser(description="Run energy community experiment")
     parser.add_argument(
         "--config", type=str, required=True, help="Path to scenario YAML config"
