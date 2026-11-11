@@ -770,13 +770,13 @@ class CityLearnAdapter:
                     f"Default weather file not found: {source_dir / 'weather.csv'}"
                 )
             else:
-                print(
-                    f"[WARNING] Custom weather file not found: {weather_file}, using default"
+                # A NAMED weather file that does not resolve is a hard failure:
+                # silently substituting the default would mislabel the run
+                # (the reviewer's called-out pattern - refuse, do not swap).
+                raise FileNotFoundError(
+                    f"Named weather file not found: {weather_file} "
+                    f"(looked in {custom_weather_dir} and {source_dir})"
                 )
-                # Copy default as fallback
-                default_weather = source_dir / "weather.csv"
-                if default_weather.exists():
-                    shutil.copy2(default_weather, schema_dir / weather_file)
 
         # Copy carbon intensity file
         ci_src = source_dir / "carbon_intensity.csv"
