@@ -298,6 +298,38 @@ def check_c2(item, cfg):
     return (not missing), missing
 
 
+_WEATHER_SEARCH_ROOTS = ("experiments/reference", "data/schemas", "data")
+
+
+def _resolve_weather_file(value: str):
+    """Resolve a weather_file value to an actual file in the repo.
+
+    Accepts any naming that resolves: an exact path, or a token whose stem
+    matches a real weather file case-insensitively (SINGAPORE -> singapore.csv),
+    including a file inside a directory named after the token
+    (singapore/weather.csv). Returns the resolved path or None.
+    """
+    if not value:
+        return None
+    p = Path(value)
+    if p.is_file():
+        return str(p)
+    token = re.sub(r"\.(csv|epw|json|zip)$", "", str(value), flags=re.I).strip()
+    token_key = re.sub(r"[^a-z0-9]", "", token.lower())
+    if not token_key:
+        return None
+    for root in _WEATHER_SEARCH_ROOTS:
+        base = ROOT / root
+        if not base.is_dir():
+            continue
+        for cand in base.rglob("*.csv"):
+            name_key = re.sub(r"[^a-z0-9]", "", cand.stem.lower())
+            parent_key = re.sub(r"[^a-z0-9]", "", cand.parent.name.lower())
+            if token_key in (name_key, parent_key):
+                return str(cand)
+    return None
+
+
 def check_c3(item, cfg, reject_named=False):
     """Values in range: the stated values match the NL text; the unstated
     values satisfy the domain-wide semantic rules."""
@@ -367,24 +399,23 @@ def check_c3(item, cfg, reject_named=False):
                     issues.append(f"buildings[{i}].evs[{j}] bad HH:MM time {t!r}")
         wf = b.get("weather_file")
         if wf is not None:
-            # the value must be a resolvable filename, not the NL phrase echoed
-            # back (e.g. 'Singapore weather file' does not name a file)
-            if not re.fullmatch(r"[A-Za-z0-9_.\-]+\.(csv|epw|json|zip)", str(wf)):
-                # no Singapore-class weather file ships with the CityLearn
-                # datasets in this environment (each carries one weather.csv),
-                # so a canonical token is the environment's honest ceiling: an
-                # UNSATISFIABLE requirement is a documented LIMITATION - it
-                # counts as NOT passing with the reason quoted (the bar counts
-                # passes), never as a pipeline failure
+            # resolvability: the value must name a weather file that actually
+            # exists (any naming that resolves to it - e.g. the canonical token
+            # SINGAPORE matches singapore.csv), not the NL phrase echoed back
+            # (e.g. 'Singapore weather file' names no file)
+            resolved = _resolve_weather_file(str(wf))
+            if resolved is None:
                 if str(wf).strip().upper() == "SINGAPORE":
+                    # a canonical token with no resolvable file in this
+                    # environment is an UNSATISFIABLE requirement: a documented
+                    # LIMITATION (data + wiring), counted as a not-pass with
+                    # the reason quoted, never as a pipeline failure
                     issues.append(
                         f"LIMIT-weather environment gap (no Singapore weather "
                         f"file ships here): {wf!r}"
                     )
                 else:
-                    issues.append(
-                        f"buildings[{i}].weather_file not a resolvable filename: {wf!r}"
-                    )
+                    issues.append(f"buildings[{i}].weather_file not resolvable: {wf!r}")
         for j, fl in enumerate(b.get("flexible_loads") or []):
             pk, ek, dur = (
                 fl.get("power_kw"),
