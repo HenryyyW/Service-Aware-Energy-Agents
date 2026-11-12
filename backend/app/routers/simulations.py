@@ -621,6 +621,95 @@ async def get_trajectories(run_id: str):
     return _convert_trajectories_to_json(coupler.co_sim_history)
 
 
+CATEGORY_GUIDANCE = {
+    "voltage": (
+        "Voltage left the permitted band",
+        "Check the feeder loading at this timestep; consider a PV curtailment or battery discharge at the flagged bus, or a tap-changer setting review.",
+    ),
+    "thermal": (
+        "Equipment loading exceeded its rating",
+        "Reduce the peak transfer at the flagged element or re-balance the community dispatch.",
+    ),
+    "convergence": (
+        "Power flow did not converge",
+        "The operating point is likely infeasible: review the dispatch schedule for conflicting setpoints at this timestep.",
+    ),
+    "default": (
+        "Constraint breached",
+        "Inspect the flagged element and timestep in the community view; adjust the dispatch or the asset limits and re-run.",
+    ),
+}
+
+
+@router.get("/simulations/{run_id}/diagnostics", response_model=dict)
+async def get_diagnostics(run_id: str):
+    """Read-only diagnosis of a completed run: what breached, when, and why -
+    with the evidence (values, limits, buses) and a recommended next step.
+    Interpretation only: no repair proposal is made here (the repair loop is
+    measured at 5/9 vs its 7/9 bar and is not claimed by this endpoint)."""
+    if run_id not in _runs:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+    run = _runs[run_id]
+    try:
+        trajectories = await get_trajectories(run_id)
+    except HTTPException:
+        trajectories = []
+
+    findings = []
+    for step in trajectories or []:
+        ts = step.get("timestep", step.get("step"))
+        for diag in (step.get("grid_diagnostics") or {}).get("diagnostics", []):
+            if diag.get("severity") not in ("violation", "critical"):
+                continue
+            category = diag.get("category", "default")
+            meaning, action = CATEGORY_GUIDANCE.get(
+                category, CATEGORY_GUIDANCE["default"]
+            )
+            findings.append(
+                {
+                    "timestep": ts,
+                    "category": category,
+                    "severity": diag.get("severity"),
+                    "message": diag.get("message"),
+                    "meaning": meaning,
+                    "recommended_action": action,
+                    "evidence": {
+                        "values": diag.get("values", {}),
+                        "limits": diag.get("limits", {}),
+                        "bus_indices": diag.get("bus_indices", []),
+                        "asset_ids": diag.get("asset_ids", []),
+                    },
+                }
+            )
+
+    energy = run.get("energy_metrics") or {}
+    grid = run.get("grid_metrics") or {}
+    service = run.get("service_metrics") or {}
+    kpi_summary = {
+        "total_cost": energy.get("total_cost"),
+        "grid_import_kwh": energy.get("grid_import_kwh"),
+        "carbon_emissions_kg": energy.get("carbon_emissions_kg"),
+        "ev_completion_rate": service.get("ev_completion_rate"),
+        "voltage_violations_count": grid.get("voltage_violations_count"),
+        "max_voltage_pu": grid.get("max_voltage_pu"),
+        "power_flow_convergence_rate": grid.get("power_flow_convergence_rate"),
+    }
+    return {
+        "run_id": run_id,
+        "scenario_id": run.get("scenario_id"),
+        "controller_type": run.get("controller_type"),
+        "status": run.get("status"),
+        "findings": findings,
+        "kpi_summary": kpi_summary,
+        "interpretation": (
+            "No constraint violations were recorded in this run."
+            if not findings
+            else f"{len(findings)} constraint breach(es) recorded; see the per-timestep findings with their evidence."
+        ),
+        "note": "Interpretation and recommendations are evidence-linked to the run; the strategy-modification component is measured separately (5 of 9 vs its pre-registered 7 of 9) and is not claimed by this endpoint.",
+    }
+
+
 @router.get("/simulations/{run_id}/grid")
 async def get_grid_diagnostics(run_id: str):
     """Get grid diagnostics for a simulation run."""

@@ -35,6 +35,11 @@ export function ScenarioDetailPage() {
   const [run, setRun] = useState<RunState | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<{
+    findings: Array<any>;
+    kpi_summary: Record<string, any>;
+    interpretation: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     if (!scenarioId) return;
@@ -70,6 +75,14 @@ export function ScenarioDetailPage() {
             error: r.error,
             controller_type: r.controller_type,
           });
+        }
+        if (r.status === 'completed') {
+          try {
+            const diag = await api.getRunDiagnostics(r.run_id);
+            if (active) setDiagnostics(diag);
+          } catch {
+            /* diagnostics are best-effort: the run itself already reported */
+          }
         }
       } catch {
         /* transient: the next tick retries */
@@ -189,6 +202,38 @@ export function ScenarioDetailPage() {
               {run.error} — check the scenario configuration and try again; the run is
               deduplicated by config and seed, so a retry reuses this run unless the config changed.
             </p>
+          )}
+        </div>
+      )}
+
+      {run && run.status === 'completed' && diagnostics && (
+        <div className="p-3 bg-surface/30 border border-border/30 rounded-lg">
+          <h2 className="font-body font-medium text-body text-text">Run diagnosis</h2>
+          <p className="text-caption text-text-muted mt-1">{diagnostics.interpretation}</p>
+          {diagnostics.kpi_summary && (
+            <dl className="grid grid-cols-2 gap-2 mt-2 text-caption">
+              {Object.entries(diagnostics.kpi_summary).map(([k, v]) => (
+                <div key={k} className="flex justify-between gap-2">
+                  <dt className="text-text-muted">{k.replace(/_/g, ' ')}</dt>
+                  <dd className="font-mono text-text">
+                    {v == null ? 'no record' : String(v)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {diagnostics.findings.length > 0 && (
+            <ul className="mt-2 space-y-2">
+              {diagnostics.findings.map((f, i) => (
+                <li key={i} className="text-caption border border-violation/30 rounded p-2">
+                  <p className="font-medium text-violation">
+                    <span aria-hidden="true">✗</span> t{f.timestep}: {f.message} ({f.severity})
+                  </p>
+                  <p className="text-text-muted">{f.meaning}</p>
+                  <p className="text-text">Next step: {f.recommended_action}</p>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}

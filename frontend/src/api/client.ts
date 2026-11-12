@@ -124,6 +124,23 @@ class ApiClient {
     return response.data;
   }
 
+  async getRunDiagnostics(runId: string): Promise<{
+    findings: Array<{
+      timestep: number;
+      category: string;
+      severity: string;
+      message: string;
+      meaning: string;
+      recommended_action: string;
+      evidence: Record<string, any>;
+    }>;
+    kpi_summary: Record<string, any>;
+    interpretation: string;
+  }> {
+    const response = await this.client.get(`/api/simulations/${runId}/diagnostics`);
+    return response.data;
+  }
+
   async getSimulationRun(runId: string): Promise<any> {
     const response = await this.client.get(`/api/simulations/${runId}`);
     return response.data;
