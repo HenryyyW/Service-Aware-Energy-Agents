@@ -5,6 +5,7 @@ import yaml
 import argparse
 import time
 import hashlib
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, List
@@ -34,6 +35,7 @@ from src.controllers import (
     QLearningController,
     LLMAgentController,
     LLMVerifiedController,
+    DeterministicSafetyController,
 )
 from src.evaluation import (
     compute_all_metrics,
@@ -209,6 +211,17 @@ class ExperimentRunner:
                 device_metadata=None,  # Will be set after coupler creation
                 llm_config=llm_config,
             )
+        elif controller_type == "deterministic_safety":
+            # For deterministic safety, we need a proposer. Default to rule_based.
+            # Proposer is passed as constructor arg (not env var only); env var
+            # SAEA_DET_SAFETY_PROPOSER selects the proposer type for the runner.
+            proposer_type = os.environ.get("SAEA_DET_SAFETY_PROPOSER", "rule_based")
+            proposer = self._create_proposer(proposer_type, llm_config)
+            self.controller = DeterministicSafetyController(
+                self.scenario_config,
+                proposer=proposer,
+                device_metadata=None,  # Will be set after coupler creation
+            )
         else:
             raise ValueError(f"Unknown controller type: {controller_type}")
 
@@ -231,6 +244,60 @@ class ExperimentRunner:
             self.controller.device_metadata = (
                 self.coupler.citylearn.get_device_metadata()
             )
+        elif controller_type == "deterministic_safety":
+            self.controller.device_metadata = (
+                self.coupler.citylearn.get_device_metadata()
+            )
+            # Also set on proposer if it has the attribute
+            if hasattr(self.controller, "proposer") and self.controller.proposer:
+                self.controller.proposer.device_metadata = (
+                    self.coupler.citylearn.get_device_metadata()
+                )
+            # Set adapter reference for stratification recording
+            self.controller.set_adapter(self.coupler.citylearn)
+
+    def _create_proposer(
+        self, proposer_type: str, llm_config
+    ) -> Optional[BaseController]:
+        """Create a proposer controller for the deterministic safety wrapper."""
+        if proposer_type == "rule_based":
+            return RuleBasedController(self.scenario_config)
+        elif proposer_type == "llm_agent":
+            return LLMAgentController(
+                self.scenario_config,
+                device_metadata=None,
+                llm_config=llm_config,
+            )
+        elif proposer_type == "llm_agent_verified":
+            return LLMVerifiedController(
+                self.scenario_config,
+                device_metadata=None,
+                llm_config=llm_config,
+            )
+        elif proposer_type == "multi_agent":
+            return MultiAgentController(self.scenario_config)
+        elif proposer_type == "centralized":
+            return CentralizedController(self.scenario_config)
+        elif proposer_type == "mpc":
+            return MPCController(
+                self.scenario_config,
+                device_metadata=None,
+            )
+        elif proposer_type in ("rl", "rl_single"):
+            rl_policy = os.environ.get("SAEA_RL_POLICY")
+            if not rl_policy:
+                raise ValueError(
+                    "--rl-policy / SAEA_RL_POLICY required for rl proposer"
+                )
+            encoder = "lmp" if self.pricing_regime == "lmp" else "base"
+            return QLearningController(
+                self.scenario_config,
+                policy_path=rl_policy,
+                device_metadata=None,
+                encoder=encoder,
+            )
+        else:
+            raise ValueError(f"Unknown proposer type: {proposer_type}")
 
     def run(self, max_steps: Optional[int] = None) -> ExperimentResult:
         """Run the experiment."""
@@ -269,6 +336,19 @@ class ExperimentRunner:
             assert self.coupler is not None
             cosim_result = self.coupler.step(requested_actions)
             self.history.append(cosim_result)
+
+            # Record stratification for deterministic safety controller
+            if hasattr(self.controller, "record_adapter_interventions"):
+                self.controller.record_adapter_interventions(
+                    requested_actions,
+                    cosim_result.citylearn_result.limited_actions,
+                    cosim_result.citylearn_result.applied_actions,
+                )
+            if hasattr(self.controller, "record_post_execution_violations"):
+                self.controller.record_post_execution_violations(
+                    cosim_result.citylearn_result.grid_diagnostics,
+                    cosim_result.citylearn_result.observations,
+                )
 
             # Extract grid diagnostics for next step's controller
             last_grid_diagnostics = cosim_result.citylearn_result.grid_diagnostics
@@ -347,6 +427,13 @@ class ExperimentRunner:
                     "costs": h.citylearn_result.costs,
                     "constraint_violations": h.citylearn_result.constraint_violations,
                     "grid_diagnostics": h.citylearn_result.grid_diagnostics,
+                    # E1/E2 instrumentation: adapter interventions and applied violations
+                    "adapter_interventions": getattr(
+                        self.coupler.citylearn, "get_adapter_interventions", lambda: []
+                    )(),
+                    "applied_violations": getattr(
+                        self.coupler.citylearn, "get_applied_violations", lambda: []
+                    )(),
                 }
             )
 
@@ -652,6 +739,21 @@ class ExperimentRunner:
                 "type": "centralized",
                 "approach": "joint_optimization",
             }
+        elif isinstance(self.controller, DeterministicSafetyController):
+            controller_type_enum = (
+                ControllerType.RULE_BASED
+            )  # Treat as deterministic baseline
+            # Proposer type is from constructor (not just env var)
+            proposer_type = "none"
+            if hasattr(self.controller, "proposer") and self.controller.proposer:
+                proposer_type = type(self.controller.proposer).__name__
+            controller_config = {
+                "type": "deterministic_safety",
+                "proposer_type": proposer_type,
+                **self.controller.agent_stats(),
+                "stratification": self.controller.get_stratification_summary(),
+                "stratification_history": self.controller.get_stratification_history(),
+            }
         else:
             # Default to rule_based for backward compatibility
             controller_type_enum = ControllerType.RULE_BASED
@@ -690,6 +792,18 @@ class ExperimentRunner:
             trajectories_file=str(self.run_dir / "trajectories.jsonl"),
             logs_file=str(self.run_dir / "experiment.log"),
             hostile_metrics=hostile_metrics,
+            adapter_interventions=(
+                self.coupler.citylearn.get_adapter_interventions()
+                if hasattr(self.coupler, "citylearn")
+                and hasattr(self.coupler.citylearn, "get_adapter_interventions")
+                else []
+            ),
+            applied_violations=(
+                self.coupler.citylearn.get_applied_violations()
+                if hasattr(self.coupler, "citylearn")
+                and hasattr(self.coupler.citylearn, "get_applied_violations")
+                else []
+            ),
         )
 
         return result
@@ -912,6 +1026,19 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Paid-LLM spend guard (docs/incident_2026-11-08_dashscope_spend.md):
+    # enforced only when THIS run will actually call a hosted LLM - an LLM
+    # controller, or the deterministic safety proposer configured as an LLM.
+    from experiments.llm_spend_guard import enforce_authorized_llm
+
+    _LLM_CONTROLLERS = ("llm_agent", "llm_agent_verified")
+    enforce_authorized_llm(
+        hosted_call_expected=(
+            args.controller in _LLM_CONTROLLERS
+            or os.environ.get("SAEA_DET_SAFETY_PROPOSER", "") in _LLM_CONTROLLERS
+        )
+    )
 
     # Load scenario
     scenario = load_scenario(args.config)

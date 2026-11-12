@@ -13,6 +13,8 @@ from src.schemas.scenario import (
     PandapowerConfig,
     PVConfig,
     BatteryConfig,
+    EnergySharingConfig,
+    FailureConfig,
 )
 
 router = APIRouter()
@@ -178,8 +180,64 @@ def _scenario_to_dict(scenario: ScenarioConfig) -> dict:
             "objective": ["cost_minimization", "carbon_reduction"],
         },
         "pandapower": scenario.pandapower.model_dump() if scenario.pandapower else None,
+        # Top-level config the GET serializer used to drop entirely - an
+        # energy-sharing scenario came back without its market definition.
+        "energy_sharing": (
+            scenario.energy_sharing.model_dump() if scenario.energy_sharing else None
+        ),
+        "failures": [f.model_dump() for f in scenario.failures],
+        "carbon_intensity_file": scenario.carbon_intensity_file,
         "random_seed": scenario.random_seed,
         "timestep_minutes": scenario.timestep_minutes,
+    }
+
+
+@router.post("/scenarios/generate", response_model=dict)
+async def generate_scenario(request: dict):
+    """NL -> executable scenario config through the verified pipeline.
+
+    The planner (LLM with the rule-based fallback) + coder + executor +
+    verifier run here; the response carries the config for the confirm step
+    AND the provenance (plan_source) plus any named rejections, so the UI can
+    show a degraded 'preview' mode instead of pretending it is the agent."""
+    import time
+
+    nl = (request.get("nl") or request.get("description") or "").strip()
+    if not nl:
+        raise HTTPException(
+            status_code=422, detail="nl (the natural-language description) is required"
+        )
+
+    max_iterations = int(request.get("max_iterations", 2))
+    project_root = os.environ.get(
+        "PROJECT_ROOT", str(Path(__file__).resolve().parents[3])
+    )
+    started = time.time()
+    try:
+        from src.agents.nl_config_pipeline import run_nl_to_config
+
+        result = run_nl_to_config(
+            nl,
+            scenario_id=f"gen_{uuid4().hex[:8]}",
+            max_iterations=max_iterations,
+            project_root=project_root,
+        )
+    except Exception as exc:  # noqa: BLE001 - surfaced, never a silent 500
+        raise HTTPException(
+            status_code=500, detail=f"NL->config pipeline failed: {exc}"
+        ) from exc
+
+    manifest = result.get("manifest") or {}
+    iterations = result.get("iterations") or []
+    last = iterations[-1] if iterations else {}
+    return {
+        "config": result.get("final_config"),
+        "plan_source": manifest.get("plan_source"),
+        "rejected_fields": manifest.get("rejected_fields") or [],
+        "success": bool(result.get("success")),
+        "iterations": len(iterations),
+        "final_verdict": (last.get("verifier_output") or {}).get("recommendation"),
+        "elapsed_s": round(time.time() - started, 1),
     }
 
 
@@ -231,6 +289,16 @@ async def create_scenario(scenario_data: dict):
         ),
         community_import_limit_kw=scenario_data.get("community_import_limit_kw"),
         community_export_limit_kw=scenario_data.get("community_export_limit_kw"),
+        # Top-level fields the API used to drop at the door (c10's C5 failure:
+        # an energy-sharing config POSTed then GET-back-less). Buildings already
+        # carry pv/battery/evs/flexible_loads/tariff/weather_file through.
+        energy_sharing=(
+            EnergySharingConfig(**scenario_data["energy_sharing"])
+            if scenario_data.get("energy_sharing")
+            else None
+        ),
+        failures=[FailureConfig(**f) for f in scenario_data.get("failures") or []],
+        carbon_intensity_file=scenario_data.get("carbon_intensity_file"),
         random_seed=scenario_data.get("random_seed", 42),
         timestep_minutes=scenario_data.get("timestep_minutes", 15),
     )

@@ -37,7 +37,7 @@ class RepairContext:
     controller_file: str
     scenario_config: Dict[str, Any]
     iteration: int = 0
-    max_iterations: int = 3
+    max_iterations: int = 5
 
 
 class RepairAgent:
@@ -473,32 +473,29 @@ class RepairAgent:
 
         Returns:
             Modified controller code
+
+        Raises:
+            Exception: If patch application fails (let sandbox catch it)
         """
         if not patch.code_changes:
             return controller_code
 
-        try:
-            # Parse the controller code into an AST
-            tree = ast.parse(controller_code)
+        # Parse the controller code into an AST
+        tree = ast.parse(controller_code)
 
-            # Apply each change
-            for change in patch.code_changes:
-                change_type = change.get("type", "modification")
-                function_name = change.get("function", "")
-                change_desc = change.get("change", "")
+        # Apply each change
+        for change in patch.code_changes:
+            change_type = change.get("type", "modification")
+            function_name = change.get("function", "")
+            change_desc = change.get("change", "")
 
-                if change_type == "modification" and function_name:
-                    # Apply the modification to the specified function
-                    controller_code = self._apply_function_modification(
-                        controller_code, function_name, change_desc
-                    )
+            if change_type == "modification" and function_name:
+                # Apply the modification to the specified function
+                controller_code = self._apply_function_modification(
+                    controller_code, function_name, change_desc
+                )
 
-            return controller_code
-
-        except Exception as e:
-            # If AST parsing fails, return original code
-            print(f"Warning: Failed to apply patch via AST: {e}")
-            return controller_code
+        return controller_code
 
     def _apply_function_modification(
         self, code: str, function_name: str, change_desc: str

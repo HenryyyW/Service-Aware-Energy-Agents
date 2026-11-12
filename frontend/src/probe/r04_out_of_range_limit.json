@@ -1,0 +1,1616 @@
+{
+ "item_id": "r04_out_of_range_limit",
+ "kind": "out_of_range",
+ "nl": "Cap the community's grid import at minus 5 kW.",
+ "success": false,
+ "final_config": {
+  "scenario_id": "scenario_base",
+  "name": "Base Scenario",
+  "description": "Minimal baseline scenario",
+  "buildings": [
+   {
+    "building_id": "building_1",
+    "building_type": "residential",
+    "location": {
+     "lat": 34.05,
+     "lon": -118.24,
+     "timezone": "America/Los_Angeles"
+    }
+   }
+  ],
+  "pandapower": {
+   "network_type": "ieee_13",
+   "voltage_limits": {
+    "min": 0.95,
+    "max": 1.05
+   },
+   "line_loading_limit": 1.0,
+   "transformer_loading_limit": 1.0,
+   "run_power_flow_every": 1
+  },
+  "energy_sharing": null,
+  "failures": [],
+  "community_import_limit_kw": -5.0,
+  "community_export_limit_kw": null,
+  "random_seed": 42,
+  "timestep_minutes": 15
+ },
+ "iterations": [
+  {
+   "iteration": 0,
+   "planner_output": {
+    "plan_source": "llm",
+    "rejected_fields": [
+     "buildings"
+    ],
+    "target_assets": [
+     "grid"
+    ],
+    "building_count": 1,
+    "building_types": [
+     "residential"
+    ],
+    "pv_configs": [],
+    "battery_configs": [],
+    "ev_configs": [],
+    "flexible_load_configs": [],
+    "tariff_configs": [],
+    "grid_configs": [
+     {
+      "network_type": "ieee_13",
+      "voltage_limits": {
+       "min": 0.95,
+       "max": 1.05
+      },
+      "line_loading_limit": 1.0
+     }
+    ],
+    "failure_injections": [],
+    "community_import_limit_kw": -5.0,
+    "community_export_limit_kw": null,
+    "energy_sharing_enabled": false,
+    "dynamic_pricing_enabled": false,
+    "timestep_minutes": 15,
+    "simulation_duration_days": 7,
+    "simulation_start": null,
+    "simulation_end": null,
+    "random_seed": 42,
+    "location": {
+     "lat": 34.05,
+     "lon": -118.24,
+     "timezone": "America/Los_Angeles"
+    },
+    "climate_zone": "tmy3_722950",
+    "weather_file": null,
+    "confidence": 0.85,
+    "assumptions": [
+     "Default timestep of 15 minutes used as no timestep specified",
+     "Default simulation duration of 7 days used as no duration specified",
+     "ieee_13 network type assumed for residential community",
+     "Voltage limits and line loading set to standard defaults"
+    ],
+    "required_fields": [
+     "scenario_id",
+     "name",
+     "description",
+     "buildings",
+     "random_seed",
+     "timestep_minutes"
+    ],
+    "out_of_scope": [
+     "detailed grid topology",
+     "custom market mechanisms"
+    ]
+   },
+   "coder_output": {
+    "config_changes": [
+     {
+      "file": "scenario",
+      "field": "community_import_limit_kw",
+      "change": "Set community_import_limit_kw to -5.0",
+      "type": "modification"
+     }
+    ],
+    "patched_config": {
+     "scenario_id": "scenario_base",
+     "name": "Base Scenario",
+     "description": "Minimal baseline scenario",
+     "buildings": [
+      {
+       "building_id": "building_1",
+       "building_type": "residential",
+       "location": {
+        "lat": 34.05,
+        "lon": -118.24,
+        "timezone": "America/Los_Angeles"
+       }
+      }
+     ],
+     "pandapower": {
+      "network_type": "ieee_13",
+      "voltage_limits": {
+       "min": 0.95,
+       "max": 1.05
+      },
+      "line_loading_limit": 1.0,
+      "transformer_loading_limit": 1.0,
+      "run_power_flow_every": 1
+     },
+     "energy_sharing": null,
+     "failures": [],
+     "community_import_limit_kw": -5.0,
+     "community_export_limit_kw": null,
+     "random_seed": 42,
+     "timestep_minutes": 15
+    },
+    "config_diff": "--- baseline\n+++ patched\n@@ -1,14 +1,24 @@\n {\n-  \"buildings\": [],\n+  \"buildings\": [\n+    {\n+      \"building_id\": \"building_1\",\n+      \"building_type\": \"residential\",\n+      \"location\": {\n+        \"lat\": 34.05,\n+        \"lon\": -118.24,\n+        \"timezone\": \"America/Los_Angeles\"\n+      }\n+    }\n+  ],\n   \"community_export_limit_kw\": null,\n-  \"community_import_limit_kw\": null,\n+  \"community_import_limit_kw\": -5.0,\n   \"description\": \"Minimal baseline scenario\",\n   \"energy_sharing\": null,\n   \"failures\": [],\n   \"name\": \"Base Scenario\",\n   \"pandapower\": {\n     \"line_loading_limit\": 1.0,\n-    \"network_type\": \"ieee_34\",\n+    \"network_type\": \"ieee_13\",\n     \"run_power_flow_every\": 1,\n     \"transformer_loading_limit\": 1.0,\n     \"voltage_limits\": {\n",
+    "implementation_notes": "Applied plan with 1 changes",
+    "applied_count": 1,
+    "failed_count": 0
+   },
+   "executor_output": {
+    "success": false,
+    "scenario_id": "nl_config_1794366239_0",
+    "config_valid": false,
+    "simulation_steps": 0,
+    "simulation_time_sec": 0.0016129016876220703,
+    "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error",
+    "warnings": [],
+    "validation_errors": [],
+    "test_results": {
+     "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error"
+    },
+    "violation_counts": {},
+    "power_flow_converged": true,
+    "energy_balance_ok": true,
+    "execution_time": 0.0016129016876220703
+   },
+   "verifier_output": {
+    "schema_valid": false,
+    "round_trip_valid": false,
+    "determinism_check": false,
+    "schema_complete": false,
+    "determinism_seed": null,
+    "determinism_tolerance": 1e-06,
+    "schema_errors": [
+     "community_import_limit_kw: Value error, Limits must be positive"
+    ],
+    "round_trip_errors": [],
+    "determinism_errors": [],
+    "completeness_issues": [],
+    "required_fields_missing": [],
+    "out_of_range_fields": [],
+    "schema_rejections": [],
+    "confidence": 0.0,
+    "recommendation": "escalate",
+    "manifest": {}
+   },
+   "reporter_output": {
+    "summary": "Config generation failed: 1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error",
+    "detailed_report": {
+     "plan": {
+      "plan_source": "llm",
+      "rejected_fields": [
+       "buildings"
+      ],
+      "target_assets": [
+       "grid"
+      ],
+      "building_count": 1,
+      "building_types": [
+       "residential"
+      ],
+      "pv_configs": [],
+      "battery_configs": [],
+      "ev_configs": [],
+      "flexible_load_configs": [],
+      "tariff_configs": [],
+      "grid_configs": [
+       {
+        "network_type": "ieee_13",
+        "voltage_limits": {
+         "min": 0.95,
+         "max": 1.05
+        },
+        "line_loading_limit": 1.0
+       }
+      ],
+      "failure_injections": [],
+      "community_import_limit_kw": -5.0,
+      "community_export_limit_kw": null,
+      "energy_sharing_enabled": false,
+      "dynamic_pricing_enabled": false,
+      "timestep_minutes": 15,
+      "simulation_duration_days": 7,
+      "simulation_start": null,
+      "simulation_end": null,
+      "random_seed": 42,
+      "location": {
+       "lat": 34.05,
+       "lon": -118.24,
+       "timezone": "America/Los_Angeles"
+      },
+      "climate_zone": "tmy3_722950",
+      "weather_file": null,
+      "confidence": 0.85,
+      "assumptions": [
+       "Default timestep of 15 minutes used as no timestep specified",
+       "Default simulation duration of 7 days used as no duration specified",
+       "ieee_13 network type assumed for residential community",
+       "Voltage limits and line loading set to standard defaults"
+      ],
+      "required_fields": [
+       "scenario_id",
+       "name",
+       "description",
+       "buildings",
+       "random_seed",
+       "timestep_minutes"
+      ],
+      "out_of_scope": [
+       "detailed grid topology",
+       "custom market mechanisms"
+      ]
+     },
+     "changes": [
+      {
+       "file": "scenario",
+       "field": "community_import_limit_kw",
+       "change": "Set community_import_limit_kw to -5.0",
+       "type": "modification"
+      }
+     ],
+     "diff": "--- baseline\n+++ patched\n@@ -1,14 +1,24 @@\n {\n-  \"buildings\": [],\n+  \"buildings\": [\n+    {\n+      \"building_id\": \"building_1\",\n+      \"building_type\": \"residential\",\n+      \"location\": {\n+        \"lat\": 34.05,\n+        \"lon\": -118.24,\n+        \"timezone\": \"America/Los_Angeles\"\n+      }\n+    }\n+  ],\n   \"community_export_limit_kw\": null,\n-  \"community_import_limit_kw\": null,\n+  \"community_import_limit_kw\": -5.0,\n   \"description\": \"Minimal baseline scenario\",\n   \"energy_sharing\": null,\n   \"failures\": [],\n   \"name\": \"Base Scenario\",\n   \"pandapower\": {\n     \"line_loading_limit\": 1.0,\n-    \"network_type\": \"ieee_34\",\n+    \"network_type\": \"ieee_13\",\n     \"run_power_flow_every\": 1,\n     \"transformer_loading_limit\": 1.0,\n     \"voltage_limits\": {\n",
+     "execution": {
+      "success": false,
+      "steps": 0,
+      "violations": {},
+      "power_flow_converged": true,
+      "energy_balance": true,
+      "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error"
+     },
+     "verification": {
+      "schema_valid": false,
+      "round_trip": false,
+      "determinism": false,
+      "confidence": 0.0
+     },
+     "mapping_errors": [],
+     "schema_errors": []
+    },
+    "artifacts": [
+     "scenario_config.json",
+     "manifest.json"
+    ],
+    "recommendations": [
+     "Fix schema validation errors",
+     "Fix round-trip serialization issues"
+    ],
+    "manifest": {
+     "scenario_id": "r04_out_of_range_limit",
+     "plan_source": "llm",
+     "rejected_fields": [
+      "buildings"
+     ]
+    }
+   },
+   "success": false,
+   "duration": 7.438916921615601
+  },
+  {
+   "iteration": 1,
+   "planner_output": {
+    "plan_source": "llm",
+    "rejected_fields": [
+     "buildings"
+    ],
+    "target_assets": [
+     "grid"
+    ],
+    "building_count": 1,
+    "building_types": [
+     "residential"
+    ],
+    "pv_configs": [],
+    "battery_configs": [],
+    "ev_configs": [],
+    "flexible_load_configs": [],
+    "tariff_configs": [],
+    "grid_configs": [
+     {
+      "network_type": "ieee_13",
+      "voltage_limits": {
+       "min": 0.95,
+       "max": 1.05
+      },
+      "line_loading_limit": 1.0
+     }
+    ],
+    "failure_injections": [],
+    "community_import_limit_kw": -5.0,
+    "community_export_limit_kw": null,
+    "energy_sharing_enabled": false,
+    "dynamic_pricing_enabled": false,
+    "timestep_minutes": 15,
+    "simulation_duration_days": 7,
+    "simulation_start": null,
+    "simulation_end": null,
+    "random_seed": 42,
+    "location": {
+     "lat": 34.05,
+     "lon": -118.24,
+     "timezone": "America/Los_Angeles"
+    },
+    "climate_zone": "tmy3_722950",
+    "weather_file": null,
+    "confidence": 0.85,
+    "assumptions": [
+     "Default ieee_13 network type used for grid configuration",
+     "Default voltage limits and line loading applied"
+    ],
+    "required_fields": [
+     "scenario_id",
+     "name",
+     "description",
+     "buildings",
+     "random_seed",
+     "timestep_minutes"
+    ],
+    "out_of_scope": [
+     "detailed grid topology",
+     "custom market mechanisms"
+    ]
+   },
+   "coder_output": {
+    "config_changes": [],
+    "patched_config": {
+     "scenario_id": "scenario_base",
+     "name": "Base Scenario",
+     "description": "Minimal baseline scenario",
+     "buildings": [
+      {
+       "building_id": "building_1",
+       "building_type": "residential",
+       "location": {
+        "lat": 34.05,
+        "lon": -118.24,
+        "timezone": "America/Los_Angeles"
+       }
+      }
+     ],
+     "pandapower": {
+      "network_type": "ieee_13",
+      "voltage_limits": {
+       "min": 0.95,
+       "max": 1.05
+      },
+      "line_loading_limit": 1.0,
+      "transformer_loading_limit": 1.0,
+      "run_power_flow_every": 1
+     },
+     "energy_sharing": null,
+     "failures": [],
+     "community_import_limit_kw": -5.0,
+     "community_export_limit_kw": null,
+     "random_seed": 42,
+     "timestep_minutes": 15
+    },
+    "config_diff": "",
+    "implementation_notes": "Applied plan with 0 changes",
+    "applied_count": 0,
+    "failed_count": 0
+   },
+   "executor_output": {
+    "success": false,
+    "scenario_id": "nl_config_1794366246_1",
+    "config_valid": false,
+    "simulation_steps": 0,
+    "simulation_time_sec": 0.0016341209411621094,
+    "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error",
+    "warnings": [],
+    "validation_errors": [],
+    "test_results": {
+     "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error"
+    },
+    "violation_counts": {},
+    "power_flow_converged": true,
+    "energy_balance_ok": true,
+    "execution_time": 0.0016341209411621094
+   },
+   "verifier_output": {
+    "schema_valid": false,
+    "round_trip_valid": false,
+    "determinism_check": false,
+    "schema_complete": false,
+    "determinism_seed": null,
+    "determinism_tolerance": 1e-06,
+    "schema_errors": [
+     "community_import_limit_kw: Value error, Limits must be positive"
+    ],
+    "round_trip_errors": [],
+    "determinism_errors": [],
+    "completeness_issues": [],
+    "required_fields_missing": [],
+    "out_of_range_fields": [],
+    "schema_rejections": [],
+    "confidence": 0.0,
+    "recommendation": "escalate",
+    "manifest": {}
+   },
+   "reporter_output": {
+    "summary": "Config generation failed: 1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error",
+    "detailed_report": {
+     "plan": {
+      "plan_source": "llm",
+      "rejected_fields": [
+       "buildings"
+      ],
+      "target_assets": [
+       "grid"
+      ],
+      "building_count": 1,
+      "building_types": [
+       "residential"
+      ],
+      "pv_configs": [],
+      "battery_configs": [],
+      "ev_configs": [],
+      "flexible_load_configs": [],
+      "tariff_configs": [],
+      "grid_configs": [
+       {
+        "network_type": "ieee_13",
+        "voltage_limits": {
+         "min": 0.95,
+         "max": 1.05
+        },
+        "line_loading_limit": 1.0
+       }
+      ],
+      "failure_injections": [],
+      "community_import_limit_kw": -5.0,
+      "community_export_limit_kw": null,
+      "energy_sharing_enabled": false,
+      "dynamic_pricing_enabled": false,
+      "timestep_minutes": 15,
+      "simulation_duration_days": 7,
+      "simulation_start": null,
+      "simulation_end": null,
+      "random_seed": 42,
+      "location": {
+       "lat": 34.05,
+       "lon": -118.24,
+       "timezone": "America/Los_Angeles"
+      },
+      "climate_zone": "tmy3_722950",
+      "weather_file": null,
+      "confidence": 0.85,
+      "assumptions": [
+       "Default ieee_13 network type used for grid configuration",
+       "Default voltage limits and line loading applied"
+      ],
+      "required_fields": [
+       "scenario_id",
+       "name",
+       "description",
+       "buildings",
+       "random_seed",
+       "timestep_minutes"
+      ],
+      "out_of_scope": [
+       "detailed grid topology",
+       "custom market mechanisms"
+      ]
+     },
+     "changes": [],
+     "diff": "",
+     "execution": {
+      "success": false,
+      "steps": 0,
+      "violations": {},
+      "power_flow_converged": true,
+      "energy_balance": true,
+      "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error"
+     },
+     "verification": {
+      "schema_valid": false,
+      "round_trip": false,
+      "determinism": false,
+      "confidence": 0.0
+     },
+     "mapping_errors": [],
+     "schema_errors": []
+    },
+    "artifacts": [
+     "scenario_config.json",
+     "manifest.json"
+    ],
+    "recommendations": [
+     "Fix schema validation errors",
+     "Fix round-trip serialization issues"
+    ],
+    "manifest": {
+     "scenario_id": "r04_out_of_range_limit",
+     "plan_source": "llm",
+     "rejected_fields": [
+      "buildings"
+     ]
+    }
+   },
+   "success": false,
+   "duration": 7.502563714981079
+  },
+  {
+   "iteration": 2,
+   "planner_output": {
+    "plan_source": "llm",
+    "rejected_fields": [
+     "buildings"
+    ],
+    "target_assets": [
+     "grid"
+    ],
+    "building_count": 1,
+    "building_types": [
+     "residential"
+    ],
+    "pv_configs": [],
+    "battery_configs": [],
+    "ev_configs": [],
+    "flexible_load_configs": [],
+    "tariff_configs": [],
+    "grid_configs": [
+     {
+      "network_type": "ieee_13",
+      "voltage_limits": {
+       "min": 0.95,
+       "max": 1.05
+      },
+      "line_loading_limit": 1.0
+     }
+    ],
+    "failure_injections": [],
+    "community_import_limit_kw": -5.0,
+    "community_export_limit_kw": null,
+    "energy_sharing_enabled": false,
+    "dynamic_pricing_enabled": false,
+    "timestep_minutes": 15,
+    "simulation_duration_days": 7,
+    "simulation_start": null,
+    "simulation_end": null,
+    "random_seed": 42,
+    "location": {
+     "lat": 34.05,
+     "lon": -118.24,
+     "timezone": "America/Los_Angeles"
+    },
+    "climate_zone": "tmy3_722950",
+    "weather_file": null,
+    "confidence": 0.85,
+    "assumptions": [
+     "Default timestep of 15 minutes used as no step was specified"
+    ],
+    "required_fields": [
+     "scenario_id",
+     "name",
+     "description",
+     "buildings",
+     "random_seed",
+     "timestep_minutes"
+    ],
+    "out_of_scope": [
+     "detailed grid topology",
+     "custom market mechanisms"
+    ]
+   },
+   "coder_output": {
+    "config_changes": [],
+    "patched_config": {
+     "scenario_id": "scenario_base",
+     "name": "Base Scenario",
+     "description": "Minimal baseline scenario",
+     "buildings": [
+      {
+       "building_id": "building_1",
+       "building_type": "residential",
+       "location": {
+        "lat": 34.05,
+        "lon": -118.24,
+        "timezone": "America/Los_Angeles"
+       }
+      }
+     ],
+     "pandapower": {
+      "network_type": "ieee_13",
+      "voltage_limits": {
+       "min": 0.95,
+       "max": 1.05
+      },
+      "line_loading_limit": 1.0,
+      "transformer_loading_limit": 1.0,
+      "run_power_flow_every": 1
+     },
+     "energy_sharing": null,
+     "failures": [],
+     "community_import_limit_kw": -5.0,
+     "community_export_limit_kw": null,
+     "random_seed": 42,
+     "timestep_minutes": 15
+    },
+    "config_diff": "",
+    "implementation_notes": "Applied plan with 0 changes",
+    "applied_count": 0,
+    "failed_count": 0
+   },
+   "executor_output": {
+    "success": false,
+    "scenario_id": "nl_config_1794366252_2",
+    "config_valid": false,
+    "simulation_steps": 0,
+    "simulation_time_sec": 0.001653909683227539,
+    "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error",
+    "warnings": [],
+    "validation_errors": [],
+    "test_results": {
+     "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error"
+    },
+    "violation_counts": {},
+    "power_flow_converged": true,
+    "energy_balance_ok": true,
+    "execution_time": 0.001653909683227539
+   },
+   "verifier_output": {
+    "schema_valid": false,
+    "round_trip_valid": false,
+    "determinism_check": false,
+    "schema_complete": false,
+    "determinism_seed": null,
+    "determinism_tolerance": 1e-06,
+    "schema_errors": [
+     "community_import_limit_kw: Value error, Limits must be positive"
+    ],
+    "round_trip_errors": [],
+    "determinism_errors": [],
+    "completeness_issues": [],
+    "required_fields_missing": [],
+    "out_of_range_fields": [],
+    "schema_rejections": [],
+    "confidence": 0.0,
+    "recommendation": "escalate",
+    "manifest": {}
+   },
+   "reporter_output": {
+    "summary": "Config generation failed: 1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error",
+    "detailed_report": {
+     "plan": {
+      "plan_source": "llm",
+      "rejected_fields": [
+       "buildings"
+      ],
+      "target_assets": [
+       "grid"
+      ],
+      "building_count": 1,
+      "building_types": [
+       "residential"
+      ],
+      "pv_configs": [],
+      "battery_configs": [],
+      "ev_configs": [],
+      "flexible_load_configs": [],
+      "tariff_configs": [],
+      "grid_configs": [
+       {
+        "network_type": "ieee_13",
+        "voltage_limits": {
+         "min": 0.95,
+         "max": 1.05
+        },
+        "line_loading_limit": 1.0
+       }
+      ],
+      "failure_injections": [],
+      "community_import_limit_kw": -5.0,
+      "community_export_limit_kw": null,
+      "energy_sharing_enabled": false,
+      "dynamic_pricing_enabled": false,
+      "timestep_minutes": 15,
+      "simulation_duration_days": 7,
+      "simulation_start": null,
+      "simulation_end": null,
+      "random_seed": 42,
+      "location": {
+       "lat": 34.05,
+       "lon": -118.24,
+       "timezone": "America/Los_Angeles"
+      },
+      "climate_zone": "tmy3_722950",
+      "weather_file": null,
+      "confidence": 0.85,
+      "assumptions": [
+       "Default timestep of 15 minutes used as no step was specified"
+      ],
+      "required_fields": [
+       "scenario_id",
+       "name",
+       "description",
+       "buildings",
+       "random_seed",
+       "timestep_minutes"
+      ],
+      "out_of_scope": [
+       "detailed grid topology",
+       "custom market mechanisms"
+      ]
+     },
+     "changes": [],
+     "diff": "",
+     "execution": {
+      "success": false,
+      "steps": 0,
+      "violations": {},
+      "power_flow_converged": true,
+      "energy_balance": true,
+      "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error"
+     },
+     "verification": {
+      "schema_valid": false,
+      "round_trip": false,
+      "determinism": false,
+      "confidence": 0.0
+     },
+     "mapping_errors": [],
+     "schema_errors": []
+    },
+    "artifacts": [
+     "scenario_config.json",
+     "manifest.json"
+    ],
+    "recommendations": [
+     "Fix schema validation errors",
+     "Fix round-trip serialization issues"
+    ],
+    "manifest": {
+     "scenario_id": "r04_out_of_range_limit",
+     "plan_source": "llm",
+     "rejected_fields": [
+      "buildings"
+     ]
+    }
+   },
+   "success": false,
+   "duration": 5.9138171672821045
+  }
+ ],
+ "iteration_count": 3,
+ "manifest": {
+  "scenario_id": "r04_out_of_range_limit",
+  "plan_source": "llm",
+  "rejected_fields": [
+   "buildings"
+  ]
+ },
+ "final_report": {
+  "total_iterations": 3,
+  "successful_iterations": 0,
+  "total_changes": 1,
+  "final_config": {
+   "scenario_id": "scenario_base",
+   "name": "Base Scenario",
+   "description": "Minimal baseline scenario",
+   "buildings": [
+    {
+     "building_id": "building_1",
+     "building_type": "residential",
+     "location": {
+      "lat": 34.05,
+      "lon": -118.24,
+      "timezone": "America/Los_Angeles"
+     }
+    }
+   ],
+   "pandapower": {
+    "network_type": "ieee_13",
+    "voltage_limits": {
+     "min": 0.95,
+     "max": 1.05
+    },
+    "line_loading_limit": 1.0,
+    "transformer_loading_limit": 1.0,
+    "run_power_flow_every": 1
+   },
+   "energy_sharing": null,
+   "failures": [],
+   "community_import_limit_kw": -5.0,
+   "community_export_limit_kw": null,
+   "random_seed": 42,
+   "timestep_minutes": 15
+  },
+  "final_manifest": {
+   "scenario_id": "r04_out_of_range_limit",
+   "plan_source": "llm",
+   "rejected_fields": [
+    "buildings"
+   ]
+  },
+  "iterations": [
+   {
+    "iteration": 0,
+    "planner_output": {
+     "plan_source": "llm",
+     "rejected_fields": [
+      "buildings"
+     ],
+     "target_assets": [
+      "grid"
+     ],
+     "building_count": 1,
+     "building_types": [
+      "residential"
+     ],
+     "pv_configs": [],
+     "battery_configs": [],
+     "ev_configs": [],
+     "flexible_load_configs": [],
+     "tariff_configs": [],
+     "grid_configs": [
+      {
+       "network_type": "ieee_13",
+       "voltage_limits": {
+        "min": 0.95,
+        "max": 1.05
+       },
+       "line_loading_limit": 1.0
+      }
+     ],
+     "failure_injections": [],
+     "community_import_limit_kw": -5.0,
+     "community_export_limit_kw": null,
+     "energy_sharing_enabled": false,
+     "dynamic_pricing_enabled": false,
+     "timestep_minutes": 15,
+     "simulation_duration_days": 7,
+     "simulation_start": null,
+     "simulation_end": null,
+     "random_seed": 42,
+     "location": {
+      "lat": 34.05,
+      "lon": -118.24,
+      "timezone": "America/Los_Angeles"
+     },
+     "climate_zone": "tmy3_722950",
+     "weather_file": null,
+     "confidence": 0.85,
+     "assumptions": [
+      "Default timestep of 15 minutes used as no timestep specified",
+      "Default simulation duration of 7 days used as no duration specified",
+      "ieee_13 network type assumed for residential community",
+      "Voltage limits and line loading set to standard defaults"
+     ],
+     "required_fields": [
+      "scenario_id",
+      "name",
+      "description",
+      "buildings",
+      "random_seed",
+      "timestep_minutes"
+     ],
+     "out_of_scope": [
+      "detailed grid topology",
+      "custom market mechanisms"
+     ]
+    },
+    "coder_output": {
+     "config_changes": [
+      {
+       "file": "scenario",
+       "field": "community_import_limit_kw",
+       "change": "Set community_import_limit_kw to -5.0",
+       "type": "modification"
+      }
+     ],
+     "patched_config": {
+      "scenario_id": "scenario_base",
+      "name": "Base Scenario",
+      "description": "Minimal baseline scenario",
+      "buildings": [
+       {
+        "building_id": "building_1",
+        "building_type": "residential",
+        "location": {
+         "lat": 34.05,
+         "lon": -118.24,
+         "timezone": "America/Los_Angeles"
+        }
+       }
+      ],
+      "pandapower": {
+       "network_type": "ieee_13",
+       "voltage_limits": {
+        "min": 0.95,
+        "max": 1.05
+       },
+       "line_loading_limit": 1.0,
+       "transformer_loading_limit": 1.0,
+       "run_power_flow_every": 1
+      },
+      "energy_sharing": null,
+      "failures": [],
+      "community_import_limit_kw": -5.0,
+      "community_export_limit_kw": null,
+      "random_seed": 42,
+      "timestep_minutes": 15
+     },
+     "config_diff": "--- baseline\n+++ patched\n@@ -1,14 +1,24 @@\n {\n-  \"buildings\": [],\n+  \"buildings\": [\n+    {\n+      \"building_id\": \"building_1\",\n+      \"building_type\": \"residential\",\n+      \"location\": {\n+        \"lat\": 34.05,\n+        \"lon\": -118.24,\n+        \"timezone\": \"America/Los_Angeles\"\n+      }\n+    }\n+  ],\n   \"community_export_limit_kw\": null,\n-  \"community_import_limit_kw\": null,\n+  \"community_import_limit_kw\": -5.0,\n   \"description\": \"Minimal baseline scenario\",\n   \"energy_sharing\": null,\n   \"failures\": [],\n   \"name\": \"Base Scenario\",\n   \"pandapower\": {\n     \"line_loading_limit\": 1.0,\n-    \"network_type\": \"ieee_34\",\n+    \"network_type\": \"ieee_13\",\n     \"run_power_flow_every\": 1,\n     \"transformer_loading_limit\": 1.0,\n     \"voltage_limits\": {\n",
+     "implementation_notes": "Applied plan with 1 changes",
+     "applied_count": 1,
+     "failed_count": 0
+    },
+    "executor_output": {
+     "success": false,
+     "scenario_id": "nl_config_1794366239_0",
+     "config_valid": false,
+     "simulation_steps": 0,
+     "simulation_time_sec": 0.0016129016876220703,
+     "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error",
+     "warnings": [],
+     "validation_errors": [],
+     "test_results": {
+      "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error"
+     },
+     "violation_counts": {},
+     "power_flow_converged": true,
+     "energy_balance_ok": true,
+     "execution_time": 0.0016129016876220703
+    },
+    "verifier_output": {
+     "schema_valid": false,
+     "round_trip_valid": false,
+     "determinism_check": false,
+     "schema_complete": false,
+     "determinism_seed": null,
+     "determinism_tolerance": 1e-06,
+     "schema_errors": [
+      "community_import_limit_kw: Value error, Limits must be positive"
+     ],
+     "round_trip_errors": [],
+     "determinism_errors": [],
+     "completeness_issues": [],
+     "required_fields_missing": [],
+     "out_of_range_fields": [],
+     "schema_rejections": [],
+     "confidence": 0.0,
+     "recommendation": "escalate",
+     "manifest": {}
+    },
+    "reporter_output": {
+     "summary": "Config generation failed: 1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error",
+     "detailed_report": {
+      "plan": {
+       "plan_source": "llm",
+       "rejected_fields": [
+        "buildings"
+       ],
+       "target_assets": [
+        "grid"
+       ],
+       "building_count": 1,
+       "building_types": [
+        "residential"
+       ],
+       "pv_configs": [],
+       "battery_configs": [],
+       "ev_configs": [],
+       "flexible_load_configs": [],
+       "tariff_configs": [],
+       "grid_configs": [
+        {
+         "network_type": "ieee_13",
+         "voltage_limits": {
+          "min": 0.95,
+          "max": 1.05
+         },
+         "line_loading_limit": 1.0
+        }
+       ],
+       "failure_injections": [],
+       "community_import_limit_kw": -5.0,
+       "community_export_limit_kw": null,
+       "energy_sharing_enabled": false,
+       "dynamic_pricing_enabled": false,
+       "timestep_minutes": 15,
+       "simulation_duration_days": 7,
+       "simulation_start": null,
+       "simulation_end": null,
+       "random_seed": 42,
+       "location": {
+        "lat": 34.05,
+        "lon": -118.24,
+        "timezone": "America/Los_Angeles"
+       },
+       "climate_zone": "tmy3_722950",
+       "weather_file": null,
+       "confidence": 0.85,
+       "assumptions": [
+        "Default timestep of 15 minutes used as no timestep specified",
+        "Default simulation duration of 7 days used as no duration specified",
+        "ieee_13 network type assumed for residential community",
+        "Voltage limits and line loading set to standard defaults"
+       ],
+       "required_fields": [
+        "scenario_id",
+        "name",
+        "description",
+        "buildings",
+        "random_seed",
+        "timestep_minutes"
+       ],
+       "out_of_scope": [
+        "detailed grid topology",
+        "custom market mechanisms"
+       ]
+      },
+      "changes": [
+       {
+        "file": "scenario",
+        "field": "community_import_limit_kw",
+        "change": "Set community_import_limit_kw to -5.0",
+        "type": "modification"
+       }
+      ],
+      "diff": "--- baseline\n+++ patched\n@@ -1,14 +1,24 @@\n {\n-  \"buildings\": [],\n+  \"buildings\": [\n+    {\n+      \"building_id\": \"building_1\",\n+      \"building_type\": \"residential\",\n+      \"location\": {\n+        \"lat\": 34.05,\n+        \"lon\": -118.24,\n+        \"timezone\": \"America/Los_Angeles\"\n+      }\n+    }\n+  ],\n   \"community_export_limit_kw\": null,\n-  \"community_import_limit_kw\": null,\n+  \"community_import_limit_kw\": -5.0,\n   \"description\": \"Minimal baseline scenario\",\n   \"energy_sharing\": null,\n   \"failures\": [],\n   \"name\": \"Base Scenario\",\n   \"pandapower\": {\n     \"line_loading_limit\": 1.0,\n-    \"network_type\": \"ieee_34\",\n+    \"network_type\": \"ieee_13\",\n     \"run_power_flow_every\": 1,\n     \"transformer_loading_limit\": 1.0,\n     \"voltage_limits\": {\n",
+      "execution": {
+       "success": false,
+       "steps": 0,
+       "violations": {},
+       "power_flow_converged": true,
+       "energy_balance": true,
+       "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error"
+      },
+      "verification": {
+       "schema_valid": false,
+       "round_trip": false,
+       "determinism": false,
+       "confidence": 0.0
+      },
+      "mapping_errors": [],
+      "schema_errors": []
+     },
+     "artifacts": [
+      "scenario_config.json",
+      "manifest.json"
+     ],
+     "recommendations": [
+      "Fix schema validation errors",
+      "Fix round-trip serialization issues"
+     ],
+     "manifest": {
+      "scenario_id": "r04_out_of_range_limit",
+      "plan_source": "llm",
+      "rejected_fields": [
+       "buildings"
+      ]
+     }
+    },
+    "success": false,
+    "duration": 7.438916921615601
+   },
+   {
+    "iteration": 1,
+    "planner_output": {
+     "plan_source": "llm",
+     "rejected_fields": [
+      "buildings"
+     ],
+     "target_assets": [
+      "grid"
+     ],
+     "building_count": 1,
+     "building_types": [
+      "residential"
+     ],
+     "pv_configs": [],
+     "battery_configs": [],
+     "ev_configs": [],
+     "flexible_load_configs": [],
+     "tariff_configs": [],
+     "grid_configs": [
+      {
+       "network_type": "ieee_13",
+       "voltage_limits": {
+        "min": 0.95,
+        "max": 1.05
+       },
+       "line_loading_limit": 1.0
+      }
+     ],
+     "failure_injections": [],
+     "community_import_limit_kw": -5.0,
+     "community_export_limit_kw": null,
+     "energy_sharing_enabled": false,
+     "dynamic_pricing_enabled": false,
+     "timestep_minutes": 15,
+     "simulation_duration_days": 7,
+     "simulation_start": null,
+     "simulation_end": null,
+     "random_seed": 42,
+     "location": {
+      "lat": 34.05,
+      "lon": -118.24,
+      "timezone": "America/Los_Angeles"
+     },
+     "climate_zone": "tmy3_722950",
+     "weather_file": null,
+     "confidence": 0.85,
+     "assumptions": [
+      "Default ieee_13 network type used for grid configuration",
+      "Default voltage limits and line loading applied"
+     ],
+     "required_fields": [
+      "scenario_id",
+      "name",
+      "description",
+      "buildings",
+      "random_seed",
+      "timestep_minutes"
+     ],
+     "out_of_scope": [
+      "detailed grid topology",
+      "custom market mechanisms"
+     ]
+    },
+    "coder_output": {
+     "config_changes": [],
+     "patched_config": {
+      "scenario_id": "scenario_base",
+      "name": "Base Scenario",
+      "description": "Minimal baseline scenario",
+      "buildings": [
+       {
+        "building_id": "building_1",
+        "building_type": "residential",
+        "location": {
+         "lat": 34.05,
+         "lon": -118.24,
+         "timezone": "America/Los_Angeles"
+        }
+       }
+      ],
+      "pandapower": {
+       "network_type": "ieee_13",
+       "voltage_limits": {
+        "min": 0.95,
+        "max": 1.05
+       },
+       "line_loading_limit": 1.0,
+       "transformer_loading_limit": 1.0,
+       "run_power_flow_every": 1
+      },
+      "energy_sharing": null,
+      "failures": [],
+      "community_import_limit_kw": -5.0,
+      "community_export_limit_kw": null,
+      "random_seed": 42,
+      "timestep_minutes": 15
+     },
+     "config_diff": "",
+     "implementation_notes": "Applied plan with 0 changes",
+     "applied_count": 0,
+     "failed_count": 0
+    },
+    "executor_output": {
+     "success": false,
+     "scenario_id": "nl_config_1794366246_1",
+     "config_valid": false,
+     "simulation_steps": 0,
+     "simulation_time_sec": 0.0016341209411621094,
+     "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error",
+     "warnings": [],
+     "validation_errors": [],
+     "test_results": {
+      "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error"
+     },
+     "violation_counts": {},
+     "power_flow_converged": true,
+     "energy_balance_ok": true,
+     "execution_time": 0.0016341209411621094
+    },
+    "verifier_output": {
+     "schema_valid": false,
+     "round_trip_valid": false,
+     "determinism_check": false,
+     "schema_complete": false,
+     "determinism_seed": null,
+     "determinism_tolerance": 1e-06,
+     "schema_errors": [
+      "community_import_limit_kw: Value error, Limits must be positive"
+     ],
+     "round_trip_errors": [],
+     "determinism_errors": [],
+     "completeness_issues": [],
+     "required_fields_missing": [],
+     "out_of_range_fields": [],
+     "schema_rejections": [],
+     "confidence": 0.0,
+     "recommendation": "escalate",
+     "manifest": {}
+    },
+    "reporter_output": {
+     "summary": "Config generation failed: 1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error",
+     "detailed_report": {
+      "plan": {
+       "plan_source": "llm",
+       "rejected_fields": [
+        "buildings"
+       ],
+       "target_assets": [
+        "grid"
+       ],
+       "building_count": 1,
+       "building_types": [
+        "residential"
+       ],
+       "pv_configs": [],
+       "battery_configs": [],
+       "ev_configs": [],
+       "flexible_load_configs": [],
+       "tariff_configs": [],
+       "grid_configs": [
+        {
+         "network_type": "ieee_13",
+         "voltage_limits": {
+          "min": 0.95,
+          "max": 1.05
+         },
+         "line_loading_limit": 1.0
+        }
+       ],
+       "failure_injections": [],
+       "community_import_limit_kw": -5.0,
+       "community_export_limit_kw": null,
+       "energy_sharing_enabled": false,
+       "dynamic_pricing_enabled": false,
+       "timestep_minutes": 15,
+       "simulation_duration_days": 7,
+       "simulation_start": null,
+       "simulation_end": null,
+       "random_seed": 42,
+       "location": {
+        "lat": 34.05,
+        "lon": -118.24,
+        "timezone": "America/Los_Angeles"
+       },
+       "climate_zone": "tmy3_722950",
+       "weather_file": null,
+       "confidence": 0.85,
+       "assumptions": [
+        "Default ieee_13 network type used for grid configuration",
+        "Default voltage limits and line loading applied"
+       ],
+       "required_fields": [
+        "scenario_id",
+        "name",
+        "description",
+        "buildings",
+        "random_seed",
+        "timestep_minutes"
+       ],
+       "out_of_scope": [
+        "detailed grid topology",
+        "custom market mechanisms"
+       ]
+      },
+      "changes": [],
+      "diff": "",
+      "execution": {
+       "success": false,
+       "steps": 0,
+       "violations": {},
+       "power_flow_converged": true,
+       "energy_balance": true,
+       "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error"
+      },
+      "verification": {
+       "schema_valid": false,
+       "round_trip": false,
+       "determinism": false,
+       "confidence": 0.0
+      },
+      "mapping_errors": [],
+      "schema_errors": []
+     },
+     "artifacts": [
+      "scenario_config.json",
+      "manifest.json"
+     ],
+     "recommendations": [
+      "Fix schema validation errors",
+      "Fix round-trip serialization issues"
+     ],
+     "manifest": {
+      "scenario_id": "r04_out_of_range_limit",
+      "plan_source": "llm",
+      "rejected_fields": [
+       "buildings"
+      ]
+     }
+    },
+    "success": false,
+    "duration": 7.502563714981079
+   },
+   {
+    "iteration": 2,
+    "planner_output": {
+     "plan_source": "llm",
+     "rejected_fields": [
+      "buildings"
+     ],
+     "target_assets": [
+      "grid"
+     ],
+     "building_count": 1,
+     "building_types": [
+      "residential"
+     ],
+     "pv_configs": [],
+     "battery_configs": [],
+     "ev_configs": [],
+     "flexible_load_configs": [],
+     "tariff_configs": [],
+     "grid_configs": [
+      {
+       "network_type": "ieee_13",
+       "voltage_limits": {
+        "min": 0.95,
+        "max": 1.05
+       },
+       "line_loading_limit": 1.0
+      }
+     ],
+     "failure_injections": [],
+     "community_import_limit_kw": -5.0,
+     "community_export_limit_kw": null,
+     "energy_sharing_enabled": false,
+     "dynamic_pricing_enabled": false,
+     "timestep_minutes": 15,
+     "simulation_duration_days": 7,
+     "simulation_start": null,
+     "simulation_end": null,
+     "random_seed": 42,
+     "location": {
+      "lat": 34.05,
+      "lon": -118.24,
+      "timezone": "America/Los_Angeles"
+     },
+     "climate_zone": "tmy3_722950",
+     "weather_file": null,
+     "confidence": 0.85,
+     "assumptions": [
+      "Default timestep of 15 minutes used as no step was specified"
+     ],
+     "required_fields": [
+      "scenario_id",
+      "name",
+      "description",
+      "buildings",
+      "random_seed",
+      "timestep_minutes"
+     ],
+     "out_of_scope": [
+      "detailed grid topology",
+      "custom market mechanisms"
+     ]
+    },
+    "coder_output": {
+     "config_changes": [],
+     "patched_config": {
+      "scenario_id": "scenario_base",
+      "name": "Base Scenario",
+      "description": "Minimal baseline scenario",
+      "buildings": [
+       {
+        "building_id": "building_1",
+        "building_type": "residential",
+        "location": {
+         "lat": 34.05,
+         "lon": -118.24,
+         "timezone": "America/Los_Angeles"
+        }
+       }
+      ],
+      "pandapower": {
+       "network_type": "ieee_13",
+       "voltage_limits": {
+        "min": 0.95,
+        "max": 1.05
+       },
+       "line_loading_limit": 1.0,
+       "transformer_loading_limit": 1.0,
+       "run_power_flow_every": 1
+      },
+      "energy_sharing": null,
+      "failures": [],
+      "community_import_limit_kw": -5.0,
+      "community_export_limit_kw": null,
+      "random_seed": 42,
+      "timestep_minutes": 15
+     },
+     "config_diff": "",
+     "implementation_notes": "Applied plan with 0 changes",
+     "applied_count": 0,
+     "failed_count": 0
+    },
+    "executor_output": {
+     "success": false,
+     "scenario_id": "nl_config_1794366252_2",
+     "config_valid": false,
+     "simulation_steps": 0,
+     "simulation_time_sec": 0.001653909683227539,
+     "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error",
+     "warnings": [],
+     "validation_errors": [],
+     "test_results": {
+      "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error"
+     },
+     "violation_counts": {},
+     "power_flow_converged": true,
+     "energy_balance_ok": true,
+     "execution_time": 0.001653909683227539
+    },
+    "verifier_output": {
+     "schema_valid": false,
+     "round_trip_valid": false,
+     "determinism_check": false,
+     "schema_complete": false,
+     "determinism_seed": null,
+     "determinism_tolerance": 1e-06,
+     "schema_errors": [
+      "community_import_limit_kw: Value error, Limits must be positive"
+     ],
+     "round_trip_errors": [],
+     "determinism_errors": [],
+     "completeness_issues": [],
+     "required_fields_missing": [],
+     "out_of_range_fields": [],
+     "schema_rejections": [],
+     "confidence": 0.0,
+     "recommendation": "escalate",
+     "manifest": {}
+    },
+    "reporter_output": {
+     "summary": "Config generation failed: 1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error",
+     "detailed_report": {
+      "plan": {
+       "plan_source": "llm",
+       "rejected_fields": [
+        "buildings"
+       ],
+       "target_assets": [
+        "grid"
+       ],
+       "building_count": 1,
+       "building_types": [
+        "residential"
+       ],
+       "pv_configs": [],
+       "battery_configs": [],
+       "ev_configs": [],
+       "flexible_load_configs": [],
+       "tariff_configs": [],
+       "grid_configs": [
+        {
+         "network_type": "ieee_13",
+         "voltage_limits": {
+          "min": 0.95,
+          "max": 1.05
+         },
+         "line_loading_limit": 1.0
+        }
+       ],
+       "failure_injections": [],
+       "community_import_limit_kw": -5.0,
+       "community_export_limit_kw": null,
+       "energy_sharing_enabled": false,
+       "dynamic_pricing_enabled": false,
+       "timestep_minutes": 15,
+       "simulation_duration_days": 7,
+       "simulation_start": null,
+       "simulation_end": null,
+       "random_seed": 42,
+       "location": {
+        "lat": 34.05,
+        "lon": -118.24,
+        "timezone": "America/Los_Angeles"
+       },
+       "climate_zone": "tmy3_722950",
+       "weather_file": null,
+       "confidence": 0.85,
+       "assumptions": [
+        "Default timestep of 15 minutes used as no step was specified"
+       ],
+       "required_fields": [
+        "scenario_id",
+        "name",
+        "description",
+        "buildings",
+        "random_seed",
+        "timestep_minutes"
+       ],
+       "out_of_scope": [
+        "detailed grid topology",
+        "custom market mechanisms"
+       ]
+      },
+      "changes": [],
+      "diff": "",
+      "execution": {
+       "success": false,
+       "steps": 0,
+       "violations": {},
+       "power_flow_converged": true,
+       "energy_balance": true,
+       "error": "1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error"
+      },
+      "verification": {
+       "schema_valid": false,
+       "round_trip": false,
+       "determinism": false,
+       "confidence": 0.0
+      },
+      "mapping_errors": [],
+      "schema_errors": []
+     },
+     "artifacts": [
+      "scenario_config.json",
+      "manifest.json"
+     ],
+     "recommendations": [
+      "Fix schema validation errors",
+      "Fix round-trip serialization issues"
+     ],
+     "manifest": {
+      "scenario_id": "r04_out_of_range_limit",
+      "plan_source": "llm",
+      "rejected_fields": [
+       "buildings"
+      ]
+     }
+    },
+    "success": false,
+    "duration": 5.9138171672821045
+   }
+  ],
+  "audit_trail": [
+   {
+    "timestamp": 1794366231.5952237,
+    "event": "pipeline_start",
+    "nl_description": "Cap the community's grid import at minus 5 kW."
+   },
+   {
+    "iteration": 0,
+    "duration": 7.438916921615601,
+    "success": false,
+    "changes": 1
+   },
+   {
+    "iteration": 1,
+    "duration": 7.502563714981079,
+    "success": false,
+    "changes": 0
+   },
+   {
+    "iteration": 2,
+    "duration": 5.9138171672821045,
+    "success": false,
+    "changes": 0
+   }
+  ]
+ },
+ "final_summary": "Config generation failed: 1 validation error for ScenarioConfig\ncommunity_import_limit_kw\n  Value error, Limits must be positive [type=value_error, input_value=-5.0, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error",
+ "final_verdict": "escalate",
+ "schema_errors": [
+  "buildings"
+ ],
+ "error": null,
+ "elapsed_s": 20.9
+}

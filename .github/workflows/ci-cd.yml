@@ -84,10 +84,29 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
+      # The test suite constructs CityLearnAdapter fixtures that would fetch
+      # datasets from the CityLearn GitHub API on demand; a rate-limited
+      # shared runner IP turns that into mass 403 failures (80 failed in one
+      # run). Cache + prefetch the datasets instead — same wiring as the
+      # reproducibility job.
+      - name: Cache CityLearn datasets
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/citylearn
+          key: citylearn-datasets-v1-${{ env.PYTHON_VERSION }}
+          restore-keys: |
+            citylearn-datasets-v1-
+
       - name: Install package
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[api]"
+
+      - name: Prefetch CityLearn datasets
+        run: |
+          python scripts/prefetch_citylearn.py \
+            --dataset citylearn_challenge_2022_phase_all_plus_evs \
+            --dataset citylearn_challenge_2020_climate_zone_1
 
       - name: Run test suite
         run: pytest -q tests --junitxml=reports/pytest.xml --tb=short
@@ -429,6 +448,14 @@ jobs:
           # Run smoke test with local images
           export IMAGE_TAG=latest
           bash scripts/smoke_deploy.sh
+
+      - name: Upload smoke logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-logs
+          path: smoke-logs/
+          if-no-files-found: ignore
 
   # ============================================================
   # ALEMBIC MIGRATION TEST

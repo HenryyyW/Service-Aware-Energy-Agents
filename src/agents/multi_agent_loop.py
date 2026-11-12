@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from src.agents.roles import AgentState
 from src.agents.planner import PlannerAgent, PlannerOutput
 from src.agents.coder import CoderAgent, CoderOutput
+from src.agents.llm_coder import create_coder_agent, LLMCoderAgent
 from src.agents.executor import ExecutorAgent, ExecutorOutput
 from src.agents.verifier import VerifierAgent, VerifierOutput
 from src.agents.reporter import ReporterAgent, ReporterOutput
@@ -26,6 +27,8 @@ class IterationRecord:
     reporter_output: ReporterOutput
     success: bool
     duration: float
+    # NEW: Track failure context for LOOP FEEDBACK
+    failure_context: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -53,11 +56,18 @@ class MultiAgentRepairLoop:
         executor: ExecutorAgent = None,
         verifier: VerifierAgent = None,
         reporter: ReporterAgent = None,
-        max_iterations: int = 3,
+        max_iterations: int = 5,
         project_root: str = None,
+        coder_config: Optional[Dict[str, Any]] = None,
     ):
         self.planner = planner or PlannerAgent()
-        self.coder = coder or CoderAgent()
+
+        # Create coder based on config (LLM-backed or deterministic)
+        if coder_config is not None:
+            self.coder = create_coder_agent(coder_config)
+        else:
+            self.coder = coder or CoderAgent()
+
         self.executor = executor or ExecutorAgent(project_root=project_root)
         self.verifier = verifier or VerifierAgent()
         self.reporter = reporter or ReporterAgent()
@@ -73,6 +83,7 @@ class MultiAgentRepairLoop:
         controller_file: str,
         scenario_config: Dict[str, Any],
         scenario_config_path: str,
+        detector_fn: Optional[Any] = None,
     ) -> MultiAgentRepairResult:
         """
         Run the complete multi-agent repair loop.
@@ -84,6 +95,7 @@ class MultiAgentRepairLoop:
             controller_file: Path to controller file
             scenario_config: Scenario configuration
             scenario_config_path: Path to scenario config file
+            detector_fn: Optional detector function to verify the actual defect is fixed
 
         Returns:
             MultiAgentRepairResult with final outcome
@@ -101,6 +113,7 @@ class MultiAgentRepairLoop:
             scenario_config=scenario_config,
             scenario_config_path=scenario_config_path,
             max_iterations=self.max_iterations,
+            detector_fn=detector_fn,
         )
 
         print(f"\n{'='*60}")
@@ -117,6 +130,28 @@ class MultiAgentRepairLoop:
             print(f"ITERATION {iteration + 1}/{self.max_iterations}")
             print(f"{'='*60}")
 
+            # === LOOP FEEDBACK: Build failure context from previous iteration ===
+            failure_context = None
+            if iteration > 0 and self.iteration_history:
+                prev = self.iteration_history[-1]
+                failure_context = {
+                    "iteration": iteration - 1,
+                    "error": prev.executor_output.error,
+                    "test_output": (
+                        prev.executor_output.stdout[-2000:]
+                        if prev.executor_output.stdout
+                        else ""
+                    ),
+                    "verifier_feedback": (
+                        f"Violations resolved: {prev.verifier_output.violations_resolved}. "
+                        f"Remaining: {prev.verifier_output.remaining_violations}. "
+                        f"Confidence: {prev.verifier_output.confidence:.0%}. "
+                        f"Recommendation: {prev.verifier_output.recommendation}"
+                    ),
+                    "executor_success": prev.executor_output.success,
+                    "violations_resolved": prev.verifier_output.violations_resolved,
+                }
+
             # === PLANNER ===
             print("\n[PLANNER] Analyzing violations and creating repair plan...")
             plan = self.planner.plan(state)
@@ -131,11 +166,28 @@ class MultiAgentRepairLoop:
                 break
 
             # === CODER ===
+            # LOOP FEEDBACK: Update coder with failure context for TEST-DRIVEN prompt
+            if isinstance(self.coder, LLMCoderAgent):
+                self.coder.iteration = iteration
+                self.coder.previous_failures = (
+                    [failure_context] if failure_context else []
+                )
+
             print("\n[CODER] Implementing code changes...")
             coder_output = self.coder.code(state, plan, state.controller_file)
             print(f"  Changes: {len(coder_output.code_changes)}")
             for change in coder_output.code_changes:
                 print(f"    - {change['function']}: {change['change'][:80]}...")
+
+            # DEBUG: Log diff and patched code info
+            print(f"  [DEBUG] Diff produced: {'YES' if coder_output.diff else 'NO'}")
+            if coder_output.diff:
+                diff_lines = coder_output.diff.count("\n")
+                print(f"  [DEBUG] Diff lines: {diff_lines}")
+            print(
+                f"  [DEBUG] Patched code length: {len(state.patched_code) if state.patched_code else 0}"
+            )
+            print(f"  [DEBUG] Code changes recorded: {len(state.code_changes)}")
 
             # === EXECUTOR ===
             print("\n[EXECUTOR] Running sandbox validation...")
@@ -174,6 +226,7 @@ class MultiAgentRepairLoop:
                 reporter_output=reporter_output,
                 success=executor_output.success and verifier_output.violations_resolved,
                 duration=iter_duration,
+                failure_context=failure_context,
             )
             self.iteration_history.append(iteration_record)
 
@@ -281,6 +334,7 @@ def run_multi_agent_repair(
     scenario_config_path: str,
     max_iterations: int = 3,
     project_root: str = None,
+    detector_fn: Optional[Any] = None,
 ) -> MultiAgentRepairResult:
     """Convenience function to run multi-agent repair loop."""
     loop = MultiAgentRepairLoop(
@@ -293,4 +347,5 @@ def run_multi_agent_repair(
         controller_file,
         scenario_config,
         scenario_config_path,
+        detector_fn,
     )

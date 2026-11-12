@@ -31,6 +31,7 @@ class SandboxResult:
     max_violations: Dict[str, int] = field(default_factory=dict)
     memory_used_mb: float = 0.0
     timed_out: bool = False
+    action_counts: Dict[str, int] = field(default_factory=dict)
 
 
 class Sandbox:
@@ -627,6 +628,12 @@ class Sandbox:
             controller_code = f.read()
 
         start_time = time.time()
+        # Track action execution for absent-execution detection
+        action_counts = {
+            "total_steps": 0,
+            "steps_with_actions": 0,
+            "total_actions": 0,
+        }
         try:
             # Import required modules
             from src.simulation import SimulationCoupler
@@ -674,7 +681,20 @@ class Sandbox:
 
             for step in range(max_steps):
                 # Get actions from controller
-                requested = controller.get_actions(observations, step)
+                try:
+                    requested = controller.get_actions(observations, step)
+                except Exception as e:
+                    # Controller crashed - track this as absent execution and re-raise
+                    action_counts["total_steps"] += 1
+                    action_counts["controller_crashed"] = True
+                    action_counts["crash_error"] = str(e)
+                    raise RuntimeError(f"Controller crashed at step {step}: {e}") from e
+
+                # Track action execution
+                action_counts["total_steps"] += 1
+                if requested.actions:
+                    action_counts["steps_with_actions"] += 1
+                    action_counts["total_actions"] += len(requested.actions)
 
                 # Step simulation
                 result = coupler.step(requested)
@@ -714,15 +734,19 @@ class Sandbox:
             # Success = no violations in checked categories
             violations_resolved = all(v == 0 for v in violation_counts.values())
 
+            # Check for absent execution (controller took no actions)
+            absent_execution = action_counts["steps_with_actions"] == 0
+
             return SandboxResult(
-                success=violations_resolved,
+                success=violations_resolved and not absent_execution,
                 stdout="\n".join(stdout_lines),
                 stderr="",
                 execution_time=execution_time,
-                tests_passed=violations_resolved,
+                tests_passed=violations_resolved and not absent_execution,
                 test_output="\n".join(stdout_lines),
                 violation_counts=violation_counts,
                 max_violations=max_violations,
+                action_counts=action_counts,
             )
 
         except Exception as e:
@@ -731,7 +755,9 @@ class Sandbox:
             return SandboxResult(
                 success=False,
                 error=f"Experiment failed: {str(e)}\n{traceback.format_exc()}",
+                stderr=traceback.format_exc(),
                 execution_time=time.time() - start_time,
+                action_counts=action_counts,
             )
 
     def _create_dynamic_controller(self, controller_code: str, scenario) -> type:
@@ -786,7 +812,13 @@ class Sandbox:
                 def get_actions(self, observations, timestep):
                     self.timestep = timestep
                     if self._impl:
-                        return self._impl.get_actions(observations, timestep)
+                        try:
+                            return self._impl.get_actions(observations, timestep)
+                        except Exception as e:
+                            # Re-raise with context so sandbox can catch and track properly
+                            raise RuntimeError(
+                                f"Patched controller crashed at step {timestep}: {e}"
+                            ) from e
                     # Fallback: return empty actions
                     from src.schemas.action import RequestedActions
 
@@ -934,6 +966,17 @@ class Sandbox:
         timeout: Optional[int] = None,
     ) -> subprocess.CompletedProcess:
         """Run command with memory and time limits."""
+        # Set environment variables to limit thread usage and avoid resource exhaustion
+        env = os.environ.copy()
+        env.update(
+            {
+                "OPENBLAS_NUM_THREADS": "1",
+                "OMP_NUM_THREADS": "1",
+                "NUMEXPR_NUM_THREADS": "1",
+                "MALLOC_ARENA_MAX": "1",
+                "JEMALLOC_ARENA_MAX": "1",
+            }
+        )
         return subprocess.run(
             cmd,
             cwd=cwd,
@@ -942,6 +985,7 @@ class Sandbox:
             text=True,
             timeout=timeout or self.timeout,
             preexec_fn=self._preexec_fn if hasattr(os, "fork") else None,
+            env=env,
         )
 
     def __enter__(self):

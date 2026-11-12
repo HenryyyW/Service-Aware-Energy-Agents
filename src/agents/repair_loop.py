@@ -11,6 +11,7 @@ from src.agents.repair_agent import (
     RepairPatch,
     RepairContext,
 )
+from src.agents.roles import AgentState
 from src.agents.sandbox import Sandbox, SandboxResult, validate_controller_in_sandbox
 from src.schemas.report import ExperimentResult, ExperimentStatus, ControllerType
 from src.schemas.diagnostics import DiagnosticReport
@@ -53,7 +54,7 @@ class RepairLoop:
         self,
         repair_agent: RepairAgent = None,
         sandbox: Sandbox = None,
-        max_iterations: int = 3,
+        max_iterations: int = 5,
         project_root: str = None,
     ):
         self.repair_agent = repair_agent or RepairAgent()
@@ -70,6 +71,7 @@ class RepairLoop:
         controller_file: str,
         scenario_config: Dict[str, Any],
         scenario_config_path: str,
+        detector_fn: Optional[Any] = None,
     ) -> RepairLoopResult:
         """
         Run the complete repair loop with verification harness integration.
@@ -81,6 +83,7 @@ class RepairLoop:
             controller_file: Path to controller file
             scenario_config: Scenario configuration
             scenario_config_path: Path to scenario config file
+            detector_fn: Optional detector function to verify the actual defect is fixed
 
         Returns:
             RepairLoopResult with final outcome
@@ -92,6 +95,18 @@ class RepairLoop:
         # Create verification harness from diagnostic violations
         verification_harness = self._create_verification_harness(
             experiment_result, diagnostic_reports
+        )
+
+        # Initialize shared state
+        state = AgentState(
+            experiment_result=experiment_result,
+            diagnostic_reports=diagnostic_reports,
+            controller_code=baseline_controller_code,
+            controller_file=controller_file,
+            scenario_config=scenario_config,
+            scenario_config_path=scenario_config_path,
+            max_iterations=self.max_iterations,
+            detector_fn=detector_fn,
         )
 
         for iteration in range(self.max_iterations):
@@ -153,6 +168,7 @@ class RepairLoop:
                     scenario_config_path,
                     current_experiment_result,
                     verification_harness,
+                    state.detector_fn,
                 )
                 repair_iteration.verification_report = verification_report
 
@@ -228,6 +244,7 @@ class RepairLoop:
         scenario_config_path: str,
         before_result: ExperimentResult,
         verification_harness: VerificationHarness,
+        detector_fn: Optional[Any] = None,
     ) -> Optional[HarnessReport]:
         """Run a full experiment with the repaired controller and verify with harness."""
         try:
@@ -262,9 +279,13 @@ class RepairLoop:
                 # Run full experiment (or at least more steps)
                 after_result = runner.run(max_steps=200)
 
-                # Verify with harness
+                # Set detector on harness if available
+                if detector_fn:
+                    verification_harness.set_detector(detector_fn)
+
+                # Verify with harness - pass controller code for detector
                 verification_report = verification_harness.verify_repair(
-                    before_result, after_result
+                    before_result, after_result, controller_code=controller_code
                 )
                 return verification_report
 
@@ -334,6 +355,7 @@ def run_repair_loop(
     scenario_config_path: str,
     max_iterations: int = 3,
     project_root: str = None,
+    detector_fn: Optional[Any] = None,
 ) -> RepairLoopResult:
     """Convenience function to run repair loop."""
     repair_agent = RepairAgent()
@@ -347,4 +369,5 @@ def run_repair_loop(
         controller_file,
         scenario_config,
         scenario_config_path,
+        detector_fn,
     )

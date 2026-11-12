@@ -1,6 +1,7 @@
 """Verifier agent - verifies that fixes resolve violations."""
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+import ast
 from src.agents.roles import AgentState, VerifierOutput, AgentRole
 from src.agents.planner import PlannerOutput
 from src.schemas.report import ExperimentResult
@@ -28,13 +29,21 @@ class VerifierAgent:
         Returns:
             VerifierOutput with verification results
         """
-        if not state.sandbox_result or not state.sandbox_result.success:
+        # Check if executor itself failed (code errors, syntax, unit tests)
+        if not state.sandbox_result or state.sandbox_result.error:
             output = VerifierOutput(
                 violations_resolved=False,
                 remaining_violations=[
                     {
                         "issue": "execution_failed",
-                        "details": executor_output.get("error", "Unknown error"),
+                        "details": (
+                            state.sandbox_result.error
+                            if state.sandbox_result
+                            else executor_output.get(
+                                "experiment_error",
+                                executor_output.get("error", "Unknown error"),
+                            )
+                        ),
                     }
                 ],
                 confidence=0.0,
@@ -43,10 +52,63 @@ class VerifierAgent:
             state.verification_result = output.model_dump()
             state.add_message(
                 AgentRole.VERIFIER,
-                f"Verification: FAILED (execution failed: {executor_output.get('error', 'Unknown error')})",
+                f"Verification: FAILED (execution failed: {state.sandbox_result.error if state.sandbox_result else executor_output.get('experiment_error', executor_output.get('error', 'Unknown error'))})",
                 output.model_dump(),
             )
             return output
+
+        # CRITICAL: Check patched code syntax before running detector
+        if state.patched_code:
+            try:
+                ast.parse(state.patched_code)
+            except SyntaxError as e:
+                output = VerifierOutput(
+                    violations_resolved=False,
+                    remaining_violations=[
+                        {
+                            "issue": "syntax_error",
+                            "reason": f"Patched code has syntax error: {e}",
+                            "severity": "critical",
+                        }
+                    ],
+                    confidence=0.0,
+                    recommendation="retry",
+                )
+                state.verification_result = output.model_dump()
+                state.add_message(
+                    AgentRole.VERIFIER,
+                    f"Verification: FAILED (patched code syntax error: {e})",
+                    output.model_dump(),
+                )
+                return output
+
+        # CRITICAL: Run the detector against the patched controller
+        # The detector defines the actual defect - if it still fails, the repair is NOT resolved
+        detector_result = self._run_detector(state)
+        if detector_result is not None:
+            detector_ok, detector_detail = detector_result
+            if not detector_ok:
+                # Detector still fails - defect NOT fixed
+                output = VerifierOutput(
+                    violations_resolved=False,
+                    remaining_violations=[
+                        {
+                            "issue": "detector_failure",
+                            "reason": f"Defect detector still fails: {detector_detail}",
+                            "severity": "critical",
+                            "details": detector_detail,
+                        }
+                    ],
+                    confidence=0.0,
+                    recommendation="retry",
+                )
+                state.verification_result = output.model_dump()
+                state.add_message(
+                    AgentRole.VERIFIER,
+                    f"Verification: FAILED (detector still fails: {detector_detail})",
+                    output.model_dump(),
+                )
+                return output
 
         # Parse experiment results from executor output
         # In practice, would run full experiment and get metrics
@@ -152,6 +214,35 @@ class VerifierAgent:
         violation_counts = test_results.get("violation_counts", {})
         check_categories = test_results.get("check_categories", [])
 
+        # Check for absent execution (controller took no actions)
+        action_counts = test_results.get("action_counts", {})
+        steps_with_actions = action_counts.get("steps_with_actions", 0)
+        total_actions = action_counts.get("total_actions", 0)
+        controller_crashed = action_counts.get("controller_crashed", False)
+        crash_error = action_counts.get("crash_error", "")
+        if controller_crashed:
+            remaining.append(
+                {
+                    "issue": "controller_crashed",
+                    "reason": f"Controller raised exception during execution: {crash_error}",
+                    "severity": "critical",
+                }
+            )
+            return False, remaining, new_violations
+        if steps_with_actions == 0 or total_actions == 0:
+            remaining.append(
+                {
+                    "issue": "absent_execution",
+                    "reason": "Controller took no actions during experiment (absent execution)",
+                    "severity": "critical",
+                }
+            )
+            return False, remaining, new_violations
+
+        # Check violation counts from sandbox experiment
+        violation_counts = test_results.get("violation_counts", {})
+        check_categories = test_results.get("check_categories", [])
+
         # Check if violations in checked categories are resolved
         primary_issue = plan.primary_issue
         violations_resolved = True
@@ -207,6 +298,39 @@ class VerifierAgent:
                 }
             )
 
+        # Cosmetic classifier: reject patches that don't change behavior (cosmetic only)
+        # If the patched code is identical to original (except whitespace), it's cosmetic
+        if state.controller_code and state.patched_code:
+            import difflib
+
+            original_lines = state.controller_code.splitlines()
+            patched_lines = state.patched_code.splitlines()
+            diff = list(
+                difflib.unified_diff(original_lines, patched_lines, lineterm="")
+            )
+            # Filter out whitespace-only changes
+            # Skip context lines (starting with space), skip file headers (---/+++),
+            # strip +/- marker before checking for comments
+            meaningful_changes = []
+            for line in diff:
+                if line.startswith(("+", "-")):
+                    # Skip file headers (--- a/file +++ b/file)
+                    if line.startswith("--- ") or line.startswith("+++ "):
+                        continue
+                    content = line[1:].lstrip()
+                    if content and not content.startswith(("#", '"""', "'''")):
+                        meaningful_changes.append(line)
+            # If no meaningful behavior changes, it's a cosmetic patch
+            if len(meaningful_changes) == 0:
+                remaining.append(
+                    {
+                        "issue": "cosmetic_patch",
+                        "reason": "Patch is cosmetic only - no behavior-changing modifications detected",
+                        "severity": "high",
+                    }
+                )
+                return False, remaining, new_violations
+
         return violations_resolved, remaining, new_violations
 
     def _compare_metrics(
@@ -256,6 +380,70 @@ class VerifierAgent:
             return "retry"
         else:
             return "escalate"
+
+    def _run_detector(self, state: AgentState) -> Optional[tuple]:
+        """Run the detector function against the patched controller.
+
+        Returns (ok, detail) tuple or None if no detector function.
+        """
+        detector_fn = state.detector_fn
+        if detector_fn is None:
+            return None
+
+        try:
+            # Load the patched controller
+            import importlib.util
+            import tempfile
+            import os
+
+            # Write patched code to a temp file and import it
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".py", delete=False, prefix="patched_controller_"
+            ) as f:
+                f.write(state.patched_code)
+                temp_path = f.name
+
+            try:
+                spec = importlib.util.spec_from_file_location(
+                    "patched_controller", temp_path
+                )
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+
+                # Find the controller class (should be RuleBasedController or similar)
+                # Skip abstract BaseController - find concrete class that implements get_actions
+                controller_cls = None
+                for name, obj in module.__dict__.items():
+                    if isinstance(obj, type) and name.endswith("Controller"):
+                        # Check if it's a concrete class (not abstract) and has get_actions
+                        import inspect
+
+                        if not inspect.isabstract(obj) and hasattr(obj, "get_actions"):
+                            controller_cls = obj
+                            break
+
+                # Fallback: if no concrete class found, try any non-abstract Controller
+                if controller_cls is None:
+                    for name, obj in module.__dict__.items():
+                        if isinstance(obj, type) and name.endswith("Controller"):
+                            import inspect
+
+                            if not inspect.isabstract(obj):
+                                controller_cls = obj
+                                break
+
+                if controller_cls is None:
+                    return (False, "No concrete controller class found in patched code")
+
+                # Run detector
+                scenario_config = state.scenario_config
+                ok, detail = detector_fn(controller_cls, scenario_config)
+                return (ok, detail)
+            finally:
+                os.unlink(temp_path)
+
+        except Exception as exc:
+            return (False, f"Detector execution error: {exc}")
 
     def verify_full_experiment(
         self,

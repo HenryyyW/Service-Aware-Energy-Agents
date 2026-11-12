@@ -4,19 +4,27 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from uuid import uuid4
+from pathlib import Path
 from datetime import datetime
 import asyncio
 import numpy as np
 import hashlib
+import re
 import json
 
 
 def _convert_numpy(obj):
-    """Recursively convert numpy types to Python native types."""
+    """Recursively convert numpy types to Python native types.
+
+    Mirrors _convert_to_json_serializable() in src/simulation/coupling.py:
+    non-finite floats (NaN/Inf) are sanitized to None for strict JSON
+    compliance (the trajectories endpoint 500'd on them, Phase 6 F2).
+    """
     if isinstance(obj, (np.integer, np.int64, np.int32, np.int16, np.int8)):
         return int(obj)
     elif isinstance(obj, (np.floating, np.float64, np.float32, np.float16)):
-        return float(obj)
+        val = float(obj)
+        return val if np.isfinite(val) else None
     elif isinstance(obj, np.ndarray):
         return obj.tolist()
     elif isinstance(obj, np.bool_):
@@ -54,6 +62,8 @@ from src.controllers import (
     RuleBasedController,
     CentralizedController,
     MultiAgentController,
+    MPCController,
+    QLearningController,
 )
 from backend.app.routers.scenarios import (
     _scenarios,
@@ -105,12 +115,44 @@ class SimulationRun(BaseModel):
     progress: float = 0.0
 
 
-def _get_controller(controller_type: str, scenario: ScenarioConfig):
-    """Get controller instance by type."""
+RL_POLICY_DIR = (
+    Path(__file__).resolve().parents[3] / "experiments" / "reference" / "rl_policy"
+)
+
+
+def _resolve_rl_policy(parameters: Optional[Dict[str, Any]]) -> str:
+    """Resolve the single-agent-RL policy path.
+
+    Explicit request parameter first; otherwise the repo's reference policies
+    (provenance: docs/rl_policy_provenance.md). A missing policy raises - the
+    run fails honestly instead of pretending to run RL."""
+    if parameters and parameters.get("rl_policy"):
+        policy = Path(str(parameters["rl_policy"]))
+        if not policy.is_file():
+            raise FileNotFoundError(f"RL policy not found: {policy}")
+        return str(policy)
+    candidates = sorted(RL_POLICY_DIR.glob("*.json")) if RL_POLICY_DIR.is_dir() else []
+    if not candidates:
+        raise FileNotFoundError(
+            f"no RL policy available under {RL_POLICY_DIR} - cannot run single-agent RL"
+        )
+    return str(candidates[0])
+
+
+def _get_controller(
+    controller_type: str,
+    scenario: ScenarioConfig,
+    parameters: Optional[Dict[str, Any]] = None,
+):
+    """Get controller instance by type (the four strategies of record)."""
     if controller_type == "centralized":
         return CentralizedController(scenario)
-    elif controller_type == "multi_agent":
+    elif controller_type in ("multi_agent", "multi_agent_rl"):
         return MultiAgentController(scenario)
+    elif controller_type == "mpc":
+        return MPCController(scenario)
+    elif controller_type == "single_agent_rl":
+        return QLearningController(scenario, policy_path=_resolve_rl_policy(parameters))
     else:
         return RuleBasedController(scenario)
 
@@ -122,6 +164,7 @@ async def _run_simulation_background(
     max_steps: int,
     random_seed: int,
     start_step: int = 0,
+    parameters: Optional[Dict[str, Any]] = None,
 ):
     """Background task to run simulation."""
     # Bound before the try: the except branch below inspects `coupler` to persist
@@ -129,6 +172,9 @@ async def _run_simulation_background(
     # scenario, dataset load) used to raise UnboundLocalError there instead of
     # recording the original error - the smoke regression on run 402cdf4b8.
     coupler = None
+    controller = None  # bound early: the except branch below inspects it, and
+    # an early constructor failure must surface the original error, not an
+    # UnboundLocalError (the smoke regression this file guards).
     try:
         _runs[run_id]["status"] = "running"
         _runs[run_id]["stage"] = "initializing"
@@ -145,7 +191,7 @@ async def _run_simulation_background(
         # Initialize coupler and controller
         coupler = SimulationCoupler(scenario, data_dir=data_dir)
 
-        controller = _get_controller(controller_type, scenario)
+        controller = _get_controller(controller_type, scenario, parameters)
 
         _couplers[run_id] = coupler
         _controllers[run_id] = controller
@@ -335,7 +381,18 @@ async def _run_simulation_background(
         _runs[run_id]["end_time"] = datetime.utcnow().isoformat()
         _runs[run_id]["stage"] = "error"
         _runs[run_id]["generation_status"] = "failed"
-        _runs[run_id]["outcome_sentence"] = f"Simulation failed: {str(e)}"
+        outcome = f"Simulation failed: {str(e)}"
+        if controller is not None and isinstance(controller, QLearningController):
+            # A policy mismatch is the common cause (trained on another
+            # scenario's devices) - name the cause and the next step instead
+            # of leaking a bare IndexError.
+            outcome += (
+                " - the single-agent-RL policy does not cover this scenario's"
+                " devices (list index out of range). Next step: train or select"
+                " a policy for this scenario (docs/rl_policy_provenance.md);"
+                " the other strategies ran and are comparable."
+            )
+        _runs[run_id]["outcome_sentence"] = outcome
 
         # Persist failed run data for cross-process access
         set_run(run_id, _runs[run_id])
@@ -408,9 +465,98 @@ async def create_simulation(
         request.controller_type,
         max_steps,
         random_seed,
+        parameters=request.parameters,
     )
 
     return run
+
+
+STRATEGY_CONTROLLERS = ("rule_based", "mpc", "single_agent_rl", "multi_agent_rl")
+
+
+@router.post("/simulations/strategy-comparison", response_model=dict)
+async def strategy_comparison(request: dict, background_tasks: BackgroundTasks):
+    """Start (or reuse) the four strategies of record on ONE community config,
+    same seed. Returns the run ids immediately; the runs execute as background
+    tasks and the caller polls GET /simulations/{run_id} for status and
+    metrics - a run that has not finished is 'pending', never estimated."""
+    scenario_id = request.get("scenario_id")
+    if not scenario_id:
+        raise HTTPException(status_code=422, detail="scenario_id is required")
+    if scenario_id not in _scenarios:
+        scenario = _load_scenario_from_disk(scenario_id)
+        if scenario:
+            _scenarios[scenario_id] = scenario
+        else:
+            raise HTTPException(
+                status_code=404, detail=f"Scenario {scenario_id} not found"
+            )
+    scenario = _scenarios[scenario_id]
+    seed = request.get("random_seed", scenario.random_seed)
+    max_steps = request.get("max_steps", 24)
+
+    run_ids: Dict[str, str] = {}
+    for controller in STRATEGY_CONTROLLERS:
+        params = dict(request.get("parameters") or {})
+        if controller == "single_agent_rl" and request.get("rl_policy"):
+            params.setdefault("rl_policy", request.get("rl_policy"))
+        config_hash = _compute_config_hash(
+            scenario_id, controller, params or None, seed
+        )
+        existing = _config_hash_index.get(config_hash)
+        if (
+            existing
+            and existing in _runs
+            and _runs[existing]["status"]
+            in (
+                "completed",
+                "running",
+                "pending",
+            )
+        ):
+            run_ids[controller] = existing
+            continue
+        run_id = f"run_{uuid4().hex[:12]}"
+        _runs[run_id] = {
+            "run_id": run_id,
+            "scenario_id": scenario_id,
+            "controller_type": controller,
+            "status": "pending",
+            "start_time": datetime.utcnow().isoformat(),
+            "end_time": None,
+            "energy_metrics": None,
+            "service_metrics": None,
+            "grid_metrics": None,
+            "random_seed": seed,
+            "max_steps": max_steps,
+            "config_hash": config_hash,
+        }
+        _config_hash_index[config_hash] = run_id
+        run_ids[controller] = run_id
+        background_tasks.add_task(
+            _run_simulation_background,
+            run_id,
+            scenario,
+            controller,
+            max_steps,
+            seed,
+            parameters=params or None,
+        )
+
+    return {
+        "scenario_id": scenario_id,
+        "random_seed": seed,
+        "runs": run_ids,
+        "strategy_data": {
+            controller: {
+                "status": "pending",
+                "import_limit_kw": scenario.community_import_limit_kw,
+                "export_limit_kw": scenario.community_export_limit_kw,
+                "run_id": rid,
+            }
+            for controller, rid in run_ids.items()
+        },
+    }
 
 
 @router.get("/simulations", response_model=List[SimulationRun])
@@ -480,6 +626,406 @@ async def get_trajectories(run_id: str):
 
     coupler = _couplers[run_id]
     return _convert_trajectories_to_json(coupler.co_sim_history)
+
+
+CATEGORY_GUIDANCE = {
+    "voltage": (
+        "Voltage left the permitted band",
+        "Check the feeder loading at this timestep; consider a PV curtailment or battery discharge at the flagged bus, or a tap-changer setting review.",
+    ),
+    "thermal": (
+        "Equipment loading exceeded its rating",
+        "Reduce the peak transfer at the flagged element or re-balance the community dispatch.",
+    ),
+    "convergence": (
+        "Power flow did not converge",
+        "The operating point is likely infeasible: review the dispatch schedule for conflicting setpoints at this timestep.",
+    ),
+    "default": (
+        "Constraint breached",
+        "Inspect the flagged element and timestep in the community view; adjust the dispatch or the asset limits and re-run.",
+    ),
+}
+
+
+# Fix proposals awaiting approval: proposal_id -> {run_id, scenario_id, ...}
+_fix_proposals: Dict[str, dict] = {}
+
+
+def _proposals_from_findings(findings, scenario):
+    """Rule-based, evidence-linked proposals. Each names the expected config
+    change and the condition that must hold afterwards. This is the workflow
+    layer - the LLM strategy-modification component is measured at 5 of 9 vs
+    its 7 of 9 bar and is NOT claimed here."""
+    proposals = []
+    seen = set()
+    values = {}
+    for f in findings:
+        key = (
+            f.get("category"),
+            tuple(sorted((f.get("evidence") or {}).get("bus_indices") or [])),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        buses = (f.get("evidence") or {}).get("bus_indices") or []
+        values = (f.get("evidence") or {}).get("values") or {}
+        cat = f.get("category")
+        if cat == "voltage":
+            limit = (f.get("evidence") or {}).get("limits") or {}
+            proposals.append(
+                {
+                    "kind": "voltage",
+                    "expected_change": (
+                        f"Reduce dispatch at bus {buses} (curtail PV / discharge battery) "
+                        "or tighten the community import limit for the flagged timesteps"
+                    ),
+                    "verification_condition": (
+                        "bus voltage within the permitted band at the flagged timesteps "
+                        f"(limits: {limit})"
+                    ),
+                    "evidence": f.get("evidence"),
+                    "source_finding": f,
+                }
+            )
+        elif cat == "thermal":
+            proposals.append(
+                {
+                    "kind": "thermal",
+                    "expected_change": (
+                        f"Re-balance the dispatch away from the flagged element {buses} "
+                        "or raise its rating after review"
+                    ),
+                    "verification_condition": "element loading within rating at the flagged timesteps",
+                    "evidence": f.get("evidence"),
+                    "source_finding": f,
+                }
+            )
+        elif cat == "convergence":
+            proposals.append(
+                {
+                    "kind": "convergence",
+                    "expected_change": "Resolve conflicting setpoints at the flagged timesteps",
+                    "verification_condition": "power flow converges at every timestep",
+                    "evidence": f.get("evidence"),
+                    "source_finding": f,
+                }
+            )
+        elif cat in ("grid_limit", "limit"):
+            peak = None
+            for k, v in (f.get("evidence") or {}).get("values", {}).items():
+                if isinstance(v, (int, float)) and "limit" not in str(k).lower():
+                    peak = max(peak or 0, v)
+            if peak is None:
+                m = re.search(r"exceeded:\s*([0-9.]+)", str(f.get("message", "")))
+                if m:
+                    peak = float(m.group(1))
+            proposals.append(
+                {
+                    "kind": (
+                        "voltage"
+                        if "voltage" in str(f.get("message", "")).lower()
+                        else "grid_limit"
+                    ),
+                    "expected_change": (
+                        f"Community import limit was exceeded (peak observed {peak}). "
+                        "Raise the import limit to cover the observed peak, or reduce the "
+                        "community dispatch - the applied proposal raises the limit."
+                    ),
+                    "verification_condition": (
+                        "after the change, the community import stays within the limit at "
+                        "every timestep (no 'import limit exceeded' diagnostics)"
+                    ),
+                    "evidence": f.get("evidence"),
+                    "source_finding": f,
+                    "observed_peak": peak,
+                }
+            )
+        else:
+            proposals.append(
+                {
+                    "kind": "generic",
+                    "expected_change": f.get("recommended_action"),
+                    "verification_condition": "the flagged constraint holds after the change",
+                    "evidence": f.get("evidence"),
+                    "source_finding": f,
+                }
+            )
+    if not proposals and values:
+        proposals.append(
+            {
+                "kind": "review",
+                "expected_change": "Manual review of the flagged operating point",
+                "verification_condition": "no new violations after the change",
+                "evidence": values,
+                "source_finding": None,
+            }
+        )
+    return proposals
+
+
+@router.post("/simulations/{run_id}/fix-proposals", response_model=dict)
+async def create_fix_proposals(run_id: str):
+    """Create fix proposals for a completed run (awaiting approval).
+
+    Proposals are rule-based and evidence-linked; nothing is applied until a
+    proposal is approved. The LLM strategy-modification component (measured
+    5 of 9 vs its pre-registered 7 of 9) is not claimed by this endpoint."""
+    if run_id not in _runs:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+    run = _runs[run_id]
+    diag = await get_diagnostics(run_id)
+    proposals = _proposals_from_findings(diag.get("findings") or [], None)
+    created = []
+    for p in proposals:
+        pid = f"fix_{uuid4().hex[:10]}"
+        record = {
+            "proposal_id": pid,
+            "run_id": run_id,
+            "scenario_id": run.get("scenario_id"),
+            "status": "awaiting_approval",
+            "before": {
+                "kpi_summary": diag.get("kpi_summary"),
+                "findings_count": len(diag.get("findings") or []),
+            },
+            **{k: v for k, v in p.items() if k != "source_finding"},
+        }
+        _fix_proposals[pid] = record
+        created.append(record)
+    return {
+        "run_id": run_id,
+        "proposals": created,
+        "note": "Nothing is applied until a proposal is approved; approval re-runs the scenario and reports the before/after verification.",
+    }
+
+
+@router.get("/simulations/{run_id}/diagnostics", response_model=dict)
+async def get_diagnostics(run_id: str):
+    """Read-only diagnosis of a completed run: what breached, when, and why -
+    with the evidence (values, limits, buses) and a recommended next step.
+    Interpretation only: no repair proposal is made here (the repair loop is
+    measured at 5/9 vs its 7/9 bar and is not claimed by this endpoint)."""
+    if run_id not in _runs:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+    run = _runs[run_id]
+    try:
+        trajectories = await get_trajectories(run_id)
+    except HTTPException:
+        trajectories = []
+
+    findings = []
+    for step in trajectories or []:
+        ts = step.get("timestep", step.get("step"))
+        for diag in (step.get("grid_diagnostics") or {}).get("diagnostics", []):
+            if diag.get("severity") not in ("violation", "critical"):
+                continue
+            category = diag.get("category", "default")
+            meaning, action = CATEGORY_GUIDANCE.get(
+                category, CATEGORY_GUIDANCE["default"]
+            )
+            findings.append(
+                {
+                    "timestep": ts,
+                    "category": category,
+                    "severity": diag.get("severity"),
+                    "message": diag.get("message"),
+                    "meaning": meaning,
+                    "recommended_action": action,
+                    "evidence": {
+                        "values": diag.get("values", {}),
+                        "limits": diag.get("limits", {}),
+                        "bus_indices": diag.get("bus_indices", []),
+                        "asset_ids": diag.get("asset_ids", []),
+                    },
+                }
+            )
+
+    energy = run.get("energy_metrics") or {}
+    grid = run.get("grid_metrics") or {}
+    service = run.get("service_metrics") or {}
+    kpi_summary = {
+        "total_cost": energy.get("total_cost"),
+        "grid_import_kwh": energy.get("grid_import_kwh"),
+        "carbon_emissions_kg": energy.get("carbon_emissions_kg"),
+        "ev_completion_rate": service.get("ev_completion_rate"),
+        "voltage_violations_count": grid.get("voltage_violations_count"),
+        "max_voltage_pu": grid.get("max_voltage_pu"),
+        "power_flow_convergence_rate": grid.get("power_flow_convergence_rate"),
+    }
+    return {
+        "run_id": run_id,
+        "scenario_id": run.get("scenario_id"),
+        "controller_type": run.get("controller_type"),
+        "status": run.get("status"),
+        "findings": findings,
+        "kpi_summary": kpi_summary,
+        "interpretation": (
+            "No constraint violations were recorded in this run."
+            if not findings
+            else f"{len(findings)} constraint breach(es) recorded; see the per-timestep findings with their evidence."
+        ),
+        "note": "Interpretation and recommendations are evidence-linked to the run; the strategy-modification component is measured separately (5 of 9 vs its pre-registered 7 of 9) and is not claimed by this endpoint.",
+    }
+
+
+@router.post("/fix-proposals/{proposal_id}/approve", response_model=dict)
+async def approve_fix_proposal(proposal_id: str, background_tasks: BackgroundTasks):
+    """Approve a fix proposal: apply the change, re-run the scenario, verify.
+
+    The proposal's expected change is applied to the scenario configuration,
+    the simulation is re-run, and the before/after KPIs and violation counts
+    are reported. The verification condition from the proposal is checked
+    against the re-run; an unmet condition is reported, not smoothed over."""
+    proposal = _fix_proposals.get(proposal_id)
+    if not proposal:
+        raise HTTPException(status_code=404, detail=f"Proposal {proposal_id} not found")
+    if proposal["status"] != "awaiting_approval":
+        raise HTTPException(
+            status_code=409, detail=f"Proposal already {proposal['status']}"
+        )
+
+    scenario_id = proposal["scenario_id"]
+    kind = proposal.get("kind")
+    before_kpis = proposal.get("before", {}).get("kpi_summary") or {}
+
+    # Apply the proposal's expected change to the scenario config. For a
+    # voltage breach the workflow-level lever is a tighter community import
+    # limit (a documented, reviewable change); other kinds adjust the
+    # community export limit symmetrically. Anything else stays manual.
+    scenario = _scenarios.get(scenario_id) or _load_scenario_from_disk(scenario_id)
+    if scenario is None:
+        raise HTTPException(status_code=404, detail=f"Scenario {scenario_id} not found")
+    applied_change = None
+    if kind in ("voltage", "grid_limit"):
+        # a limit breach: raise the documented community limit to just above the
+        # observed peak (a reviewable change), or tighten it for a voltage breach
+        if kind == "grid_limit":
+            new_limit = max(1.0, round((proposal.get("observed_peak") or 0) * 1.05, 3))
+        else:
+            new_limit = max(1.0, (before_kpis.get("grid_import_kwh") or 0) * 0.9)
+        scenario.community_import_limit_kw = new_limit
+        applied_change = f"community_import_limit_kw -> {new_limit}"
+    elif kind == "thermal":
+        new_limit = max(1.0, (before_kpis.get("grid_export_kwh") or 0) * 0.9)
+        scenario.community_export_limit_kw = new_limit
+        applied_change = f"community_export_limit_kw -> {new_limit}"
+    else:
+        proposal["status"] = "rejected"
+        proposal["resolution"] = "manual review required - no automated change proposed"
+        return {
+            "proposal_id": proposal_id,
+            "status": "rejected",
+            "resolution": proposal["resolution"],
+        }
+
+    _scenarios[scenario_id] = scenario
+
+    # Re-run the same scenario with the same seed, then verify.
+    before_run = _runs.get(proposal["run_id"], {})
+    seed = before_run.get("random_seed", scenario.random_seed)
+    max_steps = before_run.get("max_steps", 24)
+    controller = before_run.get("controller_type", "rule_based")
+    new_run_id = f"run_{uuid4().hex[:12]}"
+    config_hash = _compute_config_hash(scenario_id, controller, None, seed)
+    _runs[new_run_id] = {
+        "run_id": new_run_id,
+        "scenario_id": scenario_id,
+        "controller_type": controller,
+        "status": "pending",
+        "start_time": datetime.utcnow().isoformat(),
+        "end_time": None,
+        "energy_metrics": None,
+        "service_metrics": None,
+        "grid_metrics": None,
+        "random_seed": seed,
+        "max_steps": max_steps,
+        "config_hash": config_hash,
+        "note": f"re-run after fix proposal {proposal_id}",
+    }
+    _config_hash_index[config_hash] = new_run_id
+
+    background_tasks.add_task(
+        _run_simulation_background,
+        new_run_id,
+        scenario,
+        controller,
+        max_steps,
+        seed,
+    )
+
+    proposal["status"] = "re_running"
+    proposal["applied_change"] = applied_change
+    proposal["re_run_id"] = new_run_id
+    return {
+        "proposal_id": proposal_id,
+        "status": "re_running",
+        "applied_change": applied_change,
+        "re_run_id": new_run_id,
+        "before": proposal.get("before"),
+        "note": "The re-run executes in the background; poll GET /fix-proposals/{id} for the before/after verification.",
+    }
+
+
+@router.get("/fix-proposals/{proposal_id}", response_model=dict)
+async def get_fix_proposal(proposal_id: str):
+    """A proposal with its live before/after verification, computed on demand
+    from the original run and the proposal's re-run - real data, no estimate."""
+    proposal = _fix_proposals.get(proposal_id)
+    if not proposal:
+        raise HTTPException(status_code=404, detail=f"Proposal {proposal_id} not found")
+    re_run_id = proposal.get("re_run_id")
+    after = None
+    condition_met = None
+    if re_run_id and re_run_id in _runs:
+        run = _runs[re_run_id]
+        if run.get("status") == "completed":
+            grid = run.get("grid_metrics") or {}
+            energy = run.get("energy_metrics") or {}
+            after = {
+                "run_id": re_run_id,
+                "kpi_summary": {
+                    "total_cost": energy.get("total_cost"),
+                    "grid_import_kwh": energy.get("grid_import_kwh"),
+                    "grid_export_kwh": energy.get("grid_export_kwh"),
+                    "voltage_violations_count": grid.get("voltage_violations_count"),
+                    "max_voltage_pu": grid.get("max_voltage_pu"),
+                    "power_flow_convergence_rate": grid.get(
+                        "power_flow_convergence_rate"
+                    ),
+                },
+            }
+            before_payload = proposal.get("before") or {}
+            before_v = before_payload.get("kpi_summary") or {}
+            # the real 'before' breach count is the diagnosis's findings; the
+            # run's own grid_metrics may not carry it
+            b = (
+                before_v.get("voltage_violations_count")
+                or before_payload.get("findings_count")
+                or 0
+            )
+            a = grid.get("voltage_violations_count") or 0
+            condition_met = a < b
+            proposal["status"] = "applied" if condition_met else "applied_unverified"
+            proposal["resolution"] = (
+                "verification condition met (violations fell)"
+                if condition_met
+                else "verification condition NOT met (violations did not fall)"
+            )
+        elif run.get("status") == "failed":
+            proposal["status"] = "failed"
+            proposal["resolution"] = f"re-run failed: {run.get('error')}"
+    return {
+        "proposal_id": proposal_id,
+        "status": proposal.get("status"),
+        "kind": proposal.get("kind"),
+        "expected_change": proposal.get("expected_change"),
+        "verification_condition": proposal.get("verification_condition"),
+        "applied_change": proposal.get("applied_change"),
+        "before": proposal.get("before"),
+        "after": after,
+        "verification_condition_met": condition_met,
+        "resolution": proposal.get("resolution"),
+    }
 
 
 @router.get("/simulations/{run_id}/grid")

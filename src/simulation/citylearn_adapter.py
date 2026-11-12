@@ -75,6 +75,13 @@ class CityLearnAdapter:
         # LMP pricing state (set by coupling module when dynamic pricing enabled)
         self._current_building_lmps: Optional[Dict[str, float]] = None
         self._dynamic_pricing_enabled: bool = False
+        # E1/E2 instrumentation: adapter intervention tracking
+        self._adapter_interventions: List[Dict[str, Any]] = (
+            []
+        )  # L3: requested -> limited -> applied
+        self._applied_violations: List[Dict[str, Any]] = (
+            []
+        )  # L4: post-execution violations
 
         self._setup_environment()
 
@@ -283,6 +290,13 @@ class CityLearnAdapter:
                     buildings_to_keep[new_name] = {}
                 # Always use our building name for energy simulation file
                 buildings_to_keep[new_name]["energy_simulation"] = f"{new_name}.csv"
+                # Set weather file if specified in building config
+                if building_config.weather_file:
+                    # Use the canonical filename (e.g., singapore.csv)
+                    weather_filename = building_config.weather_file
+                    if not weather_filename.endswith(".csv"):
+                        weather_filename = f"{weather_filename.lower()}.csv"
+                    buildings_to_keep[new_name]["weather"] = weather_filename
                 # Ensure building is included
                 buildings_to_keep[new_name]["include"] = True
                 # Apply the scenario YAML's device parameters (battery, PV, EVs,
@@ -729,10 +743,40 @@ class CityLearnAdapter:
         """Copy dataset files to our schema directory."""
         source_dir = Path(source_dir)
 
-        # Copy weather file
-        weather_src = source_dir / "weather.csv"
-        if weather_src.exists():
-            shutil.copy2(weather_src, schema_dir / "weather.csv")
+        # Copy weather files - each building can have its own weather file
+        # First, collect all unique weather files needed
+        weather_files_to_copy = set()
+        for building_name in self.building_ids:
+            if building_name in schema["buildings"]:
+                building_schema = schema["buildings"][building_name]
+                weather_file = building_schema.get("weather", "weather.csv")
+                weather_files_to_copy.add(weather_file)
+
+        # Copy each unique weather file
+        for weather_file in weather_files_to_copy:
+            weather_src = None
+            # First check in our custom weather_files directory
+            custom_weather_dir = Path(self.data_dir) / "weather_files"
+            if custom_weather_dir.exists():
+                weather_src = custom_weather_dir / weather_file
+            # Fall back to source dataset directory
+            if not weather_src or not weather_src.exists():
+                weather_src = source_dir / weather_file
+            if weather_src and weather_src.exists():
+                shutil.copy2(weather_src, schema_dir / weather_file)
+            elif weather_file == "weather.csv":
+                # Default weather.csv must exist
+                raise FileNotFoundError(
+                    f"Default weather file not found: {source_dir / 'weather.csv'}"
+                )
+            else:
+                # A NAMED weather file that does not resolve is a hard failure:
+                # silently substituting the default would mislabel the run
+                # (the reviewer's called-out pattern - refuse, do not swap).
+                raise FileNotFoundError(
+                    f"Named weather file not found: {weather_file} "
+                    f"(looked in {custom_weather_dir} and {source_dir})"
+                )
 
         # Copy carbon intensity file
         ci_src = source_dir / "carbon_intensity.csv"
@@ -936,6 +980,9 @@ class CityLearnAdapter:
         elif isinstance(terminated, (bool, np.bool_)):
             done = bool(terminated or truncated)
 
+        # L4: Post-execution check - compare applied actions against device ratings and grid limits
+        self._check_applied_violations(applied_actions, observations)
+
         # Build step result
         step_result = SimulationStepResult(
             timestep=self.episode_step,
@@ -957,6 +1004,160 @@ class CityLearnAdapter:
         self.episode_step += 1
 
         return observations, step_result
+
+    def _check_applied_violations(
+        self, applied_actions: AppliedActions, observations: Dict[str, Any]
+    ) -> None:
+        """L4: Check final applied actions against device ratings and grid limits."""
+        metadata = getattr(self, "device_metadata", None) or {}
+        for app_action in applied_actions.actions:
+            # Check device power limits
+            bid = (
+                app_action.asset_id.split("_")[0]
+                if "_" in app_action.asset_id
+                else None
+            )
+            if bid and bid in metadata:
+                building_meta = metadata[bid]
+                if app_action.asset_id.endswith("_battery"):
+                    battery = building_meta.get("battery") or {}
+                    power_limit = float(battery.get("power_kw") or 0.0)
+                    if (
+                        power_limit > 0
+                        and abs(app_action.value_kw) > power_limit + 1e-9
+                    ):
+                        self._applied_violations.append(
+                            {
+                                "timestep": self.episode_step,
+                                "asset_id": app_action.asset_id,
+                                "violation_type": "device_limit",
+                                "applied_kw": float(app_action.value_kw),
+                                "limit_kw": float(power_limit),
+                                "deviation_pct": (
+                                    (
+                                        (app_action.value_kw - power_limit)
+                                        / power_limit
+                                        * 100
+                                    )
+                                    if power_limit > 0
+                                    else 0.0
+                                ),
+                            }
+                        )
+                elif "_ev_" in app_action.asset_id:
+                    # EV charger
+                    parts = app_action.asset_id.split("_")
+                    if len(parts) >= 3:
+                        try:
+                            device_index = int(parts[-1])
+                            chargers = building_meta.get("chargers") or []
+                            if device_index < len(chargers):
+                                charger = chargers[device_index]
+                                max_charge = float(charger.get("max_charge_kw") or 0.0)
+                                max_discharge = float(
+                                    charger.get("max_discharge_kw") or 0.0
+                                )
+                                if (
+                                    app_action.value_kw > 0
+                                    and max_charge > 0
+                                    and app_action.value_kw > max_charge + 1e-9
+                                ):
+                                    self._applied_violations.append(
+                                        {
+                                            "timestep": self.episode_step,
+                                            "asset_id": app_action.asset_id,
+                                            "violation_type": "device_limit",
+                                            "applied_kw": float(app_action.value_kw),
+                                            "limit_kw": float(max_charge),
+                                            "deviation_pct": (
+                                                (
+                                                    (app_action.value_kw - max_charge)
+                                                    / max_charge
+                                                    * 100
+                                                )
+                                                if max_charge > 0
+                                                else 0.0
+                                            ),
+                                        }
+                                    )
+                                elif (
+                                    app_action.value_kw < 0
+                                    and max_discharge > 0
+                                    and -app_action.value_kw > max_discharge + 1e-9
+                                ):
+                                    self._applied_violations.append(
+                                        {
+                                            "timestep": self.episode_step,
+                                            "asset_id": app_action.asset_id,
+                                            "violation_type": "device_limit",
+                                            "applied_kw": float(app_action.value_kw),
+                                            "limit_kw": float(-max_discharge),
+                                            "deviation_pct": (
+                                                (
+                                                    (
+                                                        -app_action.value_kw
+                                                        - max_discharge
+                                                    )
+                                                    / max_discharge
+                                                    * 100
+                                                )
+                                                if max_discharge > 0
+                                                else 0.0
+                                            ),
+                                        }
+                                    )
+                        except (ValueError, IndexError):
+                            pass
+                elif "_flex_" in app_action.asset_id:
+                    # Flexible load - check against nominal power
+                    parts = app_action.asset_id.split("_")
+                    if len(parts) >= 3:
+                        try:
+                            device_index = int(parts[-1])
+                            deferrable = building_meta.get("deferrable") or []
+                            if device_index < len(deferrable):
+                                power_limit = float(
+                                    deferrable[device_index].get("power_kw") or 0.0
+                                )
+                                if (
+                                    power_limit > 0
+                                    and abs(app_action.value_kw) > power_limit + 1e-9
+                                ):
+                                    self._applied_violations.append(
+                                        {
+                                            "timestep": self.episode_step,
+                                            "asset_id": app_action.asset_id,
+                                            "violation_type": "device_limit",
+                                            "applied_kw": float(app_action.value_kw),
+                                            "limit_kw": float(power_limit),
+                                            "deviation_pct": (
+                                                (
+                                                    (app_action.value_kw - power_limit)
+                                                    / power_limit
+                                                    * 100
+                                                )
+                                                if power_limit > 0
+                                                else 0.0
+                                            ),
+                                        }
+                                    )
+                        except (ValueError, IndexError):
+                            pass
+
+            # Check grid limits (voltage, line loading, transformer loading)
+            grid_diag = observations.get("grid_diagnostics")
+            if grid_diag and "diagnostics" in grid_diag:
+                for d in grid_diag["diagnostics"]:
+                    if d.get("severity") in ["violation", "critical"]:
+                        self._applied_violations.append(
+                            {
+                                "timestep": self.episode_step,
+                                "asset_id": "grid",
+                                "violation_type": f"grid_{d.get('category', 'unknown')}",
+                                "severity": d.get("severity"),
+                                "values": d.get("values", {}),
+                            }
+                        )
 
     def update_lmp_prices(
         self, building_lmps: Dict[str, float], dynamic_pricing_enabled: bool
@@ -1054,14 +1255,24 @@ class CityLearnAdapter:
         metadata: Dict[str, Dict[str, Any]],
         device_index: int = 0,
     ) -> float:
-        """Map a requested power (kW) to CityLearn's normalized device action."""
+        """Map a requested power (kW) to CityLearn's normalized device action.
+
+        Also records L3 adapter interventions (clamping at device bounds).
+        """
         building_meta = metadata.get(bid) or {}
         if action_name == "electrical_storage":
             battery = building_meta.get("battery") or {}
             power = float(battery.get("power_kw") or 0.0)
-            return (
+            normalized = (
                 self._clamp(value_kw / power) if power > 0.0 else self._clamp(value_kw)
             )
+            # Record L3 adapter intervention: requested_kW -> limited_kW (after bounds projection)
+            if power > 0.0 and abs(value_kw) > power + 1e-9:
+                limited_kw = max(-power, min(power, value_kw))
+                self._record_adapter_intervention(
+                    bid, action_name, device_index, value_kw, limited_kw, "device_bound"
+                )
+            return normalized
 
         if action_name == "electric_vehicle_storage":
             chargers = building_meta.get("chargers") or []
@@ -1079,15 +1290,77 @@ class CityLearnAdapter:
                     default=0.0,
                 )
             if value_kw >= 0.0 and max_charge > 0.0:
-                return self._clamp(value_kw / max_charge)
+                normalized = self._clamp(value_kw / max_charge)
+                if value_kw > max_charge + 1e-9:
+                    limited_kw = max_charge
+                    self._record_adapter_intervention(
+                        bid,
+                        action_name,
+                        device_index,
+                        value_kw,
+                        limited_kw,
+                        "device_bound",
+                    )
+                return normalized
             if value_kw < 0.0 and max_discharge > 0.0:
-                return -self._clamp(-value_kw / max_discharge)
+                normalized = -self._clamp(-value_kw / max_discharge)
+                if -value_kw > max_discharge + 1e-9:
+                    limited_kw = -max_discharge
+                    self._record_adapter_intervention(
+                        bid,
+                        action_name,
+                        device_index,
+                        value_kw,
+                        limited_kw,
+                        "device_bound",
+                    )
+                return normalized
             return self._clamp(value_kw)
 
         if action_name == "deferrable_appliance":
+            # deferrable appliances are fraction [0, 1], positive kW clamps to 1.0
+            if value_kw > 1.0 + 1e-9:
+                limited_kw = 1.0
+                self._record_adapter_intervention(
+                    bid, action_name, device_index, value_kw, limited_kw, "device_bound"
+                )
             return self._clamp(value_kw, 0.0, 1.0)
 
         return self._clamp(value_kw)
+
+    def _record_adapter_intervention(
+        self,
+        bid: str,
+        action_name: str,
+        device_index: int,
+        requested_kw: float,
+        limited_kw: float,
+        reason: str,
+    ) -> None:
+        """Record L3 adapter intervention: requested -> limited kW."""
+        if not hasattr(self, "_adapter_interventions"):
+            self._adapter_interventions = []
+        if not hasattr(self, "episode_step"):
+            self.episode_step = 0
+        asset_id = (
+            f"{bid}_{action_name}"
+            if device_index == 0
+            else f"{bid}_{action_name}_{device_index}"
+        )
+        self._adapter_interventions.append(
+            {
+                "timestep": self.episode_step,
+                "asset_id": asset_id,
+                "requested_kw": float(requested_kw),
+                "limited_kw": float(limited_kw),
+                "reason": reason,
+                "deviation_pct": (
+                    ((limited_kw - requested_kw) / requested_kw * 100)
+                    if requested_kw != 0
+                    else 0.0
+                ),
+            }
+        )
 
     def get_device_metadata(self) -> Dict[str, Dict[str, Any]]:
         """Live device ratings for every configured building.
@@ -1444,6 +1717,14 @@ class CityLearnAdapter:
             kpis = self.env.kpis
             return kpis if isinstance(kpis, dict) else {}
         return {}
+
+    def get_adapter_interventions(self) -> List[Dict[str, Any]]:
+        """Get L3 adapter interventions (clamping records: requested -> limited kW)."""
+        return self._adapter_interventions
+
+    def get_applied_violations(self) -> List[Dict[str, Any]]:
+        """Get L4 post-execution violations (applied actions vs device/grid limits)."""
+        return self._applied_violations
 
     def close(self):
         """Close environment."""

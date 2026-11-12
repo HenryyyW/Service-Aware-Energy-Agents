@@ -41,8 +41,43 @@ class ApiClient {
     return response.data;
   }
 
+  async startSimulation(body: {
+    scenario_id: string;
+    controller_type?: string;
+    random_seed?: number;
+    max_steps?: number;
+  }): Promise<any> {
+    const response = await this.client.post('/api/simulations', body);
+    return response.data;
+  }
+
+  async cancelSimulation(runId: string): Promise<any> {
+    const response = await this.client.post(`/api/simulations/${runId}/cancel`);
+    return response.data;
+  }
+
   async getScenario(scenarioId: string): Promise<ScenarioConfig> {
     const response = await this.client.get(`/api/scenarios/${scenarioId}`);
+    return response.data;
+  }
+
+  // NL -> config through the verified pipeline (planner + coder + executor +
+  // verifier). plan_source tells the UI whether the agent planned it ('llm')
+  // or the rule-based fallback did ('rule_based_fallback' - preview mode);
+  // rejected_fields carries the named rejections for the confirm screen.
+  async generateScenario(nl: string, maxIterations = 2): Promise<{
+    config: ScenarioConfig | null;
+    plan_source: string | null;
+    rejected_fields: string[];
+    success: boolean;
+    iterations: number;
+    final_verdict: string | null;
+    elapsed_s: number;
+  }> {
+    const response = await this.client.post('/api/scenarios/generate', {
+      nl,
+      max_iterations: maxIterations,
+    });
     return response.data;
   }
 
@@ -63,6 +98,52 @@ class ApiClient {
 
   async deleteScenario(scenarioId: string): Promise<void> {
     await this.client.delete(`/api/scenarios/${scenarioId}`);
+  }
+
+  async validateScenario(scenarioId: string): Promise<{ valid: boolean; errors: string[]; warnings: string[] }> {
+    const response = await this.client.get(`/api/scenarios/${scenarioId}/validate`);
+    return response.data;
+  }
+
+  // Four-strategy comparison: starts/reuses the runs (same seed), returns the
+  // run ids; poll getSimulationRun for status and metrics until terminal.
+  async startStrategyComparison(
+    scenarioId: string,
+    opts: { random_seed?: number; max_steps?: number } = {}
+  ): Promise<{
+    scenario_id: string;
+    random_seed: number;
+    runs: Record<string, string>;
+    strategy_data: Record<string, any>;
+  }> {
+    const response = await this.client.post('/api/simulations/strategy-comparison', {
+      scenario_id: scenarioId,
+      random_seed: opts.random_seed,
+      max_steps: opts.max_steps ?? 24,
+    });
+    return response.data;
+  }
+
+  async getRunDiagnostics(runId: string): Promise<{
+    findings: Array<{
+      timestep: number;
+      category: string;
+      severity: string;
+      message: string;
+      meaning: string;
+      recommended_action: string;
+      evidence: Record<string, any>;
+    }>;
+    kpi_summary: Record<string, any>;
+    interpretation: string;
+  }> {
+    const response = await this.client.get(`/api/simulations/${runId}/diagnostics`);
+    return response.data;
+  }
+
+  async getSimulationRun(runId: string): Promise<any> {
+    const response = await this.client.get(`/api/simulations/${runId}`);
+    return response.data;
   }
 
   // Network geometry endpoints

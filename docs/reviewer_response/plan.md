@@ -152,3 +152,49 @@ differences, not physical safety gains; missing deterministic-baseline compariso
   labelled settlement-inclusive; if it is a bug, D rows come out of the headline
   tables until fixed.
 - D-C: arXiv timing - publish the re-scoped version now, or hold until A1/E2 exist.
+
+## Decisions (user, 2026-11-08)
+
+- **D-A = re-scope AND build the benchmark.** The paper is re-scoped to what the
+  experiments measure (runtime verification of LLM dispatch proposals; code-repair
+  pipeline described as scaffolded/not-yet-demonstrated), AND a real code-repair
+  benchmark is commissioned as the evidence for the code-repair claim.
+  Benchmark envelope (authorized scope): model `poolside/laguna-xs-2.1`, provider
+  NVIDIA NIM, purpose = code-repair benchmark for the paper, count <= 10 seeded
+  repair tasks x <= 3 iterations each; same hostile-flag discipline and keep rule as
+  M2b; single matrix directory `experiments/m2b_code_repair/`. No other model, no
+  other provider. Gated on the coder fix (issue #59) landing first.
+- **D-B = decide by the accounting invariant.** If C1 (Backend B) shows the
+  settlement invariant holds, D's aggregate change keeps its settlement-inclusive
+  label with the mechanism stated; if it fails, D rows come out of the headline
+  tables until the engine is fixed and D is re-run.
+- **D-C = no arXiv upload.** No submission action is taken; the rebuild lands on
+  main only. (No scheduled upload, no deadline-driven shortcut.)
+
+## H. Dev-log register (reviewer's added point, 2026-11-09)
+
+Rule the user endorsed: the body reads research question -> method -> experimental
+design -> results -> interpretation; GitHub docs and one Reproducibility section
+carry install/run/reproduce detail. Open-source and reproducibility info STAYS -
+only the process narration moves out. Line inventory against origin/main
+`b732dbd3b6` tex (verified by grep, no false positives counted):
+
+- L413 `P0-3 fix` - internal defect-tracking language; delete the label, state the
+  final method property only (both arms share one clamp-repair path).
+- L87 + L494 `user-approved re-run` - ops language; replace with "a confirmation
+  re-run of three cells" (or fold into the keep-rule note).
+- Re-run narration ~15 lines (L63, L88, L158-160, L235, L288-292, L300, L317, L365,
+  L427, L429, L494, L518-519, L545, L651): keep ONE validity-threat statement
+  (defect found, fixed, rows re-run, D rows settlement-inclusive) + the D basis
+  labels on tables; delete the retelling elsewhere.
+- `post-fix` x4 (L235, L300, L317, L365) -> "final" / "re-run" basis wording.
+- Quarantine detail x8: body keeps the keep rule + counts (13/2); per-cell error
+  counts move to the appendix.
+- manifest/SHA-256: L66-67 and L617 already form a reproducibility sentence pair;
+  consolidate ALL manifest field lists into the Reproducibility section (L143 and
+  L427-430 fold in).
+- ALREADY CLEAN (reviewer's general impression overcounts): API paths 0, Python
+  filenames 0, Redis 0 (the single "Redis" grep hit is the word "Redistributes" in
+  a subsection title), docker/RQ 0.
+- ALSO STILL UNFIXED from F4: L427 still reads "5 scenarios x 2 LLM arms x 10" as
+  the 150-cell screen - the arithmetic error QA flagged is still in the tex.

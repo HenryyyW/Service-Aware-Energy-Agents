@@ -41,8 +41,10 @@ class AgentState:
     verification_result: Optional[Dict[str, Any]] = None
     final_report: Optional[Dict[str, Any]] = None
     iteration: int = 0
-    max_iterations: int = 3
+    max_iterations: int = 5
     messages: List[Message] = field(default_factory=list)
+    # NEW: detector function to verify the actual defect is fixed
+    detector_fn: Optional[Any] = None
 
     def add_message(
         self, role: AgentRole, content: str, metadata: Dict[str, Any] = None

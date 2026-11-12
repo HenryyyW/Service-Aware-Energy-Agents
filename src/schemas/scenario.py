@@ -1,7 +1,7 @@
 """Scenario configuration schemas for CityLearn and pandapower."""
 
 from typing import Optional, List, Dict, Any, Literal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from enum import Enum
 
 
@@ -33,6 +33,19 @@ class BatteryConfig(BaseModel):
     soc_max: float = 0.9
     initial_soc: float = 0.5
     degradation_model: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _soc_bounds_named(self):
+        # r03: out-of-range or inverted SOC bounds must be NAMED at schema
+        # validation (the P1 rejection-path spec), not silently carried into
+        # a simulation.
+        for name in ("soc_min", "soc_max"):
+            v = getattr(self, name)
+            if not 0.0 <= v <= 1.0:
+                raise ValueError(f"battery.{name} out of [0,1]: {v}")
+        if self.soc_min >= self.soc_max:
+            raise ValueError(f"battery soc inverted: {self.soc_min} >= {self.soc_max}")
+        return self
 
 
 class EVConfig(BaseModel):
@@ -182,6 +195,17 @@ class ScenarioConfig(BaseModel):
     failures: List[FailureConfig] = Field(default_factory=list)
     community_import_limit_kw: Optional[float] = None
     community_export_limit_kw: Optional[float] = None
+
+    @field_validator("community_import_limit_kw", "community_export_limit_kw")
+    @classmethod
+    def _positive_community_limits(cls, v):
+        # Same contract as EnergySharingConfig: a negative community limit must
+        # be NAMED at validation time (r04), not crash the controllers later in
+        # a division (scale = import_limit / total_import -> ZeroDivisionError).
+        if v is not None and v <= 0:
+            raise ValueError("Limits must be positive")
+        return v
+
     carbon_intensity_file: Optional[str] = None
     random_seed: int = 42
     timestep_minutes: int = 15

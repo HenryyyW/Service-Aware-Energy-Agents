@@ -1,6 +1,6 @@
 """Verification harness for proving repairs fix real violations."""
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field
 import logging
 from src.schemas.report import ExperimentResult
@@ -50,6 +50,14 @@ class HarnessReport:
 class VerificationHarness:
     def __init__(self):
         self.targets = []
+        self.detector_fn: Optional[Callable] = None
+
+    def set_detector(self, detector_fn: Callable):
+        """Set a detector function to verify the actual defect is fixed.
+
+        The detector should take (controller_cls, scenario_config) and return (ok, detail).
+        """
+        self.detector_fn = detector_fn
 
     def add_target(self, target: ViolationTarget):
         self.targets.append(target)
@@ -59,6 +67,8 @@ class VerificationHarness:
         before_result: ExperimentResult,
         after_result: ExperimentResult,
         targets: Optional[List[ViolationTarget]] = None,
+        controller_code: Optional[str] = None,
+        scenario_config: Optional[Dict[str, Any]] = None,
     ) -> HarnessReport:
         targets = targets or self.targets
         results = []
@@ -75,6 +85,84 @@ class VerificationHarness:
             summary += " Some violations remain."
         if any_reg:
             summary += " WARNING: potential regressions detected."
+
+        # Run detector if available
+        detector_passed = True
+        detector_detail = ""
+        if self.detector_fn and controller_code:
+            import importlib.util
+            import tempfile
+            import os
+
+            temp_path = None
+            try:
+                # Write controller code to temp file and import
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".py", delete=False, prefix="patched_controller_"
+                ) as f:
+                    f.write(controller_code)
+                    temp_path = f.name
+
+                spec = importlib.util.spec_from_file_location(
+                    "patched_controller", temp_path
+                )
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+
+                # Find controller class
+                # Skip abstract BaseController - find concrete class that implements get_actions
+                controller_cls = None
+                for name, obj in module.__dict__.items():
+                    if isinstance(obj, type) and name.endswith("Controller"):
+                        # Check if it's a concrete class (not abstract) and has get_actions
+                        import inspect
+
+                        if not inspect.isabstract(obj) and hasattr(obj, "get_actions"):
+                            controller_cls = obj
+                            break
+
+                # Fallback: if no concrete class found, try any non-abstract Controller
+                if controller_cls is None:
+                    for name, obj in module.__dict__.items():
+                        if isinstance(obj, type) and name.endswith("Controller"):
+                            import inspect
+
+                            if not inspect.isabstract(obj):
+                                controller_cls = obj
+                                break
+
+                if controller_cls is not None:
+                    # Run detector
+                    ok, detail = self.detector_fn(controller_cls, {})
+                    if not ok:
+                        detector_passed = False
+                        detector_detail = detail or "Detector failed"
+                else:
+                    detector_passed = False
+                    detector_detail = (
+                        "No concrete controller class found in patched code"
+                    )
+            except Exception as e:
+                logger.warning(f"Detector execution failed: {e}")
+                detector_passed = False
+                detector_detail = str(e)
+            finally:
+                if temp_path:
+                    try:
+                        os.unlink(temp_path)
+                    except OSError:
+                        pass
+
+        if not detector_passed:
+            return HarnessReport(
+                run_id_before=before_result.run_id,
+                run_id_after=after_result.run_id,
+                verification_results=results,
+                all_fixed=False,
+                any_regression=True,
+                summary=f"Detector failed: {detector_detail}",
+            )
+
         return HarnessReport(
             run_id_before=before_result.run_id,
             run_id_after=after_result.run_id,

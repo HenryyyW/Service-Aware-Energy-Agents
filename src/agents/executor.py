@@ -32,7 +32,11 @@ class ExecutorAgent:
             ExecutorOutput with execution results
         """
         if not state.patched_code:
-            return ExecutorOutput(success=False, error="No patched code to execute")
+            return ExecutorOutput(
+                success=False,
+                error="No patched code to execute",
+                test_results={"experiment_error": "No patched code to execute"},
+            )
 
         start_time = time.time()
 
@@ -50,6 +54,7 @@ class ExecutorAgent:
                         "unit_tests_passed": False,
                         "patch_rejected": True,
                         "rejection_reason": "cosmetic_only",
+                        "experiment_error": f"Patch rejected: {classification.reason}",
                         "classification": {
                             "is_behavior_changing": classification.is_behavior_changing,
                             "reason": classification.reason,
@@ -72,6 +77,9 @@ class ExecutorAgent:
                         success=False,
                         error="Failed to apply code changes in sandbox",
                         execution_time=time.time() - start_time,
+                        test_results={
+                            "experiment_error": "Failed to apply code changes in sandbox"
+                        },
                     )
 
             # Write patched controller to sandbox (get the modified code from sandbox)
@@ -88,6 +96,9 @@ class ExecutorAgent:
                     success=False,
                     error=f"Syntax error: {syntax_result.error}",
                     execution_time=time.time() - start_time,
+                    test_results={
+                        "experiment_error": f"Syntax error: {syntax_result.error}"
+                    },
                 )
 
             # Run unit tests first
@@ -110,6 +121,7 @@ class ExecutorAgent:
                         "unit_test_error": (
                             test_result.stderr[-1000:] if test_result.stderr else ""
                         ),
+                        "experiment_error": f"Unit tests failed: {test_result.error or test_result.stderr}",
                     },
                 )
 
@@ -140,8 +152,14 @@ class ExecutorAgent:
 
             execution_time = time.time() - start_time
 
+            # Executor success = code runs without errors (syntax, unit tests, experiment execution)
+            # Repair effectiveness is judged by the verifier from violation_counts
+            executor_success = (
+                exp_result.error is None
+            )  # No exception during experiment run
+
             output = ExecutorOutput(
-                success=exp_result.success,
+                success=executor_success,
                 stdout=exp_result.stdout,
                 stderr=exp_result.stderr,
                 error=exp_result.error,
@@ -150,20 +168,22 @@ class ExecutorAgent:
                     "syntax_valid": True,
                     "unit_tests_passed": True,
                     "unit_test_time": test_result.execution_time,
-                    "experiment_passed": exp_result.success,
+                    "experiment_passed": exp_result.success,  # All violations resolved
                     "experiment_output": (
                         exp_result.stdout[-1000:] if exp_result.stdout else ""
                     ),
+                    "experiment_error": exp_result.error,  # Include error for verifier
                     "violation_counts": exp_result.violation_counts,
                     "max_violations": exp_result.max_violations,
                     "check_categories": check_categories,
+                    "action_counts": getattr(exp_result, "action_counts", {}),
                 },
             )
 
             state.sandbox_result = exp_result
             state.add_message(
                 AgentRole.EXECUTOR,
-                f"Execution {'succeeded' if exp_result.success else 'failed'}",
+                f"Execution {'succeeded' if executor_success else 'failed'} (experiment_passed={exp_result.success})",
                 output.model_dump(),
             )
 
@@ -171,7 +191,10 @@ class ExecutorAgent:
 
         except Exception as e:
             return ExecutorOutput(
-                success=False, error=str(e), execution_time=time.time() - start_time
+                success=False,
+                error=str(e),
+                execution_time=time.time() - start_time,
+                test_results={"experiment_error": str(e)},
             )
         finally:
             self.sandbox.cleanup()

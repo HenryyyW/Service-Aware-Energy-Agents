@@ -85,9 +85,11 @@ def create_backend_from_config(config: Dict[str, Any]) -> "AgentBackend":
     # Map config keys to backend constructor parameters
     if "prompt_template" in backend_config:
         backend_config["prompt_template_id"] = backend_config.pop("prompt_template")
-    if "local_endpoint" in backend_config:
+    # Only map local_endpoint to endpoint for ollama backend
+    if "local_endpoint" in backend_config and backend_type == "ollama":
         backend_config["endpoint"] = backend_config.pop("local_endpoint")
-    if "local_model" in backend_config:
+    # Only map local_model to model for ollama/local backends
+    if "local_model" in backend_config and backend_type == "ollama":
         backend_config["model"] = backend_config.pop("local_model")
 
     # Filter out irrelevant keys based on backend type
@@ -109,17 +111,21 @@ def create_backend_from_config(config: Dict[str, Any]) -> "AgentBackend":
             "retry_backoff_s",
             "dashscope_api_key",
             "nvidia_api_key",
+            "openai_api_key",  # fallback if no dashscope/nvidia key
             "endpoint",  # alias for base_url
-            "openai_api_key",  # fallback
         }
         backend_config = {k: v for k, v in backend_config.items() if k in allowed_keys}
         # Map dashscope_api_key to api_key for ApiPromptCallable
-        if "dashscope_api_key" in backend_config:
+        if backend_config.get("dashscope_api_key"):
             backend_config["api_key"] = backend_config.pop("dashscope_api_key")
-        elif "nvidia_api_key" in backend_config:
+        elif backend_config.get("nvidia_api_key"):
             backend_config["api_key"] = backend_config.pop("nvidia_api_key")
-        elif "openai_api_key" in backend_config:
+        elif backend_config.get("openai_api_key"):
             backend_config["api_key"] = backend_config.pop("openai_api_key")
+        # Remove all api key aliases that were used for mapping
+        backend_config.pop("dashscope_api_key", None)
+        backend_config.pop("nvidia_api_key", None)
+        backend_config.pop("openai_api_key", None)
         # Map endpoint to base_url
         if "endpoint" in backend_config:
             backend_config["base_url"] = backend_config.pop("endpoint")

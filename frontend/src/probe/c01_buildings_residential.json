@@ -1,0 +1,670 @@
+{
+ "item_id": "c01_buildings_residential",
+ "kind": "complete",
+ "nl": "Set up a small renewable energy community with three residential buildings, no on-site assets, running for one week from 2023-01-01.",
+ "success": true,
+ "final_config": {
+  "scenario_id": "scenario_base",
+  "name": "Base Scenario",
+  "description": "Minimal baseline scenario",
+  "buildings": [
+   {
+    "building_id": "building_1",
+    "building_type": "residential",
+    "location": {
+     "lat": 34.05,
+     "lon": -118.24,
+     "timezone": "America/Los_Angeles"
+    },
+    "simulation_start": "2023-01-01",
+    "simulation_end": "2023-01-08"
+   },
+   {
+    "building_id": "building_2",
+    "building_type": "residential",
+    "location": {
+     "lat": 34.05,
+     "lon": -118.24,
+     "timezone": "America/Los_Angeles"
+    },
+    "simulation_start": "2023-01-01",
+    "simulation_end": "2023-01-08"
+   },
+   {
+    "building_id": "building_3",
+    "building_type": "residential",
+    "location": {
+     "lat": 34.05,
+     "lon": -118.24,
+     "timezone": "America/Los_Angeles"
+    },
+    "simulation_start": "2023-01-01",
+    "simulation_end": "2023-01-08"
+   }
+  ],
+  "pandapower": {
+   "network_type": "ieee_34",
+   "voltage_limits": {
+    "min": 0.95,
+    "max": 1.05
+   },
+   "line_loading_limit": 1.0,
+   "transformer_loading_limit": 1.0,
+   "run_power_flow_every": 1
+  },
+  "energy_sharing": null,
+  "failures": [],
+  "community_import_limit_kw": null,
+  "community_export_limit_kw": null,
+  "random_seed": 42,
+  "timestep_minutes": 15
+ },
+ "iterations": [
+  {
+   "iteration": 0,
+   "planner_output": {
+    "plan_source": "llm",
+    "rejected_fields": [],
+    "target_assets": [
+     "buildings"
+    ],
+    "building_count": 3,
+    "building_types": [
+     "residential"
+    ],
+    "pv_configs": [],
+    "battery_configs": [],
+    "ev_configs": [],
+    "flexible_load_configs": [],
+    "tariff_configs": [],
+    "grid_configs": [],
+    "failure_injections": [],
+    "community_import_limit_kw": null,
+    "community_export_limit_kw": null,
+    "energy_sharing_enabled": false,
+    "dynamic_pricing_enabled": false,
+    "timestep_minutes": 15,
+    "simulation_duration_days": 7,
+    "simulation_start": "2023-01-01",
+    "simulation_end": "2023-01-08",
+    "random_seed": 42,
+    "location": {
+     "lat": 34.05,
+     "lon": -118.24,
+     "timezone": "America/Los_Angeles"
+    },
+    "climate_zone": "tmy3_722950",
+    "weather_file": null,
+    "confidence": 0.85,
+    "assumptions": [
+     "No on-site generation assets (PV, battery, EV, flexible load) are present in the community",
+     "Community relies entirely on grid electricity supply",
+     "Default timestep of 15 minutes applied as no specific timestep was mentioned",
+     "Location inferred as Los Angeles, CA based on 'California' reference"
+    ],
+    "required_fields": [
+     "scenario_id",
+     "name",
+     "description",
+     "buildings",
+     "random_seed",
+     "timestep_minutes"
+    ],
+    "out_of_scope": [
+     "detailed grid topology",
+     "custom market mechanisms"
+    ]
+   },
+   "coder_output": {
+    "config_changes": [],
+    "patched_config": {
+     "scenario_id": "scenario_base",
+     "name": "Base Scenario",
+     "description": "Minimal baseline scenario",
+     "buildings": [
+      {
+       "building_id": "building_1",
+       "building_type": "residential",
+       "location": {
+        "lat": 34.05,
+        "lon": -118.24,
+        "timezone": "America/Los_Angeles"
+       },
+       "simulation_start": "2023-01-01",
+       "simulation_end": "2023-01-08"
+      },
+      {
+       "building_id": "building_2",
+       "building_type": "residential",
+       "location": {
+        "lat": 34.05,
+        "lon": -118.24,
+        "timezone": "America/Los_Angeles"
+       },
+       "simulation_start": "2023-01-01",
+       "simulation_end": "2023-01-08"
+      },
+      {
+       "building_id": "building_3",
+       "building_type": "residential",
+       "location": {
+        "lat": 34.05,
+        "lon": -118.24,
+        "timezone": "America/Los_Angeles"
+       },
+       "simulation_start": "2023-01-01",
+       "simulation_end": "2023-01-08"
+      }
+     ],
+     "pandapower": {
+      "network_type": "ieee_34",
+      "voltage_limits": {
+       "min": 0.95,
+       "max": 1.05
+      },
+      "line_loading_limit": 1.0,
+      "transformer_loading_limit": 1.0,
+      "run_power_flow_every": 1
+     },
+     "energy_sharing": null,
+     "failures": [],
+     "community_import_limit_kw": null,
+     "community_export_limit_kw": null,
+     "random_seed": 42,
+     "timestep_minutes": 15
+    },
+    "config_diff": "--- baseline\n+++ patched\n@@ -1,5 +1,39 @@\n {\n-  \"buildings\": [],\n+  \"buildings\": [\n+    {\n+      \"building_id\": \"building_1\",\n+      \"building_type\": \"residential\",\n+      \"location\": {\n+        \"lat\": 34.05,\n+        \"lon\": -118.24,\n+        \"timezone\": \"America/Los_Angeles\"\n+      },\n+      \"simulation_end\": \"2023-01-08\",\n+      \"simulation_start\": \"2023-01-01\"\n+    },\n+    {\n+      \"building_id\": \"building_2\",\n+      \"building_type\": \"residential\",\n+      \"location\": {\n+        \"lat\": 34.05,\n+        \"lon\": -118.24,\n+        \"timezone\": \"America/Los_Angeles\"\n+      },\n+      \"simulation_end\": \"2023-01-08\",\n+      \"simulation_start\": \"2023-01-01\"\n+    },\n+    {\n+      \"building_id\": \"building_3\",\n+      \"building_type\": \"residential\",\n+      \"location\": {\n+        \"lat\": 34.05,\n+        \"lon\": -118.24,\n+        \"timezone\": \"America/Los_Angeles\"\n+      },\n+      \"simulation_end\": \"2023-01-08\",\n+      \"simulation_start\": \"2023-01-01\"\n+    }\n+  ],\n   \"community_export_limit_kw\": null,\n   \"community_import_limit_kw\": null,\n   \"description\": \"Minimal baseline scenario\",\n",
+    "implementation_notes": "Applied plan with 0 changes",
+    "applied_count": 0,
+    "failed_count": 0
+   },
+   "executor_output": {
+    "success": true,
+    "scenario_id": "nl_config_1794366093_0",
+    "config_valid": true,
+    "simulation_steps": 10,
+    "simulation_time_sec": 2.283078908920288,
+    "error": null,
+    "warnings": [],
+    "validation_errors": [],
+    "test_results": {
+     "scenario_id": "nl_config_1794366093_0",
+     "steps": 10,
+     "violations": {}
+    },
+    "violation_counts": {},
+    "power_flow_converged": true,
+    "energy_balance_ok": true,
+    "execution_time": 2.283078908920288
+   },
+   "verifier_output": {
+    "schema_valid": true,
+    "round_trip_valid": true,
+    "determinism_check": true,
+    "schema_complete": true,
+    "determinism_seed": 42,
+    "determinism_tolerance": 1e-06,
+    "schema_errors": [],
+    "round_trip_errors": [],
+    "determinism_errors": [],
+    "completeness_issues": [],
+    "required_fields_missing": [],
+    "out_of_range_fields": [],
+    "schema_rejections": [],
+    "confidence": 1.0,
+    "recommendation": "accept",
+    "manifest": {
+     "scenario_id": "scenario_base",
+     "name": "Base Scenario",
+     "building_count": 3,
+     "has_pv": false,
+     "has_battery": false,
+     "has_ev": false,
+     "has_flexible_load": false,
+     "has_energy_sharing": false,
+     "has_dynamic_pricing": false,
+     "community_import_limit": null,
+     "community_export_limit": null,
+     "timestep_minutes": 15,
+     "random_seed": 42
+    }
+   },
+   "reporter_output": {
+    "summary": "Config generation successful: 0 changes applied, simulation validated",
+    "detailed_report": {
+     "plan": {
+      "plan_source": "llm",
+      "rejected_fields": [],
+      "target_assets": [
+       "buildings"
+      ],
+      "building_count": 3,
+      "building_types": [
+       "residential"
+      ],
+      "pv_configs": [],
+      "battery_configs": [],
+      "ev_configs": [],
+      "flexible_load_configs": [],
+      "tariff_configs": [],
+      "grid_configs": [],
+      "failure_injections": [],
+      "community_import_limit_kw": null,
+      "community_export_limit_kw": null,
+      "energy_sharing_enabled": false,
+      "dynamic_pricing_enabled": false,
+      "timestep_minutes": 15,
+      "simulation_duration_days": 7,
+      "simulation_start": "2023-01-01",
+      "simulation_end": "2023-01-08",
+      "random_seed": 42,
+      "location": {
+       "lat": 34.05,
+       "lon": -118.24,
+       "timezone": "America/Los_Angeles"
+      },
+      "climate_zone": "tmy3_722950",
+      "weather_file": null,
+      "confidence": 0.85,
+      "assumptions": [
+       "No on-site generation assets (PV, battery, EV, flexible load) are present in the community",
+       "Community relies entirely on grid electricity supply",
+       "Default timestep of 15 minutes applied as no specific timestep was mentioned",
+       "Location inferred as Los Angeles, CA based on 'California' reference"
+      ],
+      "required_fields": [
+       "scenario_id",
+       "name",
+       "description",
+       "buildings",
+       "random_seed",
+       "timestep_minutes"
+      ],
+      "out_of_scope": [
+       "detailed grid topology",
+       "custom market mechanisms"
+      ]
+     },
+     "changes": [],
+     "diff": "--- baseline\n+++ patched\n@@ -1,5 +1,39 @@\n {\n-  \"buildings\": [],\n+  \"buildings\": [\n+    {\n+      \"building_id\": \"building_1\",\n+      \"building_type\": \"residential\",\n+      \"location\": {\n+        \"lat\": 34.05,\n+        \"lon\": -118.24,\n+        \"timezone\": \"America/Los_Angeles\"\n+      },\n+      \"simulation_end\": \"2023-01-08\",\n+      \"simulation_start\": \"2023-01-01\"\n+    },\n+    {\n+      \"building_id\": \"building_2\",\n+      \"building_type\": \"residential\",\n+      \"location\": {\n+        \"lat\": 34.05,\n+        \"lon\": -118.24,\n+        \"timezone\": \"America/Los_Angeles\"\n+      },\n+      \"simulation_end\": \"2023-01-08\",\n+      \"simulation_start\": \"2023-01-01\"\n+    },\n+    {\n+      \"building_id\": \"building_3\",\n+      \"building_type\": \"residential\",\n+      \"location\": {\n+        \"lat\": 34.05,\n+        \"lon\": -118.24,\n+        \"timezone\": \"America/Los_Angeles\"\n+      },\n+      \"simulation_end\": \"2023-01-08\",\n+      \"simulation_start\": \"2023-01-01\"\n+    }\n+  ],\n   \"community_export_limit_kw\": null,\n   \"community_import_limit_kw\": null,\n   \"description\": \"Minimal baseline scenario\",\n",
+     "execution": {
+      "success": true,
+      "steps": 10,
+      "violations": {},
+      "power_flow_converged": true,
+      "energy_balance": true,
+      "error": null
+     },
+     "verification": {
+      "schema_valid": true,
+      "round_trip": true,
+      "determinism": true,
+      "confidence": 1.0
+     },
+     "mapping_errors": [],
+     "schema_errors": []
+    },
+    "artifacts": [
+     "scenario_config.json",
+     "manifest.json"
+    ],
+    "recommendations": [],
+    "manifest": {
+     "scenario_id": "c01_buildings_residential",
+     "plan_source": "llm"
+    }
+   },
+   "success": true,
+   "duration": 7.8942177295684814
+  }
+ ],
+ "iteration_count": 1,
+ "manifest": {
+  "scenario_id": "c01_buildings_residential",
+  "plan_source": "llm",
+  "final": true
+ },
+ "final_report": {
+  "total_iterations": 1,
+  "successful_iterations": 1,
+  "total_changes": 0,
+  "final_config": {
+   "scenario_id": "scenario_base",
+   "name": "Base Scenario",
+   "description": "Minimal baseline scenario",
+   "buildings": [
+    {
+     "building_id": "building_1",
+     "building_type": "residential",
+     "location": {
+      "lat": 34.05,
+      "lon": -118.24,
+      "timezone": "America/Los_Angeles"
+     },
+     "simulation_start": "2023-01-01",
+     "simulation_end": "2023-01-08"
+    },
+    {
+     "building_id": "building_2",
+     "building_type": "residential",
+     "location": {
+      "lat": 34.05,
+      "lon": -118.24,
+      "timezone": "America/Los_Angeles"
+     },
+     "simulation_start": "2023-01-01",
+     "simulation_end": "2023-01-08"
+    },
+    {
+     "building_id": "building_3",
+     "building_type": "residential",
+     "location": {
+      "lat": 34.05,
+      "lon": -118.24,
+      "timezone": "America/Los_Angeles"
+     },
+     "simulation_start": "2023-01-01",
+     "simulation_end": "2023-01-08"
+    }
+   ],
+   "pandapower": {
+    "network_type": "ieee_34",
+    "voltage_limits": {
+     "min": 0.95,
+     "max": 1.05
+    },
+    "line_loading_limit": 1.0,
+    "transformer_loading_limit": 1.0,
+    "run_power_flow_every": 1
+   },
+   "energy_sharing": null,
+   "failures": [],
+   "community_import_limit_kw": null,
+   "community_export_limit_kw": null,
+   "random_seed": 42,
+   "timestep_minutes": 15
+  },
+  "final_manifest": {
+   "scenario_id": "c01_buildings_residential",
+   "plan_source": "llm",
+   "final": true
+  },
+  "iterations": [
+   {
+    "iteration": 0,
+    "planner_output": {
+     "plan_source": "llm",
+     "rejected_fields": [],
+     "target_assets": [
+      "buildings"
+     ],
+     "building_count": 3,
+     "building_types": [
+      "residential"
+     ],
+     "pv_configs": [],
+     "battery_configs": [],
+     "ev_configs": [],
+     "flexible_load_configs": [],
+     "tariff_configs": [],
+     "grid_configs": [],
+     "failure_injections": [],
+     "community_import_limit_kw": null,
+     "community_export_limit_kw": null,
+     "energy_sharing_enabled": false,
+     "dynamic_pricing_enabled": false,
+     "timestep_minutes": 15,
+     "simulation_duration_days": 7,
+     "simulation_start": "2023-01-01",
+     "simulation_end": "2023-01-08",
+     "random_seed": 42,
+     "location": {
+      "lat": 34.05,
+      "lon": -118.24,
+      "timezone": "America/Los_Angeles"
+     },
+     "climate_zone": "tmy3_722950",
+     "weather_file": null,
+     "confidence": 0.85,
+     "assumptions": [
+      "No on-site generation assets (PV, battery, EV, flexible load) are present in the community",
+      "Community relies entirely on grid electricity supply",
+      "Default timestep of 15 minutes applied as no specific timestep was mentioned",
+      "Location inferred as Los Angeles, CA based on 'California' reference"
+     ],
+     "required_fields": [
+      "scenario_id",
+      "name",
+      "description",
+      "buildings",
+      "random_seed",
+      "timestep_minutes"
+     ],
+     "out_of_scope": [
+      "detailed grid topology",
+      "custom market mechanisms"
+     ]
+    },
+    "coder_output": {
+     "config_changes": [],
+     "patched_config": {
+      "scenario_id": "scenario_base",
+      "name": "Base Scenario",
+      "description": "Minimal baseline scenario",
+      "buildings": [
+       {
+        "building_id": "building_1",
+        "building_type": "residential",
+        "location": {
+         "lat": 34.05,
+         "lon": -118.24,
+         "timezone": "America/Los_Angeles"
+        },
+        "simulation_start": "2023-01-01",
+        "simulation_end": "2023-01-08"
+       },
+       {
+        "building_id": "building_2",
+        "building_type": "residential",
+        "location": {
+         "lat": 34.05,
+         "lon": -118.24,
+         "timezone": "America/Los_Angeles"
+        },
+        "simulation_start": "2023-01-01",
+        "simulation_end": "2023-01-08"
+       },
+       {
+        "building_id": "building_3",
+        "building_type": "residential",
+        "location": {
+         "lat": 34.05,
+         "lon": -118.24,
+         "timezone": "America/Los_Angeles"
+        },
+        "simulation_start": "2023-01-01",
+        "simulation_end": "2023-01-08"
+       }
+      ],
+      "pandapower": {
+       "network_type": "ieee_34",
+       "voltage_limits": {
+        "min": 0.95,
+        "max": 1.05
+       },
+       "line_loading_limit": 1.0,
+       "transformer_loading_limit": 1.0,
+       "run_power_flow_every": 1
+      },
+      "energy_sharing": null,
+      "failures": [],
+      "community_import_limit_kw": null,
+      "community_export_limit_kw": null,
+      "random_seed": 42,
+      "timestep_minutes": 15
+     },
+     "config_diff": "--- baseline\n+++ patched\n@@ -1,5 +1,39 @@\n {\n-  \"buildings\": [],\n+  \"buildings\": [\n+    {\n+      \"building_id\": \"building_1\",\n+      \"building_type\": \"residential\",\n+      \"location\": {\n+        \"lat\": 34.05,\n+        \"lon\": -118.24,\n+        \"timezone\": \"America/Los_Angeles\"\n+      },\n+      \"simulation_end\": \"2023-01-08\",\n+      \"simulation_start\": \"2023-01-01\"\n+    },\n+    {\n+      \"building_id\": \"building_2\",\n+      \"building_type\": \"residential\",\n+      \"location\": {\n+        \"lat\": 34.05,\n+        \"lon\": -118.24,\n+        \"timezone\": \"America/Los_Angeles\"\n+      },\n+      \"simulation_end\": \"2023-01-08\",\n+      \"simulation_start\": \"2023-01-01\"\n+    },\n+    {\n+      \"building_id\": \"building_3\",\n+      \"building_type\": \"residential\",\n+      \"location\": {\n+        \"lat\": 34.05,\n+        \"lon\": -118.24,\n+        \"timezone\": \"America/Los_Angeles\"\n+      },\n+      \"simulation_end\": \"2023-01-08\",\n+      \"simulation_start\": \"2023-01-01\"\n+    }\n+  ],\n   \"community_export_limit_kw\": null,\n   \"community_import_limit_kw\": null,\n   \"description\": \"Minimal baseline scenario\",\n",
+     "implementation_notes": "Applied plan with 0 changes",
+     "applied_count": 0,
+     "failed_count": 0
+    },
+    "executor_output": {
+     "success": true,
+     "scenario_id": "nl_config_1794366093_0",
+     "config_valid": true,
+     "simulation_steps": 10,
+     "simulation_time_sec": 2.283078908920288,
+     "error": null,
+     "warnings": [],
+     "validation_errors": [],
+     "test_results": {
+      "scenario_id": "nl_config_1794366093_0",
+      "steps": 10,
+      "violations": {}
+     },
+     "violation_counts": {},
+     "power_flow_converged": true,
+     "energy_balance_ok": true,
+     "execution_time": 2.283078908920288
+    },
+    "verifier_output": {
+     "schema_valid": true,
+     "round_trip_valid": true,
+     "determinism_check": true,
+     "schema_complete": true,
+     "determinism_seed": 42,
+     "determinism_tolerance": 1e-06,
+     "schema_errors": [],
+     "round_trip_errors": [],
+     "determinism_errors": [],
+     "completeness_issues": [],
+     "required_fields_missing": [],
+     "out_of_range_fields": [],
+     "schema_rejections": [],
+     "confidence": 1.0,
+     "recommendation": "accept",
+     "manifest": {
+      "scenario_id": "scenario_base",
+      "name": "Base Scenario",
+      "building_count": 3,
+      "has_pv": false,
+      "has_battery": false,
+      "has_ev": false,
+      "has_flexible_load": false,
+      "has_energy_sharing": false,
+      "has_dynamic_pricing": false,
+      "community_import_limit": null,
+      "community_export_limit": null,
+      "timestep_minutes": 15,
+      "random_seed": 42
+     }
+    },
+    "reporter_output": {
+     "summary": "Config generation successful: 0 changes applied, simulation validated",
+     "detailed_report": {
+      "plan": {
+       "plan_source": "llm",
+       "rejected_fields": [],
+       "target_assets": [
+        "buildings"
+       ],
+       "building_count": 3,
+       "building_types": [
+        "residential"
+       ],
+       "pv_configs": [],
+       "battery_configs": [],
+       "ev_configs": [],
+       "flexible_load_configs": [],
+       "tariff_configs": [],
+       "grid_configs": [],
+       "failure_injections": [],
+       "community_import_limit_kw": null,
+       "community_export_limit_kw": null,
+       "energy_sharing_enabled": false,
+       "dynamic_pricing_enabled": false,
+       "timestep_minutes": 15,
+       "simulation_duration_days": 7,
+       "simulation_start": "2023-01-01",
+       "simulation_end": "2023-01-08",
+       "random_seed": 42,
+       "location": {
+        "lat": 34.05,
+        "lon": -118.24,
+        "timezone": "America/Los_Angeles"
+       },
+       "climate_zone": "tmy3_722950",
+       "weather_file": null,
+       "confidence": 0.85,
+       "assumptions": [
+        "No on-site generation assets (PV, battery, EV, flexible load) are present in the community",
+        "Community relies entirely on grid electricity supply",
+        "Default timestep of 15 minutes applied as no specific timestep was mentioned",
+        "Location inferred as Los Angeles, CA based on 'California' reference"
+       ],
+       "required_fields": [
+        "scenario_id",
+        "name",
+        "description",
+        "buildings",
+        "random_seed",
+        "timestep_minutes"
+       ],
+       "out_of_scope": [
+        "detailed grid topology",
+        "custom market mechanisms"
+       ]
+      },
+      "changes": [],
+      "diff": "--- baseline\n+++ patched\n@@ -1,5 +1,39 @@\n {\n-  \"buildings\": [],\n+  \"buildings\": [\n+    {\n+      \"building_id\": \"building_1\",\n+      \"building_type\": \"residential\",\n+      \"location\": {\n+        \"lat\": 34.05,\n+        \"lon\": -118.24,\n+        \"timezone\": \"America/Los_Angeles\"\n+      },\n+      \"simulation_end\": \"2023-01-08\",\n+      \"simulation_start\": \"2023-01-01\"\n+    },\n+    {\n+      \"building_id\": \"building_2\",\n+      \"building_type\": \"residential\",\n+      \"location\": {\n+        \"lat\": 34.05,\n+        \"lon\": -118.24,\n+        \"timezone\": \"America/Los_Angeles\"\n+      },\n+      \"simulation_end\": \"2023-01-08\",\n+      \"simulation_start\": \"2023-01-01\"\n+    },\n+    {\n+      \"building_id\": \"building_3\",\n+      \"building_type\": \"residential\",\n+      \"location\": {\n+        \"lat\": 34.05,\n+        \"lon\": -118.24,\n+        \"timezone\": \"America/Los_Angeles\"\n+      },\n+      \"simulation_end\": \"2023-01-08\",\n+      \"simulation_start\": \"2023-01-01\"\n+    }\n+  ],\n   \"community_export_limit_kw\": null,\n   \"community_import_limit_kw\": null,\n   \"description\": \"Minimal baseline scenario\",\n",
+      "execution": {
+       "success": true,
+       "steps": 10,
+       "violations": {},
+       "power_flow_converged": true,
+       "energy_balance": true,
+       "error": null
+      },
+      "verification": {
+       "schema_valid": true,
+       "round_trip": true,
+       "determinism": true,
+       "confidence": 1.0
+      },
+      "mapping_errors": [],
+      "schema_errors": []
+     },
+     "artifacts": [
+      "scenario_config.json",
+      "manifest.json"
+     ],
+     "recommendations": [],
+     "manifest": {
+      "scenario_id": "c01_buildings_residential",
+      "plan_source": "llm"
+     }
+    },
+    "success": true,
+    "duration": 7.8942177295684814
+   }
+  ],
+  "audit_trail": [
+   {
+    "timestamp": 1794366087.8018172,
+    "event": "pipeline_start",
+    "nl_description": "Set up a small renewable energy community with three residential buildings, no on-site assets, running for one week from 2023-01-01."
+   },
+   {
+    "iteration": 0,
+    "duration": 7.8942177295684814,
+    "success": true,
+    "changes": 0
+   }
+  ]
+ },
+ "final_summary": "Config generation successful: 0 changes applied, simulation validated",
+ "final_verdict": "accept",
+ "schema_errors": [],
+ "error": null,
+ "elapsed_s": 7.9
+}

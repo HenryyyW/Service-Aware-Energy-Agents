@@ -14,10 +14,12 @@ import './Layout.css'
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Scenarios', href: '/scenarios', icon: FileText },
+  { name: 'Generate', href: '/scenarios/generate', icon: Zap },
   { name: 'Studio', href: '/studio', icon: SlidersHorizontal },
   { name: 'Workspace', href: '/workspace', icon: Activity },
   { name: 'Experiments', href: '/experiments', icon: FlaskConical },
   { name: 'Network', href: '/network', icon: Zap },
+  { name: 'Canvas', href: '/canvas', icon: Zap },
 ]
 
 export default function Layout() {
