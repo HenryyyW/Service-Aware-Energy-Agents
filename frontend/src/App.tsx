@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom'
+import { ScenarioDetailPage } from './pages/ScenarioDetailPage';
 import Dashboard from './pages/Dashboard'
 import Scenarios from './pages/Scenarios'
 import Experiments from './pages/Experiments'
@@ -22,6 +23,7 @@ function App() {
         <Route path="network" element={<Network />} />
         <Route path="studio" element={<ScenarioStudioPage />} />
         <Route path="workspace" element={<AgentWorkspacePage />} />
+        <Route path="scenarios/:scenarioId" element={<ScenarioDetailPage />} />
         <Route path="scenarios/generate" element={<ScenarioGeneratorPage />} />
         <Route path="scenarios/probe/:scenarioId" element={<ScenarioProbePage />} />
         <Route path="comparison/strategy/:scenarioId" element={<StrategyComparisonPage />} />

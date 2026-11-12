@@ -41,6 +41,21 @@ class ApiClient {
     return response.data;
   }
 
+  async startSimulation(body: {
+    scenario_id: string;
+    controller_type?: string;
+    random_seed?: number;
+    max_steps?: number;
+  }): Promise<any> {
+    const response = await this.client.post('/api/simulations', body);
+    return response.data;
+  }
+
+  async cancelSimulation(runId: string): Promise<any> {
+    const response = await this.client.post(`/api/simulations/${runId}/cancel`);
+    return response.data;
+  }
+
   async getScenario(scenarioId: string): Promise<ScenarioConfig> {
     const response = await this.client.get(`/api/scenarios/${scenarioId}`);
     return response.data;
