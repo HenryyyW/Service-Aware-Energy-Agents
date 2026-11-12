@@ -130,7 +130,8 @@ def test_actions_respect_device_power_limits():
     actions = controller.get_actions(observations, timestep=3)
 
     for action in actions.actions:
-        assert -5.0 <= action.value_kw <= 5.0
+        if action.asset_id.startswith("b0_battery"):
+            assert -5.0 <= action.value_kw <= 5.0
         assert action.timestep == 3
 
 

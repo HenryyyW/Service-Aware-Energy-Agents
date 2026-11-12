@@ -218,6 +218,11 @@ def extract_run_metrics(
     service_block = result_data.get("service") or {}
     interrupted = service_block.get("members_interrupted") or []
     metrics["members_interrupted_count"] = len(interrupted)
+
+    # Extract controller fallback tracking
+    metrics["controller_fallback_steps"] = result_data.get("controller_fallback_steps", 0)
+    metrics["controller_fallback_reason"] = result_data.get("controller_fallback_reason")
+
     return metrics
 
 

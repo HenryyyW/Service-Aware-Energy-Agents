@@ -152,6 +152,7 @@ class QLearningController(BaseController):
         self._rule_based = RuleBasedController(scenario_config)
         self._known_states = set(self.q_table)
         self.unseen_states = 0
+        self.fallback_steps = 0
         self.timestep = 0
         # The encoder used at training time is recorded in policy metadata; fall
         # back to the explicit argument (default ``base``) so an LMP policy is
@@ -166,6 +167,7 @@ class QLearningController(BaseController):
         super().reset()
         self._rule_based.reset()
         self.unseen_states = 0
+        self.fallback_steps = 0
 
     def get_actions(
         self, observations: Dict[str, Any], timestep: int
@@ -180,6 +182,7 @@ class QLearningController(BaseController):
             action_index = int(np.argmax(self.q_table[state]))
         else:
             self.unseen_states += 1
+            self.fallback_steps += 1
             return self._rule_based.get_actions(observations, timestep)
 
         battery_level, ev_level = decode_action(action_index)
