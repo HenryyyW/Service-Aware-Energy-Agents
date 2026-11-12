@@ -146,6 +146,19 @@ throughputs non-zero. Residual R1 (Backend B, re-dispatched, non-blocking):
 `SimulationRun` response model lacks them (the internal `_runs` dict carries
 the values). UI surfacing stays with FE2.
 | W8 | Windows/local startup friction: `npm.ps1` blocked by execution policy; backend launched from `backend/` cannot resolve packages; default frontend proxy targets an unresolvable `api` host; backend needs `PYTHONUTF8` to avoid generation encoding errors | Start | QA/DevOps |
+
+**W8: CLOSED (`4a2ab9bad`, QA):** README starts the backend from the repo
+root (`python -m uvicorn backend.app.main:app`), documents `npm.cmd` for
+PowerShell and `PYTHONUTF8=1` on Windows, and the vite dev proxy defaults to
+`http://127.0.0.1:8001` (was `http://api:8000`, docker-compose-only); the
+`.env.example` names now match the client (`VITE_API_BASE_URL` /
+`VITE_WS_BASE_URL`). Partner verified: merged, tsc 0 errors, build green.
+**W1/W2/W7(UI)/W9: NOT VERIFIABLE - FE2's commit `4729a54` does not exist in
+the shared repo** (all branches and worktrees checked); re-dispatched with
+the requirement to commit in the shared repo or push an origin branch. Two
+of FE2's claims conflict with main (a `/scenarios/generate` route already
+exists; main's `tsc --noEmit` is 0 errors, not 58) - treat the commit as
+unverified until it lands here.
 | W9 | UI download button not exercisable (click timeout); diagnostics step only verified via API | Steps 6-7 | FE2 + QA |
 
 Note: the walkthrough build `78c2fd9e1` predates the fallback-labelling
