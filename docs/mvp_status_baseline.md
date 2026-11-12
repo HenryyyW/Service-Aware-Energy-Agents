@@ -15,9 +15,9 @@ this refresh closes that gap.
 | 1. NL → ScenarioConfig wiring | **Landed** (`edea241e5`) | The generator page's default path calls the real `api.generateScenario`; the mock generator survives only via the injected prop (tests/previews). Confirm still creates the scenario and hands to the detail page, which starts the run - a UX seam, not a blocker. |
 | 2. Simulation lifecycle | **Landed** (`550a1dd96`) | `ScenarioDetailPage` validates, starts, polls, cancels and shows the reason + next step on failure; results link onward to diagnostics and reports. |
 | 3. Virtual-community canvas | **Landed** (`68072ec96`) | `CommunityCanvasPage` is routed (`/canvas`, nav entry added): map/table toggle on the same run data, schematic-coordinate banner ("not actual geographic data"), honest loading/empty/failure states, keyboard + aria labels. Gates verified by Project Partner: `tsc --noEmit` clean, `eslint --max-warnings 0` clean, `npm run build` success, `vitest` 7/7. Responsive breakpoints and the MVP walkthrough remain open (QA). |
-| 4. Strategy comparison | **Landed** (`54a8c4255`) | One config runs through the four strategies of record; the comparison view reads real runs via `api.startStrategyComparison`/`getSimulationRun`; missing metrics show "no record" instead of zero. End-to-end evidence: QA smoke in flight. |
+| 4. Strategy comparison | **Landed** (`54a8c4255`; verified `0eeaaa398`) | One config runs through the four strategies of record; the comparison view reads real runs via `api.startStrategyComparison`/`getSimulationRun`; missing metrics show "no record" instead of zero. QA smoke: 200 with four real records (mpc / multi_agent_rl / rule_based / single_agent_rl), real pandapower grid metrics. **Acceptance blocker F1**: `energy_metrics` comes back all 0.0 (cost/import/PV/battery/carbon/peak) - shown as recorded and flagged as placeholders (owner: Backend B). |
 | 5. Agent diagnostics | **Landed** (`f260f6412`, `7068d4dc2`) | Read-only diagnosis (breaches located with evidence, interpreted, next steps) and fix proposals behind an approval gate with before/after re-run verification. Honest sub-threshold statement: strategy modification measures **5/9 vs the pre-registered 7/9**. |
-| 6. Productization | **In progress** (`e943c1d9c`, `68072ec96`) | Experiments/Network preview pages state their mode (banner in dev, "not wired to live records yet" in prod); `docs/deployment_posture.md` separates research demo from production (access control, persistence, isolation, monitoring, secrets, multi-user out of scope). Canvas a11y landed at `68072ec96`. Remaining: QA regression + closed-loop smoke + performance budget; responsive breakpoints; the MVP walkthrough by a developer who did not build it. |
+| 6. Productization | **Regression landed** (`e943c1d9c`, `68072ec96`, `0eeaaa398`) | Preview pages state their mode; `docs/deployment_posture.md` separates research demo from production; canvas a11y landed. QA's Phase 6 report (`docs/qa/phase6_regression_report.md`, merged as PR #64): pytest 518/518, black/ruff/tsc/eslint/build green, closed loop functional end-to-end with the live LLM planner (generate 13.5s → confirm 201 → run completed → 4-strategy comparison → diagnostics 200). Performance: ~190 KB gz initial load, no route-level code splitting (Lighthouse not run - needs served build). Remaining: **F1/F2 fixes** (below), responsive breakpoints, the MVP walkthrough. |
 
 ## P1 acceptance: the bar is met on the final code
 
@@ -62,6 +62,21 @@ measurements: `probe_out_full16d` (5/16, endpoint died mid-run) and
    - reported either way; below threshold.
 6. The 5 unattributed `wan2.7-image-pro` calls from the 2026-11-08 incident
    remain unexplained (recorded in `docs/incident_2026-11-08_dashscope_spend.md`).
+
+## Open defects (QA's Phase 6 report, owners notified by QA - Partner has not
+## re-verified the notifications)
+
+- **F1 - economics placeholders (Backend B):** `energy_metrics` returns all
+  0.0 for every strategy (cost, grid import, PV, battery, carbon, peak). The
+  energy/KPI accounting does not reach the comparison-path API payload; values
+  are shown as recorded and flagged, never substituted. Blocks the plan's
+  "auditable economics" acceptance for phase 4.
+- **F2 - trajectories serializer (Backend A/B):** `GET
+  /api/simulations/{run_id}/trajectories` returns 500 on NaN/Inf ("Out of range
+  float values are not JSON compliant"). The canvas time playback consumes this
+  endpoint, so such runs error in the UI.
+- **F3 - non-gating lint:** 10 ruff errors in `docs/` analysis scripts
+  (outside CI's ruff scope, main stays green). Owner: Research.
 
 ## Remember (user's standing instruction, 2026-11-11)
 
