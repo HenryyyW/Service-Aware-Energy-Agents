@@ -1240,6 +1240,9 @@ class SimulationCoupler:
         community_load_kws: List[float] = []
         community_net_kws: List[float] = []
 
+        # Track previous SOC for battery throughput calculation in fallback path
+        self._prev_soc: Dict[str, float] = {}
+
         for h in self.co_sim_history:
             cl = h.citylearn_result
             diag = cl.grid_diagnostics or {}
@@ -1285,13 +1288,13 @@ class SimulationCoupler:
                 step_export = 0.0
                 step_pv = 0.0
                 step_load = 0.0
-                step_battery = 0.0
+                step_battery_kwh = 0.0
 
                 for building in self.scenario_config.buildings:
                     bid = building.building_id
                     net_key = f"{bid}_net_electricity_consumption"
                     pv_key = f"{bid}_solar_generation"
-                    battery_key = f"{bid}_electrical_storage_soc"  # SOC change indicates battery throughput
+                    soc_key = f"{bid}_electrical_storage_soc"
 
                     if net_key in obs:
                         net_demand_kw = float(obs[net_key])
@@ -1305,11 +1308,26 @@ class SimulationCoupler:
                         step_pv += pv_kw
                         step_load += pv_kw  # PV contributes to local load
 
+                    # Compute battery throughput from SOC change (kW * dt_hours)
+                    if soc_key in obs and hasattr(self, "_prev_soc") and bid in self._prev_soc:
+                        soc_change = abs(float(obs[soc_key]) - self._prev_soc[bid])
+                        if building.battery:
+                            capacity_kwh = building.battery.capacity_kwh
+                            step_battery_kwh += soc_change * capacity_kwh
+
+                # Store current SOC for next step
+                self._prev_soc = {}
+                for building in self.scenario_config.buildings:
+                    bid = building.building_id
+                    soc_key = f"{bid}_electrical_storage_soc"
+                    if soc_key in obs:
+                        self._prev_soc[bid] = float(obs[soc_key])
+
                 grid_import_kwh += step_import * dt_hours
                 grid_export_kwh += step_export * dt_hours
                 pv_generation_kwh += step_pv * dt_hours
                 pv_consumed_kwh += min(step_pv, step_import + step_pv) * dt_hours
-                # Battery throughput not directly available from obs without action history
+                battery_throughput_kwh += step_battery_kwh
                 community_load_kws.append(step_import + step_pv)
                 community_net_kws.append(step_import - step_export)
 
