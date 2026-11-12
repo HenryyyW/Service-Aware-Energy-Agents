@@ -202,3 +202,19 @@ reason `fallback_to_rule_based`, QA-verified: mpc 24 steps). B's semantic
 action comparison (which would count 2 steps and change the marker's
 semantics, requiring a full live re-verification) is **deferred** to the P3
 strategy-modification stage if finer granularity is needed there. No action.
+
+## Final verification (QA, PR #70, live on e17d77562): no open defects
+
+- **R1 (per-run fallback fields): PASS end-to-end.** `GET
+  /api/simulations/{run_id}` carries the marker: mpc and single_agent_rl
+  return **24 steps / fallback_to_rule_based**, rule_based and multi_agent_rl
+  return 0/None (genuine); `/api/compare` normalizes genuine to None.
+  Throughputs all non-zero (4.63 / 7.35 / 4.63 / 4.63 kWh). The
+  no-silent-substitution rule holds from controller to API to UI.
+- **W5 (PV self-consumption): PASS.** With export forced (1 building, PV
+  50 kW, no battery): reported 0.9265 == implied (pv - export)/pv exactly
+  (import 192.27 / export 14.22 / pv 193.46 kWh); the control case with
+  export = 0 correctly reads 1.0 - the formula discriminates both regimes.
+
+**All nine walkthrough defects are closed and verified; MVP retest (the
+user, per docs/mvp_walkthrough.md) is the only remaining acceptance step.**
