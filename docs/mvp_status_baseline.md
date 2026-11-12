@@ -82,6 +82,20 @@ measurements: `probe_out_full16d` (5/16, endpoint died mid-run) and
   falls back to rule_based, the exact pattern the no-silent-substitution
   rule targets; those arms must be labeled (or skipped) in the payload
   before the four-strategy comparison is a claim.**
+  Both closed on main (B's `e21e468`, merge `b5e4a9e92`): multi_agent
+  throughput 0.0 -> real (coordinator message delivery + action asset_id
+  fixes) and the comparison payload now carries `controller_fallback_steps`
+  / `controller_fallback_reason` (`/api/compare`, `ExperimentResult`) so a
+  falling-back arm is named, not silently substituted. **Partner's
+  merge-quality note** (`cc2337a65`): B's branch was not clean against
+  merged main - a missing `Optional` import broke 3 test modules'
+  collection, `self.controller` was used in a module-scope function (a
+  latent NameError), `abs(net_kw)` broke the codebase's signed-discharge
+  convention, and test asset_ids still used pre-adapter names. Fixed and
+  verified: 518 passed, black/ruff clean. **Unverified:** B's live
+  throughput numbers (368.89 / 207.35 kWh) were claimed on the branch
+  before the merge; QA has not re-run the live comparison on `cc2337a65`
+  - recompute before quoting them.**
 - **F2 - trajectories serializer (Backend A/B):** ~~CLOSED at `2bf540951`~~
   (PR #65, QA): NaN/Inf is sanitized to None in both converters
   (`src/simulation/coupling.py` and the endpoint's `_convert_numpy` in
