@@ -46,12 +46,29 @@ const mockTransformers: Transformer[] = import.meta.env.DEV ? [
 ] : []
 
 export default function Network() {
+  const isPreview = mockBuses.length > 0;
   const [selectedBus, setSelectedBus] = useState<number | null>(null)
   const [selectedLine, setSelectedLine] = useState<number | null>(null)
   const [viewMode, setViewMode] = useState<'overview' | 'detailed'>('overview')
 
   return (
     <div className="page">
+      {isPreview && (
+        <div className="p-3 bg-sun/10 border border-sun/30 text-sun rounded-lg mt-3" role="note">
+          <p className="text-caption font-medium">
+            Preview data — sample grid readings in development mode only. Live
+            grid diagnostics appear on a scenario's community view after a run.
+          </p>
+        </div>
+      )}
+      {!isPreview && (
+        <div className="p-3 bg-surface/30 border border-border/30 rounded-lg mt-3" role="note">
+          <p className="text-caption text-text-muted">
+            No live grid monitor is wired to this view yet. Run a scenario to see
+            its grid diagnostics.
+          </p>
+        </div>
+      )}
       <div className="page-header">
         <div className="header-left">
           <h1>Network Monitor</h1>

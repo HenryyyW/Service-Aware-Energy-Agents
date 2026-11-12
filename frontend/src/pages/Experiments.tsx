@@ -65,6 +65,7 @@ export default function Experiments() {
     }
   }
 
+  const isPreview = mockExperiments.length > 0;
   return (
     <div className="page">
       <div className="page-header">
@@ -74,6 +75,23 @@ export default function Experiments() {
         </div>
       </div>
 
+      {isPreview && (
+        <div className="p-3 bg-sun/10 border border-sun/30 text-sun rounded-lg mt-3" role="note">
+          <p className="text-caption font-medium">
+            Preview data — this page shows sample runs in development mode only.
+            It is not wired to live experiment records yet; use the scenario
+            pages to start and inspect real runs.
+          </p>
+        </div>
+      )}
+      {!isPreview && (
+        <div className="p-3 bg-surface/30 border border-border/30 rounded-lg mt-3" role="note">
+          <p className="text-caption text-text-muted">
+            No experiment records are wired to this view yet. Run a scenario and
+            its runs appear on the scenario detail page.
+          </p>
+        </div>
+      )}
       <div className="card">
         <div className="card-header">
           <div className="search-filter">
