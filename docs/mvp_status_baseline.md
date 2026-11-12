@@ -71,10 +71,12 @@ measurements: `probe_out_full16d` (5/16, endpoint died mid-run) and
   energy/KPI accounting does not reach the comparison-path API payload; values
   are shown as recorded and flagged, never substituted. Blocks the plan's
   "auditable economics" acceptance for phase 4.
-- **F2 - trajectories serializer (Backend A/B):** `GET
-  /api/simulations/{run_id}/trajectories` returns 500 on NaN/Inf ("Out of range
-  float values are not JSON compliant"). The canvas time playback consumes this
-  endpoint, so such runs error in the UI.
+- **F2 - trajectories serializer (Backend A/B):** ~~CLOSED at `2bf540951`~~
+  (PR #65, QA): NaN/Inf is sanitized to None in both converters
+  (`src/simulation/coupling.py` and the endpoint's `_convert_numpy` in
+  `backend/app/routers/simulations.py`). Live-verified 500 -> 200 with 192
+  non-finite values nulled. Frontend note: null trajectory fields render as
+  gaps - explicit gap markers are optional later work.
 - **F3 - non-gating lint:** 10 ruff errors in `docs/` analysis scripts
   (outside CI's ruff scope, main stays green). Owner: Research.
 
