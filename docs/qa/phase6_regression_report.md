@@ -88,6 +88,43 @@ not recur. Without the env vars the pipeline falls back deterministically in
 - README/brief 5-commit drift behind `e943c1d9c` (Partner syncing
   `mvp_status_baseline.md`).
 
+## W1/W2 root causes + W8 fixes (2026-11-12, browser session on Linux)
+
+Reproduced the walkthrough failures in a controlled browser session
+(vite dev server + local backend on 8001, LLM planner live):
+
+- **W1 — generator page blank (root cause found, Frontend)**:
+  `ScenarioGeneratorPage.tsx:239` uses a zustand selector that returns a
+  fresh object literal every render:
+  `useScenarioStore((s) => ({ setCurrentScenario: ..., addScenario: ... }))`.
+  Zustand v5 snapshots via `useSyncExternalStore` with strict caching — an
+  uncached object snapshot raises
+  `Warning: The result of getSnapshot should be cached to avoid an infinite
+  loop` (captured in the browser console) and React abandons the render →
+  blank page **before any API call**. Fix (one of): two atomic selectors
+  (`useScenarioStore((s) => s.setCurrentScenario)`) or wrap with
+  `useShallow`. This is the W1 blocker; the API behind it works (verified
+  live: generate 200, `plan_source=llm`).
+- **W2 — canvas empty data (root cause found, Frontend + walkthrough flow)**:
+  the canvas only renders scenarios registered through the API
+  (`/api/network/geometry?scenario_id=…` → in-memory `_scenarios`, disk
+  fallback). The MVP walkthrough's own quick-start creates data via the CLI
+  (`run_experiment.py`), which never registers a scenario with the API — so
+  the canvas correctly reports "No community data": the walkthrough feeds it
+  no scenario. Two gaps: (a) the canvas has no run-based data path
+  (trajectories exist per run and could drive it); (b) scenario persistence
+  location is resolution-dependent (see W8 note below) — created under the
+  venv/worktree resolution the reads can miss. Canvas itself renders and
+  degrades correctly (empty state, no crash).
+- **W8 — startup docs/config (fixed in PR #69)**: backend start must be from
+  the repo root (`python -m uvicorn backend.app.main:app`); npm.cmd note for
+  PowerShell; vite dev proxy defaulted to `http://127.0.0.1:8001` (was the
+  docker-only `http://api:8000`, contradicting the README's stated port);
+  `PYTHONUTF8=1` note for Windows; and `.env.example` documented
+  `VITE_API_URL`/`VITE_WS_URL` while the client reads
+  `VITE_API_BASE_URL`/`VITE_WS_BASE_URL` (a copied .env.example silently did
+  nothing) — aligned all three.
+
 ## Verdict
 
 HEAD @ `e943c1d9c`: **all CI-scoped gates green, 518/518 tests, closed loop
