@@ -37,6 +37,7 @@ from src.controllers import (
     LLMVerifiedController,
     DeterministicSafetyController,
 )
+from src.schemas.action import RequestedActions, Action, ActionType
 from src.evaluation import (
     compute_all_metrics,
     generate_report_plots,
@@ -327,10 +328,26 @@ class ExperimentRunner:
         step = 0
         last_grid_diagnostics = None
 
+        # Fallback tracking: count steps where controller falls back to rule_based behavior
+        self.fallback_steps = 0
+        self.fallback_reason = None
+
+        # Check if controller has a rule_based fallback
+        has_rule_based_fallback = hasattr(self.controller, "_rule_based")
+
         while True:
             # Get actions from controller (pass grid diagnostics from previous step)
             assert self.controller is not None
             requested_actions = self.controller.get_actions(observations, step)
+
+            # Detect semantic fallback: if controller has rule_based fallback and
+            # produces actions identical to what rule_based would produce, mark as fallback
+            if has_rule_based_fallback:
+                rule_based_actions = self.controller._rule_based.get_actions(observations, step)
+                if self._actions_equal(requested_actions, rule_based_actions):
+                    self.fallback_steps += 1
+                    if self.fallback_reason is None:
+                        self.fallback_reason = "semantic_fallback_to_rule_based"
 
             # Step co-simulation
             assert self.coupler is not None
@@ -397,6 +414,24 @@ class ExperimentRunner:
 
         print(f"Experiment completed in {self.end_time - self.start_time:.1f}s")
         return result
+
+    def _actions_equal(self, actions_a: RequestedActions, actions_b: RequestedActions) -> bool:
+        """Check if two RequestedActions have the same battery actions."""
+        actions_a_dict = {(a.asset_id, a.action_type): a.value_kw for a in actions_a.actions}
+        actions_b_dict = {(a.asset_id, a.action_type): a.value_kw for a in actions_b.actions}
+        
+        # Compare battery actions only
+        battery_keys_a = {k: v for k, v in actions_a_dict.items() if 'battery' in k[0].lower()}
+        battery_keys_b = {k: v for k, v in actions_b_dict.items() if 'battery' in k[0].lower()}
+        
+        if battery_keys_a.keys() != battery_keys_b.keys():
+            return False
+        
+        for key in battery_keys_a:
+            if abs(battery_keys_a[key] - battery_keys_b[key]) > 1e-6:
+                return False
+        
+        return True
 
     def _calculate_max_steps(self) -> int:
         """Calculate max steps from simulation period."""

@@ -113,6 +113,9 @@ class SimulationRun(BaseModel):
     stage: Optional[str] = None
     eta_seconds: Optional[int] = None
     progress: float = 0.0
+    # Controller fallback tracking
+    controller_fallback_steps: int = 0
+    controller_fallback_reason: Optional[str] = None
 
 
 RL_POLICY_DIR = (
