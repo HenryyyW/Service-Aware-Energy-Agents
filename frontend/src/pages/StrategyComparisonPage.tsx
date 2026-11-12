@@ -88,6 +88,8 @@ export function StrategyComparisonPage() {
                   : run.status === 'failed'
                     ? 'failed'
                     : 'pending',
+              fallback_steps: run.controller_fallback_steps,
+              fallback_reason: run.controller_fallback_reason,
             };
           }
           setStrategyData(data);
