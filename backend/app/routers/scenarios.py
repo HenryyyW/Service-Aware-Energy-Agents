@@ -204,7 +204,9 @@ async def generate_scenario(request: dict):
 
     nl = (request.get("nl") or request.get("description") or "").strip()
     if not nl:
-        raise HTTPException(status_code=422, detail="nl (the natural-language description) is required")
+        raise HTTPException(
+            status_code=422, detail="nl (the natural-language description) is required"
+        )
 
     max_iterations = int(request.get("max_iterations", 2))
     project_root = os.environ.get(
