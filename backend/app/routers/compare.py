@@ -1,6 +1,6 @@
 """Scenario comparison API endpoints."""
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
@@ -104,14 +104,22 @@ async def compare_runs(
         scenario_id_b=run_b["scenario_id"],
         controller_type_a=run_a["controller_type"],
         controller_type_b=run_b["controller_type"],
-        controller_fallback_a={
-            "fallback_steps": run_a.get("controller_fallback_steps", 0),
-            "fallback_reason": run_a.get("controller_fallback_reason"),
-        } if run_a.get("controller_fallback_steps", 0) > 0 else None,
-        controller_fallback_b={
-            "fallback_steps": run_b.get("controller_fallback_steps", 0),
-            "fallback_reason": run_b.get("controller_fallback_reason"),
-        } if run_b.get("controller_fallback_steps", 0) > 0 else None,
+        controller_fallback_a=(
+            {
+                "fallback_steps": run_a.get("controller_fallback_steps", 0),
+                "fallback_reason": run_a.get("controller_fallback_reason"),
+            }
+            if run_a.get("controller_fallback_steps", 0) > 0
+            else None
+        ),
+        controller_fallback_b=(
+            {
+                "fallback_steps": run_b.get("controller_fallback_steps", 0),
+                "fallback_reason": run_b.get("controller_fallback_reason"),
+            }
+            if run_b.get("controller_fallback_steps", 0) > 0
+            else None
+        ),
         metrics_comparison=metrics_comparison,
         summary=summary,
     )
