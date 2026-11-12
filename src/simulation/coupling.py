@@ -1223,7 +1223,8 @@ class SimulationCoupler:
         CityLearn's ``evaluate()`` returns baseline-normalized ratios (1.0 =
         baseline), which are not usable as absolute KPIs. The per-step
         building contributions recorded in ``co_sim_history`` are the source
-        of truth for the product UI.
+        of truth for the product UI. Falls back to observation-based computation
+        when building contributions are unavailable (e.g., power flow skipped).
         """
         dt_hours = self.scenario_config.timestep_minutes / 60.0
 
@@ -1240,40 +1241,85 @@ class SimulationCoupler:
             cl = h.citylearn_result
             diag = cl.grid_diagnostics or {}
             contribs = diag.get("building_contributions") or {}
-            if not contribs:
-                continue
-            total_load = 0.0
-            total_pv = 0.0
-            total_battery = 0.0
-            total_net = 0.0
-            for contribution in contribs.values():
-                total_load += float(contribution.get("load_kw", 0.0))
-                total_pv += float(contribution.get("pv_kw", 0.0))
-                total_battery += float(contribution.get("battery_kw", 0.0))
-                total_net += float(contribution.get("net_injection_kw", 0.0))
-
-            # net_injection_kw convention: positive = injection into the grid
-            # (export), negative = drawn from the grid (import).
-            grid_import_kwh += max(-total_net, 0.0) * dt_hours
-            grid_export_kwh += max(total_net, 0.0) * dt_hours
-            pv_generation_kwh += total_pv * dt_hours
-            pv_consumed_kwh += min(total_pv, total_load) * dt_hours
-            battery_throughput_kwh += abs(total_battery) * dt_hours
-            community_load_kws.append(total_load)
-            community_net_kws.append(total_net)
-
-            # Carbon intensity observation (kg/kWh) at this timestep
             obs = cl.observations or {}
-            carbon_intensity = None
-            for bid in contribs:
-                value = obs.get(f"{bid}_carbon_intensity")
-                if value is not None:
-                    carbon_intensity = float(value)
-                    break
-            if carbon_intensity is not None:
-                carbon_emissions_kg += (
-                    max(-total_net, 0.0) * dt_hours * carbon_intensity
-                )
+
+            # Try to use building contributions first (more accurate, from power flow)
+            if contribs:
+                total_load = 0.0
+                total_pv = 0.0
+                total_battery = 0.0
+                total_net = 0.0
+                for contribution in contribs.values():
+                    total_load += float(contribution.get("load_kw", 0.0))
+                    total_pv += float(contribution.get("pv_kw", 0.0))
+                    total_battery += float(contribution.get("battery_kw", 0.0))
+                    total_net += float(contribution.get("net_injection_kw", 0.0))
+
+                # net_injection_kw convention: positive = injection into the grid
+                # (export), negative = drawn from the grid (import).
+                grid_import_kwh += max(-total_net, 0.0) * dt_hours
+                grid_export_kwh += max(total_net, 0.0) * dt_hours
+                pv_generation_kwh += total_pv * dt_hours
+                pv_consumed_kwh += min(total_pv, total_load) * dt_hours
+                battery_throughput_kwh += abs(total_battery) * dt_hours
+                community_load_kws.append(total_load)
+                community_net_kws.append(total_net)
+
+                # Carbon intensity observation (kg/kWh) at this timestep
+                carbon_intensity = None
+                for bid in contribs:
+                    value = obs.get(f"{bid}_carbon_intensity")
+                    if value is not None:
+                        carbon_intensity = float(value)
+                        break
+                if carbon_intensity is not None:
+                    carbon_emissions_kg += (
+                        max(-total_net, 0.0) * dt_hours * carbon_intensity
+                    )
+            else:
+                # Fallback: compute from observations directly (same logic as metrics.py)
+                step_import = 0.0
+                step_export = 0.0
+                step_pv = 0.0
+                step_load = 0.0
+                step_battery = 0.0
+
+                for building in self.scenario_config.buildings:
+                    bid = building.building_id
+                    net_key = f"{bid}_net_electricity_consumption"
+                    pv_key = f"{bid}_solar_generation"
+                    battery_key = f"{bid}_electrical_storage_soc"  # SOC change indicates battery throughput
+
+                    if net_key in obs:
+                        net_demand_kw = float(obs[net_key])
+                        if net_demand_kw > 0:
+                            step_import += net_demand_kw
+                        elif net_demand_kw < 0:
+                            step_export += -net_demand_kw
+
+                    if pv_key in obs:
+                        pv_kw = float(obs[pv_key])
+                        step_pv += pv_kw
+                        step_load += pv_kw  # PV contributes to local load
+
+                grid_import_kwh += step_import * dt_hours
+                grid_export_kwh += step_export * dt_hours
+                pv_generation_kwh += step_pv * dt_hours
+                pv_consumed_kwh += min(step_pv, step_import + step_pv) * dt_hours
+                # Battery throughput not directly available from obs without action history
+                community_load_kws.append(step_import + step_pv)
+                community_net_kws.append(step_import - step_export)
+
+                # Carbon intensity
+                carbon_intensity = None
+                for building in self.scenario_config.buildings:
+                    bid = building.building_id
+                    value = obs.get(f"{bid}_carbon_intensity")
+                    if value is not None:
+                        carbon_intensity = float(value)
+                        break
+                if carbon_intensity is not None:
+                    carbon_emissions_kg += step_import * dt_hours * carbon_intensity
 
         return {
             "grid_import_kwh": grid_import_kwh,
