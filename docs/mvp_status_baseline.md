@@ -159,6 +159,16 @@ object every render) tripping `useSyncExternalStore`'s infinite-loop abort -
 fixed with atomic selectors; W2 adds loading/error/empty canvas states;
 W9 disables the report download button while downloading. Partner verified:
 tsc 0 errors, eslint 0, vitest 7/7, build green.
+**W2 root cause deepened (QA browser repro, `b819f4788`, merged):** the
+canvas only renders API-registered scenarios (`/api/network/geometry` ->
+in-memory `_scenarios`); the walkthrough's API/CLI-created scenarios never
+register, so "No community data" was correct-but-unreachable. **Decision
+(Partners): run-based data path** - the canvas falls back to `getRuns()` ->
+`run.scenario_id` -> scenarios + trajectories, so any real run displays;
+empty state only when zero runs exist. Dispatched to FE2 (2026-11-13). Known
+limitation recorded: scenario persistence is resolution-dependent (same-
+process reads fine; cross-restart loss is the documented research-demo
+posture).
 **W7 (UI): CLOSED (`249667489`, FE2, partner-verified):** the page's
 `strategyData` builder now maps `run.controller_fallback_steps/reason`, the
 panel renders them (or "no record"), and a new component test covers both
