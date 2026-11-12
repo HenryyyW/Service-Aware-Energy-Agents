@@ -165,6 +165,9 @@ async def _run_simulation_background(
     # scenario, dataset load) used to raise UnboundLocalError there instead of
     # recording the original error - the smoke regression on run 402cdf4b8.
     coupler = None
+    controller = None  # bound early: the except branch below inspects it, and
+    # an early constructor failure must surface the original error, not an
+    # UnboundLocalError (the smoke regression this file guards).
     try:
         _runs[run_id]["status"] = "running"
         _runs[run_id]["stage"] = "initializing"
@@ -372,7 +375,7 @@ async def _run_simulation_background(
         _runs[run_id]["stage"] = "error"
         _runs[run_id]["generation_status"] = "failed"
         outcome = f"Simulation failed: {str(e)}"
-        if isinstance(controller, QLearningController):
+        if controller is not None and isinstance(controller, QLearningController):
             # A policy mismatch is the common cause (trained on another
             # scenario's devices) - name the cause and the next step instead
             # of leaking a bare IndexError.
