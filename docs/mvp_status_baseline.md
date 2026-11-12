@@ -11,7 +11,7 @@ this refresh closes that gap.
 
 | Plan phase | Status | Evidence / gap |
 |---|---|---|
-| 0. MVP & status baseline | **This record** | README L42/L270 and the brief's P1 row still lag `edea241e5`; sync owned by PM/Frontend |
+| 0. MVP & status baseline | **This record** | README L42/L270 + brief P1 synced at `04d1a2ffb` (PM, docs-only, verified); acceptance bar MET on `probe_out_full16f` (14/16 full-bar, all 8 domains, 4/4 rejection; c09 C3 recorded as measured) |
 | 1. NL → ScenarioConfig wiring | **Landed** (`edea241e5`) | The generator page's default path calls the real `api.generateScenario`; the mock generator survives only via the injected prop (tests/previews). Confirm still creates the scenario and hands to the detail page, which starts the run - a UX seam, not a blocker. |
 | 2. Simulation lifecycle | **Landed** (`550a1dd96`) | `ScenarioDetailPage` validates, starts, polls, cancels and shows the reason + next step on failure; results link onward to diagnostics and reports. |
 | 3. Virtual-community canvas | **Exists, not reachable** | `CommunityCanvasPage` renders real run data with a TimePlayer, but it is **not routed in `App.tsx`** (verified 2026-11-12) - the front-door gap. Alternative table view and honest loading/empty/failed states: in flight with Frontend (2026-11-12). |
