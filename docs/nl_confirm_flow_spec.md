@@ -103,6 +103,6 @@ An uninvolved developer should walk this end-to-end without changing code:
 8. **Rejection path**: If `validate` returns invalid OR user clicks Edit & reject → return to input with the invalid field named + pre-filled retry ("Fix <field>: <detail>").
 9. **No silent corrections**: rejected/defaulted fields always named inline; never auto-corrected.
 
-## Open item (decision, not a blocker)
+## Decision (closed) — post-Run navigation
 
-Whether, after Run starts, the details page auto-navigates to the Community Canvas once the run completes, or stays on the detail page with canvas/comparison as onward links. Spec'd as detail page first (run-control center), onward links secondary. Revisit with Frontend during build if the detail page feels redundant.
+Stay on the details page once the run completes; do not auto-navigate to the Community Canvas. The completed run's diagnostics + KPI summary + interpretation stay on one screen; the canvas / strategy comparison / report download remain onward links from the details page. Confirmed by Project Partner copy (356aee93, 2026-11-12).
