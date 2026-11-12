@@ -236,10 +236,8 @@ export interface ScenarioGeneratorPageProps {
 
 export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }: ScenarioGeneratorPageProps) {
   const navigate = useNavigate();
-  const { setCurrentScenario, addScenario } = useScenarioStore((s) => ({
-    setCurrentScenario: s.setCurrentScenario,
-    addScenario: s.addScenario,
-  }));
+  const setCurrentScenario = useScenarioStore((s) => s.setCurrentScenario);
+  const addScenario = useScenarioStore((s) => s.addScenario);
 
   const [step, setStep] = useState<'input' | 'confirm'>('input');
   const [description, setDescription] = useState('');
