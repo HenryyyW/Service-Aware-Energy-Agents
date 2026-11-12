@@ -276,32 +276,50 @@ async def create_scenario(scenario_data: dict):
     """Create a new scenario."""
     scenario_id = scenario_data.get("scenario_id") or f"scenario_{uuid4().hex[:8]}"
 
-    # Create ScenarioConfig from the input
-    scenario = ScenarioConfig(
-        scenario_id=scenario_id,
-        name=scenario_data.get("name", scenario_id),
-        description=scenario_data.get("description", ""),
-        buildings=[BuildingConfig(**b) for b in scenario_data.get("buildings", [])],
-        pandapower=(
-            PandapowerConfig(**scenario_data["pandapower"])
-            if scenario_data.get("pandapower")
-            else None
-        ),
-        community_import_limit_kw=scenario_data.get("community_import_limit_kw"),
-        community_export_limit_kw=scenario_data.get("community_export_limit_kw"),
-        # Top-level fields the API used to drop at the door (c10's C5 failure:
-        # an energy-sharing config POSTed then GET-back-less). Buildings already
-        # carry pv/battery/evs/flexible_loads/tariff/weather_file through.
-        energy_sharing=(
-            EnergySharingConfig(**scenario_data["energy_sharing"])
-            if scenario_data.get("energy_sharing")
-            else None
-        ),
-        failures=[FailureConfig(**f) for f in scenario_data.get("failures") or []],
-        carbon_intensity_file=scenario_data.get("carbon_intensity_file"),
-        random_seed=scenario_data.get("random_seed", 42),
-        timestep_minutes=scenario_data.get("timestep_minutes", 15),
-    )
+    # Create ScenarioConfig from the input with validation
+    try:
+        scenario = ScenarioConfig(
+            scenario_id=scenario_id,
+            name=scenario_data.get("name", scenario_id),
+            description=scenario_data.get("description", ""),
+            buildings=[BuildingConfig(**b) for b in scenario_data.get("buildings", [])],
+            pandapower=(
+                PandapowerConfig(**scenario_data["pandapower"])
+                if scenario_data.get("pandapower")
+                else None
+            ),
+            community_import_limit_kw=scenario_data.get("community_import_limit_kw"),
+            community_export_limit_kw=scenario_data.get("community_export_limit_kw"),
+            energy_sharing=(
+                EnergySharingConfig(**scenario_data["energy_sharing"])
+                if scenario_data.get("energy_sharing")
+                else None
+            ),
+            failures=[FailureConfig(**f) for f in scenario_data.get("failures") or []],
+            carbon_intensity_file=scenario_data.get("carbon_intensity_file"),
+            random_seed=scenario_data.get("random_seed", 42),
+            timestep_minutes=scenario_data.get("timestep_minutes", 15),
+        )
+    except Exception as e:
+        from pydantic import ValidationError
+
+        if isinstance(e, ValidationError):
+            errors = []
+            for err in e.errors():
+                loc = " -> ".join(str(x) for x in err["loc"])
+                msg = err["msg"]
+                errors.append({"field": loc, "message": msg})
+            raise HTTPException(
+                status_code=422,
+                detail={"message": "Validation failed", "errors": errors},
+            )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Invalid scenario config",
+                "errors": [{"field": "unknown", "message": str(e)}],
+            },
+        )
 
     _scenarios[scenario_id] = scenario
 

@@ -118,6 +118,14 @@ def _format_metrics_table(metrics: dict) -> list:
 
 def _generate_report(run: dict) -> str:
     """Generate markdown report from run data."""
+    # Extract scenario config from run data
+    scenario_config = run.get("scenario_config", {})
+    buildings = scenario_config.get("buildings", [])
+    timestep_minutes = scenario_config.get("timestep_minutes", 15)
+    effective_timestep = scenario_config.get(
+        "effective_timestep_minutes", timestep_minutes
+    )
+
     lines = [
         f"# Simulation Report: {run['run_id']}",
         "",
@@ -128,11 +136,44 @@ def _generate_report(run: dict) -> str:
         f"**End Time:** {run.get('end_time', 'N/A')}  ",
         f"**Random Seed:** {run.get('random_seed', 'N/A')}  ",
         "",
-        "---",
+        "## Scenario Configuration",
         "",
-        "## Energy Metrics",
-        "",
+        f"- Timestep: {timestep_minutes} min (effective: {effective_timestep} min)",
+        f"- Buildings: {len(buildings)}",
     ]
+
+    for i, b in enumerate(buildings):
+        lines.append(
+            f"  - {b.get('building_id', f'building_{i+1}')}: {b.get('building_type', 'residential')}"
+        )
+        if b.get("pv"):
+            lines.append(f"    - PV: {b['pv'].get('capacity_kw', 0)} kW")
+        if b.get("battery"):
+            lines.append(f"    - Battery: {b['battery'].get('capacity_kwh', 0)} kWh")
+        if b.get("evs"):
+            lines.append(f"    - EV(s): {len(b['evs'])}")
+        if b.get("flexible_loads"):
+            lines.append(f"    - Flexible loads: {len(b['flexible_loads'])}")
+        if b.get("tariff"):
+            lines.append(f"    - Tariff: {b['tariff'].get('type', 'time_of_use')}")
+        if b.get("weather_file"):
+            lines.append(f"    - Weather file: {b['weather_file']}")
+
+    lines.extend(
+        [
+            f"- Community import limit: {scenario_config.get('community_import_limit_kw', 'N/A')} kW",
+            f"- Community export limit: {scenario_config.get('community_export_limit_kw', 'N/A')} kW",
+            f"- Energy sharing: {scenario_config.get('energy_sharing', {}).get('enabled', False) if scenario_config.get('energy_sharing') else False}",
+            f"- Grid network: {scenario_config.get('pandapower', {}).get('network_type', 'N/A') if scenario_config.get('pandapower') else 'N/A'}",
+            "",
+            "---",
+            "",
+            "## Energy Metrics",
+            "",
+        ]
+    )
+
+    em = run.get("energy_metrics", {})
 
     em = run.get("energy_metrics", {})
     if em:

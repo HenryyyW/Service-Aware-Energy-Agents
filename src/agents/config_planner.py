@@ -288,7 +288,17 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
 
         if any(kw in nl_lower for kw in ["ev", "electric vehicle", "car"]):
             plan.target_assets.append("ev")
-            plan.ev_configs.append({"capacity_kwh": 60, "max_charge_kw": 11})
+            plan.ev_configs.append(
+                {
+                    "capacity_kwh": 60,
+                    "max_charge_kw": 11,
+                    "arrival_time": "18:00",
+                    "departure_time": "07:00",
+                    "target_soc": 0.8,
+                    "initial_soc": 0.3,
+                    "connected_days": [0, 1, 2, 3, 4, 5, 6],
+                }
+            )
 
         if any(kw in nl_lower for kw in ["flexible", "load", "hvac", "thermostat"]):
             plan.target_assets.append("flexible_load")

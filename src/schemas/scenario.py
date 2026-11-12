@@ -209,3 +209,4 @@ class ScenarioConfig(BaseModel):
     carbon_intensity_file: Optional[str] = None
     random_seed: int = 42
     timestep_minutes: int = 15
+    effective_timestep_minutes: Optional[int] = None

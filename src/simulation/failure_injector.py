@@ -44,7 +44,11 @@ class FailureInjector:
     def __init__(self, scenario_config: ScenarioConfig):
         self.scenario_config = scenario_config
         self.failures = scenario_config.failures
-        self.timestep_minutes = scenario_config.timestep_minutes
+        # Use effective timestep (dataset-native) for simulation calculations
+        self.timestep_minutes = (
+            getattr(scenario_config, "effective_timestep_minutes", None)
+            or scenario_config.timestep_minutes
+        )
         self.simulation_start_datetime: Optional[datetime] = None
 
         # Parse start/end times to timesteps

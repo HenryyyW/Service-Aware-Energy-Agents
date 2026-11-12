@@ -561,7 +561,7 @@ class TestLmpUpdateIntervalValidation:
             coupler.reset(random_seed=42)
 
         assert "lmp_update_interval_minutes" in str(exc_info.value)
-        assert "must equal simulation timestep_minutes" in str(exc_info.value)
+        assert "must equal effective simulation timestep" in str(exc_info.value)
         assert "15" in str(exc_info.value) and "60" in str(exc_info.value)
 
 

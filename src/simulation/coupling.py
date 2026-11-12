@@ -117,13 +117,14 @@ class SimulationCoupler:
         ):
             dp = self.scenario_config.energy_sharing.dynamic_pricing
             if dp.enabled:
-                if (
-                    dp.lmp_update_interval_minutes
-                    != self.scenario_config.timestep_minutes
-                ):
+                effective_timestep = (
+                    self.scenario_config.effective_timestep_minutes
+                    or self.scenario_config.timestep_minutes
+                )
+                if dp.lmp_update_interval_minutes != effective_timestep:
                     raise ValueError(
                         f"lmp_update_interval_minutes ({dp.lmp_update_interval_minutes}) "
-                        f"must equal simulation timestep_minutes ({self.scenario_config.timestep_minutes}). "
+                        f"must equal effective simulation timestep ({effective_timestep} min). "
                         f"Interpolation is not supported."
                     )
         seed = random_seed or self.scenario_config.random_seed
@@ -256,13 +257,14 @@ class SimulationCoupler:
             # Validate lmp_update_interval_minutes if dynamic pricing is enabled
             if dynamic_pricing_enabled:
                 dp_config = self.scenario_config.energy_sharing.dynamic_pricing
-                if (
-                    dp_config.lmp_update_interval_minutes
-                    != self.scenario_config.timestep_minutes
-                ):
+                effective_timestep = (
+                    self.scenario_config.effective_timestep_minutes
+                    or self.scenario_config.timestep_minutes
+                )
+                if dp_config.lmp_update_interval_minutes != effective_timestep:
                     raise ValueError(
                         f"lmp_update_interval_minutes ({dp_config.lmp_update_interval_minutes}) "
-                        f"must equal simulation timestep_minutes ({self.scenario_config.timestep_minutes}). "
+                        f"must equal effective simulation timestep ({effective_timestep} min). "
                         f"Interpolation is not supported."
                     )
 
@@ -1397,9 +1399,14 @@ class SimulationCoupler:
 
         # Export CityLearn trajectories
         trajectories = []
+        effective_timestep = (
+            self.scenario_config.effective_timestep_minutes
+            or self.scenario_config.timestep_minutes
+        )
         for h in self.co_sim_history:
             traj = {
                 "timestep": h.timestep,
+                "timestamp_minutes": h.timestep * effective_timestep,
                 "requested_actions": [
                     a.model_dump() for a in h.citylearn_result.requested_actions.actions
                 ],

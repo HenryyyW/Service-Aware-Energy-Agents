@@ -99,8 +99,8 @@ class CityLearnAdapter:
                 f"[WARNING] Scenario timestep ({self.scenario_config.timestep_minutes} min) differs from dataset native resolution ({dataset_timestep_minutes} min). "
                 f"Using dataset resolution ({dataset_timestep_minutes} min) for CityLearn simulation."
             )
-            # Override scenario timestep for this adapter to avoid resampling issues
-            self.scenario_config.timestep_minutes = dataset_timestep_minutes
+            # Store effective timestep separately; keep original timestep_minutes for reporting
+            self.scenario_config.effective_timestep_minutes = dataset_timestep_minutes
             # Keep the LMP update interval in lockstep with the effective
             # simulation timestep. apply_pricing_regime runs before the dataset
             # is resolved and bakes in the YAML timestep (e.g. 15), which the
@@ -112,6 +112,11 @@ class CityLearnAdapter:
             dp_cfg = es_cfg.dynamic_pricing if es_cfg is not None else None
             if dp_cfg is not None and dp_cfg.enabled:
                 dp_cfg.lmp_update_interval_minutes = dataset_timestep_minutes
+        else:
+            # Timestep matches dataset native resolution
+            self.scenario_config.effective_timestep_minutes = (
+                self.scenario_config.timestep_minutes
+            )
 
         # Save original root_directory BEFORE customizing schema
         original_root_dir = Path(schema["root_directory"])
@@ -437,7 +442,10 @@ class CityLearnAdapter:
 
     def _episode_shape(self) -> Tuple[int, int]:
         """(steps_per_day, episode_steps) at the dataset's resolution."""
-        step_minutes = int(self.scenario_config.timestep_minutes)
+        step_minutes = int(
+            getattr(self.scenario_config, "effective_timestep_minutes", None)
+            or self.scenario_config.timestep_minutes
+        )
         steps_per_day = int(24 * 60 // step_minutes)
         return steps_per_day, int(7 * steps_per_day + 1)
 
@@ -450,7 +458,10 @@ class CityLearnAdapter:
         the estimated SOC at arrival).
         """
         steps_per_day, steps = self._episode_shape()
-        step_minutes = int(self.scenario_config.timestep_minutes)
+        step_minutes = int(
+            getattr(self.scenario_config, "effective_timestep_minutes", None)
+            or self.scenario_config.timestep_minutes
+        )
         # 2023-07-01 (the episode start) is a Saturday -> weekday 5.
         start_weekday = 5
 
@@ -562,7 +573,10 @@ class CityLearnAdapter:
     ) -> Tuple["pd.DataFrame", "pd.DataFrame"]:
         """Build cycle-profile and flexibility-schedule CSVs from a FlexibleLoadConfig."""
         steps_per_day, steps = self._episode_shape()
-        step_minutes = int(self.scenario_config.timestep_minutes)
+        step_minutes = int(
+            getattr(self.scenario_config, "effective_timestep_minutes", None)
+            or self.scenario_config.timestep_minutes
+        )
         duration_steps = max(1, int(round(flex.duration_hours * 60 / step_minutes)))
         total_energy = (
             float(flex.energy_kwh)
