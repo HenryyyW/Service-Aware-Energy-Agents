@@ -14,7 +14,10 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: 'http://api:8000',
+        // 'api' only resolves inside docker compose; local dev defaults to
+        // the loopback backend (README: port 8001). Override with
+        // VITE_API_PROXY_TARGET when needed.
+        target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8001',
         changeOrigin: true,
       },
     },
