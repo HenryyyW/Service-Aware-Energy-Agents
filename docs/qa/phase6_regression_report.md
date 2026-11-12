@@ -1,5 +1,16 @@
 # Phase 6 regression verification — main @ `e943c1d9c`
 
+> **Re-verified 2026-11-12 on merged main @ `cc2337a65`** (PR #66 + Backend B's
+> throughput/fallback follow-ups) — see the "Re-verification" section at the
+> bottom. Summary: all four strategy throughputs now non-zero (multi_agent_rl
+> 7.35 kWh, genuinely acting and honestly worse: 41.80 vs 27.48 USD); B's
+> claimed magnitudes (368.89/207.35 kWh) do NOT reproduce on this smoke
+> config — different environment; and the fallback labelling
+> (`controller_fallback_steps/reason`) still does not fire for
+> mpc/single_agent_rl (both None in run payloads and `/api/compare`) despite
+> byte-identical outputs to rule_based — the tracking only covers the
+> `llm_agent` controller's attribute.
+
 QA/DevOps, 2026-11-12. Scope: HEAD regression gates, closed-loop smoke on a
 local backend, performance load magnitude. Isolated worktree at exactly
 `e943c1d9c`; no product code modified.
@@ -84,3 +95,42 @@ mechanically functional end-to-end with the LLM planner live.** The loop's
 weak layer is the economics payload (F1) and the trajectories serializer
 (F2) — both recorded for the owning engineers; neither blocks the loop
 mechanics.
+
+## Re-verification — main @ `cc2337a65` (2026-11-12, post-merge)
+
+PR #66 (F1 energy fallback, QA-verified) + Backend B's throughput/SOC
+follow-ups merged; Partner resolved 4 merge-quality issues. Local standalone
+backend at cc2337a65, same closed loop (scenario `rerun_smoke`: 4 buildings,
+batteries 10 kWh/5 kW @ initial_soc 0.5, 24 steps, seed 42).
+
+| strategy | battery_throughput_kwh | total_cost | grid_import_kwh | carbon_kg | fallback_steps/reason |
+|---|---|---|---|---|---|
+| rule_based | 4.63 | 27.48 | 96.83 | 21.07 | None / None |
+| mpc | 4.63 | 27.48 | 96.83 | 21.07 | None / None |
+| single_agent_rl | 4.63 | 27.48 | 96.83 | 21.07 | None / None |
+| multi_agent_rl | **7.35** | **41.80** | **144.77** | **32.85** | None / None |
+
+Findings:
+
+1. **All four throughputs non-zero** ✓ — the multi_agent controller now
+   genuinely acts (7.35 kWh) and its economics are honestly displayed as
+   WORSE than baseline (41.80 vs 27.48 USD, higher import and carbon). No
+   substitution or zero-padding.
+2. **B's claimed magnitudes (multi_agent 368.89, mpc 207.35 kWh) do not
+   reproduce on this smoke config** — different environment/construct than
+   B's test (my config: 4×10 kWh batteries, 24 steps). The qualitative claim
+   (all four non-zero) verifies; the specific numbers are environment-bound.
+3. **Fallback labelling still does not fire**: mpc and single_agent_rl are
+   byte-identical to rule_based on every metric (silent substitution when
+   policies are unavailable, as B confirmed for single_agent_rl), yet
+   `controller_fallback_steps`/`controller_fallback_reason` are None in both
+   the run payloads and `GET /api/compare`. Mechanism: the tracking reads
+   `controller.fallback_steps`, an attribute only `src/agents/llm_agent.py`
+   maintains (its LLM-fallback counter) — the comparison runners for
+   mpc/single_agent_rl never set it. The labelling needs to be set by the
+   comparison runner itself when a controller is substituted (owner: Backend
+   B). Until then, the payload cannot distinguish "genuine" mpc/single_agent_rl
+   runs from rule_based passthrough.
+
+Everything else from the original report (§1 gates, §2 loop mechanics, F2
+trajectories fix — merged as 2bf540951, performance §3) stands.
