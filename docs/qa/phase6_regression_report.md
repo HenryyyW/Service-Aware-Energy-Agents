@@ -172,6 +172,45 @@ Findings:
 Everything else from the original report (§1 gates, §2 loop mechanics, F2
 trajectories fix — merged as 2bf540951, performance §3) stands.
 
+### Re-verification #2 — R1 + W5 (main @ `e17d77562`, 2026-11-13)
+
+Backend B's R1 (SimulationRun response model carries
+`controller_fallback_steps/reason`) and W5 (PV self-consumption fallback
+formula: `actual_load = import − export + pv`), verified live on a local
+standalone backend.
+
+**R1 — per-run fallback labels now survive serialization** (scenario
+`r1w5_smoke`, 4 strategies, 24 steps, seed 42, policies absent):
+
+| strategy | throughput_kwh | `controller_fallback_steps/reason` in run GET |
+|---|---|---|
+| rule_based | 4.63 | 0 / None — correct (genuine) |
+| mpc | 4.63 | **24 / `fallback_to_rule_based`** ✓ |
+| single_agent_rl | 4.63 | **24 / `fallback_to_rule_based`** ✓ |
+| multi_agent_rl | 7.35 | 0 / None — correct (genuine) |
+
+`GET /api/compare` agrees (rule_based None, mpc
+24/`fallback_to_rule_based`). Note the run-GET now reports `0/None` for
+genuine arms (the fields exist; 0 = no fallback steps) while `/api/compare`
+normalizes to `None` — both convey the same fact; the no-silent-substitution
+requirement is met end-to-end. Throughputs all non-zero.
+
+**W5 — self-consumption no longer a 100% illusion** (scenario `w5_smoke2`:
+1 building, PV 50 kW, no battery, no `building_contributions` → fallback
+formula path; 24 steps, seed 42):
+
+- `grid_import = 192.27 kWh`, `grid_export = 14.22 kWh`,
+  `pv_generation = 193.46 kWh` → **export > 0** (the regime where the old
+  `import + pv` load formula produced the 100% illusion).
+- Reported `pv_self_consumption = 0.9265` — matches the corrected implied
+  value `(pv − export) / pv = 0.927` exactly; `actual_load =
+  import − export + pv = 371.51 kWh` consistent.
+- Control case (`w5_smoke`, PV 5 kW, export = 0): self-consumption 1.0 is
+  genuinely correct there (all PV consumed) — the formula discriminates
+  properly between the two regimes.
+
+Both items verified; no new defects.
+
 ### Re-verification addendum — fallback labelling (main @ `a1f3e8a56`, 2026-11-12)
 
 Backend B's fallback-tracking fix (8a25ab9, merged a1f3e8a56) verified live
