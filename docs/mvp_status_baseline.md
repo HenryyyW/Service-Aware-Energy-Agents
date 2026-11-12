@@ -194,3 +194,11 @@ The other defects are independent of that merge.
 Priority (from the walkthrough): W1/W8 (entry + startup) -> W2 (canvas data
 chain) -> W4/W5 (timeline + KPI honesty) -> W3/W6/W7 (config integrity,
 report, labelling).
+
+## Fallback-label mechanism decided (Backend B, 2026-11-13): option A
+
+Main keeps the controller-attribute mechanism (`controller.fallback_steps`,
+reason `fallback_to_rule_based`, QA-verified: mpc 24 steps). B's semantic
+action comparison (which would count 2 steps and change the marker's
+semantics, requiring a full live re-verification) is **deferred** to the P3
+strategy-modification stage if finer granularity is needed there. No action.
