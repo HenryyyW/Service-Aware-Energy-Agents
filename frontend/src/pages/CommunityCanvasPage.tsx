@@ -1,22 +1,29 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSimulationStore } from '../store/simulationStore';
+import { useScenarioStore } from '../store/scenarioStore';
 import { api, wsManager } from '../api/client';
 import { CommunityCanvas } from '../components/canvas/CommunityCanvas';
 import { ToastProvider } from '@/components/ui/Toast'
 import { useToast } from '@/hooks';
-import { RefreshCw } from '../utils/lucide';
+import { Plus, RefreshCw } from '../utils/lucide';
 import { devError } from '../utils/devLog';
 
 function CommunityCanvasPageContent() {
-  const { setRuns, setCurrentRun, setTrajectories } = useSimulationStore();
+  const { setRuns, setCurrentRun, setTrajectories, runs } = useSimulationStore();
+  const setCurrentScenario = useScenarioStore((s) => s.setCurrentScenario);
   const { addToast } = useToast();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
 
-    // Load runs on mount
+    // Load runs on mount. Canvas is run-sourced: every run renders via its
+    // scenario_id configuration (api.getScenario) plus its own trajectories
+    // (api.getTrajectories). Falls back to the empty state when there are no
+    // runs at all.
     const loadRuns = async () => {
       setLoading(true);
       setError(null);
@@ -25,10 +32,22 @@ function CommunityCanvasPageContent() {
         if (!active) return;
         setRuns(runsData);
         if (runsData.length > 0) {
-          setCurrentRun(runsData[0]);
-          // Load trajectories for the first run
+          const run = runsData[0];
+          setCurrentRun(run);
+          // Scenario config for this run (building locations / network geometry)
           try {
-            const trajectories = await api.getTrajectories(runsData[0].run_id);
+            const scenario = await api.getScenario(run.scenario_id);
+            if (active) setCurrentScenario(scenario);
+          } catch (scenarioError) {
+            if (active) {
+              setError('Failed to load scenario configuration');
+              devError('Failed to load scenario:', scenarioError);
+            }
+            return;
+          }
+          // Trajectories for this run
+          try {
+            const trajectories = await api.getTrajectories(run.run_id);
             if (active) setTrajectories(trajectories);
           } catch (trajError) {
             if (active) {
@@ -63,7 +82,7 @@ function CommunityCanvasPageContent() {
       active = false;
       wsManager.disconnect();
     };
-  }, [setRuns, setCurrentRun, setTrajectories, addToast]);
+  }, [setRuns, setCurrentRun, setTrajectories, setCurrentScenario, addToast]);
 
   if (loading) {
     return (
@@ -92,9 +111,26 @@ function CommunityCanvasPageContent() {
     );
   }
 
-  return (
-    <CommunityCanvas />
-  );
+  if (runs.length === 0) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center bg-surface text-center px-6">
+        <p className="text-body text-text-muted">No community data</p>
+        <p className="text-caption text-text-muted">
+          No simulation runs found. Create a scenario to view its run on the canvas.
+        </p>
+        <button
+          type="button"
+          className="btn btn-primary mt-3"
+          onClick={() => navigate('/scenarios/generate')}
+          aria-label="Create scenario"
+        >
+          <Plus className="w-4 h-4 mr-2" /> Create scenario
+        </button>
+      </div>
+    );
+  }
+
+  return <CommunityCanvas />;
 }
 
 export function CommunityCanvasPage() {

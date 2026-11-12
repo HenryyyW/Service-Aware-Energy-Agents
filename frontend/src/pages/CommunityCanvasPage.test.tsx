@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { CommunityCanvasPage } from '@/pages/CommunityCanvasPage'
 import { api } from '@/api/client'
@@ -32,6 +32,26 @@ beforeEach(() => {
 })
 
 describe('CommunityCanvasPage', () => {
+  const run = {
+    run_id: 'run_abc',
+    scenario_id: 'scenario_a',
+    controller_type: 'rule_based',
+    status: 'completed',
+  } as any
+
+  const scenario = {
+    scenario_id: 'scenario_a',
+    name: 'Scenario A',
+    buildings: [
+      { building_id: 'building_1', location: { lat: 40, lon: -105 } },
+    ],
+    pandapower: { bus_mappings: [{ building_id: 'building_1', bus_idx: 0 }] },
+  } as any
+
+  const trajectories = [
+    { timestep: 0, observations: { 'building_1_solar_generation': 5 } },
+  ] as any
+
   it('shows empty state when no runs exist', async () => {
     mockApi.getRuns.mockResolvedValue([])
     render(
@@ -42,7 +62,7 @@ describe('CommunityCanvasPage', () => {
     await screen.findByText(/no community data/i)
   })
 
-  it('navigates to /scenarios from empty state browse button', async () => {
+  it('navigates to scenario generator from empty state create button', async () => {
     mockApi.getRuns.mockResolvedValue([])
     mockNavigate.mockReturnValue(vi.fn())
     render(
@@ -51,8 +71,24 @@ describe('CommunityCanvasPage', () => {
       </MemoryRouter>,
     )
     await screen.findByText(/no community data/i)
-    const browseBtn = screen.getByRole('button', { name: /browse scenarios/i })
-    fireEvent.click(browseBtn)
-    expect(mockNavigate()).toHaveBeenCalledWith('/scenarios')
+    const createBtn = screen.getByRole('button', { name: /create scenario/i })
+    fireEvent.click(createBtn)
+    expect(mockNavigate()).toHaveBeenCalledWith('/scenarios/generate')
+  })
+
+  it('renders run-based canvas data when runs exist', async () => {
+    mockApi.getRuns.mockResolvedValue([run])
+    mockApi.getScenario.mockResolvedValue(scenario)
+    mockApi.getTrajectories.mockResolvedValue(trajectories)
+    render(
+      <MemoryRouter>
+        <CommunityCanvasPage />
+      </MemoryRouter>,
+    )
+    // Run-based data path: load scenario + trajectories for the run
+    await waitFor(() => expect(mockApi.getScenario).toHaveBeenCalledWith('scenario_a'))
+    await waitFor(() => expect(mockApi.getTrajectories).toHaveBeenCalledWith('run_abc'))
+    // Not in the empty state
+    expect(screen.queryByText(/no community data/i)).not.toBeInTheDocument()
   })
 })
