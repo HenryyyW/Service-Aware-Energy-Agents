@@ -159,12 +159,13 @@ object every render) tripping `useSyncExternalStore`'s infinite-loop abort -
 fixed with atomic selectors; W2 adds loading/error/empty canvas states;
 W9 disables the report download button while downloading. Partner verified:
 tsc 0 errors, eslint 0, vitest 7/7, build green.
-**W7 (UI): PARTIAL - re-dispatched.** `StrategyComparison.tsx` +
-`StrategyPanel.tsx` accept `controller_fallback_*` and render "no record"
-when absent, but `StrategyComparisonPage.tsx` (the `strategyData` builder,
-~L70-91) does not map the backend fields - so the label can never appear yet.
-Also gated by R1 (below): the per-run response model still strips the
-fields, so the page's `getSimulationRun` source sees nothing.
+**W7 (UI): CLOSED (`249667489`, FE2, partner-verified):** the page's
+`strategyData` builder now maps `run.controller_fallback_steps/reason`, the
+panel renders them (or "no record"), and a new component test covers both
+branches (vitest 9/9, 4 files). **Still gated by R1** on the per-run path:
+`GET /api/simulations/{run_id}` strips the fields until Backend B's
+response-model addition lands - the labels QA verified via `/api/compare`
+already flow; the per-run source is the remaining leg.
 | W9 | UI download button not exercisable (click timeout); diagnostics step only verified via API | Steps 6-7 | FE2 + QA |
 
 Note: the walkthrough build `78c2fd9e1` predates the fallback-labelling
