@@ -1327,7 +1327,9 @@ class SimulationCoupler:
                 grid_import_kwh += step_import * dt_hours
                 grid_export_kwh += step_export * dt_hours
                 pv_generation_kwh += step_pv * dt_hours
-                pv_consumed_kwh += min(step_pv, step_import + step_pv) * dt_hours
+                # Actual load = net_demand + pv = step_import - step_export + step_pv
+                actual_load = step_import - step_export + step_pv
+                pv_consumed_kwh += min(step_pv, actual_load) * dt_hours
                 battery_throughput_kwh += step_battery_kwh
                 community_load_kws.append(step_import + step_pv)
                 community_net_kws.append(step_import - step_export)
