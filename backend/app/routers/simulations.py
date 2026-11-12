@@ -14,11 +14,17 @@ import json
 
 
 def _convert_numpy(obj):
-    """Recursively convert numpy types to Python native types."""
+    """Recursively convert numpy types to Python native types.
+
+    Mirrors _convert_to_json_serializable() in src/simulation/coupling.py:
+    non-finite floats (NaN/Inf) are sanitized to None for strict JSON
+    compliance (the trajectories endpoint 500'd on them, Phase 6 F2).
+    """
     if isinstance(obj, (np.integer, np.int64, np.int32, np.int16, np.int8)):
         return int(obj)
     elif isinstance(obj, (np.floating, np.float64, np.float32, np.float16)):
-        return float(obj)
+        val = float(obj)
+        return val if np.isfinite(val) else None
     elif isinstance(obj, np.ndarray):
         return obj.tolist()
     elif isinstance(obj, np.bool_):
