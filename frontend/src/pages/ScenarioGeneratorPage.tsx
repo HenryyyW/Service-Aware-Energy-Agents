@@ -355,8 +355,8 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
           <h1 className="font-display font-semibold text-heading-1 text-text">Generate Scenario</h1>
           <p className="text-caption text-text-muted">Describe an energy community in natural language, review the generated config, then run it.</p>
         </div>
-        <div className="flex-1 flex overflow-hidden">
-          <div className="w-2/5 flex-shrink-0 border-r border-border/30 bg-surface/30 p-4 overflow-y-auto">
+        <div className="flex-1 flex flex-col sm:flex-row overflow-hidden">
+          <div className="w-full sm:w-2/5 flex-shrink-0 border-r border-border/30 bg-surface/30 p-4 overflow-y-auto sm:border-b-0 sm:border-r">
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="block text-caption text-text-muted">Community description</label>
@@ -443,8 +443,8 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
         )}
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
-        <div className="w-2/5 flex-shrink-0 border-r border-border/30 bg-surface/30 p-4 overflow-y-auto">
+      <div className="flex-1 flex flex-col sm:flex-row overflow-hidden">
+        <div className="w-full sm:w-2/5 flex-shrink-0 border-r border-border/30 bg-surface/30 p-4 overflow-y-auto sm:border-b-0 sm:border-r">
           {parsed && <CommunitySummary config={parsed} />}
         </div>
         <div className="flex-1 min-w-0 p-4 overflow-y-auto">

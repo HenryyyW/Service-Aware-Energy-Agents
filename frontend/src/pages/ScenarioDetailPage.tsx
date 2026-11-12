@@ -211,7 +211,7 @@ export function ScenarioDetailPage() {
           <h2 className="font-body font-medium text-body text-text">Run diagnosis</h2>
           <p className="text-caption text-text-muted mt-1">{diagnostics.interpretation}</p>
           {diagnostics.kpi_summary && (
-            <dl className="grid grid-cols-2 gap-2 mt-2 text-caption">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 text-caption">
               {Object.entries(diagnostics.kpi_summary).map(([k, v]) => (
                 <div key={k} className="flex justify-between gap-2">
                   <dt className="text-text-muted">{k.replace(/_/g, ' ')}</dt>

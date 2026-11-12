@@ -596,26 +596,30 @@ export function CommunityCanvas(_props: CommunityCanvasProps) {
           </div>
 
           {/* Table view toggle */}
-          <div className="absolute bottom-2 left-2 right-2 p-2 bg-white/90 backdrop-blur rounded-lg border border-border/30 flex items-center gap-3 z-50">
-            <span className="text-[10px] text-text-muted font-medium">View:</span>
-            <Button
-              variant={viewMode === 'map' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('map')}
-              aria-label="Map view"
-              aria-pressed={viewMode === 'map'}
-            >
-              <Zap className="w-4 h-4 mr-1" /> Map
-            </Button>
-            <Button
-              variant={viewMode === 'table' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('table')}
-              aria-label="Table view"
-              aria-pressed={viewMode === 'table'}
-            >
-              <FileText className="w-4 h-4 mr-1" /> Table
-            </Button>
+          <div className="absolute bottom-2 left-2 right-2 p-2 bg-white/90 backdrop-blur rounded-lg border border-border/30 flex flex-col sm:flex-row items-center gap-2 sm:gap-3 z-50">
+            <span className="text-[10px] text-text-muted font-medium sm:mr-2">View:</span>
+            <div className="flex gap-1 w-full sm:w-auto justify-center sm:justify-start">
+              <Button
+                variant={viewMode === 'map' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('map')}
+                aria-label="Map view"
+                aria-pressed={viewMode === 'map'}
+                className="flex-1 sm:flex-initial"
+              >
+                <Zap className="w-4 h-4 mr-1" /> Map
+              </Button>
+              <Button
+                variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('table')}
+                aria-label="Table view"
+                aria-pressed={viewMode === 'table'}
+                className="flex-1 sm:flex-initial"
+              >
+                <FileText className="w-4 h-4 mr-1" /> Table
+              </Button>
+            </div>
           </div>
 
           {/* Table view */}
