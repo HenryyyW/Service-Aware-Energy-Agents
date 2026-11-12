@@ -221,6 +221,10 @@ class ExperimentResult(BaseModel):
     # Hostile proposer metrics (M2b experiment)
     hostile_metrics: Optional[Dict[str, Any]] = None
 
+    # Controller fallback tracking
+    controller_fallback_steps: int = 0
+    controller_fallback_reason: Optional[str] = None
+
     def duration_seconds(self) -> float:
         if self.end_time:
             return (self.end_time - self.start_time).total_seconds()

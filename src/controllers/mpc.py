@@ -53,6 +53,18 @@ class MPCController(BaseController):
         super().reset()
         self._reset_state()
 
+    def update_from_simulation(self, observations: Dict[str, Any]) -> None:
+        """Update internal battery SOC from simulation observations.
+        
+        This is called after each simulation step to synchronize the controller's
+        internal state with the actual simulated battery SOC.
+        """
+        for building_id in self.device_metadata:
+            battery_id = f"{building_id}_battery"
+            soc_key = f"{building_id}_electrical_storage_soc"
+            if soc_key in observations:
+                self._rule_based.battery_soc[battery_id] = float(observations[soc_key])
+
     # ------------------------------------------------------------------ public
     def get_actions(
         self, observations: Dict[str, Any], timestep: int
@@ -437,9 +449,9 @@ class MPCController(BaseController):
                     )
                     battery_actions.append(
                         Action(
-                            asset_id=f"{building_id}_electrical_storage",
+                            asset_id=f"{building_id}_battery",
                             action_type=action_type,
-                            value_kw=net_kw,
+                            value_kw=abs(net_kw),
                             timestep=timestep,
                         )
                     )
@@ -450,7 +462,7 @@ class MPCController(BaseController):
                 if charge_kw >= ev_info["min_charge_kw"] and charge_kw > 1e-2:
                     ev_actions.append(
                         Action(
-                            asset_id=f"{building_id}_electric_vehicle_storage",
+                            asset_id=f"{building_id}_ev_0",
                             action_type=ActionType.EV_CHARGE,
                             value_kw=charge_kw,
                             timestep=timestep,

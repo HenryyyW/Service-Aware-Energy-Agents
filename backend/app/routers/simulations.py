@@ -243,6 +243,17 @@ async def _run_simulation_background(
             "battery_throughput_kwh": energy["battery_throughput_kwh"],
             "carbon_emissions_kg": energy["carbon_emissions_kg"],
         }
+
+        # Add controller fallback tracking
+        controller_fallback_steps = 0
+        controller_fallback_reason = None
+        if hasattr(self.controller, "fallback_steps"):
+            controller_fallback_steps = self.controller.fallback_steps
+        if hasattr(self.controller, "_rule_based") and hasattr(self.controller, "fallback_steps"):
+            if self.controller.fallback_steps > 0:
+                controller_fallback_reason = "fallback_to_rule_based"
+        _runs[run_id]["controller_fallback_steps"] = controller_fallback_steps
+        _runs[run_id]["controller_fallback_reason"] = controller_fallback_reason
         _runs[run_id]["service_metrics"] = {
             "ev_completion_rate": kpis.get("ev_completion_rate", 0),
             "avg_ev_soc_at_departure": kpis.get("avg_ev_soc_at_departure", 0),

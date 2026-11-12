@@ -277,6 +277,10 @@ class ExperimentRunner:
             if hasattr(self.controller, "update_grid_diagnostics"):
                 self.controller.update_grid_diagnostics(last_grid_diagnostics)
 
+            # Update controller with simulation observations for state tracking (SOC, etc.)
+            if hasattr(self.controller, "update_from_simulation"):
+                self.controller.update_from_simulation(observations)
+
             # Update observations
             observations = cosim_result.citylearn_result.observations
             step += 1
@@ -690,6 +694,18 @@ class ExperimentRunner:
             trajectories_file=str(self.run_dir / "trajectories.jsonl"),
             logs_file=str(self.run_dir / "experiment.log"),
             hostile_metrics=hostile_metrics,
+            controller_fallback_steps=(
+                self.controller.fallback_steps
+                if hasattr(self.controller, "fallback_steps")
+                else 0
+            ),
+            controller_fallback_reason=(
+                "fallback_to_rule_based"
+                if hasattr(self.controller, "fallback_steps")
+                and self.controller.fallback_steps > 0
+                and hasattr(self.controller, "_rule_based")
+                else None
+            ),
         )
 
         return result
