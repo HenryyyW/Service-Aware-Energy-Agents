@@ -25,11 +25,14 @@ from .failure_injector import create_failure_injector, FailureType
 
 
 def _convert_to_json_serializable(obj):
-    """Recursively convert numpy types to Python native types for JSON serialization."""
+    """Recursively convert numpy types to Python native types for JSON serialization.
+    Also sanitizes NaN/Inf floats to None for strict JSON compliance.
+    """
     if isinstance(obj, (np.integer, np.int64, np.int32, np.int16, np.int8)):
         return int(obj)
     elif isinstance(obj, (np.floating, np.float64, np.float32, np.float16)):
-        return float(obj)
+        val = float(obj)
+        return val if np.isfinite(val) else None
     elif isinstance(obj, np.ndarray):
         return obj.tolist()
     elif isinstance(obj, np.bool_):
