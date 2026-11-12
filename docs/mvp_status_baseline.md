@@ -98,12 +98,15 @@ measurements: `probe_out_full16d` (5/16, endpoint died mid-run) and
   worse than baseline (41.80 vs 27.48 USD) - no substitution, no padding.
   B's branch magnitudes (368.89 / 207.35 kWh) do NOT reproduce on the
   smoke config; treat as environment-bound and quote QA's numbers.
-  **Still open (Backend B, re-dispatched): fallback labelling does not
-  fire** - mpc/single_agent_rl are byte-identical to rule_based yet the
-  new `controller_fallback_*` fields read None, because the tracking
-  reads `controller.fallback_steps` (only `src/agents/llm_agent.py`
-  maintains it) instead of setting the label at substitution time in the
-  comparison runner.**
+  **Fallback labelling rework merged** (`a1f3e8a56`, B's `8a25ab9`): the RL
+  controller increments `fallback_steps` at the real fallback (state not
+  in Q-table) and MPC had both fallback paths incrementing, so the
+  tracking reads a live attribute; the benchmark extractor propagates the
+  two fields. Partner verified after merge: 518 passed, black/ruff clean
+  (kept the None-guarded simulations.py version in a conflict;
+  black-formatted run_benchmark.py). **Awaiting QA's live re-check that
+  the label actually fires for mpc/single_agent_rl on the comparison
+  path.**
 - **F2 - trajectories serializer (Backend A/B):** ~~CLOSED at `2bf540951`~~
   (PR #65, QA): NaN/Inf is sanitized to None in both converters
   (`src/simulation/coupling.py` and the endpoint's `_convert_numpy` in
