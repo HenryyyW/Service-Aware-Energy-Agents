@@ -344,6 +344,8 @@ class CityLearnAdapter:
             attrs["capacity"] = float(building_config.battery.capacity_kwh)
             attrs["nominal_power"] = float(building_config.battery.power_kw)
             attrs["efficiency"] = float(building_config.battery.efficiency_charge)
+            # Set initial SOC from scenario config (default 0.5 if not specified)
+            attrs["initial_soc"] = float(building_config.battery.initial_soc or 0.5)
 
         # PV
         if building_config.pv is not None and building_config.pv.capacity_kw > 0:
