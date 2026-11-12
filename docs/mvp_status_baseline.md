@@ -137,6 +137,14 @@ loop is broken at entry and in the canvas. Register (owner in brackets):
 | W5 | PV self-consumption 100% is computed from empty data (no building contributions in 24 steps) - a fallback value presented as a KPI | Step 3 | Backend B |
 | W6 | Report carries run id + seed but **not the full scenario configuration** (the script promises it) | Step 7 | Backend A |
 | W7 | Silent strategy substitution unexplained in the UI (three arms identical) | Step 5 | Backend B (label) + FE2 (surface) |
+
+**W7 backend part: PASSED (QA live on `a1f3e8a56`, PR #68):** mpc and
+single_agent_rl are labelled 24 steps / `fallback_to_rule_based` via
+`GET /api/compare`; rule_based and multi_agent_rl correctly None; four
+throughputs non-zero. Residual R1 (Backend B, re-dispatched, non-blocking):
+`GET /api/simulations/{run_id}` still strips the two fields - the
+`SimulationRun` response model lacks them (the internal `_runs` dict carries
+the values). UI surfacing stays with FE2.
 | W8 | Windows/local startup friction: `npm.ps1` blocked by execution policy; backend launched from `backend/` cannot resolve packages; default frontend proxy targets an unresolvable `api` host; backend needs `PYTHONUTF8` to avoid generation encoding errors | Start | QA/DevOps |
 | W9 | UI download button not exercisable (click timeout); diagnostics step only verified via API | Steps 6-7 | FE2 + QA |
 
