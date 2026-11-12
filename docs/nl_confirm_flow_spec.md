@@ -1,7 +1,7 @@
 # P1 — NL → ScenarioConfig confirmation interaction: confirm-then-run flow spec
 
-Owner: Product Design Lead · Date: 2026-11-12 · Status: spec for build
-Recipient: Frontend Engineer (builds this); contract owner: Backend (existing `/scenarios` router, unchanged).
+Owner: Product Design Lead · Date: 2026-11-12 · Status: built & QA-verified (main @ de884c091)
+Recipient: Frontend Engineer 2 (builds this); contract owner: Backend (existing `/scenarios` router, unchanged).
 Companion: `docs/nl_config_confirm_design.md` (confirm-screen UX: provenance chips, diff, rejection path).
 
 ---
@@ -14,7 +14,7 @@ Companion: `docs/nl_config_confirm_design.md` (confirm-screen UX: provenance chi
 - The confirm screen's job is config review ("did the agent get my intent right?"). It must remain a pure review gate, not conflated with "spend compute to run." Running consumes compute and produces decision-relevant results — it deserves its own explicit act.
 - Approving a config and executing it are two different commitments. Separating them respects that.
 - The scenario details page is the natural run-control center: validate → run → monitor progress → view diagnostics → onward to canvas / comparison / report.
-- No rework: Frontend already built Candidate A on `main` (`feature/p1-nl-scenario-input` → merged at `a619917e6`).
+- No rework: P1 already built and QA-verified on `main` — commit `edea241e5` (11-11, mock removed, real `api.generateScenario` wired); QA smoke end-to-end: generate 13.5s → confirm 201 → run completed → four-strategy comparison 4 records → diagnostics 200; report docs/qa/phase6_regression_report.md, QA PR #64.
 
 ## State transition — user journey
 
