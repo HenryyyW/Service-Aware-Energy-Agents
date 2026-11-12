@@ -39,7 +39,7 @@ The project owner re-centred the project on the virtual-community simulator desc
 
 | Phase | Content | Status |
 |---|---|---|
-| **P1** | Natural-language → ScenarioConfig pipeline: describe a community in plain language, the agent emits a validated, reviewable simulation configuration | **Backend done** — pipeline, 16-item corpus, scoring instruments, rejection path; confirmation UX spec merged (`docs/nl_config_confirm_design.md`); input UI landed but still wired to a mock generator (`ScenarioGeneratorPage.tsx`) - the next frontend slice |
+| **P1** | Natural-language → ScenarioConfig pipeline: describe a community in plain language, the agent emits a validated, reviewable simulation configuration | **Landed on main** (`edea241e5`) — pipeline, 16-item corpus, scoring instruments, rejection path; acceptance bar MET on the clean batch `probe_out_full16f` (14/16 full-bar, all 8 domains, 4/4 rejection; `docs/mvp_status_baseline.md`); confirmation UX spec merged (`docs/nl_config_confirm_design.md`); the generator page's default path calls the real `api.generateScenario` — the mock survives only via the injected prop (tests/previews). Paper completion is not product completion: closed-loop QA smoke still in flight |
 | **P3** | Agent-assistant scope: strategy generation/modification under the physics/service gates, result analysis, diagnostics, verifiable proposals | Component exists (plan → code → execute → verify → repair). Measured: 5/9 detector-verified modifications, threshold ≥7/9 not met |
 | **P4** | Paper reframe around the platform (the code-repair result becomes a supporting result) | Pending |
 | **P2** | Spatiotemporal virtual-community visualization and strategy comparison | Last phase |
@@ -267,7 +267,7 @@ The suite covers controller coordination, CityLearn adapter behavior, pandapower
 
 1. **DONE** — Restored a clean test baseline and unified the timestep/data-unit contract.
 2. **DONE** — Pricing regimes (pool-TOU / LMP), P2P matching + schemas, configured failure injection (scenario E), the plan → code → execute → verify → repair agent workflow, and a FastAPI service with a switchable-style React frontend.
-3. **Phase 1 (backend done, UI wiring in progress)** — Natural-language → ScenarioConfig pipeline: the agent's scenario-construction front door with the confirmation gate; evaluation corpus; input UX (mock → real wiring is the open slice).
+3. **Phase 1 (landed on main, `edea241e5`)** — Natural-language → ScenarioConfig pipeline: the agent's scenario-construction front door with the confirmation gate; evaluation corpus; input UX wired to the real pipeline (mock generator kept only for tests/previews via the injected prop).
 4. **Phase 3** — Agent-assistant scope: strategy generation/modification under the physics/service gates, result analysis, diagnostics, verifiable proposals.
 5. **Phase 4** — Paper reframe: the platform as the contribution; the code-repair/strategy-modification result as a supporting result.
 6. **Phase 2 (last)** — Spatiotemporal virtual-community visualization and the strategy-comparison view.
