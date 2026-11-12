@@ -19,6 +19,7 @@ const navigation = [
   { name: 'Workspace', href: '/workspace', icon: Activity },
   { name: 'Experiments', href: '/experiments', icon: FlaskConical },
   { name: 'Network', href: '/network', icon: Zap },
+  { name: 'Canvas', href: '/canvas', icon: Zap },
 ]
 
 export default function Layout() {
