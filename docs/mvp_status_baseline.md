@@ -92,10 +92,18 @@ measurements: `probe_out_full16d` (5/16, endpoint died mid-run) and
   collection, `self.controller` was used in a module-scope function (a
   latent NameError), `abs(net_kw)` broke the codebase's signed-discharge
   convention, and test asset_ids still used pre-adapter names. Fixed and
-  verified: 518 passed, black/ruff clean. **Unverified:** B's live
-  throughput numbers (368.89 / 207.35 kWh) were claimed on the branch
-  before the merge; QA has not re-run the live comparison on `cc2337a65`
-  - recompute before quoting them.**
+  verified: 518 passed, black/ruff clean. **QA re-verified live on
+  `cc2337a65` (merged `bc9c43cbe`, PR #67):** throughput is real for all
+  four arms (4.63 / 4.63 / 4.63 / 7.35 kWh) and multi_agent_rl is shown
+  worse than baseline (41.80 vs 27.48 USD) - no substitution, no padding.
+  B's branch magnitudes (368.89 / 207.35 kWh) do NOT reproduce on the
+  smoke config; treat as environment-bound and quote QA's numbers.
+  **Still open (Backend B, re-dispatched): fallback labelling does not
+  fire** - mpc/single_agent_rl are byte-identical to rule_based yet the
+  new `controller_fallback_*` fields read None, because the tracking
+  reads `controller.fallback_steps` (only `src/agents/llm_agent.py`
+  maintains it) instead of setting the label at substitution time in the
+  comparison runner.**
 - **F2 - trajectories serializer (Backend A/B):** ~~CLOSED at `2bf540951`~~
   (PR #65, QA): NaN/Inf is sanitized to None in both converters
   (`src/simulation/coupling.py` and the endpoint's `_convert_numpy` in
