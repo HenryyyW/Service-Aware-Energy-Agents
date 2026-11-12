@@ -193,6 +193,7 @@ function ReportPageContent() {
   const { addToast } = useToast();
   const [report, setReport] = useState<ReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
   const [format] = useState<'markdown' | 'json'>('markdown');
   const [selectedAsset, setSelectedAsset] = useState<string>('');
   const [layer, setLayer] = useState<'run' | 'community' | 'asset'>(
@@ -268,6 +269,8 @@ function ReportPageContent() {
   }, [runId, loadReport]);
 
   const handleDownload = async (fmt: 'markdown' | 'json') => {
+    if (downloading) return;
+    setDownloading(true);
     try {
       addToast({ type: 'info', title: `Generating ${fmt.toUpperCase()}...`, duration: 2000 });
       const blob = await api.downloadReport(runId!, fmt);
@@ -281,6 +284,8 @@ function ReportPageContent() {
     } catch (error) {
       console.error('Failed to download report:', error);
       addToast({ type: 'error', title: 'Download failed' });
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -308,9 +313,9 @@ function ReportPageContent() {
               <option value="markdown">Markdown</option>
               <option value="json">JSON</option>
             </select>
-            <Button onClick={() => handleDownload(format)}>
+            <Button onClick={() => handleDownload(format)} disabled={downloading}>
               <Download className="w-4 h-4 mr-2" />
-              Download
+              {downloading ? 'Downloading…' : 'Download'}
             </Button>
             <Button variant="ghost" size="icon" onClick={loadReport} aria-label="Refresh">
               <RotateCcw className="w-4 h-4" />
@@ -354,18 +359,20 @@ function ReportPageContent() {
                         size="sm"
                         onClick={() => handleDownload('json')}
                         className="flex items-center gap-2"
+                        disabled={downloading}
                       >
                         <FileText className="w-4 h-4" />
-                        <span>Download JSON</span>
+                        <span>{downloading ? 'Downloading…' : 'Download JSON'}</span>
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDownload('markdown')}
                         className="flex items-center gap-2"
+                        disabled={downloading}
                       >
                         <Download className="w-4 h-4 mr-2" />
-                        <span>Download Markdown</span>
+                        <span>{downloading ? 'Downloading…' : 'Download Markdown'}</span>
                       </Button>
                     </div>
                   </div>

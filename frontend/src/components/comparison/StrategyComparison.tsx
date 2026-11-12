@@ -40,6 +40,8 @@ export interface StrategyComparisonProps {
     run_id?: string;
     status: 'completed' | 'failed' | 'pending';
     power_flow_converged?: boolean;
+    fallback_steps?: number;
+    fallback_reason?: string;
   }>;
   /** Violations from probe data */
   violations?: Array<{
@@ -68,6 +70,8 @@ export function StrategyComparison({ config, strategyData, violations }: Strateg
       export_limit_kwh: config.community_export_limit_kw,
       voltage_violations_count: undefined,
       max_voltage_pu: undefined,
+      fallback_steps: undefined,
+      fallback_reason: undefined,
     },
   }));
 
@@ -109,6 +113,8 @@ export function StrategyComparison({ config, strategyData, violations }: Strateg
                 run_id: s.data.run_id,
                 status: s.data.status,
                 power_flow_converged: s.data.power_flow_converged,
+                fallback_steps: s.data.fallback_steps,
+                fallback_reason: s.data.fallback_reason,
               }}
               buildings={config.buildings ?? []}
               violations={violations}

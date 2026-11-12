@@ -18,6 +18,11 @@ export interface StrategyPanelProps {
     run_id?: string;
     status: 'completed' | 'failed' | 'pending';
     power_flow_converged?: boolean;
+    // OPF fallback marker from the backend (lmp_opf_fallback_steps / reason).
+    // Shown only when the backend provides it; otherwise "no record" so it is
+    // never mistaken for a real strategy difference.
+    fallback_steps?: number;
+    fallback_reason?: string;
   };
   buildings: Array<{
     building_id: string;
@@ -111,6 +116,29 @@ export function StrategyPanel({ strategy, buildings, violations, currentTimestep
           linkHref={strategy.run_id ? `/runs/${strategy.run_id}/report` : undefined}
           linkLabel={`Run ${strategy.run_id} report`}
         />
+      </div>
+
+      {/* OPF fallback marker — only shown when the backend provides it;
+           otherwise "no record" so it is never mistaken for a real strategy
+           difference. */}
+      <div className="p-3 border-b border-border/30 bg-surface/50">
+        <div className="flex items-center justify-between mb-1">
+          <h5 className="text-caption text-text-muted">OPF Fallback</h5>
+        </div>
+        <div className="flex items-center gap-2">
+          {strategy.fallback_steps !== undefined ? (
+            <>
+              <span className="badge badge-violation text-[10px]">
+                {strategy.fallback_steps} step{strategy.fallback_steps !== 1 ? 's' : ''}
+              </span>
+              {strategy.fallback_reason && (
+                <span className="text-caption text-text-muted">{strategy.fallback_reason}</span>
+              )}
+            </>
+          ) : (
+            <span className="text-caption text-text-muted">無紀錄 / no record</span>
+          )}
+        </div>
       </div>
 
       {/* Map */}
