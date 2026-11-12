@@ -141,10 +141,9 @@ loop is broken at entry and in the canvas. Register (owner in brackets):
 **W7 backend part: PASSED (QA live on `a1f3e8a56`, PR #68):** mpc and
 single_agent_rl are labelled 24 steps / `fallback_to_rule_based` via
 `GET /api/compare`; rule_based and multi_agent_rl correctly None; four
-throughputs non-zero. Residual R1 (Backend B, re-dispatched, non-blocking):
-`GET /api/simulations/{run_id}` still strips the two fields - the
-`SimulationRun` response model lacks them (the internal `_runs` dict carries
-the values). UI surfacing stays with FE2.
+throughputs non-zero. Residual R1 (Backend B): CLOSED at `ca1ac551a` (B's `92d37f7a4`) - the
+`SimulationRun` response model carries the two fields; QA live re-check
+in flight on the merged main. UI surfacing stays with FE2.
 | W8 | Windows/local startup friction: `npm.ps1` blocked by execution policy; backend launched from `backend/` cannot resolve packages; default frontend proxy targets an unresolvable `api` host; backend needs `PYTHONUTF8` to avoid generation encoding errors | Start | QA/DevOps |
 
 **W8: CLOSED (`4a2ab9bad`, QA):** README starts the backend from the repo
