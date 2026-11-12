@@ -55,7 +55,7 @@ class MPCController(BaseController):
 
     def update_from_simulation(self, observations: Dict[str, Any]) -> None:
         """Update internal battery SOC from simulation observations.
-        
+
         This is called after each simulation step to synchronize the controller's
         internal state with the actual simulated battery SOC.
         """
@@ -451,7 +451,7 @@ class MPCController(BaseController):
                         Action(
                             asset_id=f"{building_id}_battery",
                             action_type=action_type,
-                            value_kw=abs(net_kw),
+                            value_kw=net_kw,
                             timestep=timestep,
                         )
                     )

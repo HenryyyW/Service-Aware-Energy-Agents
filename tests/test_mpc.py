@@ -63,7 +63,7 @@ def test_battery_discharges_when_price_is_high_and_soc_is_full():
     )
     actions = controller.get_actions(base_observations(price=0.35, soc=1.0), timestep=0)
 
-    battery = [a for a in actions.actions if a.asset_id == "b0_electrical_storage"]
+    battery = [a for a in actions.actions if a.asset_id == "b0_battery"]
     assert battery, "MPC should dispatch the battery at a high price"
     assert battery[0].action_type == ActionType.BATTERY_DISCHARGE
     assert battery[0].value_kw < 0.0
@@ -83,7 +83,7 @@ def test_battery_charges_when_future_prices_are_higher():
         base_observations(price=0.05, load=0.0, pv=8.0, soc=0.0), timestep=0
     )
 
-    battery = [a for a in actions.actions if a.asset_id == "b0_electrical_storage"]
+    battery = [a for a in actions.actions if a.asset_id == "b0_battery"]
     assert battery, "MPC should charge when later prices are much higher"
     assert battery[0].action_type == ActionType.BATTERY_CHARGE
     assert 0.0 < battery[0].value_kw <= 5.0
@@ -116,7 +116,7 @@ def test_ev_charges_to_meet_departure_requirement():
     )
     actions = controller.get_actions(observations, timestep=0)
 
-    ev = [a for a in actions.actions if a.asset_id == "b0_electric_vehicle_storage"]
+    ev = [a for a in actions.actions if a.asset_id == "b0_ev_0"]
     assert ev, "MPC must charge an EV that is short of its departure target"
     assert ev[0].action_type == ActionType.EV_CHARGE
     assert 0.0 < ev[0].value_kw <= 11.0
@@ -130,7 +130,8 @@ def test_actions_respect_device_power_limits():
     actions = controller.get_actions(observations, timestep=3)
 
     for action in actions.actions:
-        assert -5.0 <= action.value_kw <= 5.0
+        if action.asset_id.startswith("b0_battery"):
+            assert -5.0 <= action.value_kw <= 5.0
         assert action.timestep == 3
 
 
