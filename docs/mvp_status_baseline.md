@@ -153,12 +153,18 @@ PowerShell and `PYTHONUTF8=1` on Windows, and the vite dev proxy defaults to
 `http://127.0.0.1:8001` (was `http://api:8000`, docker-compose-only); the
 `.env.example` names now match the client (`VITE_API_BASE_URL` /
 `VITE_WS_BASE_URL`). Partner verified: merged, tsc 0 errors, build green.
-**W1/W2/W7(UI)/W9: NOT VERIFIABLE - FE2's commit `4729a54` does not exist in
-the shared repo** (all branches and worktrees checked); re-dispatched with
-the requirement to commit in the shared repo or push an origin branch. Two
-of FE2's claims conflict with main (a `/scenarios/generate` route already
-exists; main's `tsc --noEmit` is 0 errors, not 58) - treat the commit as
-unverified until it lands here.
+**W1/W2/W9: CLOSED (`e92710b30` + `67572134d`, FE2, partner-verified and
+pushed).** W1's root cause was an object-literal zustand selector (a new
+object every render) tripping `useSyncExternalStore`'s infinite-loop abort -
+fixed with atomic selectors; W2 adds loading/error/empty canvas states;
+W9 disables the report download button while downloading. Partner verified:
+tsc 0 errors, eslint 0, vitest 7/7, build green.
+**W7 (UI): PARTIAL - re-dispatched.** `StrategyComparison.tsx` +
+`StrategyPanel.tsx` accept `controller_fallback_*` and render "no record"
+when absent, but `StrategyComparisonPage.tsx` (the `strategyData` builder,
+~L70-91) does not map the backend fields - so the label can never appear yet.
+Also gated by R1 (below): the per-run response model still strips the
+fields, so the page's `getSimulationRun` source sees nothing.
 | W9 | UI download button not exercisable (click timeout); diagnostics step only verified via API | Steps 6-7 | FE2 + QA |
 
 Note: the walkthrough build `78c2fd9e1` predates the fallback-labelling
