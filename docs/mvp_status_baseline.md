@@ -121,3 +121,29 @@ measurements: `probe_out_full16d` (5/16, endpoint died mid-run) and
 The paper reframe runs in parallel with product work, but README, the brief
 and the paper metadata stay synchronized - **paper completion is not product
 completion.**
+
+## MVP walkthrough (user, 2026-11-12): NOT PASSED - defect register
+
+Walked on main `78c2fd9e1` from a Windows machine, no code edits, honest verdict:
+**fail**. API-assisted complement confirmed the simulation core runs, but the UI
+loop is broken at entry and in the canvas. Register (owner in brackets):
+
+| ID | Defect | Evidence from the walkthrough | Owner |
+|---|---|---|---|
+| W1 | Generator page renders blank / React infinite update | Step 1 fails in the browser; API path works | Frontend (FE2) |
+| W2 | Canvas shows "No community data" although 24 trajectories exist | Step 4 fails | Frontend (FE2) + QA repro |
+| W3 | Fallback config (no LLM) is degraded AND invalid: missing EV arrival/departure times; `POST /scenarios` returns **500** instead of a named 4xx | Step 2 | Backend A |
+| W4 | Timeline inconsistent: 15-min config overridden by the 60-min dataset; trajectory timestamps on another scale, early steps repeat | Steps 3-4 | Backend A |
+| W5 | PV self-consumption 100% is computed from empty data (no building contributions in 24 steps) - a fallback value presented as a KPI | Step 3 | Backend B |
+| W6 | Report carries run id + seed but **not the full scenario configuration** (the script promises it) | Step 7 | Backend A |
+| W7 | Silent strategy substitution unexplained in the UI (three arms identical) | Step 5 | Backend B (label) + FE2 (surface) |
+| W8 | Windows/local startup friction: `npm.ps1` blocked by execution policy; backend launched from `backend/` cannot resolve packages; default frontend proxy targets an unresolvable `api` host; backend needs `PYTHONUTF8` to avoid generation encoding errors | Start | QA/DevOps |
+| W9 | UI download button not exercisable (click timeout); diagnostics step only verified via API | Steps 6-7 | FE2 + QA |
+
+Note: the walkthrough build `78c2fd9e1` predates the fallback-labelling
+merge (`a1f3e8a56`); QA's live check of W7's labelling is still in flight.
+The other defects are independent of that merge.
+
+Priority (from the walkthrough): W1/W8 (entry + startup) -> W2 (canvas data
+chain) -> W4/W5 (timeline + KPI honesty) -> W3/W6/W7 (config integrity,
+report, labelling).
