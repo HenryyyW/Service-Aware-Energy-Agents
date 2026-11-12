@@ -134,3 +134,31 @@ Findings:
 
 Everything else from the original report (§1 gates, §2 loop mechanics, F2
 trajectories fix — merged as 2bf540951, performance §3) stands.
+
+### Re-verification addendum — fallback labelling (main @ `a1f3e8a56`, 2026-11-12)
+
+Backend B's fallback-tracking fix (8a25ab9, merged a1f3e8a56) verified live
+on the same smoke (scenario `fbverify_smoke`, 24 steps, seed 42, policies
+absent):
+
+| strategy | throughput_kwh | `controller_fallback_steps/reason` (via `GET /api/compare`) |
+|---|---|---|
+| rule_based | 4.63 | None / None — correct (no fallback) |
+| mpc | 4.63 | **24 / `fallback_to_rule_based`** ✓ |
+| single_agent_rl | 4.63 | **24 / `fallback_to_rule_based`** ✓ |
+| multi_agent_rl | 7.35 | None / None — correct (genuine controller, no fallback) |
+
+The no-silent-substitution requirement is **met at the `/api/compare`
+contract**: substituted arms are labelled at substitution time (steps>0,
+reason recorded), genuine arms unlabelled, throughputs all non-zero.
+
+**Residual contract gap (Backend B, non-blocking for acceptance):**
+`GET /api/simulations/{run_id}` still strips both fields — the
+`SimulationRun` response model has no
+`controller_fallback_steps`/`controller_fallback_reason` fields, so FastAPI
+drops them at serialization (the internal `_runs` dict carries the values;
+the `GET /api/compare` handler reads the raw dict and therefore works).
+Same pattern as the AgentTask `metrics_comparison` strip fixed in
+`4a090209c`. Two-line schema addition; until then the per-run payload
+cannot convey the label to the frontend (the comparison page can, via
+`/api/compare`).
