@@ -16,6 +16,8 @@ class ComparisonResult(BaseModel):
     scenario_id_b: str
     controller_type_a: str
     controller_type_b: str
+    controller_fallback_a: Optional[Dict[str, Any]] = None
+    controller_fallback_b: Optional[Dict[str, Any]] = None
     metrics_comparison: Dict[str, Dict[str, Dict[str, float]]]
     summary: Dict[str, Any]
 
@@ -102,6 +104,14 @@ async def compare_runs(
         scenario_id_b=run_b["scenario_id"],
         controller_type_a=run_a["controller_type"],
         controller_type_b=run_b["controller_type"],
+        controller_fallback_a={
+            "fallback_steps": run_a.get("controller_fallback_steps", 0),
+            "fallback_reason": run_a.get("controller_fallback_reason"),
+        } if run_a.get("controller_fallback_steps", 0) > 0 else None,
+        controller_fallback_b={
+            "fallback_steps": run_b.get("controller_fallback_steps", 0),
+            "fallback_reason": run_b.get("controller_fallback_reason"),
+        } if run_b.get("controller_fallback_steps", 0) > 0 else None,
         metrics_comparison=metrics_comparison,
         summary=summary,
     )

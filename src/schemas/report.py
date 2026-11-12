@@ -224,6 +224,10 @@ class ExperimentResult(BaseModel):
     adapter_interventions: List[Dict[str, Any]] = Field(default_factory=list)
     applied_violations: List[Dict[str, Any]] = Field(default_factory=list)
 
+    # Controller fallback tracking
+    controller_fallback_steps: int = 0
+    controller_fallback_reason: Optional[str] = None
+
     def duration_seconds(self) -> float:
         if self.end_time:
             return (self.end_time - self.start_time).total_seconds()

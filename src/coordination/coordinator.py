@@ -78,8 +78,9 @@ class MultiAgentCoordinator:
         # Phase 4: Final Allocation - Send allocations to building agents and collect responses
         allocation_messages = []
         for building_id, allocation in self.aggregator.final_allocations.items():
+            # building_id is already "building_0", "building_1", etc.
             msg = self.aggregator.send_message(
-                receiver=f"building_{building_id}",
+                receiver=building_id,
                 phase=CoordinationPhase.FINAL_ALLOCATION,
                 payload={"allocation": allocation},
             )
@@ -87,7 +88,9 @@ class MultiAgentCoordinator:
 
         # Deliver allocation messages to building agents
         for msg in allocation_messages:
-            building_id = msg.receiver.replace("building_", "")
+            # building_agents keys are full building_ids like "building_0"
+            # msg.receiver is "building_0", "building_1", etc.
+            building_id = msg.receiver
             if building_id in self.building_agents:
                 self.building_agents[building_id].receive(msg)
 
