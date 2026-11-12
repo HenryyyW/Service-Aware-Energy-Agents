@@ -1309,7 +1309,11 @@ class SimulationCoupler:
                         step_load += pv_kw  # PV contributes to local load
 
                     # Compute battery throughput from SOC change (kW * dt_hours)
-                    if soc_key in obs and hasattr(self, "_prev_soc") and bid in self._prev_soc:
+                    if (
+                        soc_key in obs
+                        and hasattr(self, "_prev_soc")
+                        and bid in self._prev_soc
+                    ):
                         soc_change = abs(float(obs[soc_key]) - self._prev_soc[bid])
                         if building.battery:
                             capacity_kwh = building.battery.capacity_kwh
