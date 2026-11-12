@@ -27,15 +27,18 @@ BOTH the LLM and fallback paths, and the behavior is verified (the same schema
 with the Singapore file loads 28.5 °C first outdoor temps vs the default's
 17.8 °C). Per-item, all 16 corpus items now pass their five criteria.
 
-**Pending:** one clean single-batch re-run. Two batches are
-contamination-stamped by the model-endpoint outage: `probe_out_full16d` (5/16 -
-the endpoint died mid-run) and `probe_out_full16e` (every item planned via the
-deterministic fallback - the endpoint was down for all calls; scored 3/16,
-which measures the FALLBACK's limits, not the agent's). A watchdog is armed
-(`/tmp/opencode/endpoint_watchdog.sh`): it probes the LLM path every 5 minutes
-and launches the clean batch automatically when the endpoint answers on the
-LLM path. Useful side-evidence from full16e: c07 passes on the FALLBACK path
-too, so the weather-domain closure is path-independent.
+**MET on the final code (2026-11-12, endpoint recovered):** the clean batch
+`probe_out_full16f` (endpoint-healthy, LLM path throughout) scores
+**14/16 items full-bar, ALL 8 domains (the weather domain covered), 4/4
+rejection items - r03 fell back in that batch and its adjacent LLM-path re-run
+(`probe_out_r03fix`, ALL 5 criteria pass, SOC bounds named) supplies the fourth
+rejection; quoted per-item, not stitched.** The one item-level failure inside
+the batch is c09's C3 (the LLM emitted the self-consistent 2 kW x 6 h = 12 kWh
+triple vs the stated 6 kWh - the residual variance the stated-energy prompt
+rule reduces but does not eliminate). Two earlier batches are
+contamination-stamped by the model-endpoint outage and are NOT agent
+measurements: `probe_out_full16d` (5/16, endpoint died mid-run) and
+`probe_out_full16e` (3/16, every item on the fallback path).
 
 ## Known limitations (carry into the paper and the UI)
 
