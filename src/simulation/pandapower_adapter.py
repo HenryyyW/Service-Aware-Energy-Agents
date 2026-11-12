@@ -172,9 +172,11 @@ class PandapowerAdapter:
         self,
         config: PandapowerConfig,
         building_locations: Optional[Dict[str, Dict[str, float]]] = None,
+        building_configs: Optional[List[Any]] = None,
     ):
         self.config = config
         self.building_locations = building_locations or {}
+        self.building_configs = building_configs or []
         self.net = None
         self.bus_mapping: Dict[str, int] = {}  # building_id -> bus_idx
         self.phase_mapping: Dict[str, str] = {}  # building_id -> phase
@@ -882,7 +884,7 @@ class PandapowerAdapter:
             building_config = next(
                 (
                     b
-                    for b in getattr(self.config, "buildings", [])
+                    for b in self.building_configs
                     if b.building_id == mapping.building_id
                 ),
                 None,
@@ -1912,4 +1914,4 @@ def create_grid_from_scenario(scenario: ScenarioConfig) -> PandapowerAdapter:
                 lon = getattr(loc, "lon", 0)
             building_locations[building.building_id] = {"lat": lat, "lon": lon}
 
-    return PandapowerAdapter(pandapower_config, building_locations)
+    return PandapowerAdapter(pandapower_config, building_locations, scenario.buildings)
