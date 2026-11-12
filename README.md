@@ -143,11 +143,18 @@ python experiments/run_experiment.py \
 
 # 3. Backend API  (serves /api/* and /ws, default port 8001, matches the Vite proxy)
 pip install -r backend/requirements.txt
-cd backend && uvicorn app.main:app --reload --port 8001
+# Run FROM THE REPO ROOT (starting inside backend/ breaks package resolution):
+python -m uvicorn backend.app.main:app --reload --port 8001
+# Windows: set PYTHONUTF8=1 first (scenario generate writes UTF-8 artifacts;
+# without it the generate step can raise encoding errors).
 
 # 4. Frontend  (separate terminal)
 npm --prefix frontend install
 npm --prefix frontend run dev                     # http://127.0.0.1:3000
+# Windows PowerShell: npm resolves to npm.ps1, which execution policy may
+# block — use npm.cmd instead:
+#   npm.cmd --prefix frontend install
+#   npm.cmd --prefix frontend run dev
 ```
 
 Open the Vite URL and pick the run you just produced on the Community Canvas. Switch the visual
