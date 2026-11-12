@@ -90,6 +90,30 @@ class ApiClient {
     return response.data;
   }
 
+  // Four-strategy comparison: starts/reuses the runs (same seed), returns the
+  // run ids; poll getSimulationRun for status and metrics until terminal.
+  async startStrategyComparison(
+    scenarioId: string,
+    opts: { random_seed?: number; max_steps?: number } = {}
+  ): Promise<{
+    scenario_id: string;
+    random_seed: number;
+    runs: Record<string, string>;
+    strategy_data: Record<string, any>;
+  }> {
+    const response = await this.client.post('/api/simulations/strategy-comparison', {
+      scenario_id: scenarioId,
+      random_seed: opts.random_seed,
+      max_steps: opts.max_steps ?? 24,
+    });
+    return response.data;
+  }
+
+  async getSimulationRun(runId: string): Promise<any> {
+    const response = await this.client.get(`/api/simulations/${runId}`);
+    return response.data;
+  }
+
   // Network geometry endpoints
   async getNetworkGeometry(scenarioId: string): Promise<NetworkGeometry> {
     const response = await this.client.get('/api/network/geometry', {

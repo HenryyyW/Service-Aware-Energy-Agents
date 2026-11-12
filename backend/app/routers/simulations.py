@@ -4,6 +4,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from uuid import uuid4
+from pathlib import Path
 from datetime import datetime
 import asyncio
 import numpy as np
@@ -54,6 +55,8 @@ from src.controllers import (
     RuleBasedController,
     CentralizedController,
     MultiAgentController,
+    MPCController,
+    QLearningController,
 )
 from backend.app.routers.scenarios import (
     _scenarios,
@@ -105,12 +108,44 @@ class SimulationRun(BaseModel):
     progress: float = 0.0
 
 
-def _get_controller(controller_type: str, scenario: ScenarioConfig):
-    """Get controller instance by type."""
+RL_POLICY_DIR = (
+    Path(__file__).resolve().parents[3] / "experiments" / "reference" / "rl_policy"
+)
+
+
+def _resolve_rl_policy(parameters: Optional[Dict[str, Any]]) -> str:
+    """Resolve the single-agent-RL policy path.
+
+    Explicit request parameter first; otherwise the repo's reference policies
+    (provenance: docs/rl_policy_provenance.md). A missing policy raises - the
+    run fails honestly instead of pretending to run RL."""
+    if parameters and parameters.get("rl_policy"):
+        policy = Path(str(parameters["rl_policy"]))
+        if not policy.is_file():
+            raise FileNotFoundError(f"RL policy not found: {policy}")
+        return str(policy)
+    candidates = sorted(RL_POLICY_DIR.glob("*.json")) if RL_POLICY_DIR.is_dir() else []
+    if not candidates:
+        raise FileNotFoundError(
+            f"no RL policy available under {RL_POLICY_DIR} - cannot run single-agent RL"
+        )
+    return str(candidates[0])
+
+
+def _get_controller(
+    controller_type: str,
+    scenario: ScenarioConfig,
+    parameters: Optional[Dict[str, Any]] = None,
+):
+    """Get controller instance by type (the four strategies of record)."""
     if controller_type == "centralized":
         return CentralizedController(scenario)
-    elif controller_type == "multi_agent":
+    elif controller_type in ("multi_agent", "multi_agent_rl"):
         return MultiAgentController(scenario)
+    elif controller_type == "mpc":
+        return MPCController(scenario)
+    elif controller_type == "single_agent_rl":
+        return QLearningController(scenario, policy_path=_resolve_rl_policy(parameters))
     else:
         return RuleBasedController(scenario)
 
@@ -122,6 +157,7 @@ async def _run_simulation_background(
     max_steps: int,
     random_seed: int,
     start_step: int = 0,
+    parameters: Optional[Dict[str, Any]] = None,
 ):
     """Background task to run simulation."""
     # Bound before the try: the except branch below inspects `coupler` to persist
@@ -145,7 +181,7 @@ async def _run_simulation_background(
         # Initialize coupler and controller
         coupler = SimulationCoupler(scenario, data_dir=data_dir)
 
-        controller = _get_controller(controller_type, scenario)
+        controller = _get_controller(controller_type, scenario, parameters)
 
         _couplers[run_id] = coupler
         _controllers[run_id] = controller
@@ -335,7 +371,18 @@ async def _run_simulation_background(
         _runs[run_id]["end_time"] = datetime.utcnow().isoformat()
         _runs[run_id]["stage"] = "error"
         _runs[run_id]["generation_status"] = "failed"
-        _runs[run_id]["outcome_sentence"] = f"Simulation failed: {str(e)}"
+        outcome = f"Simulation failed: {str(e)}"
+        if isinstance(controller, QLearningController):
+            # A policy mismatch is the common cause (trained on another
+            # scenario's devices) - name the cause and the next step instead
+            # of leaking a bare IndexError.
+            outcome += (
+                " - the single-agent-RL policy does not cover this scenario's"
+                " devices (list index out of range). Next step: train or select"
+                " a policy for this scenario (docs/rl_policy_provenance.md);"
+                " the other strategies ran and are comparable."
+            )
+        _runs[run_id]["outcome_sentence"] = outcome
 
         # Persist failed run data for cross-process access
         set_run(run_id, _runs[run_id])
@@ -408,9 +455,98 @@ async def create_simulation(
         request.controller_type,
         max_steps,
         random_seed,
+        parameters=request.parameters,
     )
 
     return run
+
+
+STRATEGY_CONTROLLERS = ("rule_based", "mpc", "single_agent_rl", "multi_agent_rl")
+
+
+@router.post("/simulations/strategy-comparison", response_model=dict)
+async def strategy_comparison(request: dict, background_tasks: BackgroundTasks):
+    """Start (or reuse) the four strategies of record on ONE community config,
+    same seed. Returns the run ids immediately; the runs execute as background
+    tasks and the caller polls GET /simulations/{run_id} for status and
+    metrics - a run that has not finished is 'pending', never estimated."""
+    scenario_id = request.get("scenario_id")
+    if not scenario_id:
+        raise HTTPException(status_code=422, detail="scenario_id is required")
+    if scenario_id not in _scenarios:
+        scenario = _load_scenario_from_disk(scenario_id)
+        if scenario:
+            _scenarios[scenario_id] = scenario
+        else:
+            raise HTTPException(
+                status_code=404, detail=f"Scenario {scenario_id} not found"
+            )
+    scenario = _scenarios[scenario_id]
+    seed = request.get("random_seed", scenario.random_seed)
+    max_steps = request.get("max_steps", 24)
+
+    run_ids: Dict[str, str] = {}
+    for controller in STRATEGY_CONTROLLERS:
+        params = dict(request.get("parameters") or {})
+        if controller == "single_agent_rl" and request.get("rl_policy"):
+            params.setdefault("rl_policy", request.get("rl_policy"))
+        config_hash = _compute_config_hash(
+            scenario_id, controller, params or None, seed
+        )
+        existing = _config_hash_index.get(config_hash)
+        if (
+            existing
+            and existing in _runs
+            and _runs[existing]["status"]
+            in (
+                "completed",
+                "running",
+                "pending",
+            )
+        ):
+            run_ids[controller] = existing
+            continue
+        run_id = f"run_{uuid4().hex[:12]}"
+        _runs[run_id] = {
+            "run_id": run_id,
+            "scenario_id": scenario_id,
+            "controller_type": controller,
+            "status": "pending",
+            "start_time": datetime.utcnow().isoformat(),
+            "end_time": None,
+            "energy_metrics": None,
+            "service_metrics": None,
+            "grid_metrics": None,
+            "random_seed": seed,
+            "max_steps": max_steps,
+            "config_hash": config_hash,
+        }
+        _config_hash_index[config_hash] = run_id
+        run_ids[controller] = run_id
+        background_tasks.add_task(
+            _run_simulation_background,
+            run_id,
+            scenario,
+            controller,
+            max_steps,
+            seed,
+            parameters=params or None,
+        )
+
+    return {
+        "scenario_id": scenario_id,
+        "random_seed": seed,
+        "runs": run_ids,
+        "strategy_data": {
+            controller: {
+                "status": "pending",
+                "import_limit_kw": scenario.community_import_limit_kw,
+                "export_limit_kw": scenario.community_export_limit_kw,
+                "run_id": rid,
+            }
+            for controller, rid in run_ids.items()
+        },
+    }
 
 
 @router.get("/simulations", response_model=List[SimulationRun])
