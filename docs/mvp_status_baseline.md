@@ -72,9 +72,16 @@ measurements: `probe_out_full16d` (5/16, endpoint died mid-run) and
   strategy-differentiated (mpc 30.70 USD vs multi_agent_rl 16.64 USD;
   grid_import 107.4 vs 63.5 kWh; carbon 22.7 vs 12.5 kg; peak 19.0 vs
   14.8 kW). The battery-throughput zero was fixed in the same PR
-  (`a6baa64ab`). **Remaining flag for Backend B:** `rule_based` and
-  `single_agent_rl` return identical economics - confirm the RL arm is not a
-  passthrough before claiming a four-strategy difference.
+  (`a6baa64ab`). **Two remaining flags for Backend B (QA-verified live):
+  (1) `battery_throughput_kwh` is still 0.0 in the comparison path - the
+  coupler's storage state of charge is pinned at 0.0 across all steps even
+  though discharge actions are applied and grid accounting moves; dispatch
+  works at grid level, SOC bookkeeping is the broken link. (2)
+  `single_agent_rl` completes byte-identical to `rule_based` even with no RL
+  policy loaded - the comparison endpoint silently substitutes the
+  rule-based arm, the exact pattern the no-silent-substitution rule targets;
+  it must be labeled or fixed before the four-strategy comparison is a
+  claim.**
 - **F2 - trajectories serializer (Backend A/B):** ~~CLOSED at `2bf540951`~~
   (PR #65, QA): NaN/Inf is sanitized to None in both converters
   (`src/simulation/coupling.py` and the endpoint's `_convert_numpy` in

@@ -49,11 +49,16 @@ saw - the UI shows the plan source.
    each have an explicit state.
 5. **Strategy comparison** - open `/comparison/strategy/<scenario_id>`.
    *Expected:* four strategies (rule_based, MPC, single-agent RL, multi-agent
-   RL) with ACTUAL run records and real grid metrics. **Known flag:**
-   `energy_metrics` (cost, grid import, PV, battery, carbon, peak) currently
-   returns 0.0 and is labeled a placeholder - defect F1, not yet fixed
-   (Backend B). A missing value must read "no record", never a substituted
-   zero.
+   RL) with ACTUAL run records and real grid metrics; economics is real and
+   strategy-differentiated (e.g. MPC vs multi-agent RL differ in cost, import,
+   carbon, peak). **Two known flags (recorded, Backend B owns both):**
+   `battery_throughput_kwh` still reads 0.0 - the comparison path's environment
+   never updates storage state of charge even though dispatch actions are
+   applied; and `single_agent_rl` currently returns byte-identical results to
+   `rule_based` because the comparison endpoint silently substitutes the
+   rule-based arm when no RL policy is loaded. Both are shown as the system
+   computes them - no substitution on your side. If you see a value that is
+   neither a real record nor a labeled gap, that is a fail.
 6. **Diagnosis** - from the run, open diagnostics.
    *Expected:* findings with evidence and next steps, or an explicit
    "no violations recorded" reading - not an empty panel.
@@ -76,7 +81,9 @@ saw - the UI shows the plan source.
 
 | Flag | Status |
 |---|---|
-| F1 economics placeholders (0.0) | open - Backend B |
+| F1 economics placeholders (0.0) | closed at `555d28bf7` - economics real |
+| battery_throughput_kwh 0.0 in the comparison path | open - Backend B (SOC bookkeeping) |
+| single_agent_rl == rule_based (silent substitution) | open - Backend B (label or fix) |
 | LLM fallback when NIM env is unset | by design, deterministic |
 | Schematic layout is not geographic data | disclosed on the canvas |
 | Strategy modification measures 5/9 vs the 7/9 pre-registered bar | recorded, below threshold |
