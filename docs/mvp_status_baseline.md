@@ -68,20 +68,20 @@ measurements: `probe_out_full16d` (5/16, endpoint died mid-run) and
 
 - **F1 - economics placeholders (Backend B):** ~~CLOSED at `555d28bf7`~~
   (PR #66, Backend B, QA-verified on a live 4-strategy comparison):
-  `energy_metrics` now falls back to observations - economics is real and
-  strategy-differentiated (mpc 30.70 USD vs multi_agent_rl 16.64 USD;
-  grid_import 107.4 vs 63.5 kWh; carbon 22.7 vs 12.5 kg; peak 19.0 vs
-  14.8 kW). The battery-throughput zero was fixed in the same PR
-  (`a6baa64ab`). **Two remaining flags for Backend B (QA-verified live):
-  (1) `battery_throughput_kwh` is still 0.0 in the comparison path - the
-  coupler's storage state of charge is pinned at 0.0 across all steps even
-  though discharge actions are applied and grid accounting moves; dispatch
-  works at grid level, SOC bookkeeping is the broken link. (2)
-  `single_agent_rl` completes byte-identical to `rule_based` even with no RL
-  policy loaded - the comparison endpoint silently substitutes the
-  rule-based arm, the exact pattern the no-silent-substitution rule targets;
-  it must be labeled or fixed before the four-strategy comparison is a
-  claim.**
+  economics falls back to observations - real and strategy-differentiated
+  (mpc 30.70 USD vs multi_agent_rl 16.64 USD; grid_import 107.4 vs 63.5 kWh;
+  carbon 22.7 vs 12.5 kg; peak 19.0 vs 14.8 kW). Throughput closed at
+  `14094dcea` (SOC initialized from config, default 0.5): SOC tracks
+  (0.26 -> ~0.089 soc_min) and battery_throughput_kwh is non-zero (4.63 kWh
+  for rule_based / mpc / single_agent_rl on a 24-step 10 kWh config).
+  **Two remaining notes for Backend B (non-blocking, honesty-critical):
+  (1) multi_agent_rl shows 0.0 throughput while keeping its real cost
+  advantage - B's noted separate controller issue. (2) In environments
+  without their policies/artifacts, mpc AND single_agent_rl return
+  byte-identical results to rule_based - the comparison endpoint silently
+  falls back to rule_based, the exact pattern the no-silent-substitution
+  rule targets; those arms must be labeled (or skipped) in the payload
+  before the four-strategy comparison is a claim.**
 - **F2 - trajectories serializer (Backend A/B):** ~~CLOSED at `2bf540951`~~
   (PR #65, QA): NaN/Inf is sanitized to None in both converters
   (`src/simulation/coupling.py` and the endpoint's `_convert_numpy` in
