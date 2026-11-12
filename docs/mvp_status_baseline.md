@@ -136,6 +136,15 @@ loop is broken at entry and in the canvas. Register (owner in brackets):
 | W4 | Timeline inconsistent: 15-min config overridden by the 60-min dataset; trajectory timestamps on another scale, early steps repeat | Steps 3-4 | Backend A |
 | W5 | PV self-consumption 100% is computed from empty data (no building contributions in 24 steps) - a fallback value presented as a KPI | Step 3 | Backend B |
 | W6 | Report carries run id + seed but **not the full scenario configuration** (the script promises it) | Step 7 | Backend A |
+
+**W3/W4/W6: CLOSED (`37219e6cf`, Backend A, partner-verified in an isolated
+worktree on origin).** W3: the fallback EV config carries
+arrival/departure/target/initial values and invalid configs return named 422s
+(not 500); W4: `ScenarioConfig.effective_timestep_minutes` added and
+trajectories use the effective (dataset-native) timestep; W6: the report
+download includes the full scenario configuration. A's patch needed black/ruff
+cleanup before landing (518 green after). The shared repo still holds A's
+uncommitted overlap - A decides discard-or-commit (2026-11-13).
 | W7 | Silent strategy substitution unexplained in the UI (three arms identical) | Step 5 | Backend B (label) + FE2 (surface) |
 
 **W7 backend part: PASSED (QA live on `a1f3e8a56`, PR #68):** mpc and
