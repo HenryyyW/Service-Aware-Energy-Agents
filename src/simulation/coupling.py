@@ -569,14 +569,16 @@ class SimulationCoupler:
 
             # Update controller with grid diagnostics for re-dispatch
             print(
-                f"DEBUG: Checking controller: controller={self.controller is not None}, has_redispatch={hasattr(self.controller, '_apply_grid_violation_redispatch') if self.controller else False}",
+                f"DEBUG: Checking controller: controller={self.controller is not None}, has_update={hasattr(self.controller, 'update_grid_diagnostics') if self.controller else False}, has_redispatch={hasattr(self.controller, '_apply_grid_violation_redispatch') if self.controller else False}",
                 flush=True,
             )
+            # Diagnostics update: all controllers have this (BaseController)
+            if self.controller and hasattr(self.controller, "update_grid_diagnostics"):
+                self.controller.update_grid_diagnostics(grid_diag_dict)
+            # Re-dispatch: only RuleBased/MultiAgent/Centralized have this
             if self.controller and hasattr(
                 self.controller, "_apply_grid_violation_redispatch"
             ):
-                if hasattr(self.controller, "update_grid_diagnostics"):
-                    self.controller.update_grid_diagnostics(grid_diag_dict)
                 # Apply re-dispatch scaling to EXISTING actions (don't re-run control logic)
                 # This avoids double-updating controller state (battery SOC, etc.)
                 re_dispatched_actions = (
