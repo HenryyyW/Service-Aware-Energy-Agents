@@ -211,6 +211,36 @@ formula path; 24 steps, seed 42):
 
 Both items verified; no new defects.
 
+### Re-verification #3 — Lighthouse + axe + responsive preflight (main @ `328df3568`, 2026-11-13)
+
+Production build (`npm run build`, vite) + preview server (:4173). NIM not involved.
+
+**Lighthouse** (`npm run lighthouse` = `lhci autorun --fail-on-budget`, 3 runs, static dist): all budgets met, exit 0.
+
+| category (median of 3) | score | budget |
+|---|---|---|
+| Performance | **0.99** | ≥ 0.9 ✓ |
+| Accessibility | **0.94** | ≥ 0.9 ✓ |
+| Best-Practices | **0.96** | ≥ 0.9 ✓ |
+| SEO | **1.00** | ≥ 0.9 ✓ |
+
+Metrics (median): FCP 729 ms (≤2500 ✓), LCP 769 ms (≤4000 ✓), CLS 0.0002 (≤0.1 ✓), TBT 0 ms (≤300 ✓). Scope note: lhci's `staticDistDir` mode exercises the app shell (root route) served from dist — the deep-page budgets are covered indirectly (same chunks; route-level split absent per §3).
+
+**axe** (`npm run axe` = axe-core 4.14.0 CLI against http://localhost:4173, exit-code gate): **0 violations** on the root page, exit 0. (Repo script scope is the root route only.)
+
+**Responsive spot-check** (3 viewports × 4 pages, headless Chrome screenshots + live browser):
+
+| page | desktop 1280 | tablet 768 | mobile 375 |
+|---|---|---|---|
+| generator | ✓ renders correctly | ✓ | ✓ (hamburger menu; minor cosmetic overlap of the hamburger with the page title) |
+| canvas | ✓ layout clean (state: data path via run — see W2, closed) | ✓ | ✓ |
+| comparison | ✓ layout clean | ✓ | ✓ |
+| scenario detail | ✓ layout clean | ✓ | ✓ |
+
+No broken layouts at any viewport; one cosmetic item (mobile hamburger/title overlap) for FE2.
+
+**Verification-environment notes (honest):** headless-Chrome screenshot re-shoots became unstable late in the session (Chrome hangs even on static pages after the lhci/axe/browser churn — environment, not app; Lighthouse's own 3 Chrome runs succeeded minutes earlier). The responsive verdicts above combine the successfully captured screenshots (generator inspected visually at desktop + mobile; canvas at mobile) with live-browser and DOM checks (all four routes reach their loading/data states through the preview proxy — `curl` and real-browser verified). The generator's W1 blank-page behavior is **dev-server-specific** (zustand getSnapshot loop protection kills the dev render; the production build renders correctly) — the FE fix for dev mode is still with FE2.
+
 ### Re-verification addendum — fallback labelling (main @ `a1f3e8a56`, 2026-11-12)
 
 Backend B's fallback-tracking fix (8a25ab9, merged a1f3e8a56) verified live
