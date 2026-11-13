@@ -20,11 +20,10 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
-from experiments.run_benchmark import SUMMARY_METRICS, compute_statistics, extract_run_metrics
+from experiments.run_benchmark import extract_run_metrics
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -47,33 +46,6 @@ def build(matrix_dir: Path) -> Path:
             )
         )
 
-    grouped: Dict[str, List[Dict[str, Any]]] = {}
-    for row in rows:
-        grouped.setdefault(f"{row['scenario']}::{row['controller']}", []).append(row)
-
-    summary_stats: Dict[str, Dict[str, Dict[str, float]]] = {}
-    for key, group in grouped.items():
-        summary_stats[key] = {}
-        for metric in SUMMARY_METRICS:
-            values = [row.get(metric) for row in group if row.get(metric) is not None]
-            if values:
-                summary_stats[key][metric] = compute_statistics(values)
-
-    scenarios = sorted({row["scenario"] for row in rows})
-    controllers = sorted({row["controller"] for row in rows})
-    seeds = sorted({row["seed"] for row in rows})
-    payload = {
-        "generated_at": datetime.now().isoformat(timespec="seconds"),
-        "scenarios": scenarios,
-        "controllers": controllers,
-        "seeds": seeds,
-        "total_runs": len(rows),
-        "successful_runs": len(rows),
-        "wall_clock_seconds": 0.0,
-        "confidence_level": 0.95,
-        "ci_method": "student_t_half_width",
-        "summary_statistics": summary_stats,
-    }
     out = matrix_dir / "raw_results.json"
     out.write_text(json.dumps(rows, indent=2))
     print(f"{matrix_dir}: {len(rows)} runs -> {out}")

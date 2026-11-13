@@ -26,7 +26,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List
 
 ROOT = Path(os.environ.get("SAEA_REPO_ROOT", Path(__file__).resolve().parents[2]))
 MATRIX = ROOT / "experiments" / "m2b_code_repair"
@@ -93,7 +93,6 @@ def main() -> int:
             if "manifest" not in audit:
                 continue
             agent = audit["manifest"].get("agent") or {}
-            manifest = audit["manifest"]
             criteria = {k: criterion(audit, v) for k, v in CRITERIA_FIELDS.items()}
             steps = agent.get("total_steps") or 0
             keep = (

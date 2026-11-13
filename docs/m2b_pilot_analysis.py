@@ -35,11 +35,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import statistics
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 ROOT = Path(os.environ.get("SAEA_REPO_ROOT", Path(__file__).resolve().parents[1]))
 
@@ -471,7 +470,7 @@ def main() -> None:
         "",
         "## Per-cell table (epoch, error count/share, fallback share, recovery telemetry)",
         "",
-        f"| Cell | Epoch | llm_calls | errors | error share | fallback steps | fallback share | repair_success_rate | verification_failures | KEEP |",
+        "| Cell | Epoch | llm_calls | errors | error share | fallback steps | fallback share | repair_success_rate | verification_failures | KEEP |",
         "|---|---|---|---|---|---|---|---|---|---|",
     ]
     keep_rows = []
