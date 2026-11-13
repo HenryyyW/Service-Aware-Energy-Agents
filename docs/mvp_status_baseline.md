@@ -297,3 +297,21 @@ UNTRACEABLE - the plan adjustment is confirmed (Partner):
   scripted Tables 2/3/4 + abstract rebuild, the positioning re-wording
   (multi_agent no longer cheapest in any scenario), the RL fallback-share
   disclosure, and the PDF rebuild.
+
+## Paper rebuild: all three legs complete and partner-verified (2026-11-13)
+
+- **pool_tou**: 250 manifests, all `git_commit=9763bd7b0`, `git_dirty=false`,
+  `pricing_regime=pool_tou`; raw_results 250 rows. Partner-verified in-repo.
+- **lmp**: 250 manifests, all `git_commit=05a925219` (docs-only delta from
+  9763bd7b0 - partner-verified: no code difference), `git_dirty=false`,
+  `pricing_regime=lmp`; raw_results 250 rows. Partner-verified.
+- **p2p**: 250 manifests, all `git_commit=05a925219`, `git_dirty=false`,
+  `pricing_regime=p2p`; raw_results 250 rows. Partner-verified (this leg's
+  artifacts were found complete on disk after Research 2's turn died to the
+  NVIDIA NIM outage mid-report).
+
+All three legs meet the traceability rule: single baseline, clean tree,
+explicit regime, lossless raw_results. Remaining: the scripted rebuild of
+Tables 2/3/4, figures and abstract ranges; the positioning re-wording; the
+RL fallback-share disclosure; the PDF rebuild. Re-dispatched to Research 2
+(2026-11-13; their session had died to the NIM outage).
