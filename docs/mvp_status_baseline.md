@@ -236,3 +236,39 @@ user, per docs/mvp_walkthrough.md) is the only remaining acceptance step.**
 **Pre-retest status: script v2 pushed (`328df3568`), CI green, preflight
 green, one cosmetic fix in flight. The user's walkthrough retest is the only
 remaining acceptance step.**
+
+## Paper sync audit (Research, 2026-11-13): reviewer items closed, but a
+## material KPI-table deviation found and re-run ordered
+
+**Confirmed by Research (and my text-level audit):** the reviewer pass 1 /
+disclosure / bar-met / P4-reframe merges stand; the tex reads the final P1
+numbers (14/16 + all 8 domains + 4/4, c09 C3 disclosed); tex and PDF are in
+sync (11-12 13:40, 21 pages, 0 warnings); the reviewer-response open items
+(D != A, Table 2/3 D rebuilt, recovery claim removed) are all closed; the
+docs/ ruff cleanup (F3) landed (`5433b83e0`).
+
+**Deviation (material):** the paper's B-axis KPI tables (Tables 2/3/4) and
+figures were recorded on 11-04/11-07 builds - BEFORE the 11-12 evening
+economics rework. Controlled reproduction: scenario_a x centralized x 123
+= 12.19 on final vs 35.16 recorded; every re-runnable cell moves 8-17 KPIs;
+the recorded PV self-consumption was the pre-W5 illusory path; and the
+positioning claim flips - multi_agent's paired cost delta vs rule_based goes
+from -18.11 (recorded, "cost-minimal in every scenario") to +17.51, i.e. it
+is no longer cheapest in ANY scenario. Root cause: the recorded multi_agent
+numbers predate the action-delivery fix (`e21e4688`) - its actions never
+reached the assets. Environment ruled out (old builds reproduce the recorded
+values exactly).
+
+**New blocker (Backend A):** 20/250 cells crash on final code - scenario_E
+mpc/rl die at `src/simulation/coupling.py:580` (`hasattr` guard passes for
+BaseController subclasses, then calls a method only
+RuleBased/MultiAgent/Centralized define). The call landed after the paper's
+E rows were recorded, so those rows cannot be reproduced on any build since.
+
+**Decision (Partner): option (1) - re-run everything on final code.** pool_tou
+already re-run (230/250); p2p and LMP legs next (~1h each, deterministic);
+A's E-fix first for the 20 crashed cells; then rebuild Tables 2/3/4, figures,
+abstract ranges and re-word the positioning claims. M2a/M2b stay as published
+records (their counts are unaffected). QA independently re-verifies one cell
+before the re-run is trusted. The paper must not be re-submitted with the old
+B-axis numbers.
