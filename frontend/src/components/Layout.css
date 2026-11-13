@@ -172,6 +172,11 @@
     align-items: center;
     justify-content: center;
   }
+
+  /* Keep the page title clear of the fixed hamburger button on small screens. */
+  .top-bar-left {
+    padding-left: 64px;
+  }
 }
 
 @media (max-width: 768px) {
