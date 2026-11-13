@@ -218,3 +218,21 @@ strategy-modification stage if finer granularity is needed there. No action.
 
 **All nine walkthrough defects are closed and verified; MVP retest (the
 user, per docs/mvp_walkthrough.md) is the only remaining acceptance step.**
+
+## Pre-retest preflight (QA, PR #71, production build @ 328df3568)
+
+- **Lighthouse (3 runs, median): all budgets met.** Performance 0.99,
+  Accessibility 0.94, Best-Practices 0.96, SEO 1.00; FCP 729 ms, LCP 769 ms,
+  CLS 0.0002, TBT 0 ms (exit 0).
+- **axe (axe-core 4.14.0): 0 violations** (exit 0).
+- **Responsive (3 viewports x 4 pages): no broken layouts.** One cosmetic
+  item dispatched to FE2: the mobile hamburger overlaps the generator page
+  title (non-blocking, fix in flight).
+- QA's environment note: the W1 blank page was dev-server-specific (zustand
+  `getSnapshot` loop protection kills the dev render only) - the production
+  build renders the generator at all viewports. The dev-mode render was
+  separately verified by FE2 (all four routes mount, 0 React exceptions).
+
+**Pre-retest status: script v2 pushed (`328df3568`), CI green, preflight
+green, one cosmetic fix in flight. The user's walkthrough retest is the only
+remaining acceptance step.**
