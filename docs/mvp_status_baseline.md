@@ -259,8 +259,13 @@ numbers predate the action-delivery fix (`e21e4688`) - its actions never
 reached the assets. Environment ruled out (old builds reproduce the recorded
 values exactly).
 
-**New blocker (Backend A):** 20/250 cells crash on final code - scenario_E
-mpc/rl die at `src/simulation/coupling.py:580` (`hasattr` guard passes for
+**Blocker CLOSED (`cbcc6e937` + `572cdbcb8`, Backend A):** the E-arm crash is
+fixed and the guards decoupled - all controllers receive grid-diagnostics
+updates, only RuleBased/MultiAgent/Centralized perform redispatch. Re-run
+baseline: `572cdbcb8` (partner-verified, 518 green).
+
+**Old blocker record (kept for provenance):** 20/250 cells crashed on final
+code - scenario_E mpc/rl died at `src/simulation/coupling.py:580` (`hasattr` guard passes for
 BaseController subclasses, then calls a method only
 RuleBased/MultiAgent/Centralized define). The call landed after the paper's
 E rows were recorded, so those rows cannot be reproduced on any build since.
