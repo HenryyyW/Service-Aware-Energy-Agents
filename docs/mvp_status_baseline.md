@@ -277,3 +277,23 @@ abstract ranges and re-word the positioning claims. M2a/M2b stay as published
 records (their counts are unaffected). QA independently re-verifies one cell
 before the re-run is trusted. The paper must not be re-submitted with the old
 B-axis numbers.
+
+## Paper rebuild handoff (Research 2, 2026-11-13): full re-run re-ordered
+
+Research 2's audit of the inherited artifacts found both "completed" legs
+UNTRACEABLE - the plan adjustment is confirmed (Partner):
+- **p2p leg (inherited): invalid.** Manifests span three commits, 100/250
+  cells ran with `git_dirty=true`, and the previous "probe-verified
+  final-code reproduction" records do not exist on disk. Fails the
+  traceability rule; re-run ordered. (The Partner had relayed the old
+  claim - teammate self-reports are not facts until independently verified.)
+- **pool_tou leg (inherited): invalid AND mis-baselined.** 230/250 cells
+  ran pre-crash-fix, and none of the manifests carry `pricing_regime` - the
+  old run never passed `--regime pool_tou`, so energy_sharing was actually
+  off. Reusing it would poison the baseline. Re-run ordered.
+- **Re-run in flight on the clean tree `9763bd7b0`:** pool_tou (250 cells,
+  `--regime pool_tou`, ~15 min, 8 workers) -> lmp (`--regime lmp`,
+  `lmp_` policy prefix) -> p2p (`--regime p2p`), each leg reported, then the
+  scripted Tables 2/3/4 + abstract rebuild, the positioning re-wording
+  (multi_agent no longer cheapest in any scenario), the RL fallback-share
+  disclosure, and the PDF rebuild.
