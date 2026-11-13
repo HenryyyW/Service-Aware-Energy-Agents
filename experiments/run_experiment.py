@@ -8,7 +8,7 @@ import hashlib
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 
 import numpy as np
 
@@ -58,6 +58,31 @@ from src.evaluation import (
 # have not gated a p2p matrix, so no p2p runs are scheduled this phase.
 # ---------------------------------------------------------------------------
 REGIMES = ("tou_solo", "pool_tou", "lmp", "p2p")
+
+
+def _sanitize_for_json(obj: Any) -> Any:
+    """Recursively convert numpy types to Python native types for JSON serialization.
+
+    This replaces `default=str` which converts numpy scalars to strings.
+    Instead, we convert them to proper JSON numbers (float/int).
+    """
+    if isinstance(obj, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64, np.float32, np.float16)):
+        val = float(obj)
+        return val if np.isfinite(val) else None
+    elif isinstance(obj, np.bool_):
+        return bool(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [_sanitize_for_json(v) for v in obj]
+    else:
+        return obj
+
+
 REGIME_COST_BASIS = {
     "tou_solo": "tariff",  # no community pool, static TOU
     "pool_tou": "tariff",  # pool clearing at TOU
@@ -932,7 +957,7 @@ class ExperimentRunner:
             manifest["pricing_regime"] = self.pricing_regime
             manifest["cost_basis"] = self.cost_basis
         with open(self.run_dir / "manifest.json", "w") as f:
-            json.dump(manifest, f, indent=2, default=str)
+            json.dump(_sanitize_for_json(manifest), f, indent=2)
 
         # Agent traceability for the verified-vs-unverified ablation
         # (ABLATION_DESIGN.md section 4): backend, prompt hash and sampling
@@ -941,7 +966,7 @@ class ExperimentRunner:
         if callable(agent_stats):
             manifest["agent"] = agent_stats()
             with open(self.run_dir / "manifest.json", "w") as f:
-                json.dump(manifest, f, indent=2, default=str)
+                json.dump(_sanitize_for_json(manifest), f, indent=2)
 
     def _save_results(self, result: ExperimentResult):
         """Save experiment results."""
@@ -960,7 +985,7 @@ class ExperimentRunner:
             result_dict["cost_basis"] = self.cost_basis
 
         with open(self.run_dir / "result.json", "w") as f:
-            json.dump(result_dict, f, indent=2, default=str)
+            json.dump(_sanitize_for_json(result_dict), f, indent=2)
 
         self._write_manifest(result)
 
