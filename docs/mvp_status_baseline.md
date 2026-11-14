@@ -398,3 +398,43 @@ pytest 518, black/ruff clean. Pushed `4defbf05c`.
 **Process change (durable):** for any generator-flow fix, the acceptance
 check is a live browser pass through input -> generate -> confirm, not gate
 summaries. The user may retry the walkthrough now.
+
+## MVP retest #3 (user, 2026-11-14): NOT PASSED - 2 pass / 3 partial / 3 fail;
+## W10 confirmed fixed
+
+Full eight-step run on Windows, no code edits. **Verdict: 2 pass, 3 partial,
+3 fail.** W10's fix holds (step 1 shows preview + provenance + rejections,
+step 2 saves and validates) and the strategy comparison surfaces fallback
+labels correctly (step 5 conditional pass: mpc/single_agent_rl both
+`24 steps / fallback_to_rule_based`, numbers identical because both arms
+fall back - honestly labeled).
+
+New defects (all three root causes partner-verified in-repo before
+dispatch):
+
+- **W11 (fail) - canvas stuck on "Loading community data"** despite API
+  data: `CommunityCanvas.tsx:206` exits the loading state only when
+  `!currentRun?.scenario_id` - with a real run the inverted condition never
+  clears. -> FE2.
+- **W12 (fail) - trajectory timestamps broken beyond 24 steps**:
+  `simulations.py:606` formats `h.timestep * 0.25` as a zero-padded HOUR -
+  hours accumulate without day rollover (168 steps -> `T42:00`) and the
+  0.25 factor hardcodes 15-min steps while the effective timestep is
+  60 min. A's W4 fix touched the schema, not this serializer. -> Backend A.
+- **W13 (fail) - report shows `Buildings: 0` / N/A limits**: `reports.py:122`
+  reads `run['scenario_config']` but the run dict (`simulations.py` ~:533)
+  never writes it - the W6 fix assumed a field that does not exist on the
+  UI-created path. -> Backend A.
+
+Partial items to close:
+- **Step 3:** the UI does not expose `max_steps` (API has it), so runs start
+  with 168 steps instead of the walkthrough's 24 - steps input on the run
+  control (default 24) -> FE2.
+- **Step 6:** EV completion 0% exists only in the API; the diagnostics UI
+  must surface service metrics (a 0% service failure cannot hide behind
+  "no violations") -> FE2.
+- **README line 20** still carries the stale "mock generator" banner text
+  (the 04d1a2ffb sync covered L42/L270 but missed L20) -> PM.
+
+Retest discipline reaffirmed: every fix must be walked in a live browser
+with real data before the user is asked to retry.
