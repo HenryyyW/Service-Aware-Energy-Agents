@@ -463,3 +463,28 @@ expectation.
   reviewed and direction confirmed; the live-browser pass (canvas exits
   loading, steps input, EV completion visible) is the partner's remaining
   check.
+
+## Partner browser verification of the f08e14301 batch (2026-11-14)
+
+Live browser pass (backend + dev server, Chrome) against f08e14301:
+- W11 loading-gate fix: HOLDS - /canvas exits loading within seconds.
+- Steps/seed inputs: PRESENT and correct (spinbuttons 24 / 42 on the detail
+  page); a UI run click triggers the run (idempotent merge of an identical
+  config run - by design).
+- **W14 (new, fail):** the canvas then shows "No community data / No
+  buildings found" because `CommunityCanvasPage` builds buildings from
+  `/api/network/geometry?scenario_id=`, which only has REGISTERED
+  scenarios; UI/API-created scenarios never register and the failure is
+  swallowed in a catch. Fix dispatched: synthesize a deterministic
+  schematic layout from `currentScenario.buildings` when geometry is
+  missing (the canvas already discloses schematics), keeping
+  trajectories-driven assets/violations.
+- **Step 6 (still open):** after a completed run the detail page shows
+  "Completed" + links but no service metrics; the `evCompletionRate` block
+  (`ScenarioDetailPage.tsx:255`) did not render in the browser though the
+  API returns 0. Re-dispatched: service metrics (EV completion, avg EV SOC)
+  must render unconditionally for completed runs - a 0% service failure
+  cannot hide behind panels.
+
+W12 standalone: PASSES (verified earlier). W13 single-run path + top-level
+max_steps: with Backend A.
