@@ -438,3 +438,28 @@ Partial items to close:
 
 Retest discipline reaffirmed: every fix must be walked in a live browser
 with real data before the user is asked to retry.
+
+## Partner verification of W12/W13 fixes (2026-11-14): W12 PASSES, W13 and
+## max_steps DO NOT - re-dispatched with exact call sites
+
+Ran the UI-equivalent flow against f08e14301 (live backend): generate ->
+create -> POST /api/simulations with top-level `max_steps=24` -> 24-step
+expectation.
+
+- **W12: PASS.** 168-step run trajectories: `2023-01-01T00:00` ->
+  `2023-01-07T23:00`, correct day rollover at the 60-minute effective
+  timestep; no repeated hours, no `T42:00`.
+- **W13: STILL BROKEN.** Report still shows `Buildings: 0` / N/A. A's fix
+  wrote `scenario_config` only into the strategy-comparison background
+  dict (`simulations.py` ~:533); the single-run path stores
+  `run.model_dump()` (~:470) and the `SimulationRun` model has no such
+  field. Second call site re-dispatched.
+- **max_steps/random_seed: IGNORED.** `simulations.py:441` reads only
+  `request.parameters`; the top-level fields (which FE2's new UI and the
+  API client send) are dropped, so the run still executes 168 steps.
+  Re-dispatched: top-level first, `parameters` as fallback, keeping the
+  client as-is.
+- **FE2's W11 + service-metric work** (packaged in the same commit): logic
+  reviewed and direction confirmed; the live-browser pass (canvas exits
+  loading, steps input, EV completion visible) is the partner's remaining
+  check.
