@@ -49,3 +49,6 @@ htmlcov/
 # Logs
 *.log
 experiments/m2b_code_repair/
+experiments/baxis_rerun_pooltou/
+experiments/baxis_rerun_lmp/
+experiments/baxis_rerun_p2p/

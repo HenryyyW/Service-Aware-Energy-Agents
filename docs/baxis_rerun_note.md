@@ -76,3 +76,23 @@ from the new pool-TOU leg (`experiments/make_figures.py`). No number in
 **Provenance.** Rebuilt PDF: 21 pages. Every number traces to
 `docs/baxis_rebuild/` ← `experiments/baxis_rerun_*/raw_results.json` ←
 per-run `result.json` + `manifest.json`.
+
+**Artifact provenance (repo hygiene).** The repo artifact-hygiene rule
+(`scripts/check_artifacts.py`) permits only source files (`.py/.sh/.md/.yml/.toml`)
+under `experiments/`; generated run directories must stay on disk or object
+storage. Accordingly, the three re-run legs are **not committed** (they are in
+`.gitignore`). On the experiment machine they remain at:
+
+```
+experiments/baxis_rerun_pooltou/   # 250 runs, 9763bd7b0
+experiments/baxis_rerun_lmp/       # 250 runs, 05a925219
+experiments/baxis_rerun_p2p/       # 250 runs, 05a925219
+```
+
+Each contains 250 per-run directories with `result.json` + `manifest.json` +
+`trajectories.jsonl` + logs, plus the aggregated `raw_results.json`,
+`status.json`, `summary.json`. The baseline/provenance for each leg is
+recorded in `summary.json` (`git_commit`, `git_dirty=false`,
+`pricing_regime` for every manifest). The rebuild script (`docs/baxis_table_rebuild.py`)
+and its outputs (`docs/baxis_rebuild/summary.json`, `docs/baxis_rebuild/*.md`)
+**are committed** and serve as the reproducible paper trail.

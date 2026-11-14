@@ -78,8 +78,17 @@ def t_critical(n: int, confidence: float = 0.95) -> float:
 
         return float(student_t.ppf(0.5 + confidence / 2.0, n - 1))
     except Exception:
-        table = {2: 12.706, 3: 4.303, 4: 3.227, 5: 2.776, 6: 2.571,
-                 7: 2.447, 8: 2.365, 9: 2.306, 10: 2.262}
+        table = {
+            2: 12.706,
+            3: 4.303,
+            4: 3.227,
+            5: 2.776,
+            6: 2.571,
+            7: 2.447,
+            8: 2.365,
+            9: 2.306,
+            10: 2.262,
+        }
         return table.get(n, 2.262)
 
 
@@ -163,13 +172,21 @@ def manifest_summary(leg: str) -> dict:
     counts = Counter()
     for m in sorted((ROOT / LEGS[leg]).glob("scenario_*/*/manifest.json")):
         j = json.loads(m.read_text())
-        counts[(j.get("git_commit"), bool(j.get("git_dirty")), j.get("pricing_regime"))] += 1
+        counts[
+            (j.get("git_commit"), bool(j.get("git_dirty")), j.get("pricing_regime"))
+        ] += 1
     return {f"{k[0]} dirty={k[1]} regime={k[2]}": v for k, v in counts.items()}
 
 
 def traj_hash(scenario: str, controller: str, seed: int, leg: str) -> Optional[str]:
     """sha256 over per-step requested actions (dispatch identity, not billing)."""
-    p = ROOT / LEGS[leg] / scenario / f"{scenario}_{controller}_{seed}" / "trajectories.jsonl"
+    p = (
+        ROOT
+        / LEGS[leg]
+        / scenario
+        / f"{scenario}_{controller}_{seed}"
+        / "trajectories.jsonl"
+    )
     if not p.is_file():
         return None
     h = hashlib.sha256()
@@ -199,14 +216,16 @@ def deltas_block(data, metric_key: str) -> List[dict]:
         if not pairs:
             continue
         stats = paired_t(pairs)
-        rows.append({
-            "controller": controller,
-            "n": len(pairs),
-            "mean": stats["mean"],
-            "ci95": describe(pairs)["ci95"],
-            "t": stats["t"],
-            "p_raw": stats["p"],
-        })
+        rows.append(
+            {
+                "controller": controller,
+                "n": len(pairs),
+                "mean": stats["mean"],
+                "ci95": describe(pairs)["ci95"],
+                "t": stats["t"],
+                "p_raw": stats["p"],
+            }
+        )
         pvalues.append(stats["p"])
     for row, adjusted in zip(rows, holm(pvalues)):
         row["p_holm"] = adjusted
@@ -271,17 +290,25 @@ def main() -> None:
     ]
     deltas_summary: Dict[str, dict] = {}
     for scenario in SCENARIOS:
-        data = {(c, s): legs["pool_tou"].get((scenario, c, s), {})
-                for c in CONTROLLERS for s in SEEDS}
+        data = {
+            (c, s): legs["pool_tou"].get((scenario, c, s), {})
+            for c in CONTROLLERS
+            for s in SEEDS
+        }
         for metric in ("total_cost", "peak_demand_kw"):
-            key = "deltas"
             deltas_summary.setdefault(scenario, {})
             for row in deltas_block(data, metric):
                 deltas_summary[scenario].setdefault(row["controller"], {})[metric] = {
-                    "mean": row["mean"], "ci95": row["ci95"], "p_holm": row["p_holm"]}
+                    "mean": row["mean"],
+                    "ci95": row["ci95"],
+                    "p_holm": row["p_holm"],
+                }
         for row in deltas_block(data, "total_cost"):
-            pk = [r for r in deltas_block(data, "peak_demand_kw")
-                  if r["controller"] == row["controller"]][0]
+            pk = [
+                r
+                for r in deltas_block(data, "peak_demand_kw")
+                if r["controller"] == row["controller"]
+            ][0]
             lines.append(
                 f"| {LETTER[scenario]} | {row['controller']} "
                 f"| {row['mean']:+.2f} ± {row['ci95']:.2f} "
@@ -304,8 +331,11 @@ def main() -> None:
         "|---|---|---|---|",
     ]
     for scenario in SCENARIOS:
-        data = {(c, s): legs["pool_tou"].get((scenario, c, s), {})
-                for c in CONTROLLERS for s in SEEDS}
+        data = {
+            (c, s): legs["pool_tou"].get((scenario, c, s), {})
+            for c in CONTROLLERS
+            for s in SEEDS
+        }
         sm = scenario_metrics(data)
         for controller in CONTROLLERS:
             m = sm.get(controller, {})
@@ -342,13 +372,23 @@ def main() -> None:
         if scenario != "scenario_a":
             continue
         for controller in CONTROLLERS:
-            tou = [legs["pool_tou"][(scenario, controller, s)]["total_cost"] for s in SEEDS]
+            tou = [
+                legs["pool_tou"][(scenario, controller, s)]["total_cost"] for s in SEEDS
+            ]
             lmp = [legs["lmp"][(scenario, controller, s)]["total_cost"] for s in SEEDS]
-            ev_t = [legs["pool_tou"][(scenario, controller, s)]["ev_completion_rate"] for s in SEEDS]
-            ev_l = [legs["lmp"][(scenario, controller, s)]["ev_completion_rate"] for s in SEEDS]
+            ev_t = [
+                legs["pool_tou"][(scenario, controller, s)]["ev_completion_rate"]
+                for s in SEEDS
+            ]
+            ev_l = [
+                legs["lmp"][(scenario, controller, s)]["ev_completion_rate"]
+                for s in SEEDS
+            ]
             same = sum(
-                1 for s in SEEDS
-                if traj_hash(scenario, controller, s, "pool_tou") == traj_hash(scenario, controller, s, "lmp")
+                1
+                for s in SEEDS
+                if traj_hash(scenario, controller, s, "pool_tou")
+                == traj_hash(scenario, controller, s, "lmp")
             )
             lmp_lines.append(
                 f"| {controller} | {statistics.fmean(tou):.2f} | {statistics.fmean(lmp):.2f} "
@@ -367,8 +407,10 @@ def main() -> None:
         "|---|---|---|---|",
     ]
     for controller in CONTROLLERS:
-        vals = {k: [legs["lmp"][("scenario_d", controller, s)][k] for s in SEEDS]
-                for k in ("total_cost", "peak_demand_kw", "ev_completion_rate")}
+        vals = {
+            k: [legs["lmp"][("scenario_d", controller, s)][k] for s in SEEDS]
+            for k in ("total_cost", "peak_demand_kw", "ev_completion_rate")
+        }
         d = {k: describe(v) for k, v in vals.items()}
         d_lmp_lines.append(
             f"| {controller} "
@@ -379,15 +421,23 @@ def main() -> None:
     (OUT / "d_lmp.md").write_text("\n".join(d_lmp_lines) + "\n")
 
     # -- p2p pairing ---------------------------------------------------------- --
-    def run_result(leg: str, scenario: str, controller: str, seed: int) -> Optional[dict]:
-        p = ROOT / LEGS[leg] / scenario / f"{scenario}_{controller}_{seed}" / "result.json"
+    def run_result(
+        leg: str, scenario: str, controller: str, seed: int
+    ) -> Optional[dict]:
+        p = (
+            ROOT
+            / LEGS[leg]
+            / scenario
+            / f"{scenario}_{controller}_{seed}"
+            / "result.json"
+        )
         return json.loads(p.read_text()) if p.is_file() else None
 
     p2p_lines = [
         "# P2P vs pool TOU pairing (aggregate + member redistribution)",
         "",
         "Paired per-seed (p2p − pool_tou) per scenario/controller, n=10.",
-        "\"Redistribution\" = mean |Δ per-member all-in bill| over the five members",
+        '"Redistribution" = mean |Δ per-member all-in bill| over the five members',
         "(energy_sharing.per_member[].actual_total_bill). Volume = P2P community",
         "traded volume (energy_sharing.total_community_volume_kwh).",
         "",
@@ -412,11 +462,14 @@ def main() -> None:
                 bq = p2p_r["energy_sharing"]["per_member"]
                 bills_p = [bp[k]["actual_total_bill"] for k in bp]
                 bills_q = [bq[k]["actual_total_bill"] for k in bq]
-                redist.append(statistics.fmean(
-                    [abs(b - a) for a, b in zip(bills_p, bills_q)]))
+                redist.append(
+                    statistics.fmean([abs(b - a) for a, b in zip(bills_p, bills_q)])
+                )
                 d_gini.append(_gini(bills_q) - _gini(bills_p))
                 vol.append(p2p_r["energy_sharing"]["total_community_volume_kwh"])
-                if traj_hash(scenario, controller, s, "pool_tou") == traj_hash(scenario, controller, s, "p2p"):
+                if traj_hash(scenario, controller, s, "pool_tou") == traj_hash(
+                    scenario, controller, s, "p2p"
+                ):
                     disp += 1
             p2p_summary.setdefault(LETTER[scenario], {})[controller] = {
                 "delta_aggregate_mean": statistics.fmean(d_cost),
@@ -453,7 +506,13 @@ def main() -> None:
     mem_summary = {}
     for m in members:
         deltas = []
-        for scenario in ("scenario_a", "scenario_b", "scenario_c", "scenario_d", "scenario_e"):
+        for scenario in (
+            "scenario_a",
+            "scenario_b",
+            "scenario_c",
+            "scenario_d",
+            "scenario_e",
+        ):
             if scenario == "scenario_d":
                 continue  # D bit-identical to A; counted once
             for controller in CONTROLLERS:
@@ -462,12 +521,21 @@ def main() -> None:
                     p2p_r = run_result("p2p", scenario, controller, s)
                     if pool_r and p2p_r:
                         deltas.append(
-                            p2p_r["energy_sharing"]["per_member"][m]["actual_total_bill"]
-                            - pool_r["energy_sharing"]["per_member"][m]["actual_total_bill"]
+                            p2p_r["energy_sharing"]["per_member"][m][
+                                "actual_total_bill"
+                            ]
+                            - pool_r["energy_sharing"]["per_member"][m][
+                                "actual_total_bill"
+                            ]
                         )
         st = paired_t(deltas)
         d95 = describe(deltas)
-        mem_summary[m] = {"mean": st["mean"], "ci95": d95["ci95"], "t": st["t"], "p": st["p"]}
+        mem_summary[m] = {
+            "mean": st["mean"],
+            "ci95": d95["ci95"],
+            "t": st["t"],
+            "p": st["p"],
+        }
         mem_lines.append(
             f"| {m} | {st['mean']:+.2f} | ±{d95['ci95']:.2f} | {st['t']:+.2f} | {fmt_p(st['p'])} |"
         )
@@ -501,22 +569,45 @@ def main() -> None:
     for scenario in SCENARIOS:
         means = {}
         for controller in CONTROLLERS:
-            vals = [legs["pool_tou"][(scenario, controller, s)]["total_cost"]
-                    for s in SEEDS if (scenario, controller, s) in legs["pool_tou"]]
+            vals = [
+                legs["pool_tou"][(scenario, controller, s)]["total_cost"]
+                for s in SEEDS
+                if (scenario, controller, s) in legs["pool_tou"]
+            ]
             if vals:
                 means[controller] = statistics.fmean(vals)
         ranking[scenario] = sorted(means.items(), key=lambda kv: kv[1])
-    ma_delta = {LETTER[s]: deltas_summary[s].get("multi_agent", {}).get("total_cost", {}).get("mean")
-                for s in SCENARIOS}
-    ev_ma = {LETTER[s]: statistics.fmean(
-        [legs["pool_tou"][(s, "multi_agent", sd)]["ev_completion_rate"] for sd in SEEDS])
-        for s in SCENARIOS}
-    ev_rb = {LETTER[s]: statistics.fmean(
-        [legs["pool_tou"][(s, "rule_based", sd)]["ev_completion_rate"] for sd in SEEDS])
-        for s in SCENARIOS}
-    ev_mpc = {LETTER[s]: statistics.fmean(
-        [legs["pool_tou"][(s, "mpc", sd)]["ev_completion_rate"] for sd in SEEDS])
-        for s in SCENARIOS}
+    ma_delta = {
+        LETTER[s]: deltas_summary[s]
+        .get("multi_agent", {})
+        .get("total_cost", {})
+        .get("mean")
+        for s in SCENARIOS
+    }
+    ev_ma = {
+        LETTER[s]: statistics.fmean(
+            [
+                legs["pool_tou"][(s, "multi_agent", sd)]["ev_completion_rate"]
+                for sd in SEEDS
+            ]
+        )
+        for s in SCENARIOS
+    }
+    ev_rb = {
+        LETTER[s]: statistics.fmean(
+            [
+                legs["pool_tou"][(s, "rule_based", sd)]["ev_completion_rate"]
+                for sd in SEEDS
+            ]
+        )
+        for s in SCENARIOS
+    }
+    ev_mpc = {
+        LETTER[s]: statistics.fmean(
+            [legs["pool_tou"][(s, "mpc", sd)]["ev_completion_rate"] for sd in SEEDS]
+        )
+        for s in SCENARIOS
+    }
     abstract = [
         "# Abstract / prose numbers (measured)",
         "",
@@ -525,8 +616,8 @@ def main() -> None:
     ]
     for scenario in SCENARIOS:
         abstract.append(
-            f"* {LETTER[scenario]}: " +
-            ", ".join(f"{c} {v:.2f}" for c, v in ranking[scenario])
+            f"* {LETTER[scenario]}: "
+            + ", ".join(f"{c} {v:.2f}" for c, v in ranking[scenario])
         )
     abstract += [
         "",
@@ -542,13 +633,22 @@ def main() -> None:
     ]
     (OUT / "abstract_numbers.md").write_text("\n".join(abstract) + "\n")
 
-    summary["ranking_pool_tou"] = {LETTER[s]: [[c, v] for c, v in ranking[s]] for s in SCENARIOS}
+    summary["ranking_pool_tou"] = {
+        LETTER[s]: [[c, v] for c, v in ranking[s]] for s in SCENARIOS
+    }
     summary["multi_agent_delta_usd"] = ma_delta
-    summary["ev_completion_mean"] = {"multi_agent": ev_ma, "rule_based": ev_rb, "mpc": ev_mpc}
+    summary["ev_completion_mean"] = {
+        "multi_agent": ev_ma,
+        "rule_based": ev_rb,
+        "mpc": ev_mpc,
+    }
 
     (OUT / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
     print(f"wrote {OUT}/ ({len(list(OUT.iterdir()))} files)")
-    print("ranking:", {LETTER[s]: [(c, round(v, 2)) for c, v in ranking[s]] for s in SCENARIOS})
+    print(
+        "ranking:",
+        {LETTER[s]: [(c, round(v, 2)) for c, v in ranking[s]] for s in SCENARIOS},
+    )
 
 
 if __name__ == "__main__":
