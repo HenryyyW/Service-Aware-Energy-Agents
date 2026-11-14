@@ -88,6 +88,8 @@ class SimulationCreateRequest(BaseModel):
     parameters: Optional[Dict[str, Any]] = None
     run_name: Optional[str] = None
     run_description: Optional[str] = None
+    max_steps: Optional[int] = None
+    random_seed: Optional[int] = None
 
 
 class SimulationRun(BaseModel):
@@ -116,6 +118,8 @@ class SimulationRun(BaseModel):
     # Controller fallback tracking
     controller_fallback_steps: int = 0
     controller_fallback_reason: Optional[str] = None
+    # Scenario config for report generation
+    scenario_config: Optional[Dict[str, Any]] = None
 
 
 RL_POLICY_DIR = (
@@ -438,8 +442,11 @@ async def create_simulation(
             )
 
     scenario = _scenarios[request.scenario_id]
-    max_steps = request.parameters.get("max_steps", 672) if request.parameters else 672
-    random_seed = (
+    # Top-level fields take priority; parameters dict is fallback for backward compat
+    max_steps = request.max_steps or (
+        request.parameters.get("max_steps", 672) if request.parameters else 672
+    )
+    random_seed = request.random_seed or (
         request.parameters.get("random_seed", scenario.random_seed)
         if request.parameters
         else scenario.random_seed
@@ -460,6 +467,9 @@ async def create_simulation(
 
     run_id = f"run_{uuid4().hex[:12]}"
 
+    # Store scenario config for report generation
+    scenario_config_dict = scenario.model_dump(mode="json")
+
     run = SimulationRun(
         run_id=run_id,
         scenario_id=request.scenario_id,
@@ -471,6 +481,7 @@ async def create_simulation(
         run_description=request.run_description,
         config_hash=config_hash,
         generation_status="computing",
+        scenario_config=scenario_config_dict,
     )
 
     _runs[run_id] = run.model_dump()
