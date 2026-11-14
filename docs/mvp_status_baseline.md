@@ -512,3 +512,22 @@ Re-ran the exact failing paths against 39f7daece:
 
 Retest #4 waits on this last item; everything else in the loop is
 partner-verified green.
+
+## TimePlayer verified by partner (2026-11-15) - ALL retest-#3 items now closed
+## live; the user's retest #4 is unblocked
+
+Live browser pass on 5d8625fe3 (pushed in b1b76c413): /canvas with a run
+shows "Schematic network layout - not actual geographic data", the TimePlayer
+is mounted (slider "Simulation timestep", Step 0 / 23:00, 1x, PAUSED, Reset /
+Step backward / Play simulation / Step forward / Playback speed buttons), and
+stepping forward twice advances 00:00 -> 02:00 with the backward button
+re-enabled. Gates partner-verified on the same tree: pytest 518, vitest
+13/13, tsc 0, eslint 0, build green, black/ruff clean.
+
+Closed with live evidence across this verification cycle: W13 (report
+carries scenario config), max_steps top-level (24-step runs), W14 (canvas
+renders API-created scenarios via schematic-from-config), step 6 (service
+metrics visible on completed runs), step 4's time player. The eight-step
+walkthrough has no known open defect as of `b1b76c413` - the user's retest #4
+is the only remaining acceptance step. (QA's Lighthouse/axe re-check on the
+newer code is advisable but not a blocker for the walkthrough itself.)
