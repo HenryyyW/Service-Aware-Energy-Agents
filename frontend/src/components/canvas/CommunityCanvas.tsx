@@ -10,6 +10,7 @@ import { useScenarioStore } from '../../store/scenarioStore';
 import { toDisplayNetworkGeometry } from '../../api/networkGeometry';
 import { Button } from '../ui/Button';
 import { CommunityTable } from './CommunityTable';
+import { TimePlayer } from './TimePlayer';
 import {
   createBuildingLayer,
   createPVLayer,
@@ -654,6 +655,11 @@ export function CommunityCanvas(_props: CommunityCanvasProps) {
                 <FileText className="w-4 h-4 mr-1" /> Table
               </Button>
             </div>
+          </div>
+
+          {/* Time player (playback controls) */}
+          <div className="absolute bottom-2 left-2 right-2 p-2 bg-white/90 backdrop-blur rounded-lg border border-border/30 flex flex-col items-center gap-2 z-50">
+            <TimePlayer />
           </div>
 
           {/* Table view */}
