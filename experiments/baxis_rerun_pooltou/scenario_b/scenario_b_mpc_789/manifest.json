@@ -1,0 +1,25 @@
+{
+  "run_id": "scenario_b_mpc_789",
+  "scenario_id": "scenario_b",
+  "controller": {
+    "type": "mpc",
+    "approach": "deterministic_receding_horizon_lp",
+    "horizon_steps": 24,
+    "fallback_steps": 0
+  },
+  "random_seed": 789,
+  "scenario_config_sha256": "2d52ecf991ab5b2f2af9d91700abbdf48a30807e29098c85411d715637b58aed",
+  "git_commit": "9763bd7b0e5ff9917bc633734c0f3ecc802ec76b",
+  "git_dirty": false,
+  "python": "3.13.5",
+  "packages": {
+    "citylearn": "3.0.2",
+    "pandapower": "3.5.6",
+    "numpy": "2.4.6",
+    "pandas": "2.3.3"
+  },
+  "timestep_minutes": 15,
+  "history_steps": 168,
+  "pricing_regime": "pool_tou",
+  "cost_basis": "tariff"
+}

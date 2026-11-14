@@ -1,0 +1,25 @@
+{
+  "run_id": "scenario_a_rl_999",
+  "scenario_id": "scenario_a",
+  "controller": {
+    "type": "rl_single",
+    "algorithm": "tabular_q_learning",
+    "policy_path": "experiments/reference/rl_policy/lmp_scenario_a.json",
+    "unseen_states": 131
+  },
+  "random_seed": 999,
+  "scenario_config_sha256": "13063d101860f4ed3383a1a4cf22b169a5badc69bd64c7d524c45a6e66e11c76",
+  "git_commit": "05a925219463c46618cdd5db8e473383edfc65d4",
+  "git_dirty": false,
+  "python": "3.13.5",
+  "packages": {
+    "citylearn": "3.0.2",
+    "pandapower": "3.5.6",
+    "numpy": "2.4.6",
+    "pandas": "2.3.3"
+  },
+  "timestep_minutes": 15,
+  "history_steps": 168,
+  "pricing_regime": "lmp",
+  "cost_basis": "lmp"
+}

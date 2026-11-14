@@ -1,0 +1,23 @@
+{
+  "run_id": "scenario_c_multi_agent_8888",
+  "scenario_id": "scenario_c",
+  "controller": {
+    "type": "multi_agent",
+    "workflow": "planner_coder_executor_verifier_reporter"
+  },
+  "random_seed": 8888,
+  "scenario_config_sha256": "c11eb458f818f77bba9af39d54d56673e0482d3ac6abc1045748451ed95ef940",
+  "git_commit": "9763bd7b0e5ff9917bc633734c0f3ecc802ec76b",
+  "git_dirty": false,
+  "python": "3.13.5",
+  "packages": {
+    "citylearn": "3.0.2",
+    "pandapower": "3.5.6",
+    "numpy": "2.4.6",
+    "pandas": "2.3.3"
+  },
+  "timestep_minutes": 15,
+  "history_steps": 168,
+  "pricing_regime": "pool_tou",
+  "cost_basis": "tariff"
+}

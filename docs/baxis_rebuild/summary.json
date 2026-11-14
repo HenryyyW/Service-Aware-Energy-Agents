@@ -1,0 +1,448 @@
+{
+ "seeds": [
+  42,
+  123,
+  456,
+  789,
+  999,
+  1234,
+  2024,
+  3456,
+  5555,
+  8888
+ ],
+ "controllers": [
+  "rule_based",
+  "multi_agent",
+  "centralized",
+  "mpc",
+  "rl"
+ ],
+ "provenance": {
+  "pool_tou": {
+   "9763bd7b0e5ff9917bc633734c0f3ecc802ec76b dirty=False regime=pool_tou": 250
+  },
+  "lmp": {
+   "05a925219463c46618cdd5db8e473383edfc65d4 dirty=False regime=lmp": 250
+  },
+  "p2p": {
+   "05a925219463c46618cdd5db8e473383edfc65d4 dirty=False regime=p2p": 250
+  }
+ },
+ "legs_complete": {
+  "pool_tou": true,
+  "lmp": true,
+  "p2p": true
+ },
+ "p2p_pairing": {
+  "A": {
+   "rule_based": {
+    "delta_aggregate_mean": 4.605709708103339,
+    "delta_aggregate_ci95": 1.6609650187832743,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 1.6234025678167474,
+    "delta_gini_allin": 0.013892308979953505,
+    "p2p_volume_kwh": 77.65038216449321,
+    "dispatch_identical": "10/10"
+   },
+   "multi_agent": {
+    "delta_aggregate_mean": 6.805813869308724,
+    "delta_aggregate_ci95": 2.019693732777935,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 1.9054617630491228,
+    "delta_gini_allin": 0.0058376261567868555,
+    "p2p_volume_kwh": 76.61884255865589,
+    "dispatch_identical": "10/10"
+   },
+   "centralized": {
+    "delta_aggregate_mean": 4.363596681019246,
+    "delta_aggregate_ci95": 0.8993207975588792,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 1.5631897914082777,
+    "delta_gini_allin": 0.013472611613655094,
+    "p2p_volume_kwh": 65.91301288837568,
+    "dispatch_identical": "10/10"
+   },
+   "mpc": {
+    "delta_aggregate_mean": 8.13517872335446,
+    "delta_aggregate_ci95": 4.130778719609344,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 2.767352631632471,
+    "delta_gini_allin": 0.013176064411553653,
+    "p2p_volume_kwh": 80.29415973571595,
+    "dispatch_identical": "10/10"
+   },
+   "rl": {
+    "delta_aggregate_mean": 7.536767828448779,
+    "delta_aggregate_ci95": 0.2842184061399538,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 2.303787290909324,
+    "delta_gini_allin": 0.0014244625752987232,
+    "p2p_volume_kwh": 128.03520429767667,
+    "dispatch_identical": "10/10"
+   }
+  },
+  "B": {
+   "rule_based": {
+    "delta_aggregate_mean": 7.093904659447699,
+    "delta_aggregate_ci95": 1.4400655906726687,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 2.0717146892151925,
+    "delta_gini_allin": 0.006318385317978292,
+    "p2p_volume_kwh": 72.03257323559373,
+    "dispatch_identical": "10/10"
+   },
+   "multi_agent": {
+    "delta_aggregate_mean": 4.629158372501843,
+    "delta_aggregate_ci95": 1.0743125834702774,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 1.2650824068365503,
+    "delta_gini_allin": -0.005707150504750433,
+    "p2p_volume_kwh": 65.45784635897726,
+    "dispatch_identical": "10/10"
+   },
+   "centralized": {
+    "delta_aggregate_mean": 4.546916398615275,
+    "delta_aggregate_ci95": 1.437448818448651,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 1.396291650772752,
+    "delta_gini_allin": 0.002547143012439507,
+    "p2p_volume_kwh": 67.0319484507665,
+    "dispatch_identical": "10/10"
+   },
+   "mpc": {
+    "delta_aggregate_mean": 15.21902543974916,
+    "delta_aggregate_ci95": 4.156725386647796,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 3.233261616733595,
+    "delta_gini_allin": -0.016299378340077213,
+    "p2p_volume_kwh": 67.84802502805833,
+    "dispatch_identical": "10/10"
+   },
+   "rl": {
+    "delta_aggregate_mean": 6.259098306007286,
+    "delta_aggregate_ci95": 0.23062842218893537,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 1.9697257467751281,
+    "delta_gini_allin": -0.0008520539434150584,
+    "p2p_volume_kwh": 106.25464740786701,
+    "dispatch_identical": "10/10"
+   }
+  },
+  "C": {
+   "rule_based": {
+    "delta_aggregate_mean": -0.9632941650093698,
+    "delta_aggregate_ci95": 1.4383548982286432,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 1.455960402940721,
+    "delta_gini_allin": 0.021951853465459307,
+    "p2p_volume_kwh": 85.0878287985106,
+    "dispatch_identical": "10/10"
+   },
+   "multi_agent": {
+    "delta_aggregate_mean": -10.592152542991176,
+    "delta_aggregate_ci95": 11.247514898755002,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 4.032885218352195,
+    "delta_gini_allin": 0.02910482847253774,
+    "p2p_volume_kwh": 123.22887330539524,
+    "dispatch_identical": "10/10"
+   },
+   "centralized": {
+    "delta_aggregate_mean": -1.6555498186480406,
+    "delta_aggregate_ci95": 2.11193573061649,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 1.6926413059516268,
+    "delta_gini_allin": 0.027015952692724422,
+    "p2p_volume_kwh": 82.35345859676599,
+    "dispatch_identical": "10/10"
+   },
+   "mpc": {
+    "delta_aggregate_mean": -9.41319647535247,
+    "delta_aggregate_ci95": 9.523320788352613,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 4.8589842080309795,
+    "delta_gini_allin": 0.02965034528018609,
+    "p2p_volume_kwh": 133.50725163863973,
+    "dispatch_identical": "10/10"
+   },
+   "rl": {
+    "delta_aggregate_mean": -50.62754743687809,
+    "delta_aggregate_ci95": 4.656108785662491,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 10.125509487375616,
+    "delta_gini_allin": -0.006504808239150843,
+    "p2p_volume_kwh": 100.06850794944913,
+    "dispatch_identical": "10/10"
+   }
+  },
+  "D": {
+   "rule_based": {
+    "delta_aggregate_mean": 4.605709708103339,
+    "delta_aggregate_ci95": 1.6609650187832743,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 1.6234025678167474,
+    "delta_gini_allin": 0.013892308979953505,
+    "p2p_volume_kwh": 77.65038216449321,
+    "dispatch_identical": "10/10"
+   },
+   "multi_agent": {
+    "delta_aggregate_mean": 6.805813869308724,
+    "delta_aggregate_ci95": 2.019693732777935,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 1.9054617630491228,
+    "delta_gini_allin": 0.0058376261567868555,
+    "p2p_volume_kwh": 76.61884255865589,
+    "dispatch_identical": "10/10"
+   },
+   "centralized": {
+    "delta_aggregate_mean": 4.363596681019246,
+    "delta_aggregate_ci95": 0.8993207975588792,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 1.5631897914082777,
+    "delta_gini_allin": 0.013472611613655094,
+    "p2p_volume_kwh": 65.91301288837568,
+    "dispatch_identical": "10/10"
+   },
+   "mpc": {
+    "delta_aggregate_mean": 8.13517872335446,
+    "delta_aggregate_ci95": 4.130778719609344,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 2.767352631632471,
+    "delta_gini_allin": 0.013176064411553653,
+    "p2p_volume_kwh": 80.29415973571595,
+    "dispatch_identical": "10/10"
+   },
+   "rl": {
+    "delta_aggregate_mean": 7.536767828448779,
+    "delta_aggregate_ci95": 0.2842184061399538,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 2.303787290909324,
+    "delta_gini_allin": 0.0014244625752987232,
+    "p2p_volume_kwh": 128.03520429767667,
+    "dispatch_identical": "10/10"
+   }
+  },
+  "E": {
+   "rule_based": {
+    "delta_aggregate_mean": 4.601333223603095,
+    "delta_aggregate_ci95": 1.6478735313155235,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 1.623527757420239,
+    "delta_gini_allin": 0.013711980602509366,
+    "p2p_volume_kwh": 76.74280229061841,
+    "dispatch_identical": "10/10"
+   },
+   "multi_agent": {
+    "delta_aggregate_mean": 6.282000846110327,
+    "delta_aggregate_ci95": 1.8677086158130047,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 1.8061414599316385,
+    "delta_gini_allin": 0.0060266858259227256,
+    "p2p_volume_kwh": 74.84289075126871,
+    "dispatch_identical": "10/10"
+   },
+   "centralized": {
+    "delta_aggregate_mean": 4.388961154192643,
+    "delta_aggregate_ci95": 0.8891586643461833,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 1.5598316774182988,
+    "delta_gini_allin": 0.013366067669396336,
+    "p2p_volume_kwh": 65.12611633120105,
+    "dispatch_identical": "10/10"
+   },
+   "mpc": {
+    "delta_aggregate_mean": 8.13517872335446,
+    "delta_aggregate_ci95": 4.130778719609344,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 2.767352631632471,
+    "delta_gini_allin": 0.013176064411553653,
+    "p2p_volume_kwh": 80.29415973571595,
+    "dispatch_identical": "10/10"
+   },
+   "rl": {
+    "delta_aggregate_mean": 7.536767828448779,
+    "delta_aggregate_ci95": 0.2842184061399538,
+    "aggregate_identical": "0/10",
+    "mean_redistribution_usd": 2.303787290909324,
+    "delta_gini_allin": 0.0014244625752987232,
+    "p2p_volume_kwh": 128.03520429767667,
+    "dispatch_identical": "10/10"
+   }
+  }
+ },
+ "p2p_member_bills": {
+  "building_0": {
+   "mean": -0.11808003659342316,
+   "ci95": 0.7943286315324344,
+   "t": -0.2931390002355461,
+   "p": 0.769721364518573
+  },
+  "building_1": {
+   "mean": 1.7299604754004594,
+   "ci95": 0.47262024081592346,
+   "t": 7.218071902450508,
+   "p": 1.0879531644568231e-11
+  },
+  "building_2": {
+   "mean": -2.6365343048566974,
+   "ci95": 0.5284312230448862,
+   "t": -9.83880370779072,
+   "p": 7.268654395916269e-19
+  },
+  "building_3": {
+   "mean": 1.5904702037475946,
+   "ci95": 0.4194855219578196,
+   "t": 7.4766302114065715,
+   "p": 2.37765342020273e-12
+  },
+  "building_4": {
+   "mean": 0.7785672284713605,
+   "ci95": 0.25673426691553153,
+   "t": 5.980116171360874,
+   "p": 1.01796286379202e-08
+  }
+ },
+ "ranking_pool_tou": {
+  "A": [
+   [
+    "centralized",
+    175.82837134755067
+   ],
+   [
+    "rule_based",
+    191.96438385478714
+   ],
+   [
+    "multi_agent",
+    275.483475013556
+   ],
+   [
+    "mpc",
+    371.22238899022665
+   ],
+   [
+    "rl",
+    476.281598971689
+   ]
+  ],
+  "B": [
+   [
+    "mpc",
+    222.7426942899529
+   ],
+   [
+    "centralized",
+    236.11647998276916
+   ],
+   [
+    "rule_based",
+    258.24375545171654
+   ],
+   [
+    "multi_agent",
+    307.3275144346277
+   ],
+   [
+    "rl",
+    331.467975012079
+   ]
+  ],
+  "C": [
+   [
+    "centralized",
+    159.64803420309448
+   ],
+   [
+    "rule_based",
+    168.76904973430499
+   ],
+   [
+    "multi_agent",
+    268.7746240270486
+   ],
+   [
+    "rl",
+    292.7456164047803
+   ],
+   [
+    "mpc",
+    366.11418795549486
+   ]
+  ],
+  "D": [
+   [
+    "centralized",
+    175.82837134755067
+   ],
+   [
+    "rule_based",
+    191.96438385478714
+   ],
+   [
+    "multi_agent",
+    275.483475013556
+   ],
+   [
+    "mpc",
+    371.22238899022665
+   ],
+   [
+    "rl",
+    476.281598971689
+   ]
+  ],
+  "E": [
+   [
+    "centralized",
+    175.9087275215447
+   ],
+   [
+    "rule_based",
+    191.93995917610386
+   ],
+   [
+    "multi_agent",
+    278.05080743397707
+   ],
+   [
+    "mpc",
+    371.22238899022665
+   ],
+   [
+    "rl",
+    476.281598971689
+   ]
+  ]
+ },
+ "multi_agent_delta_usd": {
+  "A": 83.51909115876887,
+  "B": 49.08375898291117,
+  "C": 100.00557429274366,
+  "D": 83.51909115876887,
+  "E": 86.1108482578732
+ },
+ "ev_completion_mean": {
+  "multi_agent": {
+   "A": 0.7028571428571428,
+   "B": 0.39090909090909093,
+   "C": 0.7142857142857143,
+   "D": 0.7028571428571428,
+   "E": 0.7028571428571428
+  },
+  "rule_based": {
+   "A": 0.3085714285714286,
+   "B": 0.1,
+   "C": 0.29714285714285715,
+   "D": 0.3085714285714286,
+   "E": 0.3085714285714286
+  },
+  "mpc": {
+   "A": 0.9971428571428571,
+   "B": 0.10727272727272727,
+   "C": 0.9914285714285714,
+   "D": 0.9971428571428571,
+   "E": 0.9971428571428571
+  }
+ }
+}

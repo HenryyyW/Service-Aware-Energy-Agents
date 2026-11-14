@@ -69,21 +69,26 @@ seeds each (750 runs), with a further 150-run scenario-D re-run after an
 energy-sharing configuration defect was fixed, a 150-cell real-LLM screen
 (100 LLM-arm and 50 reference cells), and a 60-cell hostile-proposer study
 in two 30-cell pilots; every run carries a manifest recording its full
-provenance (Section~\ref{sec:repro}). The multi-agent controller is cost-
-and peak-minimal in every scenario (paired cost delta vs.\ rule-based
-$-11.95$ to $-43.03$ USD across A/B/C/E on the grid-only cost basis,
-$-78.56$ USD in scenario D on the settlement-inclusive basis,
-$p_{\mathrm{Holm}} < 0.0001$, $n{=}10$) with an explicit EV-completion
-trade-off ($0.057$ vs.\ $1.000$ for MPC) that we report rather than
-resolve; scenario D rows are settlement-inclusive while A/B/C/E are
-grid-only, and all cost comparisons are within-scenario. Only price-aware
+provenance (Section~\ref{sec:repro}). The multi-agent controller is not cost-minimal on the re-run legs: its paired
+cost delta vs.\ rule-based is positive in all five scenarios ($+49.08$ to
+$+100.01$ USD, all $p_{\mathrm{Holm}} < 0.0001$, $n{=}10$, settlement-inclusive
+basis in every scenario), while the centralized heuristic is cost-minimal in
+A/C/D/E and MPC in B, with an explicit service split (MPC completes $0.997$ of
+EV departure requirements in scenario A against multi-agent's $0.703$; in
+scenario B no controller exceeds $0.39$) that we report rather than
+resolve --- a reversal of the pre-repair record, whose multi-agent rows
+predate the action-delivery repair. Only price-aware
 controllers (MPC, RL) change dispatch when the pricing regime changes; a
-fixed trajectory still bills differently under different price series, so
-dispatch identity never implies cost identity. Under P2P clearing the
-A/B/C/E community aggregates are bit-identical to pool clearing while
-member bills redistribute significantly, and scenario D --- whose
-settlement is already active --- diverges at the aggregate as well,
-through the real grid-cost change from energy sharing. Thermal comfort is
+fixed trajectory still bills differently under different price series (all
+300 paired price-insensitive cells re-bill across the three regimes, zero
+bit-identical), so dispatch identity never implies cost identity. Under P2P
+clearing dispatch is identical for every controller (250/250 paired action
+hashes), the community aggregate moves in every cell, and member bills
+redistribute significantly (building\_2 $-2.64 \pm 0.53$ USD,
+building\_1/3/4 $+0.78$ to $+1.73$, paired $n{=}40$ per member) --- the
+pre-repair ``aggregates bit-identical'' split does not survive the re-run.
+The RL arm's tabular policy falls back to rule-based for 2--9 of 168 steps
+per run (1.2--5.4\%), disclosed alongside every RL row. Thermal comfort is
 unmeasurable on the stock dataset (the indoor-temperature series is
 entirely NaN), so no comfort claim is made. On the agent layer, the
 real-LLM dispatch screen is a safety-metrics null (unrepaired violations
@@ -164,13 +169,16 @@ the price signal as given. The unresolved question is whether a controller's
 mechanism changes --- comparisons that price one fixed trajectory under two
 series cannot separate the two responses, and dispatch identity never implies
 cost identity. Our finding, over a 750-run matrix (5 scenarios $\times$ 5
-controllers $\times$ 10 seeds $\times$ 3 regimes) plus a 150-run scenario-D
-re-run, is the separation itself: only the price-aware controllers (MPC, RL)
+controllers $\times$ 10 seeds $\times$ 3 regimes, re-run end-to-end on the
+final code) plus a 150-run scenario-D re-run, is the separation itself: only
+the price-aware controllers (MPC, RL)
 change dispatch across regimes, the price-insensitive heuristics dispatch
-identically, the LMP price series reaches the bills only where settlement and
-dynamic pricing are active (scenario D), and bilateral P2P clearing
-redistributes member bills while the A/B/C/E community aggregate is
-bit-identical to pool clearing. The contribution is the dispatch/billing
+identically, the LMP price series reaches the bills wherever settlement and
+dynamic pricing are active --- which, on the regime recipes, is every
+scenario, so all 300 paired price-insensitive cells re-bill across regimes,
+and bilateral P2P clearing changes dispatch nowhere while moving the
+community aggregate in every cell and redistributing member bills. The
+contribution is the dispatch/billing
 separation and the mechanism account of which regime reaches the bills, not a
 TOU-versus-LMP cost comparison.
 
@@ -307,8 +315,9 @@ is described in Section~\ref{sec:m2a}.
 dataset (\texttt{citylearn\_challenge\_2022\_phase\_all\_plus\_evs}: five
 buildings, hourly resolution, one simulated week available). Scenarios declare
 15-minute steps but the adapter aligns them to the dataset's native 60-minute
-resolution; every reported run uses a 24-step (one-day) horizon. Load and PV
-traces depend only on (seed, filename) --- a seed selects CityLearn's generated
+resolution; the deterministic benchmark matrix runs the full 168-step
+(one-week) episode, the agent studies a 24-step (one-day) horizon.
+Load and PV traces depend only on (seed, filename) --- a seed selects CityLearn's generated
 fallback data, and the same seed reproduces the same traces for every
 controller --- so controller differences at equal seed are pure controller
 effects, and seed variance reflects data generation, not controller
@@ -319,18 +328,20 @@ policy.
 Five scenarios (Table~\ref{tab:scenarios}) differ in device mix and stressors.
 Each runs ten seeds (42, 123, 456, 789, 999, 1234, 2024, 3456, 5555,
 8888) $\times$ five controllers $= 250$ runs per regime, under three regimes
-(pool TOU, LMP, bilateral P2P) for 750 runs; the legs of record are
-\texttt{matrix\_full} (pool TOU, A/B/C/E) plus \texttt{matrix\_d\_rerun} (D),
-\texttt{m52\_benchmark} (LMP, A/B/C/E; the directory name is a legacy of its
-M5.2 origin) plus \texttt{matrix\_d\_rerun\_lmp} (D), and
-\texttt{matrix\_p2p} (P2P, A/B/C/E) plus \texttt{matrix\_d\_rerun\_p2p} (D).
-An energy-sharing configuration defect was found and fixed; the settlement fix
-is not in the \texttt{matrix\_full} or \texttt{m52\_benchmark} lineages, so
-their D blocks are pre-fix and superseded, and scenario D's rows are cited
-from the 150-run re-run (5 controllers $\times$ 10 seeds $\times$ 3 regimes) in
-all three regimes. Postfix copies and the \texttt{matrix\_d\_rerun} pool-TOU
-block duplicate D rows and are never added on top of the 750. D's rows are
-settlement-inclusive, A/B/C/E report grid-only cost. A
+(pool TOU, LMP, bilateral P2P) for 750 runs. The legs of record are the
+complete three-regime re-run executed 2026-11-13 on the final code (commit
+\texttt{9763bd7b0}; the LMP and P2P legs carry the docs-only commit
+\texttt{05a925219}, which changes no code): \texttt{baxis\_rerun\_pooltou},
+\texttt{baxis\_rerun\_lmp} (RL policies with the \texttt{lmp\_} prefix), and
+\texttt{baxis\_rerun\_p2p}. Every run carries a manifest with
+\texttt{git\_dirty=false} and its \texttt{pricing\_regime}; same-seed repeats
+are bit-identical (verified by per-cell probes, e.g.\ scenario E $\times$ MPC
+$\times$ seed 42 re-run and compared KPI-for-KPI). The
+earlier B-axis matrices (\texttt{matrix\_full}, \texttt{matrix\_p2p},
+\texttt{m52\_benchmark}) and the scenario-D re-run matrices
+(\texttt{matrix\_d\_rerun*} ) predate the 2026-11-12 economics/settlement
+rework and the action-delivery repair; their KPI tables are superseded and
+cited nowhere as numbers (they remain in the artifacts for provenance). A
 further 50-run fallback-mode
 ablation and a 150-cell real-LLM screen (100 LLM-arm and 50 reference cells,
 24 simulated steps) isolate verification machinery from proposer quality, and a
@@ -338,11 +349,15 @@ ablation and a 150-cell real-LLM screen (100 LLM-arm and 50 reference cells,
 engagement. All cost comparisons in this paper are
 therefore within-scenario.
 
-\textbf{Cost basis.} Only scenario D enables community energy sharing, so its
-\texttt{total\_cost} is the community bill including settlement
-($190.81 \pm 0.03$ USD for \agent{rule\_based}), while A/B/C/E report the
-grid-only bill. Cross-scenario cost magnitudes are not comparable; every
-comparison we make is a within-scenario paired delta, which is unaffected.
+\textbf{Cost basis.} On the regime recipes every scenario runs with community
+settlement active, so \texttt{total\_cost} is the community bill including
+settlement in all five scenarios --- there is no grid-only/settlement-inclusive
+split between scenarios. The W5 PV-path repair scales the recorded PV and grid
+energies to the dataset's native hourly resolution (a per-step energy unit the
+earlier tables inflated), and the settlement rework made \texttt{total\_cost}
+the settlement engine's actual community bill; both changes move the absolute
+cost level, and within-scenario paired deltas are the comparison unit
+throughout.
 
 \textbf{Comfort is unmeasurable here.} The stock CityLearn 2022 dataset ships
 the indoor dry-bulb temperature series entirely NaN, so
@@ -363,7 +378,7 @@ Scenario & Device Mix & Stressor \\
 A & Base, no added DERs (stock EVs included) & Coordination baseline \\
 B & + Battery, PV & Tariff exposure \\
 C & + Flexible loads & Deferrable load deadlines \\
-D & D as C + energy sharing & Community settlement (cost basis: settlement-inclusive) \\
+D & D as C + energy sharing & Community settlement (bit-identical to A under the regime recipes) \\
 E & Full + Failures & Mid-run component failures \\
 \bottomrule
 \end{tabular}
@@ -429,19 +444,20 @@ and the scorer are released with the paper's artifacts.
 \subsection{Cost, Peak and Service}
 \label{sec:costpeak}
 
-Figure~\ref{fig:f1} shows KPI bars with 95\% CI. The cost-versus-service Pareto front (Figure~\ref{fig:f3}) places \agent{multi\_agent} at the cost-minimal end and \agent{mpc} at the service-maximal end in every scenario. Table~\ref{tab:deltas} reports paired per-seed deltas vs. \agent{rule\_based} with Holm correction.
+Figure~\ref{fig:f1} shows KPI bars with 95\% CI. The cost-versus-service Pareto front (Figure~\ref{fig:f3}) places \agent{centralized} at the cost-minimal end in scenarios A/C/D/E and \agent{mpc} at the cost-minimal end in scenario B, while \agent{mpc} is service-maximal in A/C/D/E (EV completion $0.997$ in A); in scenario B no controller exceeds $0.39$ completion. Table~\ref{tab:deltas} reports paired per-seed deltas vs. \agent{rule\_based} with Holm correction. On the re-run legs the earlier ``\agent{multi\_agent} is cost-minimal in every scenario'' claim does not hold: its paired cost delta vs.\ \agent{rule\_based} is positive in all five scenarios ($+49.08$ to $+100.01$ USD, all $p_{\mathrm{Holm}} < 0.0001$), a reversal of the pre-repair record whose root cause (its actions never reaching the assets before the action-delivery fix) is documented below.
 
 \textbf{Cost is reported at achieved service, and sub-threshold service is
 marked infeasible.} The controllers do not share an objective or a service
 guarantee (Table~\ref{tab:controllers}): \agent{multi\_agent} and
 \agent{rule\_based} are heuristics with no EV-deadline constraint,
 \agent{centralized} is a full-observability heuristic joint dispatch, and only
-\agent{mpc} and \agent{rl} carry an EV service term. In scenario A,
-\agent{multi\_agent} meets $0.057$ of departure requirements against
-\agent{mpc}'s $1.000$; its cost advantage is therefore a cost advantage at a
-lower service level, and we mark controllers below a full-EV-completion
-threshold as service-infeasible rather than cost-advantaged. No equal-service
-cost comparison is claimed; closing the EV gap under cost parity is open work.
+\agent{mpc} and \agent{rl} carry an EV service term. In scenario A
+\agent{multi\_agent} meets $0.703$ of departure requirements against
+\agent{rule\_based}'s $0.309$ and \agent{mpc}'s $0.997$: it is dominated by
+\agent{centralized} on cost ($-16.14$ USD paired) and by \agent{mpc} on
+service, so we mark controllers below a full-EV-completion threshold as
+service-infeasible rather than cost-advantaged. No equal-service cost
+comparison is claimed; closing the EV gap under cost parity is open work.
 
 \begin{table}[htbp]
 \centering
@@ -464,49 +480,49 @@ rl & tabular Q-learning on SOC/price/time state & device bounds via action discr
 
 \begin{table}[htbp]
 \centering
-\caption{Paired per-seed deltas vs. \agent{rule\_based} (mean $\pm$ 95\% CI half-width; $n{=}10$ seeds; Holm within each scenario over the four controller comparisons). Scenario D is settlement-inclusive and A/B/C/E grid-only; comparisons are within-scenario (Section~\ref{sec:setup}). Cost deltas must be read together with service feasibility (Table~\ref{tab:controllers}, Section~\ref{sec:service}).}
+\caption{Paired per-seed deltas vs. \agent{rule\_based} (mean $\pm$ 95\% CI half-width; $n{=}10$ seeds; Holm within each scenario over the four controller comparisons). Pool-TOU regime; every scenario runs with community settlement active, so all rows are settlement-inclusive; comparisons are within-scenario (Section~\ref{sec:setup}). Rows D and A are bit-identical per seed (the regime applies the same sharing configuration to both); they are shown separately for the scenario grid. Cost deltas must be read together with service feasibility (Table~\ref{tab:controllers}, Section~\ref{sec:service}).}
 \label{tab:deltas}
 \begin{tabular}{llrrr}
 \toprule
 Scenario & Controller & $\Delta$ cost (USD) & $\Delta$ peak (kW) & $p_{\mathrm{Holm}}$ \\
 \midrule
-A & multi\_agent & $-18.11 \pm 0.03$ & $-16.59 \pm 0.00$ & $< 0.0001$ \\
-A & centralized & $-5.26 \pm 0.22$ & $+1.43 \pm 0.00$ & $< 0.0001$ \\
-A & mpc & $+69.60 \pm 8.54$ & $+29.44 \pm 0.00$ & $< 0.0001$ \\
-A & rl & $+110.09 \pm 8.41$ & $+49.28 \pm 3.37$ & $< 0.0001$ \\
-B & multi\_agent & $-43.03 \pm 1.45$ & $-25.68 \pm 0.00$ & $< 0.0001$ \\
-B & centralized & $-2.06 \pm 0.62$ & $-4.71 \pm 1.41$ & $< 0.0001$ \\
-B & mpc & $+16.35 \pm 2.66$ & $-18.73 \pm 0.00$ & $< 0.0001$ \\
-B & rl & $+34.41 \pm 2.14$ & $+10.10 \pm 0.42$ & $< 0.0001$ \\
-C & multi\_agent & $-11.95 \pm 0.04$ & $-16.59 \pm 0.00$ & $< 0.0001$ \\
-C & centralized & $-3.68 \pm 0.16$ & $+1.20 \pm 0.00$ & $< 0.0001$ \\
-C & mpc & $+68.03 \pm 8.33$ & $+29.44 \pm 0.00$ & $< 0.0001$ \\
-C & rl & $+52.69 \pm 3.06$ & $+12.83 \pm 1.47$ & $< 0.0001$ \\
-D & multi\_agent & $-78.56 \pm 0.03$ & $-16.59 \pm 0.00$ & $< 0.0001$ \\
-D & centralized & $+3.99 \pm 0.24$ & $+1.43 \pm 0.00$ & $< 0.0001$ \\
-D & mpc & $+242.63 \pm 18.93$ & $+29.44 \pm 0.00$ & $< 0.0001$ \\
-D & rl & $+374.34 \pm 14.41$ & $+49.28 \pm 3.37$ & $< 0.0001$ \\
-E & multi\_agent & $-17.46 \pm 0.03$ & $-17.26 \pm 0.00$ & $< 0.0001$ \\
-E & centralized & $-5.06 \pm 0.22$ & $+1.43 \pm 0.00$ & $< 0.0001$ \\
-E & mpc & $+68.18 \pm 8.48$ & $+29.44 \pm 0.00$ & $< 0.0001$ \\
-E & rl & $+108.45 \pm 8.09$ & $+49.28 \pm 3.37$ & $< 0.0001$ \\
+A & multi\_agent & $+83.52 \pm 11.57$ & $+6.57 \pm 3.57$ & $< 0.0001$ \\
+A & centralized & $-16.14 \pm 7.65$ & $-3.32 \pm 2.43$ & $0.0010$ \\
+A & mpc & $+179.26 \pm 18.54$ & $+28.54 \pm 1.34$ & $< 0.0001$ \\
+A & rl & $+284.32 \pm 21.59$ & $+51.93 \pm 5.64$ & $< 0.0001$ \\
+B & multi\_agent & $+49.08 \pm 3.03$ & $+1.60 \pm 1.48$ & $< 0.0001$ \\
+B & centralized & $-22.13 \pm 0.97$ & $-1.91 \pm 1.00$ & $< 0.0001$ \\
+B & mpc & $-35.50 \pm 2.50$ & $-16.01 \pm 1.01$ & $< 0.0001$ \\
+B & rl & $+73.22 \pm 2.42$ & $+12.88 \pm 1.22$ & $< 0.0001$ \\
+C & multi\_agent & $+100.01 \pm 15.71$ & $+8.19 \pm 3.42$ & $< 0.0001$ \\
+C & centralized & $-9.12 \pm 9.26$ & $-3.79 \pm 2.27$ & $0.0529$ \\
+C & mpc & $+197.35 \pm 15.68$ & $+29.45 \pm 0.75$ & $< 0.0001$ \\
+C & rl & $+123.98 \pm 10.39$ & $+17.09 \pm 1.27$ & $< 0.0001$ \\
+D & multi\_agent & $+83.52 \pm 11.57$ & $+6.57 \pm 3.57$ & $< 0.0001$ \\
+D & centralized & $-16.14 \pm 7.65$ & $-3.32 \pm 2.43$ & $0.0010$ \\
+D & mpc & $+179.26 \pm 18.54$ & $+28.54 \pm 1.34$ & $< 0.0001$ \\
+D & rl & $+284.32 \pm 21.59$ & $+51.93 \pm 5.64$ & $< 0.0001$ \\
+E & multi\_agent & $+86.11 \pm 11.17$ & $+5.33 \pm 3.03$ & $< 0.0001$ \\
+E & centralized & $-16.03 \pm 7.65$ & $-3.32 \pm 2.43$ & $0.0011$ \\
+E & mpc & $+179.28 \pm 18.54$ & $+28.54 \pm 1.34$ & $< 0.0001$ \\
+E & rl & $+284.34 \pm 21.58$ & $+51.93 \pm 5.64$ & $< 0.0001$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{table}[htbp]
 \centering
-\caption{Scenario D KPI comparison (pool TOU, re-run basis, $n{=}10$). Total cost is the community bill including settlement.}
+\caption{Scenario D KPI comparison (pool TOU regime, $n{=}10$, re-run leg of record \texttt{baxis\_rerun\_pooltou}). Total cost is the community bill including settlement. Under the regime recipe D's community runs the same settlement configuration as A, so D's rows are bit-identical to A's at equal seed. The RL row falls back to the rule-based policy for 2--9 of 168 steps per scenario (1.2--5.4\%; the RL fallback disclosure below).}
 \label{tab:d-kpis}
 \begin{tabular}{lccc}
 \toprule
 Controller & Total cost (USD) & Peak demand (kW) & EV completion \\
 \midrule
-rule\_based & $190.81 \pm 0.03$ & $29.62 \pm 0.00$ & $0.154 \pm 0.062$ \\
-multi\_agent & $112.26 \pm 0.00$ & $13.03 \pm 0.00$ & $0.057 \pm 0.039$ \\
-centralized & $194.80 \pm 0.25$ & $31.05 \pm 0.00$ & $0.160 \pm 0.065$ \\
-mpc & $433.44 \pm 18.93$ & $59.06 \pm 0.00$ & $1.000 \pm 0.000$ \\
-rl & $565.15 \pm 14.41$ & $78.90 \pm 3.37$ & $0.977 \pm 0.021$ \\
+rule\_based & $191.96 \pm 13.83$ & $26.75 \pm 1.34$ & $0.309 \pm 0.075$ \\
+multi\_agent & $275.48 \pm 14.20$ & $33.32 \pm 4.19$ & $0.703 \pm 0.065$ \\
+centralized & $175.83 \pm 13.04$ & $23.43 \pm 3.56$ & $0.326 \pm 0.077$ \\
+mpc & $371.22 \pm 15.18$ & $55.30 \pm 0.04$ & $0.997 \pm 0.006$ \\
+rl & $476.28 \pm 14.34$ & $78.68 \pm 5.63$ & $0.931 \pm 0.011$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -537,61 +553,73 @@ rl & $565.15 \pm 14.41$ & $78.90 \pm 3.37$ & $0.977 \pm 0.021$ \\
 \label{fig:f3}
 \end{figure}
 
-\textbf{The service trade-off, stated explicitly.} \agent{multi\_agent} is
-cost-minimal (e.g.\ $22.39 \pm 0.00$ vs.\ rule-based $40.49 \pm 0.03$ USD in
-scenario~A) but completes only $0.057$ of EV departure requirements, against
-$0.154$ for rule-based and $1.000$ for MPC. Under the paper's service-aware
-objective this is a defect, not a win: the controller buys cost and peak
-reductions ($-16.59$ kW) by under-charging EVs. We therefore report cost,
-peak, and EV completion as jointly necessary, and treat closing the EV gap
-under cost parity as open work rather than an achieved property. With restored
-PV, several scenario~C configurations are net exporters and their total cost is
-negative (export credit exceeding import cost); negative totals are flagged as
-export-credit, not as profit.
+\textbf{The service trade-off, stated explicitly.} On the re-run legs
+\agent{centralized} is cheapest in A/C/D/E ($175.83$, $159.65$, $175.83$,
+$175.91$ USD mean; paired deltas $-16.14$, $-9.12$, $-16.14$, $-16.03$ vs.\
+\agent{rule\_based}, Holm $0.0010$/$0.0529$/$0.0010$/$0.0011$ --- C's is not
+significant at 95\%) and \agent{mpc} cheapest in B ($222.74$ USD, paired
+$-35.50 \pm 2.50$). \agent{multi\_agent} is third in A/C/D/E and fourth in B
+($+49.08$ to $+100.01$ USD paired, all $p_{\mathrm{Holm}} < 0.0001$) and
+completes $0.703$ (A), $0.391$ (B), $0.714$ (C) of EV departure requirements
+against \agent{mpc}'s $0.997$/$0.107$/$0.991$: neither cost-minimal nor
+service-maximal, reported at that measured level. The RL arm is the most
+expensive controller in every scenario ($476.28$, $331.47$, $292.75$,
+$476.28$, $476.28$ USD) and its tabular policy is out of its observation
+coverage in every scenario, falling back to rule-based for 2--9 of 168 steps
+(1.2--5.4\%; the RL fallback disclosure below) so the RL rows are not read as
+pure-policy results. Scenario C remains a net energy exporter under the
+repaired PV path (grid export 245--253 vs.\ import 138--148 kWh per run), but
+no cell's total cost is negative, so no export-credit flagging applies.
 
-\textbf{Scenario D on the re-run basis.} Scenario D's rows use the re-run basis,
-on which \texttt{total\_cost} is the settlement engine's actual community bill
-when sharing is enabled; D diverges from A at all ten seeds on that basis. The
-physics --- grid exchange, PV, peak --- is unchanged between the two bases;
-only the cost basis moved, from grid-only to community-bill-including-settlement.
-A per-run accounting invariant (internal P2P payments sum to zero; community
-aggregate cost equals the external grid bill plus explicit community trades) is
-asserted by regression tests, so D's aggregate movement is a property of the
-settlement-inclusive basis, not an accounting defect.
+\textbf{Scenario D on the re-run basis.} D's rows come from the full pool-TOU
+re-run leg (\texttt{baxis\_rerun\_pooltou}), on which \texttt{total\_cost} is
+the settlement engine's actual community bill with sharing enabled --- as in
+all five scenarios, because the regime override enables energy sharing
+community-wide. D's distinguishing file flag (sharing enabled) therefore
+coincides with the regime default and its runs are bit-identical to A's at
+equal seed ($175.83$ vs.\ $175.83$ USD mean); the D rows are retained for the
+scenario grid and the LMP/P2P pairings, not as a distinct economics case. The
+physics --- grid exchange, PV, peak --- is unchanged between the pre- and
+post-repair records; what moved is the cost basis (grid-only $\to$
+community-bill-including-settlement), the PV-path energy scaling (the pre-W5
+illusory path), and \agent{multi\_agent}'s action delivery. A per-run
+accounting invariant (internal P2P payments sum to zero; community aggregate
+cost equals the external grid bill plus explicit community trades) is asserted
+by regression tests, so the aggregate movement is a property of the repaired
+basis, not an accounting defect.
 
 \subsection{LMP-Regime Benchmark}
 \label{sec:lmp}
 
 250 runs under \texttt{lmp} pricing (5 controllers $\times$ 5 scenarios $\times$
-10 seeds; scenario D on the re-run, settlement-inclusive basis). The central
-finding is a \emph{price-awareness split}: only the two price-aware controllers
-change dispatch when the regime changes. MPC's cost rises from $110.09 \pm 8.54$
-USD (TOU) to $168.47 \pm 10.69$ (LMP) in scenario~A and its EV completion drops
-($1.000 \to 0.966$), and RL's arm shifts similarly ($150.58 \to 106.22$ in
-scenario~A), while rule-based, multi-agent, and centralized --- none of which
-condition on prices --- produce identical dispatch under both regimes (e.g.\
-multi\_agent $22.39 \pm 0.00$ in both). Ranking within a regime is unchanged:
-\agent{multi\_agent} cost-minimal (all $p_{\mathrm{Holm}} < 0.0001$),
-\agent{centralized} close to \agent{rule\_based}.
+10 seeds, re-run leg of record \texttt{baxis\_rerun\_lmp} with
+\texttt{lmp\_}-prefixed RL policies; settlement active in every scenario). The
+central finding is a \emph{price-awareness split}: only the two price-aware
+controllers change dispatch when the regime changes. In scenario A the three
+price-insensitive controllers reproduce identical dispatch under TOU and LMP
+(10/10 paired seeds, per-step action hashes equal), while MPC and RL change
+dispatch at 0/10 seeds. Costs move opposite to the pre-repair record: MPC's
+cost falls from $371.22 \pm 15.18$ USD (TOU) to $309.10 \pm 1.99$ (LMP) with EV
+completion $0.997 \to 0.629$, and RL from $476.28 \pm 14.34$ to
+$325.49 \pm 8.49$ with $0.931 \to 0.660$; the price-insensitive controllers
+also bill differently under LMP ($-8.54$, $-25.91$, $-10.68$ USD for
+rule-based, multi-agent and centralized in A). The regime switch re-bills and
+re-dispatches the price-aware arms without reordering the field:
+\agent{centralized} stays cost-minimal in A/C/D/E and \agent{mpc} in B.
 
 \textbf{Dispatch sensitivity is not billing sensitivity.} Cost is a function of
 prices on a fixed trajectory, so identical dispatch across regimes does not
-imply identical cost. We separate the two: dispatch sensitivity is the
-per-step action comparison above (identical for the price-insensitive
-controllers, different for MPC/RL); billing sensitivity is a property of the
-billed series. A billing-identity test prices one fixed trajectory under the
-TOU and LMP series and asserts the bills differ (84.43 vs.\ 79.04 USD in the
-test configuration), and a companion test asserts the LMP series enters billing
-for every building. In the landed matrix, A/B/C/E costs are unchanged across
-all three regimes for the price-insensitive controllers (200 paired cells,
-zero differing): those scenarios run without community settlement, so the
-billed series does not change with the regime --- a property of the billing
-configuration in these builds, not a consequence of dispatch identity.
-Scenario D, where settlement and dynamic pricing are active, does bill the LMP
-series, and its regime rows are cited from the dedicated re-run matrices (all
-three matrix legs --- pool TOU, LMP, and P2P --- still carry D's pre-re-run
-rows in their D blocks): e.g.\ rule\_based
-190.81 USD (TOU) vs.\ 165.03 (LMP) on the settlement-inclusive basis.
+imply identical cost. In the landed matrix the LMP series enters billing in
+every scenario, because community settlement --- and its dynamic pricing ---
+is active community-wide: the price-insensitive controllers' costs change
+across regimes despite identical dispatch (e.g.\ scenario A rule-based
+$191.96 \to 183.42$ USD; 300 of 300 paired price-insensitive cells bill
+differently across the three regimes --- 150 vs.\ LMP, 150 vs.\ P2P --- zero
+bit-identical). A billing-identity test prices one fixed trajectory under the
+TOU and LMP series and asserts the bills differ, and a companion test asserts
+the LMP series enters billing for every building; the landed matrix shows the
+same separation at full-episode scale, so the regime comparison is read as two
+independent measurements, not as one.
 
 \textbf{LMP construction, stated as built.} ``LMP'' here is not a network-dual
 locational marginal price from the co-simulation power flow. In our builds the
@@ -604,62 +632,66 @@ the name is used in that sense throughout.
 
 \begin{table}[htbp]
 \centering
-\caption{Scenario D under LMP (re-run basis, $n{=}10$; settlement-inclusive). Rows cited from the dedicated scenario-D re-run matrices (\texttt{matrix\_d\_rerun}, \texttt{matrix\_d\_rerun\_lmp}).}
+\caption{Scenario D under LMP ($n{=}10$; settlement-inclusive, re-run leg of record \texttt{baxis\_rerun\_lmp} with \texttt{lmp\_}-prefixed RL policies).}
 \label{tab:d-lmp}
 \begin{tabular}{lccccc}
 \toprule
 Controller & Cost TOU (USD) & Cost LMP (USD) & $\Delta$ & EV TOU & EV LMP \\
 \midrule
-rule\_based & $190.81 \pm 0.03$ & $165.03 \pm 0.00$ & $-25.79$ & 0.154 & 0.154 \\
-multi\_agent & $112.26 \pm 0.00$ & $94.32 \pm 0.00$ & $-17.94$ & 0.057 & 0.057 \\
-centralized & $194.80 \pm 0.25$ & $173.31 \pm 0.00$ & $-21.49$ & 0.160 & 0.160 \\
-mpc & $433.44 \pm 18.93$ & $424.17 \pm 9.03$ & $-9.27$ & 1.000 & 0.971 \\
-rl & $565.15 \pm 14.41$ & $310.29 \pm 8.23$ & $-254.86$ & 0.977 & 0.411 \\
+rule\_based & $191.96 \pm 13.83$ & $183.42 \pm 11.12$ & $-8.54$ & 0.309 & 0.309 \\
+multi\_agent & $275.48 \pm 14.20$ & $249.58 \pm 12.00$ & $-25.91$ & 0.703 & 0.703 \\
+centralized & $175.83 \pm 13.04$ & $165.15 \pm 12.32$ & $-10.68$ & 0.326 & 0.326 \\
+mpc & $371.22 \pm 15.18$ & $309.10 \pm 1.99$ & $-62.12$ & 0.997 & 0.629 \\
+rl & $476.28 \pm 14.34$ & $325.49 \pm 8.49$ & $-150.79$ & 0.931 & 0.660 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{P2P Regime: Bilateral Clearing Redistributes, Aggregates Unchanged (A/B/C/E)}
+\textbf{RL fallback disclosure.} The tabular RL policy covers 138-state
+observations; on an unseen state the controller falls back to the rule-based
+policy for that step, so the RL rows are not pure-policy results. Per-scenario
+fallback counts over the 168-step episode (identical in all regimes): A/D/E
+3--4 steps (max 2.4\%), B 2 (1.2\%), C 9 (5.4\%); the fallback reason is
+recorded per cell in the run record.
+
+\subsection{P2P Regime: Bilateral Clearing Moves Aggregates and Redistributes (A/B/C/E)}
 \label{sec:p2p}
 
 250 runs under \texttt{p2p} pricing (bilateral double-auction clearing with
-uniform residual price, same grid as Section~\ref{sec:setup}). Paired against
-the pool-TOU matrix at identical (scenario, controller, seed), the A/B/C/E
-community aggregates are \emph{bit-identical}: $\Delta$ cost, $\Delta$ peak,
-and $\Delta$ EV completion are exactly zero across the 200 paired runs (4
-scenarios $\times$ 5 controllers $\times$ 10 seeds; no controller excluded), while
-bilateral trades clear in every run (mean community volume 347.2 kWh, max
-563.1, no zero-volume runs). This cost-transparency is by construction: trades
-reallocate energy between members before power flow, leaving the residual grid
-exchange unchanged.
+uniform residual price, same grid as Section~\ref{sec:setup}), paired against
+the pool-TOU leg at identical (scenario, controller, seed). Dispatch is
+identical under bilateral clearing for every controller (250/250 paired
+per-step action hashes equal --- the P2P market type does not change the
+tariff series the controllers condition on), and trades clear in every run
+(community volume 53.9--139.2 kWh, mean 87.4, no zero-volume runs). The
+community aggregate, however, is \emph{not} bit-identical to pool clearing on
+these legs: paired aggregate cost moves in every cell (0/250 identical),
+$+4.36 \pm 0.90$ to $+8.14 \pm 4.13$ USD in scenario A depending on
+controller, $+4.55$ to $+15.22$ in B, and $-0.96$ to $-50.63$ in C (the
+net-exporter scenario, where bilateral clearing lowers the bill), with D
+bit-identical to A and E close to A. The pre-repair record's
+``aggregates bit-identical, member bills redistribute'' split does not
+survive the re-run: with settlement active in every scenario, the bilateral
+layer changes both the aggregate and the member bills.
 
-The effect is at the member level. Per-member bills shift significantly under
-P2P (paired, $n{=}40$ runs per member): building\_2 pays $7.60 \pm 1.83$ USD
-less, while building\_1 ($-5.64 \pm 1.97$), building\_3 ($-7.17 \pm 1.16$), and
-building\_4 ($-2.37 \pm 2.04$) pay more; building\_0's change is not
-significant ($+1.92 \pm 4.60$). Aggregate savings vs.\ baseline are
-statistically indistinguishable from pool clearing ($-5.66 \pm 10.09$ USD,
-paired $p{=}0.26$). The fairness coefficient as computed is invariant ($0.0926$
-in both arms, zero paired variance), which exposes a measurement gap: the
-current Gini input does not reflect settlement redistribution. We therefore
-report RQ3 as \emph{redistribution without aggregate benefit} under the tested
-regime for A/B/C/E, and defer inequality claims until a settlement-aware
-fairness metric is defined.
-
-\textbf{Scenario D is the exception.} Because community settlement is already
-active in D, bilateral clearing adds a second redistribution layer on top of it
-and the aggregate moves as well (paired, $n{=}10$; rows cited from the
-dedicated scenario-D re-run matrices): rule\_based $+9.58 \pm
-0.91$ USD, multi\_agent $-24.10 \pm 0.00$, centralized $+12.08 \pm 1.04$, mpc
-$+29.06 \pm 4.63$, rl $+34.02 \pm 0.91$, with peak and EV completion exactly
-unchanged and community volume 252--520 kWh. The ``aggregates bit-identical''
-claim is therefore scoped to A/B/C/E; D is genuinely divergent under P2P on
-the settlement-inclusive basis. The mechanism is not double counting: the
-second settlement layer redistributes member bills (internal payments sum to
-zero, asserted by a regression test), and the aggregate moves only through the
-real grid-cost change from energy sharing --- the community aggregate equals
-the external grid bill plus explicit community trades under the accounting
-invariant.
+Per-member all-in bills shift as well (paired, $n{=}40$ runs per member over
+A/B/C/E $\times$ 10 seeds): building\_2 pays $2.64 \pm 0.53$ USD less
+($p < 0.0001$), while building\_1 ($+1.73 \pm 0.47$), building\_3
+($+1.59 \pm 0.42$) and building\_4 ($+0.78 \pm 0.26$) pay more (all
+$p < 0.0001$); building\_0's change is not significant ($-0.12 \pm 0.79$,
+$p{=}0.77$). The all-in-bill Gini shifts by $+0.0139$ (A, rule-based) to
+$+0.0291$ (C, multi-agent), so bilateral clearing mildly concentrates the
+residual bill; we therefore report RQ3 as \emph{aggregate movement plus
+redistribution} under the tested regime, and defer stronger inequality claims
+until a settlement-aware fairness metric is defined. Scenario D is no longer
+the exception: settlement is active in every scenario on the regime recipes,
+so bilateral clearing layers on the same configuration everywhere and D
+behaves exactly like A (bit-identical per seed, as in the pool-TOU leg). The
+mechanism is not double counting: the settlement layer redistributes member
+bills (internal payments sum to zero, asserted by a regression test), and the
+aggregate moves only through the real grid-cost change from energy sharing
+--- the community aggregate equals the external grid bill plus explicit
+community trades under the accounting invariant.
 
 \subsection{Scenario E: Failure Injection}
 \label{sec:scenarioe}
@@ -910,13 +942,14 @@ Community exchange limits & import/export kW limits & reported \\
 \textbf{Thermal comfort is unmeasurable on this dataset.} The stock CityLearn
 2022 dataset ships indoor dry-bulb temperature (and the other comfort series)
 entirely NaN, so the band check cannot accumulate a violation and
-\texttt{comfort\_violation\_degree\_hours} is $0.0$ in all 250 B-axis runs, with
+\texttt{comfort\_violation\_degree\_hours} is $0.0$ in all 750 matrix runs, with
 min $=$ max $= 0.0$ across every scenario-controller cell. That is a
 data-availability result, not comfort satisfaction: the paper makes no comfort
 claim, and any future comfort statement requires a dataset with real indoor
 temperature or a building thermal model. EV service, by contrast, is fully
-reported: \agent{multi\_agent} completes $0.057$ of departure requirements
-against $0.154$ for rule-based and $1.000$ for MPC (Table~\ref{tab:d-kpis}).
+reported: in scenario A \agent{multi\_agent} completes $0.703$ of departure
+requirements against \agent{rule\_based}'s $0.309$ and \agent{mpc}'s $0.997$
+(Table~\ref{tab:d-kpis}); in scenario B no controller exceeds $0.39$.
 
 \textbf{Failure-injection results (scenario E).} Across all 150 scenario-E runs
 (3 regimes $\times$ 5 controllers $\times$ 10 seeds) the injected failures ---
@@ -1000,7 +1033,7 @@ grid-limit reductions, component failures. Attacks limited to failure-injection 
 \label{sec:limitations}
 \begin{enumerate}
     \item \textbf{Thermal comfort is unmeasurable}: the stock dataset's indoor-temperature series is all-NaN, so \texttt{comfort\_violation\_degree\_hours} $= 0.0$ everywhere and no comfort claim is made (Section~\ref{sec:service}).
-    \item \textbf{Cost basis differs by scenario}: scenario D is settlement-inclusive, A/B/C/E grid-only; all cost comparisons are within-scenario and labelled.
+    \item \textbf{Cost basis is settlement-inclusive in every scenario} on the regime recipes, and the pre-repair rows are superseded: a 2026-11-12 economics/settlement rework plus the W5 PV-path repair moved the absolute cost level, and the action-delivery repair (which flipped multi-agent's paired cost delta from negative to positive) means the legacy B-axis tables are not comparable; all cost comparisons are within-scenario paired deltas and labelled.
     \item \textbf{Synthetic traces}: Load/PV profiles depend only on (seed, filename); scenario effects are device-mix effects.
     \item \textbf{Controller scope}: RL is evaluated per regime with the regime-matching policy; LMP policies are trained separately.
     \item \textbf{LLM proposer}: the screens use a single hosted model (\texttt{poolside/laguna-xs-2.1} on NVIDIA NIM) at temperature 0 on a 24-step horizon; the model and provider are named under the user's approved disclosure and manifests retain full provenance. The M2a null and the M2b results are specific to this model--prompt--horizon combination.
@@ -1133,6 +1166,13 @@ backend-error-degraded, first-attempt validity 0.958), left out of the 99
 usable LLM-arm runs and reported here for completeness.
 
 \bibliographystyle{plainnat}
+\let\origthebibliography\thebibliography
+\let\endorigthebibliography\endthebibliography
+\renewenvironment{thebibliography}[1]{%
+  \begin{small}\begin{origthebibliography}{#1}%
+}{%
+  \end{origthebibliography}\end{small}%
+}
 \bibliography{references}
 
 \end{document}

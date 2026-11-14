@@ -1,0 +1,23 @@
+{
+  "run_id": "scenario_b_centralized_42",
+  "scenario_id": "scenario_b",
+  "controller": {
+    "type": "centralized",
+    "approach": "joint_optimization"
+  },
+  "random_seed": 42,
+  "scenario_config_sha256": "128012cd881662cfc11001f9fc111d4c34a6f247ff1869c9abfa21abba12a097",
+  "git_commit": "05a925219463c46618cdd5db8e473383edfc65d4",
+  "git_dirty": false,
+  "python": "3.13.5",
+  "packages": {
+    "citylearn": "3.0.2",
+    "pandapower": "3.5.6",
+    "numpy": "2.4.6",
+    "pandas": "2.3.3"
+  },
+  "timestep_minutes": 15,
+  "history_steps": 168,
+  "pricing_regime": "lmp",
+  "cost_basis": "lmp"
+}

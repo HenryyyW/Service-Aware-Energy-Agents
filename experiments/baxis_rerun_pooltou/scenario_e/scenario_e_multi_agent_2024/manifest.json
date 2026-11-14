@@ -1,0 +1,23 @@
+{
+  "run_id": "scenario_e_multi_agent_2024",
+  "scenario_id": "scenario_e",
+  "controller": {
+    "type": "multi_agent",
+    "workflow": "planner_coder_executor_verifier_reporter"
+  },
+  "random_seed": 2024,
+  "scenario_config_sha256": "5b061c8251cd8de9aac4357c4b66abc8518a49968a42cee5196a6a26b94c8d17",
+  "git_commit": "9763bd7b0e5ff9917bc633734c0f3ecc802ec76b",
+  "git_dirty": false,
+  "python": "3.13.5",
+  "packages": {
+    "citylearn": "3.0.2",
+    "pandapower": "3.5.6",
+    "numpy": "2.4.6",
+    "pandas": "2.3.3"
+  },
+  "timestep_minutes": 15,
+  "history_steps": 168,
+  "pricing_regime": "pool_tou",
+  "cost_basis": "tariff"
+}

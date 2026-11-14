@@ -1,0 +1,22 @@
+{
+  "run_id": "scenario_d_rule_based_1234",
+  "scenario_id": "scenario_d",
+  "controller": {
+    "type": "rule_based"
+  },
+  "random_seed": 1234,
+  "scenario_config_sha256": "43c122a078868670ef6f077b7d1ccce356594a8c9ce448e3d8a784116dcad032",
+  "git_commit": "05a925219463c46618cdd5db8e473383edfc65d4",
+  "git_dirty": false,
+  "python": "3.13.5",
+  "packages": {
+    "citylearn": "3.0.2",
+    "pandapower": "3.5.6",
+    "numpy": "2.4.6",
+    "pandas": "2.3.3"
+  },
+  "timestep_minutes": 15,
+  "history_steps": 168,
+  "pricing_regime": "lmp",
+  "cost_basis": "lmp"
+}

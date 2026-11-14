@@ -1,0 +1,25 @@
+{
+  "run_id": "scenario_d_rl_1234",
+  "scenario_id": "scenario_d",
+  "controller": {
+    "type": "rl_single",
+    "algorithm": "tabular_q_learning",
+    "policy_path": "experiments/reference/rl_policy/scenario_d.json",
+    "unseen_states": 3
+  },
+  "random_seed": 1234,
+  "scenario_config_sha256": "c9ff2ed019314e9132cb62a26048f2445f947cee60f711af3c3a1c18b3e2e0fa",
+  "git_commit": "9763bd7b0e5ff9917bc633734c0f3ecc802ec76b",
+  "git_dirty": false,
+  "python": "3.13.5",
+  "packages": {
+    "citylearn": "3.0.2",
+    "pandapower": "3.5.6",
+    "numpy": "2.4.6",
+    "pandas": "2.3.3"
+  },
+  "timestep_minutes": 15,
+  "history_steps": 168,
+  "pricing_regime": "pool_tou",
+  "cost_basis": "tariff"
+}
