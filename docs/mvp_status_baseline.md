@@ -334,3 +334,18 @@ manifests/raw_results were committed under `experiments/` (the Partner's own
 untrack the three legs (keep on disk for verification), .gitignore them, keep
 the script + summary + note + paper in git, document the traceability path.
 Content itself needs no change.
+
+## Paper rebuild: COMPLETE and green (2026-11-14, main 3171de289)
+
+Research 2's rebuild is verified and pushed; CI and the full CI/CD pipeline
+are green on the head. The three B-axis legs are rebuilt on scripted,
+traceable data (`docs/baxis_table_rebuild.py` -> `docs/baxis_rebuild/`; the
+750 raw runs stay on the experiment machine per the repo's artifact-hygiene
+rule, with their baseline/regime provenance recorded in `summary.json`).
+
+Paper state now matches the final code: multi_agent's paired cost delta is
+positive in all five scenarios (+49.08 to +100.01 USD, p_Holm < 0.0001,
+settlement-inclusive), the "cost-minimal in every scenario" claim is
+replaced, centralized is cost-minimal in A/C/D/E and mpc in B, the RL
+fallback share (2-9/168 steps) is disclosed, and M2a/M2b remain published
+records. PDF: 21 pages.
