@@ -10,6 +10,8 @@ vi.mock('@/api/client', () => ({
     getRuns: vi.fn(),
     getScenario: vi.fn(),
     getTrajectories: vi.fn(),
+    getNetworkGeometry: vi.fn(),
+    getAssetMetadata: vi.fn(),
   },
   wsManager: { on: vi.fn(), off: vi.fn(), send: vi.fn(), disconnect: vi.fn() },
 }))
@@ -80,6 +82,14 @@ describe('CommunityCanvasPage', () => {
     mockApi.getRuns.mockResolvedValue([run])
     mockApi.getScenario.mockResolvedValue(scenario)
     mockApi.getTrajectories.mockResolvedValue(trajectories)
+    mockApi.getNetworkGeometry.mockResolvedValue({
+      coordinate_system: 'geographic',
+      buses: { '0': { bus_idx: 0, name: 'bus_0', lat: 40, lon: -105 } },
+      lines: [],
+      transformers: [],
+      bounds: { min_lon: -105.1, max_lon: -104.9, min_lat: 39.9, max_lat: 40.1 },
+    } as any)
+    mockApi.getAssetMetadata.mockResolvedValue({ pv: [], batteries: [], evs: [] } as any)
     render(
       <MemoryRouter>
         <CommunityCanvasPage />
@@ -88,7 +98,8 @@ describe('CommunityCanvasPage', () => {
     // Run-based data path: load scenario + trajectories for the run
     await waitFor(() => expect(mockApi.getScenario).toHaveBeenCalledWith('scenario_a'))
     await waitFor(() => expect(mockApi.getTrajectories).toHaveBeenCalledWith('run_abc'))
-    // Not in the empty state
-    expect(screen.queryByText(/no community data/i)).not.toBeInTheDocument()
+    // Canvas exits loading once run + scenario + trajectories + geometry ready,
+    // and paints buildings instead of the empty state.
+    await waitFor(() => expect(screen.queryByText(/no community data/i)).not.toBeInTheDocument())
   })
 })

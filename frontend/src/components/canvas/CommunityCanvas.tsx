@@ -48,6 +48,7 @@ export function CommunityCanvas(_props: CommunityCanvasProps) {
   const {
     buildingIds,
     currentRun,
+    trajectories,
     timePlayer,
   } = useSimulationStore();
 
@@ -201,12 +202,28 @@ export function CommunityCanvas(_props: CommunityCanvasProps) {
     return currentStepData?.grid_diagnostics;
   }, [currentStepData]);
 
-  // Transition out of loading when there's no run to load from
+  // Transition out of loading once the run, its scenario config, its
+  // trajectories and the network geometry have all loaded. With no run at all
+  // we keep the empty state instead of a loading spinner.
   useEffect(() => {
-    if (!currentRun?.scenario_id && isLoading) {
+    const hasRun = Boolean(currentRun?.scenario_id);
+    const ready =
+      hasRun &&
+      Boolean(currentScenario) &&
+      trajectories.length > 0 &&
+      Boolean(sourceNetworkGeometry);
+    if (ready) {
+      setIsLoading(false);
+    } else if (!hasRun && isLoading) {
       setIsLoading(false);
     }
-  }, [currentRun?.scenario_id, isLoading]);
+  }, [
+    currentRun?.scenario_id,
+    currentScenario,
+    trajectories,
+    sourceNetworkGeometry,
+    isLoading,
+  ]);
 
   const violations = useMemo(() => {
     if (!gridDiagnostics || !networkGeometry) return [];

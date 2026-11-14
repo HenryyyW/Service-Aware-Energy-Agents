@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSimulationStore } from '../store/simulationStore';
 import { useScenarioStore } from '../store/scenarioStore';
+import { useCanvasStore } from '../store/canvasStore';
 import { api, wsManager } from '../api/client';
 import { CommunityCanvas } from '../components/canvas/CommunityCanvas';
 import { ToastProvider } from '@/components/ui/Toast'
@@ -12,6 +13,7 @@ import { devError } from '../utils/devLog';
 function CommunityCanvasPageContent() {
   const { setRuns, setCurrentRun, setTrajectories, runs } = useSimulationStore();
   const setCurrentScenario = useScenarioStore((s) => s.setCurrentScenario);
+  const { fetchNetworkGeometry, fetchAssetMetadata } = useCanvasStore();
   const { addToast } = useToast();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -34,7 +36,8 @@ function CommunityCanvasPageContent() {
         if (runsData.length > 0) {
           const run = runsData[0];
           setCurrentRun(run);
-          // Scenario config for this run (building locations / network geometry)
+          // Scenario config + network geometry + asset metadata for this run,
+          // all needed before the canvas can paint buildings.
           try {
             const scenario = await api.getScenario(run.scenario_id);
             if (active) setCurrentScenario(scenario);
@@ -45,6 +48,14 @@ function CommunityCanvasPageContent() {
             }
             return;
           }
+          void (async () => {
+            try {
+              await fetchNetworkGeometry(run.scenario_id);
+              await fetchAssetMetadata(run.scenario_id);
+            } catch (geoError) {
+              devError('Failed to load network geometry / asset metadata:', geoError);
+            }
+          })();
           // Trajectories for this run
           try {
             const trajectories = await api.getTrajectories(run.run_id);
@@ -82,7 +93,15 @@ function CommunityCanvasPageContent() {
       active = false;
       wsManager.disconnect();
     };
-  }, [setRuns, setCurrentRun, setTrajectories, setCurrentScenario, addToast]);
+  }, [
+    setRuns,
+    setCurrentRun,
+    setTrajectories,
+    setCurrentScenario,
+    fetchNetworkGeometry,
+    fetchAssetMetadata,
+    addToast,
+  ]);
 
   if (loading) {
     return (

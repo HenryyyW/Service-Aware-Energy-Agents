@@ -384,8 +384,14 @@ async def _run_simulation_background(
         # Persist trajectories for cross-process access (verifier needs them)
         # Use the shared converter so stored format matches GET /trajectories endpoint
         if hasattr(coupler, "co_sim_history") and coupler.co_sim_history:
+            effective_timestep = getattr(
+                coupler.scenario_config, "effective_timestep_minutes", None
+            ) or getattr(coupler.scenario_config, "timestep_minutes", 15)
             set_trajectories(
-                run_id, _convert_trajectories_to_json(coupler.co_sim_history)
+                run_id,
+                _convert_trajectories_to_json(
+                    coupler.co_sim_history, effective_timestep
+                ),
             )
 
     except Exception as e:
@@ -530,6 +536,8 @@ async def strategy_comparison(request: dict, background_tasks: BackgroundTasks):
             run_ids[controller] = existing
             continue
         run_id = f"run_{uuid4().hex[:12]}"
+        # Store scenario config for report generation
+        scenario_config_dict = scenario.model_dump(mode="json")
         _runs[run_id] = {
             "run_id": run_id,
             "scenario_id": scenario_id,
@@ -543,6 +551,7 @@ async def strategy_comparison(request: dict, background_tasks: BackgroundTasks):
             "random_seed": seed,
             "max_steps": max_steps,
             "config_hash": config_hash,
+            "scenario_config": scenario_config_dict,
         }
         _config_hash_index[config_hash] = run_id
         run_ids[controller] = run_id
@@ -586,7 +595,9 @@ async def get_simulation(run_id: str):
     return _runs[run_id]
 
 
-def _convert_trajectories_to_json(co_sim_history) -> list:
+def _convert_trajectories_to_json(
+    co_sim_history, effective_timestep_minutes: int = 15
+) -> list:
     """Convert co-simulation history to JSON-serializable trajectory list.
 
     This is the canonical converter used by both:
@@ -595,15 +606,22 @@ def _convert_trajectories_to_json(co_sim_history) -> list:
 
     Args:
         co_sim_history: List of CoSimulationStepResult objects
+        effective_timestep_minutes: The effective simulation timestep in minutes
 
     Returns:
         List of JSON-serializable trajectory dicts
     """
     trajectories = []
     for h in co_sim_history:
+        # Calculate timestamp using effective timestep
+        total_minutes = h.timestep * effective_timestep_minutes
+        days = total_minutes // 1440
+        hours = (total_minutes % 1440) // 60
+        timestamp = f"2023-01-{days + 1:02d}T{hours:02d}:00:00"
+
         traj = {
             "timestep": h.timestep,
-            "timestamp": f"2023-01-01T{h.timestep * 0.25:02.0f}:00:00",
+            "timestamp": timestamp,
             "observations": _convert_numpy(h.citylearn_result.observations),
             "applied_actions": [
                 _convert_numpy(a.model_dump())
@@ -638,7 +656,10 @@ async def get_trajectories(run_id: str):
         )
 
     coupler = _couplers[run_id]
-    return _convert_trajectories_to_json(coupler.co_sim_history)
+    effective_timestep = getattr(
+        coupler.scenario_config, "effective_timestep_minutes", None
+    ) or getattr(coupler.scenario_config, "timestep_minutes", 15)
+    return _convert_trajectories_to_json(coupler.co_sim_history, effective_timestep)
 
 
 CATEGORY_GUIDANCE = {
