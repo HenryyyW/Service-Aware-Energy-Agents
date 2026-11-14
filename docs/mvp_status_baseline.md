@@ -375,3 +375,26 @@ a rendering test before any future "verified" claim.
 case-insensitive lookup), degrade safely when an icon is missing, add a
 confirm-screen render test, and verify in a live dev server. Partner will
 personally re-run generate->confirm before asking the user to retest.
+
+## W10 closed (2026-11-14, 4defbf05c) - partner browser-verified
+
+FE2 fixed the confirm-screen white screen: the sections render their own
+`icon` field (the case-mismatched `ICON_FOR` lookup table is gone) and
+`SummaryCard` degrades to a text fallback when an icon is missing. New
+`ScenarioGeneratorPage.test.tsx` renders the confirm step with all sections.
+
+**Partner verification (the step that was missing twice):** started a clean
+backend + dev server, opened `/scenarios/generate` in a real browser, typed
+the walkthrough description through the trusted input path, clicked Generate.
+The confirm screen rendered fully - preview-mode banner, named rejections,
+all seven sections with provenance chips (given/assumed/default/missing),
+and Run Scenario / Edit-reject / Validate-now buttons. Backend log shows the
+full generate pipeline returning 200 twice with recommendation "accept". No
+white screen, no React error.
+
+Gates re-verified by the Partner: tsc 0, eslint 0, vitest 13/13, build green,
+pytest 518, black/ruff clean. Pushed `4defbf05c`.
+
+**Process change (durable):** for any generator-flow fix, the acceptance
+check is a live browser pass through input -> generate -> confirm, not gate
+summaries. The user may retry the walkthrough now.
