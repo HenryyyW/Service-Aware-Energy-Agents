@@ -129,25 +129,25 @@ function buildDiff(existing: ScenarioConfig, parsed: ScenarioConfig) {
 /* -------------------------------------------------------------------------- */
 /* Left panel — community summary cards                                       */
 /* -------------------------------------------------------------------------- */
-const ICON_FOR: Record<string, any> = {
-  community: Building2,
-  buildings: Building2,
-  pv: Sun,
-  battery: Battery,
-  ev: Car,
-  evs: Car,
-  flexible_load: Zap,
-  flexible_loads: Zap,
-  tariff: FileText,
-  grid: Network,
-  sharing: Zap,
-};
-
-function SummaryCard({ title, icon: Icon, rows }: { title: string; icon: any; rows: { label: string; value: string; prov: Provenance }[] }) {
+function SummaryCard({
+  title,
+  icon: Icon,
+  rows,
+}: {
+  title: string
+  icon?: any
+  rows: { label: string; value: string; prov: Provenance }[]
+}) {
   return (
     <div className="glass-card overflow-hidden">
       <div className="flex items-center gap-2 p-3 bg-surface/50 border-b border-border/30">
-        <Icon className="w-4 h-4 text-text-muted" />
+        {Icon ? (
+          <Icon className="w-4 h-4 text-text-muted" />
+        ) : (
+          <span className="w-4 h-4 flex items-center justify-center rounded bg-surface border border-border/30 text-text-muted text-[10px]">
+            {title.charAt(0).toUpperCase()}
+          </span>
+        )}
         <h4 className="font-body font-medium text-body-sm text-text">{title}</h4>
       </div>
       <div className="p-3 space-y-2">
@@ -221,7 +221,7 @@ function CommunitySummary({ config }: { config: ScenarioConfig }) {
   return (
     <div className="space-y-3">
       {sections.map((s) => (
-        <SummaryCard key={s.title} title={s.title} icon={ICON_FOR[s.title]} rows={s.rows} />
+        <SummaryCard key={s.title} title={s.title} icon={s.icon} rows={s.rows} />
       ))}
     </div>
   );
