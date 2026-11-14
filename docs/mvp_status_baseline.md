@@ -488,3 +488,27 @@ Live browser pass (backend + dev server, Chrome) against f08e14301:
 
 W12 standalone: PASSES (verified earlier). W13 single-run path + top-level
 max_steps: with Backend A.
+
+## Partner re-verification of the W13/max_steps/W14/step-6 fixes
+## (2026-11-15, live backend + Chrome)
+
+Re-ran the exact failing paths against 39f7daece:
+- **W13 + max_steps: PASS.** `POST /api/simulations` with top-level
+  `max_steps=24` -> run completes at exactly 24 steps; 24 trajectories;
+  timestamps `00:00` -> `23:00` (60-min effective); report shows
+  `Buildings: 1` with no N/A; `scenario_config` present on the run payload.
+- **W14 (canvas): PASS.** /canvas renders the schematic banner
+  ("Schematic network layout - not actual geographic data") with Map/Table
+  toggle; the table view lists the building, its PV/battery/EV assets and
+  Grid Violations (0).
+- **Step 6 (service metrics): PASS.** After a completed run the detail page
+  shows "Service metrics - EV completion rate 0.0% / Avg EV SOC at
+  departure 0.0%".
+- **Step 4's last piece (fail): the time player is never mounted.**
+  `TimePlayer.tsx` exists and the store wiring is used
+  (`CommunityCanvas.tsx:52/507/542`), but no `<TimePlayer />` is rendered
+  anywhere - the map view has no playback/scrub controls. Re-dispatched to
+  FE2 (mount + browser-verify scrub updates + keyboard operable).
+
+Retest #4 waits on this last item; everything else in the loop is
+partner-verified green.
