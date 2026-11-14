@@ -349,3 +349,29 @@ settlement-inclusive), the "cost-minimal in every scenario" claim is
 replaced, centralized is cost-minimal in A/C/D/E and mpc in B, the RL
 fallback share (2-9/168 steps) is disclosed, and M2a/M2b remain published
 records. PDF: 21 pages.
+
+## MVP retest #2 (user, 2026-11-14): NOT PASSED - W10, generator confirm screen
+
+Walked per script v2 on Windows, no code edits. **Failed at step 1 again,
+with a NEW root cause**: generate returns 200 but the confirm/preview screen
+white-screens with React "element type is invalid / undefined".
+
+**Root cause verified on origin/main:** `ScenarioGeneratorPage.tsx:224`
+resolves the icon via `ICON_FOR[s.title]` while section titles are
+capitalized ('Community', 'Buildings', 'PV', 'Battery') and the `ICON_FOR`
+table (:132) only has lowercase keys -> `undefined` -> `SummaryCard` renders
+`<Icon/>` with an undefined component. The sections themselves carry an
+`icon` field (:212-215) that the render path ignores - the lookup is the
+defect.
+
+**Why the gates missed it:** tsc/eslint/build/vitest all green because the
+failure is a runtime lookup (the `ICON_FOR` type is `Record<string, any>`),
+and no test renders the confirm screen - the exact class of gap that also
+hid W1 (dev-only) earlier. **Process correction:** the generator's
+generate->confirm path must be exercised in a live dev server and covered by
+a rendering test before any future "verified" claim.
+
+**Dispatched to FE2 (2026-11-14):** use the sections' own icon (or a
+case-insensitive lookup), degrade safely when an icon is missing, add a
+confirm-screen render test, and verify in a live dev server. Partner will
+personally re-run generate->confirm before asking the user to retest.
