@@ -315,3 +315,22 @@ explicit regime, lossless raw_results. Remaining: the scripted rebuild of
 Tables 2/3/4, figures and abstract ranges; the positioning re-wording; the
 RL fallback-share disclosure; the PDF rebuild. Re-dispatched to Research 2
 (2026-11-13; their session had died to the NIM outage).
+
+## Paper rebuild: content verified, artifact-hygiene fix in flight (2026-11-14)
+
+Research 2's rebuild (`0fda3e120`, partner-verified and pushed): Tables 2/3/4,
+figures f1/f3, abstract ranges and the positioning re-wording all rebuilt
+scripted from the three verified legs (`docs/baxis_table_rebuild.py` +
+`docs/baxis_rebuild/summary.json`); multi_agent's paired cost delta is
+positive in all five scenarios (+49.08 to +100.01 USD, p_Holm < 0.0001) -
+the "cost-minimal in every scenario" claim is dead and replaced; centralized
+is cost-minimal in A/C/D/E, mpc in B; RL fallback shares (2-9/168 steps)
+disclosed; PDF 21 pages rebuilt; M2a/M2b untouched as published records.
+
+**CI red on that head:** `Artifact hygiene` rejected 759 files - the 750
+manifests/raw_results were committed under `experiments/` (the Partner's own
+"land artifacts in the repo" instruction - revoked; the repo's
+`scripts/check_artifacts.py` rule wins). Fix dispatched to Research 2:
+untrack the three legs (keep on disk for verification), .gitignore them, keep
+the script + summary + note + paper in git, document the traceability path.
+Content itself needs no change.
