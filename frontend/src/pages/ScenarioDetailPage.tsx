@@ -101,6 +101,38 @@ export function ScenarioDetailPage() {
     };
   }, [run]);
 
+  // Backfill service metrics for a run that mounted already completed
+  // (e.g. deduplicated run returned immediately). The polling effect above
+  // never observes the transition, so evCompletionRate would stay null and
+  // the 0 % service failure would be invisible.
+  useEffect(() => {
+    if (!run || run.status !== 'completed' || run.evCompletionRate != null) return;
+    let active = true;
+    (async () => {
+      try {
+        const r = await api.getSimulationRun(run.run_id);
+        if (active) {
+          setRun({
+            ...(run as RunState),
+            evCompletionRate: r.service_metrics?.ev_completion_rate ?? null,
+            avgEvSocAtDeparture: r.service_metrics?.avg_ev_soc_at_departure ?? null,
+          });
+        }
+        try {
+          const diag = await api.getRunDiagnostics(run.run_id);
+          if (active) setDiagnostics(diag);
+        } catch {
+          /* diagnostics are best-effort */
+        }
+      } catch {
+        /* transient */
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [run]);
+
   const handleRun = useCallback(async () => {
     if (!scenarioId || starting) return;
     setError(null);
@@ -252,31 +284,6 @@ export function ScenarioDetailPage() {
               ))}
             </dl>
           )}
-          {run.evCompletionRate !== null || run.avgEvSocAtDeparture !== null ? (
-            <div className="mt-3 p-3 bg-surface/30 border border-border/30 rounded-lg">
-              <h3 className="font-body font-medium text-body text-text text-sm mb-2">
-                Service metrics
-              </h3>
-              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-caption">
-                <div className="flex justify-between gap-2">
-                  <dt className="text-text-muted">EV completion rate</dt>
-                  <dd className="font-mono text-text">
-                    {run.evCompletionRate === null || run.evCompletionRate === undefined
-                      ? 'no record'
-                      : `${(run.evCompletionRate * 100).toFixed(1)}%`}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt className="text-text-muted">Avg EV SOC at departure</dt>
-                  <dd className="font-mono text-text">
-                    {run.avgEvSocAtDeparture === null || run.avgEvSocAtDeparture === undefined
-                      ? 'no record'
-                      : `${(run.avgEvSocAtDeparture * 100).toFixed(1)}%`}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          ) : null}
           {diagnostics.findings.length > 0 && (
             <ul className="mt-2 space-y-2">
               {diagnostics.findings.map((f, i) => (
@@ -290,6 +297,31 @@ export function ScenarioDetailPage() {
               ))}
             </ul>
           )}
+        </div>
+      )}
+      {run && run.status === 'completed' && (
+        <div className="mt-3 p-3 bg-surface/30 border border-border/30 rounded-lg">
+          <h3 className="font-body font-medium text-body text-text text-sm mb-2">
+            Service metrics
+          </h3>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-caption">
+            <div className="flex justify-between gap-2">
+              <dt className="text-text-muted">EV completion rate</dt>
+              <dd className="font-mono text-text">
+                {run.evCompletionRate === null || run.evCompletionRate === undefined
+                  ? 'no record'
+                  : `${(run.evCompletionRate * 100).toFixed(1)}%`}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-text-muted">Avg EV SOC at departure</dt>
+              <dd className="font-mono text-text">
+                {run.avgEvSocAtDeparture === null || run.avgEvSocAtDeparture === undefined
+                  ? 'no record'
+                  : `${(run.avgEvSocAtDeparture * 100).toFixed(1)}%`}
+              </dd>
+            </div>
+          </dl>
         </div>
       )}
 

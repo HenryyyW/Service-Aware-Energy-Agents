@@ -74,6 +74,26 @@ export function CommunityCanvas(_props: CommunityCanvasProps) {
     [sourceNetworkGeometry, communityAnchor],
   );
 
+  // Deterministic schematic locations when the geometry endpoint has no
+  // registration for this scenario (API-built scenarios are never registered).
+  // Buildings are placed on a circle around the community anchor so the
+  // canvas still renders a readable layout instead of "No community data".
+  const schematicBuildingLocations = useMemo(() => {
+    const locations = new Map<string, { lat: number; lon: number }>();
+    const buildingList = currentScenario?.buildings ?? [];
+    if (!buildingList.length) return locations;
+    const count = buildingList.length;
+    const radius = 0.0008; // ~88 m
+    buildingList.forEach((b, i) => {
+      const angle = (2 * Math.PI * i) / count;
+      locations.set(b.building_id, {
+        lat: communityAnchor.latitude + radius * Math.sin(angle),
+        lon: communityAnchor.longitude + radius * Math.cos(angle),
+      });
+    });
+    return locations;
+  }, [currentScenario?.buildings, communityAnchor]);
+
   const currentStepData = useCurrentStepData();
 
   const lmpPrices = useMemo((): Record<string, number> => {
@@ -101,14 +121,20 @@ export function CommunityCanvas(_props: CommunityCanvasProps) {
     const locations = new Map<string, { lat: number; lon: number }>();
     buildingIds.forEach((id) => {
       const busIdx = buildingBusMapping.get(id);
-      if (busIdx === undefined || !networkGeometry) return;
-      const busEntry = Object.values(networkGeometry.buses).find((b: NetworkBus) => b.bus_idx === busIdx);
-      if (busEntry) {
-        locations.set(id, { lat: busEntry.lat, lon: busEntry.lon });
+      if (busIdx !== undefined && networkGeometry) {
+        const busEntry = Object.values(networkGeometry.buses).find((b: NetworkBus) => b.bus_idx === busIdx);
+        if (busEntry) {
+          locations.set(id, { lat: busEntry.lat, lon: busEntry.lon });
+          return;
+        }
       }
+      // Fall back to the deterministic schematic location so API-built
+      // scenarios (never registered in the geometry table) still render.
+      const synthetic = schematicBuildingLocations.get(id);
+      if (synthetic) locations.set(id, synthetic);
     });
     return locations;
-  }, [buildingIds, buildingBusMapping, networkGeometry]);
+  }, [buildingIds, buildingBusMapping, networkGeometry, schematicBuildingLocations]);
 
   const buildings: Building[] = useMemo(() => {
     if (!buildingIds.length || !currentStepData) return [];
@@ -202,28 +228,19 @@ export function CommunityCanvas(_props: CommunityCanvasProps) {
     return currentStepData?.grid_diagnostics;
   }, [currentStepData]);
 
-  // Transition out of loading once the run, its scenario config, its
-  // trajectories and the network geometry have all loaded. With no run at all
-  // we keep the empty state instead of a loading spinner.
+  // Transition out of loading once the run, its scenario config and its
+  // trajectories have loaded. With no run at all we keep the empty state
+  // instead of a loading spinner. Missing network geometry is not a blocker:
+  // schematic locations are synthesized from the scenario config instead.
   useEffect(() => {
     const hasRun = Boolean(currentRun?.scenario_id);
-    const ready =
-      hasRun &&
-      Boolean(currentScenario) &&
-      trajectories.length > 0 &&
-      Boolean(sourceNetworkGeometry);
+    const ready = hasRun && Boolean(currentScenario) && trajectories.length > 0;
     if (ready) {
       setIsLoading(false);
     } else if (!hasRun && isLoading) {
       setIsLoading(false);
     }
-  }, [
-    currentRun?.scenario_id,
-    currentScenario,
-    trajectories,
-    sourceNetworkGeometry,
-    isLoading,
-  ]);
+  }, [currentRun?.scenario_id, currentScenario, trajectories, isLoading]);
 
   const violations = useMemo(() => {
     if (!gridDiagnostics || !networkGeometry) return [];
