@@ -53,6 +53,41 @@ export function ScenarioDetailPage() {
       setSeed(scenario.random_seed ?? 42);
       const v = await api.validateScenario(scenarioId);
       setValidation({ valid: v.valid, errors: v.errors || [] });
+      // Fetch latest run for this scenario so a completed run
+      // (e.g. from a previous session) is shown on the detail page.
+      try {
+        const runs = await api.getRuns();
+        const scenarioRuns = runs.filter((r: any) => r.scenario_id === scenarioId);
+        const latestRun = scenarioRuns
+          .sort((a: any, b: any) =>
+            new Date(b.start_time || 0).getTime() -
+              new Date(a.start_time || 0).getTime()
+          )[0];
+        if (latestRun) {
+          setRun({
+            run_id: latestRun.run_id,
+            status: latestRun.status,
+            stage: latestRun.stage,
+            progress: latestRun.progress,
+            eta_seconds: latestRun.eta_seconds,
+            outcome_sentence: latestRun.outcome_sentence,
+            error: (latestRun as any).error,
+            controller_type: latestRun.controller_type,
+            evCompletionRate: latestRun.service_metrics?.ev_completion_rate ?? null,
+            avgEvSocAtDeparture: latestRun.service_metrics?.avg_ev_soc_at_departure ?? null,
+          });
+          if (latestRun.status === 'completed') {
+            try {
+              const diag = await api.getRunDiagnostics(latestRun.run_id);
+              setDiagnostics(diag);
+            } catch {
+              /* diagnostics are best-effort */
+            }
+          }
+        }
+      } catch {
+        /* runs fetch is best-effort for the detail page */
+      }
     } catch (e: any) {
       setError(e.response?.data?.detail || e.message || 'Scenario not found');
     }
@@ -100,42 +135,6 @@ export function ScenarioDetailPage() {
       clearInterval(t);
     };
   }, [run]);
-
-  // Backfill service metrics + diagnostics for a run that mounted already
-  // completed (e.g. deduplicated run returned immediately). The polling
-  // effect above never observes the transition, so evCompletionRate would
-  // stay null and the 0 % service failure / diagnosis panel would be
-  // invisible. Depends on run.run_id (not the run object) so re-renders from
-  // setRun don't re-trigger the effect.
-  useEffect(() => {
-    if (!run || run.status !== 'completed' || diagnostics != null) return;
-    let active = true;
-    (async () => {
-      try {
-        const r = await api.getSimulationRun(run.run_id);
-        if (active) {
-          setRun({
-            ...(run as RunState),
-            evCompletionRate: r.service_metrics?.ev_completion_rate ?? null,
-            avgEvSocAtDeparture: r.service_metrics?.avg_ev_soc_at_departure ?? null,
-          });
-        }
-        if (active) {
-          try {
-            const diag = await api.getRunDiagnostics(run.run_id);
-            if (active) setDiagnostics(diag);
-          } catch {
-            /* diagnostics are best-effort */
-          }
-        }
-      } catch {
-        /* transient */
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [run?.run_id, run?.status, diagnostics]);
 
   const handleRun = useCallback(async () => {
     if (!scenarioId || starting) return;
