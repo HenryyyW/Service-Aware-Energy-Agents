@@ -27,6 +27,10 @@ const STRATEGIES: Array<{
 export interface StrategyComparisonProps {
   /** Probe data for the community config */
   config: ScenarioConfig;
+  /** Effective simulation timestep in minutes (dataset resolution), falling
+   *  back to config.timestep_minutes. Drives the comparison time axis so the
+   *  scrubber matches the actual number of trajectory steps. */
+  effectiveTimestepMinutes?: number;
   /** Strategy metrics keyed by controller name */
   strategyData: Record<string, {
     total_cost?: number | string;
@@ -53,9 +57,10 @@ export interface StrategyComparisonProps {
   }>;
 }
 
-export function StrategyComparison({ config, strategyData, violations }: StrategyComparisonProps) {
+export function StrategyComparison({ config, strategyData, violations, effectiveTimestepMinutes }: StrategyComparisonProps) {
   const [currentTimestep, setCurrentTimestep] = useState(0);
-  const maxTimestep = config.timestep_minutes ? 24 * 60 / config.timestep_minutes - 1 : 95;
+  const effectiveTimestep = effectiveTimestepMinutes ?? config.timestep_minutes ?? 15;
+  const maxTimestep = effectiveTimestep ? Math.max(0, 24 * 60 / effectiveTimestep - 1) : 95;
 
   // Build strategies array with fallback data
   const strategies = STRATEGIES.map((s) => ({
@@ -89,6 +94,15 @@ export function StrategyComparison({ config, strategyData, violations }: Strateg
             <p className="text-caption text-text-muted">
               Same community config, four strategies side by side
             </p>
+            {effectiveTimestepMinutes !== undefined &&
+              effectiveTimestepMinutes !== (config.timestep_minutes ?? 15) && (
+                <p className="text-caption text-violation mt-1">
+                  Dataset resolution {effectiveTimestepMinutes} min{' '}
+                  {config.timestep_minutes !== undefined &&
+                    config.timestep_minutes !== effectiveTimestepMinutes &&
+                    `(configured ${config.timestep_minutes} min)`}
+                </p>
+              )}
           </div>
         </div>
       </div>

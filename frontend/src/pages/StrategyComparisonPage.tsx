@@ -31,6 +31,7 @@ export function StrategyComparisonPage() {
 
   const [runStatus, setRunStatus] = useState<Record<string, string>>({});
   const [runError, setRunError] = useState<string | null>(null);
+  const [effectiveTimestepMinutes, setEffectiveTimestepMinutes] = useState<number | undefined>();
 
   useEffect(() => {
     if (!scenarioId) return;
@@ -66,6 +67,18 @@ export function StrategyComparisonPage() {
           if (!active) return;
           const data: Record<string, any> = {};
           const statuses: Record<string, string> = {};
+          // Effective timestep (dataset resolution) may differ from the
+          // configured timestep_minutes; all strategies share the same scenario
+          // so it is identical across runs.
+          let effectiveTimestepMinutes = scenario.timestep_minutes;
+          for (const [, r] of entries) {
+            const rc = (r as any)?.scenario_config;
+            if (rc?.effective_timestep_minutes) {
+              effectiveTimestepMinutes = rc.effective_timestep_minutes;
+              break;
+            }
+          }
+          setEffectiveTimestepMinutes(effectiveTimestepMinutes);
           for (const [controller, run] of entries) {
             statuses[controller] = run.status;
             const energy = run.energy_metrics || {};
@@ -90,6 +103,7 @@ export function StrategyComparisonPage() {
                     : 'pending',
               fallback_steps: run.controller_fallback_steps,
               fallback_reason: run.controller_fallback_reason,
+              effective_timestep_minutes: effectiveTimestepMinutes,
             };
           }
           setStrategyData(data);
@@ -169,6 +183,7 @@ export function StrategyComparisonPage() {
           config={config}
           strategyData={strategyData}
           violations={violations}
+          effectiveTimestepMinutes={effectiveTimestepMinutes}
         />
       </div>
     </div>

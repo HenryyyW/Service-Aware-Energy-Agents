@@ -101,12 +101,13 @@ export function ScenarioDetailPage() {
     };
   }, [run]);
 
-  // Backfill service metrics for a run that mounted already completed
-  // (e.g. deduplicated run returned immediately). The polling effect above
-  // never observes the transition, so evCompletionRate would stay null and
-  // the 0 % service failure would be invisible.
+  // Backfill service metrics + diagnostics for a run that mounted already
+  // completed (e.g. deduplicated run returned immediately). The polling
+  // effect above never observes the transition, so evCompletionRate would
+  // stay null and the 0 % service failure / diagnosis panel would be
+  // invisible.
   useEffect(() => {
-    if (!run || run.status !== 'completed' || run.evCompletionRate != null) return;
+    if (!run || run.status !== 'completed') return;
     let active = true;
     (async () => {
       try {
@@ -118,11 +119,15 @@ export function ScenarioDetailPage() {
             avgEvSocAtDeparture: r.service_metrics?.avg_ev_soc_at_departure ?? null,
           });
         }
-        try {
-          const diag = await api.getRunDiagnostics(run.run_id);
-          if (active) setDiagnostics(diag);
-        } catch {
-          /* diagnostics are best-effort */
+        // Fetch diagnostics whenever they are not yet cached so the diagnosis
+        // panel renders even for runs that mounted already completed.
+        if (active && diagnostics == null) {
+          try {
+            const diag = await api.getRunDiagnostics(run.run_id);
+            if (active) setDiagnostics(diag);
+          } catch {
+            /* diagnostics are best-effort */
+          }
         }
       } catch {
         /* transient */
@@ -131,7 +136,7 @@ export function ScenarioDetailPage() {
     return () => {
       active = false;
     };
-  }, [run]);
+  }, [run, diagnostics]);
 
   const handleRun = useCallback(async () => {
     if (!scenarioId || starting) return;
@@ -191,7 +196,9 @@ export function ScenarioDetailPage() {
           </h1>
           <p className="text-caption text-text-muted">
             {buildings.length} building{buildings.length === 1 ? '' : 's'} ·{' '}
-            {config.timestep_minutes} min steps · seed {config.random_seed}
+            {(run as any)?.scenario_config?.effective_timestep_minutes ??
+              config.timestep_minutes}
+            min steps · seed {config.random_seed}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -327,7 +334,7 @@ export function ScenarioDetailPage() {
 
       {run && run.status === 'completed' && (
         <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={() => navigate(`/scenarios/probe/${run.run_id}`)}>
+          <Button variant="secondary" onClick={() => navigate('/canvas')}>
             View the community
           </Button>
           <Button variant="secondary" onClick={() => navigate(`/comparison/strategy/${config.scenario_id}`)}>
