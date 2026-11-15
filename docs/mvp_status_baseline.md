@@ -596,3 +596,26 @@ by the main.tsx worker-URL change).
 W15 note: the API now generates 4 buildings for all tested inputs, but
 per-asset counts still equal the building count (cross-contamination) -
 re-dispatched to Backend A with measurements.
+
+## Partner verification of the W15-v3 / W24 / W23 batch (2026-11-15) on
+## ff27a82b7
+
+- **W24: PASS (live browser).** The confirm screen renders all four
+  buildings ("Buildings 4 buildings" + building_1..4 + per-building PV
+  sections) - no more buildings[0]-only view.
+- **W15 v3: STILL FAILS (live API).** The clause-based parse landed but the
+  counts still equal the building count (battery=4, evs=4 for "one shared
+  battery, two EVs"). Root cause located to `config_coder.py:_build_buildings`
+  - it stamps one asset config on EVERY building (`configs[i % len(configs)]`
+  cycling). Re-dispatched to Backend A with the file-level fix guidance.
+- **W23: STILL FAILS (live browser, fresh run path).** The diagnostics fetch
+  lives inside the polling effect; `setRun` re-triggers the effect whose
+  cleanup aborts the fetch, and the completed-run guard short-circuits any
+  retry - diagnostics stays null for freshly started runs. Re-dispatched to
+  FE2 with two concrete fix options.
+- Confirmed real economics on the detail page: $17 / 61 kWh import /
+  PV self-consumption 37% (not the former 100% illusion) / EV 0% / 100% power
+  flow convergence.
+- Note: a `.vite` cache file accidentally committed in Backend A's W15 v3 was
+  dropped before merge (the artifact-hygiene guard); one vitest assertion
+  updated for the W24 multi-building render.
