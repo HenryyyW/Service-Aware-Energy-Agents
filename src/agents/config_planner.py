@@ -258,6 +258,8 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
 
     def _fallback_plan(self, nl: str) -> ConfigPlannerOutput:
         """Fallback rule-based planning when LLM is unavailable."""
+        import re
+
         # Simple keyword-based extraction
         nl_lower = nl.lower()
 
@@ -272,49 +274,202 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
                     plan.weather_file = f"{canonical}.csv"
                     break
 
-        # A setup description with no detected assets still needs its
-        # buildings constructed (same rule as the LLM path).
-        if not plan.target_assets and _nl_is_setup(nl):
-            plan.target_assets.append("buildings")
+        # Helper: extract number from text (digits or English/Chinese number words)
+        def extract_count(text: str, keywords: list) -> tuple[int | None, bool]:
+            """Returns (count, mentioned). count is None if mentioned but unparseable."""
+            mentioned = any(kw in text for kw in keywords)
+            if not mentioned:
+                return (None, False)
 
-        # Detect assets
-        if any(kw in nl_lower for kw in ["pv", "solar", "photovoltaic"]):
+            # Try digits first
+            for kw in keywords:
+                # Pattern: "N keyword" or "keyword N" or "N-keyword"
+                patterns = [
+                    rf"(\d+)\s*{re.escape(kw)}",  # "4 buildings"
+                    rf"{re.escape(kw)}\s*(\d+)",  # "buildings 4"
+                    rf"(\d+)[-\s]{re.escape(kw)}",  # "4-building"
+                ]
+                for pat in patterns:
+                    m = re.search(pat, text)
+                    if m:
+                        return (int(m.group(1)), True)
+
+            # English number words - only match "NUM KEYWORD" pattern (number before keyword)
+            num_words = {
+                "one": 1,
+                "two": 2,
+                "three": 3,
+                "four": 4,
+                "five": 5,
+                "six": 6,
+                "seven": 7,
+                "eight": 8,
+                "nine": 9,
+                "ten": 10,
+                "a": 1,
+                "an": 1,
+                "single": 1,
+                "couple": 2,
+                "pair": 2,
+                "few": 3,
+                "several": 3,
+            }
+            for word, val in num_words.items():
+                if re.search(rf"\b{word}\b", text):
+                    # Check if number word immediately precedes keyword (within ~8 chars)
+                    for kw in keywords:
+                        if re.search(rf"\b{word}\b.{{0,8}}\b{kw}\b", text):
+                            return (val, True)
+
+            # Chinese number words - match both orders but tighter window
+            zh_nums = {
+                "一": 1,
+                "二": 2,
+                "两": 2,
+                "三": 3,
+                "四": 4,
+                "五": 5,
+                "六": 6,
+                "七": 7,
+                "八": 8,
+                "九": 9,
+                "十": 10,
+            }
+            for ch, val in zh_nums.items():
+                if ch in text:
+                    for kw in keywords:
+                        if re.search(rf"{ch}.{{0,2}}{kw}|{kw}.{{0,2}}{ch}", text):
+                            return (val, True)
+
+            # Mentioned but couldn't parse count
+            return (None, True)
+
+        rejected = []
+
+        # Building count
+        bld_count, bld_mentioned = extract_count(
+            nl_lower, ["building", "buildings", "house", "houses", "栋", "建筑", "楼"]
+        )
+        if bld_count is not None:
+            plan.building_count = bld_count
+        elif bld_mentioned:
+            plan.rejected_fields.append("buildings.count")
+        else:
+            plan.building_count = 1
+
+        plan.building_types = ["residential"] * plan.building_count
+
+        # PV
+        pv_keywords = ["pv", "solar", "photovoltaic", "太阳能", "光伏"]
+        pv_count, pv_mentioned = extract_count(nl_lower, pv_keywords)
+        if pv_mentioned:
             plan.target_assets.append("pv")
-            plan.pv_configs.append({"capacity_kw": 10.0})
+            if pv_count is not None:
+                for _ in range(pv_count):
+                    plan.pv_configs.append({"capacity_kw": 10.0})
+            else:
+                plan.rejected_fields.append("pv.count")
+                plan.pv_configs.append({"capacity_kw": 10.0})
+        else:
+            # Check if any PV keyword mentioned without count
+            if any(
+                kw in nl_lower
+                for kw in ["pv", "solar", "photovoltaic", "太阳能", "光伏"]
+            ):
+                plan.target_assets.append("pv")
+                plan.pv_configs.append({"capacity_kw": 10.0})
 
-        if any(kw in nl_lower for kw in ["battery", "storage"]):
+        # Battery
+        bat_keywords = ["battery", "batteries", "storage", "电池", "储能"]
+        bat_count, bat_mentioned = extract_count(nl_lower, bat_keywords)
+        if bat_mentioned:
             plan.target_assets.append("battery")
-            plan.battery_configs.append({"capacity_kwh": 13.5, "power_kw": 5.0})
+            if bat_count is not None:
+                for _ in range(bat_count):
+                    plan.battery_configs.append({"capacity_kwh": 13.5, "power_kw": 5.0})
+            else:
+                plan.rejected_fields.append("battery.count")
+                plan.battery_configs.append({"capacity_kwh": 13.5, "power_kw": 5.0})
+        else:
+            if any(kw in nl_lower for kw in ["battery", "storage", "电池", "储能"]):
+                plan.target_assets.append("battery")
+                plan.battery_configs.append({"capacity_kwh": 13.5, "power_kw": 5.0})
 
-        if any(kw in nl_lower for kw in ["ev", "electric vehicle", "car"]):
+        # EV
+        ev_keywords = [
+            "ev",
+            "evs",
+            "electric vehicle",
+            "electric vehicles",
+            "car",
+            "cars",
+            "电动车",
+            "电车",
+        ]
+        ev_count, ev_mentioned = extract_count(nl_lower, ev_keywords)
+        if ev_mentioned:
             plan.target_assets.append("ev")
-            plan.ev_configs.append(
-                {
-                    "capacity_kwh": 60,
-                    "max_charge_kw": 11,
-                    "arrival_time": "18:00",
-                    "departure_time": "07:00",
-                    "target_soc": 0.8,
-                    "initial_soc": 0.3,
-                    "connected_days": [0, 1, 2, 3, 4, 5, 6],
-                }
-            )
+            if ev_count is not None:
+                for _ in range(ev_count):
+                    plan.ev_configs.append(
+                        {
+                            "capacity_kwh": 60,
+                            "max_charge_kw": 11,
+                            "arrival_time": "18:00",
+                            "departure_time": "07:00",
+                            "target_soc": 0.8,
+                            "initial_soc": 0.3,
+                            "connected_days": [0, 1, 2, 3, 4, 5, 6],
+                        }
+                    )
+            else:
+                plan.rejected_fields.append("evs.count")
+                plan.ev_configs.append(
+                    {
+                        "capacity_kwh": 60,
+                        "max_charge_kw": 11,
+                        "arrival_time": "18:00",
+                        "departure_time": "07:00",
+                        "target_soc": 0.8,
+                        "initial_soc": 0.3,
+                        "connected_days": [0, 1, 2, 3, 4, 5, 6],
+                    }
+                )
+        else:
+            if any(
+                kw in nl_lower
+                for kw in ["ev", "electric vehicle", "car", "电动车", "电车"]
+            ):
+                plan.target_assets.append("ev")
+                plan.ev_configs.append(
+                    {
+                        "capacity_kwh": 60,
+                        "max_charge_kw": 11,
+                        "arrival_time": "18:00",
+                        "departure_time": "07:00",
+                        "target_soc": 0.8,
+                        "initial_soc": 0.3,
+                        "connected_days": [0, 1, 2, 3, 4, 5, 6],
+                    }
+                )
 
+        # Flexible load
         if any(kw in nl_lower for kw in ["flexible", "load", "hvac", "thermostat"]):
             plan.target_assets.append("flexible_load")
             plan.flexible_load_configs.append({"power_kw": 3.0, "energy_kwh": 10})
 
+        # Tariff
         if any(kw in nl_lower for kw in ["tariff", "price", "rate", "tou"]):
             plan.target_assets.append("tariff")
             plan.tariff_configs.append({"type": "time_of_use"})
 
+        # Grid
         if any(kw in nl_lower for kw in ["grid", "network", "ieee"]):
             plan.target_assets.append("grid")
             plan.grid_configs.append({"network_type": "ieee_34"})
 
-        # Default building
-        plan.building_count = 1
-        plan.building_types = ["residential"]
+        # Building types based on parsed count
+        plan.building_types = ["residential"] * plan.building_count
 
         # Community limits
         if "import limit" in nl_lower:

@@ -192,6 +192,7 @@ function ReportPageContent() {
   const { currentTask } = useAgentStore();
   const { addToast } = useToast();
   const [report, setReport] = useState<ReportResponse | null>(null);
+  const [runDetail, setRunDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [format] = useState<'markdown' | 'json'>('markdown');
@@ -240,6 +241,14 @@ function ReportPageContent() {
         // Fallback to API
         const reportResponse = await api.getReport(runId!);
         setReport(reportResponse);
+      }
+      // Fetch the full run so the footer can surface scenario/controller and
+      // effective timestep (run.scenario_config.effective_timestep_minutes).
+      try {
+        const runDetailData = await api.getSimulationRun(runId!);
+        setRunDetail(runDetailData);
+      } catch {
+        /* run detail is best-effort for the footer */
       }
     } catch (error) {
       console.error('Failed to load report:', error);
@@ -418,10 +427,19 @@ function ReportPageContent() {
       <div className="p-4 border-t border-border/30 bg-surface/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4 text-caption text-text-muted">
-            <span>Run: {run?.run_id || runId}</span>
-            <span>Scenario: {run?.scenario_id || 'Unknown'}</span>
-            <span>Controller: {run?.controller_type || 'Unknown'}</span>
-            <span>{run?.start_time ? new Date(run.start_time).toLocaleString() : ''}</span>
+            <span>Run: {runDetail?.run_id || run?.run_id || runId}</span>
+            <span>
+              Scenario: {runDetail?.scenario_id || report?.scenario_id || run?.scenario_id || 'Unknown'}
+            </span>
+            <span>
+              Controller: {runDetail?.controller_type || report?.controller_type || run?.controller_type || 'Unknown'}
+            </span>
+            <span>
+              {runDetail?.scenario_config?.effective_timestep_minutes !== undefined
+                ? `Dataset resolution ${runDetail.scenario_config.effective_timestep_minutes} min`
+                : ''}
+            </span>
+            <span>{runDetail?.start_time || run?.start_time ? new Date(runDetail?.start_time || run?.start_time).toLocaleString() : ''}</span>
           </div>
           <Link to="/" className="btn-secondary">
             <ChevronLeft className="w-4 h-4 mr-2" />

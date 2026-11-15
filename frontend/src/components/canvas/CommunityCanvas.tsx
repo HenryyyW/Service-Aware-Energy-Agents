@@ -161,37 +161,86 @@ export function CommunityCanvas(_props: CommunityCanvasProps) {
   }, [buildingIds, buildingLocations, currentStepData]);
 
   const pvAssets: PVAsset[] = useMemo(() => {
-    if (!assetMetadata?.pv) return [];
-    return assetMetadata.pv.map((pv: PVAssetMetadata) => ({
-      asset_id: pv.asset_id,
-      building_id: pv.building_id,
-      orientation: pv.orientation,
-      tilt: pv.tilt,
-      location: pv.location,
-    }));
-  }, [assetMetadata]);
+    if (assetMetadata?.pv?.length) {
+      return assetMetadata.pv.map((pv: PVAssetMetadata) => ({
+        asset_id: pv.asset_id,
+        building_id: pv.building_id,
+        capacity_kw: pv.capacity_kw,
+        orientation: pv.orientation,
+        tilt: pv.tilt,
+        location: pv.location,
+      }));
+    }
+    // No registered network geometry (API-built scenario): synthesise PV
+    // assets from the scenario config so the canvas still renders buildings.
+    return (currentScenario?.buildings ?? []).flatMap((b: any) =>
+      b.pv ? [
+        {
+          asset_id: `pv_${b.building_id}`,
+          building_id: b.building_id,
+          capacity_kw: b.pv.capacity_kw,
+          orientation: b.pv.azimuth,
+          tilt: b.pv.tilt,
+          location: b.pv.location ?? b.location,
+        },
+      ] : [],
+    );
+  }, [assetMetadata?.pv, currentScenario?.buildings]);
 
   const batteryAssets: BatteryAsset[] = useMemo(() => {
-    if (!assetMetadata?.batteries) return [];
-    return assetMetadata.batteries.map((battery: BatteryAssetMetadata) => ({
-      asset_id: battery.asset_id,
-      building_id: battery.building_id!,
-      community: false,
-      soc: 0,
-      location: battery.location,
-    }));
-  }, [assetMetadata]);
+    if (assetMetadata?.batteries?.length) {
+      return assetMetadata.batteries.map((battery: BatteryAssetMetadata) => ({
+        asset_id: battery.asset_id,
+        building_id: battery.building_id!,
+        community: false,
+        soc: 0,
+        capacity_kwh: battery.capacity_kwh,
+        power_kw: battery.power_kw,
+        location: battery.location,
+      }));
+    }
+    return (currentScenario?.buildings ?? []).flatMap((b: any) =>
+      b.battery ? [
+        {
+          asset_id: `battery_${b.building_id}`,
+          building_id: b.building_id,
+          community: false,
+          soc: 0,
+          capacity_kwh: b.battery.capacity_kwh,
+          power_kw: b.battery.power_kw,
+          location: b.battery.location ?? b.location,
+        },
+      ] : [],
+    );
+  }, [assetMetadata?.batteries, currentScenario?.buildings]);
 
   const evAssets: EVAsset[] = useMemo(() => {
-    if (!assetMetadata?.evs) return [];
-    return assetMetadata.evs.map((ev: EVAssetMetadata) => ({
-      asset_id: ev.asset_id,
-      building_id: ev.building_id!,
-      hub: false,
-      soc: 0,
-      location: ev.location,
-    }));
-  }, [assetMetadata]);
+    if (assetMetadata?.evs?.length) {
+      return assetMetadata.evs.map((ev: EVAssetMetadata) => ({
+        asset_id: ev.asset_id,
+        building_id: ev.building_id!,
+        hub: false,
+        soc: 0,
+        capacity_kwh: ev.capacity_kwh,
+        charger_power_kw: ev.charger_power_kw,
+        target_soc: ev.target_soc,
+        location: ev.location,
+      }));
+    }
+    return (currentScenario?.buildings ?? []).flatMap((b: any) =>
+      b.evs?.[0] ? [
+        {
+          asset_id: `ev_${b.building_id}_0`,
+          building_id: b.building_id,
+          hub: false,
+          soc: 0,
+          charger_power_kw: b.evs[0].max_charge_kw,
+          target_soc: b.evs[0].target_soc,
+          location: b.evs[0].location ?? b.location,
+        },
+      ] : [],
+    );
+  }, [assetMetadata?.evs, currentScenario?.buildings]);
 
   const feeders: Feeder[] = useMemo(() => {
     if (!networkGeometry) return [];

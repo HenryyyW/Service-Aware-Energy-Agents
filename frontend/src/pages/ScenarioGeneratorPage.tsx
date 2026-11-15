@@ -127,6 +127,38 @@ function buildDiff(existing: ScenarioConfig, parsed: ScenarioConfig) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Client-side scenario validation                                            */
+/* -------------------------------------------------------------------------- */
+/* Mirrors the backend /api/scenarios/{id}/validate checks so the confirm
+ * screen can validate a config that has been generated but not yet saved
+ * (POST /scenarios). A saved scenario can still be validated server-side. */
+function validateScenarioConfig(config: ScenarioConfig | null): {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+} {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  if (!config) {
+    return { valid: false, errors: ['No configuration to validate'], warnings: [] };
+  }
+  const buildingsCount = Array.isArray(config.buildings)
+    ? config.buildings.length
+    : config.community?.buildings || 0;
+  if (buildingsCount === 0) {
+    errors.push('No buildings configured');
+  }
+  if (!config.pandapower) {
+    warnings.push('No pandapower configuration - grid validation will be skipped');
+  }
+  const timestep = config.community?.timestep_minutes ?? config.timestep_minutes;
+  if (timestep !== undefined && !([5, 15, 30, 60] as number[]).includes(timestep)) {
+    warnings.push(`Unusual timestep: ${timestep} minutes`);
+  }
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+/* -------------------------------------------------------------------------- */
 /* Left panel — community summary cards                                       */
 /* -------------------------------------------------------------------------- */
 function SummaryCard({
@@ -296,17 +328,19 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
   }, [description, isGenerating, propGenerate, setCurrentScenario]);
 
   const handleValidate = useCallback(async () => {
-    if (!parsed?.scenario_id) return;
+    if (!parsed) return;
     setIsValidating(true);
     try {
-      const v = await api.validateScenario(parsed.scenario_id);
+      // Validate the in-memory config (works for generated-but-unsaved
+      // scenarios too; a saved scenario can still be re-validated server-side).
+      const v = validateScenarioConfig(parsed);
       setValidation(v);
     } catch (e: any) {
       setError({ message: e.response?.data?.detail || 'Validation failed' });
     } finally {
       setIsValidating(false);
     }
-  }, [parsed?.scenario_id]);
+  }, [parsed]);
 
   const handleRun = useCallback(async () => {
     if (!parsed || isRunning) return;
