@@ -1,10 +1,14 @@
 # Backend Dockerfile - Service-Aware Energy Agents API
+# syntax=docker/dockerfile:1
 FROM python:3.11-slim
 
+# NOTE: no PIP_NO_CACHE_DIR here - the pip layer below uses a BuildKit cache
+# mount; PIP_NO_CACHE_DIR=1 would defeat it and every src/ touch would
+# re-download the full dependency set (the 20-min Build Backend Image
+# timeout on run 43620475737).
 ENV PYTHONUNBUFFERED=1 \
     PYTHONHASHSEED=0 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
 
@@ -14,11 +18,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install Python dependencies. src/ changes on nearly every commit, which
+# invalidates this layer - the pip cache mount keeps the downloaded wheels
+# across builds so rebuilds install from cache instead of the network.
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
 COPY backend/requirements.txt ./backend/
-RUN pip install --no-cache-dir -e ".[api]" -r backend/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -e ".[api]" -r backend/requirements.txt
 
 # Copy application code
 COPY backend/ ./backend/
