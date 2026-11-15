@@ -144,27 +144,49 @@ class ConfigCoderAgent:
 
         A config may name its building with a 1-based 'building' key (the
         planner prompt asks for it when an asset sits on only some buildings).
-        With no hints, configs are dealt to buildings in order (round-robin),
-        the pre-hint behaviour."""
+        With no hints, configs are assigned to the first N buildings where
+        N = len(configs). Buildings beyond N get None."""
         if not configs:
             return None
+        # Respect explicit building hints if present
         hinted = [c for c in configs if isinstance(c, dict) and c.get("building")]
-        if not hinted:
-            return configs[i % len(configs)]
-        for c in configs:
-            if isinstance(c, dict) and c.get("building") == i + 1:
-                return c
+        if hinted:
+            for c in configs:
+                if isinstance(c, dict) and c.get("building") == i + 1:
+                    return c
+            return None
+        # No hints: assign to first N buildings where N = len(configs)
+        if i < len(configs):
+            return configs[i]
         return None
 
     @staticmethod
-    def _config_list_for_building(configs, i):
-        """The list-slot asset configs (evs, flexible_loads) for building i."""
+    def _config_list_for_building(configs, i, num_buildings):
+        """The list-slot asset configs (evs, flexible_loads) for building i.
+
+        Distributes configs across buildings as evenly as possible.
+        E.g., 4 EV configs across 3 buildings -> [2, 1, 1] (first building gets 2).
+        """
         if not configs:
             return []
+        # Respect explicit building hints if present
         hinted = [c for c in configs if isinstance(c, dict) and c.get("building")]
-        if not hinted:
-            return [configs[i % len(configs)]]
-        return [c for c in configs if c.get("building") == i + 1]
+        if hinted:
+            return [c for c in configs if c.get("building") == i + 1]
+        # No hints: distribute evenly across buildings
+        n_configs = len(configs)
+        n_buildings = num_buildings
+        if n_configs <= n_buildings:
+            # Fewer configs than buildings: assign one per building
+            return [configs[i]] if i < n_configs else []
+        else:
+            # More configs than buildings: distribute evenly
+            # E.g., 4 configs across 3 buildings -> building 0 gets 2, buildings 1,2 get 1 each
+            base = n_configs // n_buildings
+            extra = n_configs % n_buildings
+            start = i * base + min(i, extra)
+            end = start + base + (1 if i < extra else 0)
+            return configs[start:end]
 
     def _build_buildings(self, plan: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Build building configurations from plan."""
@@ -195,7 +217,7 @@ class ConfigCoderAgent:
 
             # EV (per building, like pv/battery: one config per building)
             if "ev" in plan.get("target_assets", []) and plan.get("ev_configs"):
-                evs = self._config_list_for_building(plan["ev_configs"], i)
+                evs = self._config_list_for_building(plan["ev_configs"], i, count)
                 if evs:
                     building["evs"] = evs
 
@@ -203,7 +225,9 @@ class ConfigCoderAgent:
             if "flexible_load" in plan.get("target_assets", []) and plan.get(
                 "flexible_load_configs"
             ):
-                loads = self._config_list_for_building(plan["flexible_load_configs"], i)
+                loads = self._config_list_for_building(
+                    plan["flexible_load_configs"], i, count
+                )
                 if loads:
                     building["flexible_loads"] = loads
 
