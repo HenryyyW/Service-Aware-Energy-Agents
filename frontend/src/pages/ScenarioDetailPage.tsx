@@ -106,7 +106,28 @@ export function ScenarioDetailPage() {
     const t = setInterval(async () => {
       try {
         const r = await api.getSimulationRun(run.run_id);
-        if (active) {
+        if (r.status === 'completed') {
+          try {
+            const diag = await api.getRunDiagnostics(r.run_id);
+            if (active) {
+              setDiagnostics(diag);
+              setRun({
+                run_id: r.run_id,
+                status: r.status,
+                stage: r.stage,
+                progress: r.progress,
+                eta_seconds: r.eta_seconds,
+                outcome_sentence: r.outcome_sentence,
+                error: r.error,
+                controller_type: r.controller_type,
+                evCompletionRate: r.service_metrics?.ev_completion_rate ?? null,
+                avgEvSocAtDeparture: r.service_metrics?.avg_ev_soc_at_departure ?? null,
+              });
+            }
+          } catch {
+            /* diagnostics are best-effort: the run itself already reported */
+          }
+        } else if (active) {
           setRun({
             run_id: r.run_id,
             status: r.status,
