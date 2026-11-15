@@ -531,3 +531,40 @@ metrics visible on completed runs), step 4's time player. The eight-step
 walkthrough has no known open defect as of `b1b76c413` - the user's retest #4
 is the only remaining acceptance step. (QA's Lighthouse/axe re-check on the
 newer code is advisable but not a blocker for the walkthrough itself.)
+
+## MVP retest #4 (user, 2026-11-15): NOT PASSED - big progress, one
+## blocking defect + a UI cluster
+
+2 partial-pass heavy run; every fix from retest #3 held under live use
+(24-step runs with real economics ($5.47 / 20.10 kWh / 22.05% PV / 4.35 kWh
+throughput / 3.96 kg), correct timestamps, report with buildings/config,
+canvas + table + time player + keyboard, four-strategy comparison with
+honest fallback labels, downloads).
+
+- **W15 (fail, blocking): NL fallback fidelity.** "4 buildings, one shared
+  battery, two EVs" -> Base Scenario, 1 building, 1 EV, no battery. Verified
+  root cause: `_fallback_plan` hardcodes `building_count = 1`, single-count
+  configs, English-only keywords, and - worst - **silently defaults**
+  unparsed counts instead of listing them as rejected fields
+  (no-silent-substitution violation at the front door). -> Backend A: parse
+  building/EV counts, bilingual asset keywords, named rejections for
+  unparsed stated counts.
+- **W16** Validate-now validates the nonexistent `scenario_base`. -> FE2.
+- **W17** "View the community" navigates to a nonexistent probe scenario.
+  -> FE2.
+- **W18** effective timestep never surfaced: config says 15 min, runs at
+  60; comparison `maxTimestep` computes 95 against 24 real trajectories
+  (dispatch trace "0/95" is this symptom); report effective timestep None.
+  -> FE2: use `effective_timestep_minutes` wherever timesteps are computed
+  or displayed, and disclose the dataset resolution.
+- **W19** asset capacity shows `—` (asset-metadata, like geometry, serves
+  only registered scenarios). -> FE2: synthesize from config, W14 pattern.
+- **W20** MapLibre worker load error in map view (table view fine). -> FE2.
+- **W22** report page footer: scenario/controller `Unknown`, effective
+  timestep `None`. -> FE2.
+- **W23** diagnostics panel missing on the detail page in practice (API
+  fine). -> FE2.
+- **CI/CD:** Build Backend Image 20-min timeout -> pipeline cancelled,
+  compose smoke skipped. -> QA.
+- **Paper deadline TODAY (11-15):** submission status unverified;
+  Research 2 asked for immediate confirmation.
