@@ -196,10 +196,7 @@ function SummaryCard({
 }
 
 function CommunitySummary({ config }: { config: ScenarioConfig }) {
-  const b = (config.buildings ?? [])[0] ?? {};
-  const pv = b.pv ?? {};
-  const bat = b.battery ?? {};
-  const ev = b.evs?.[0] ?? {};
+  const buildings = config.buildings ?? [];
   const grid = config.pandapower ?? ({} as any);
   const sharing = config.energy_sharing ?? ({} as any);
 
@@ -211,24 +208,36 @@ function CommunitySummary({ config }: { config: ScenarioConfig }) {
       { label: 'Random seed', value: String(config.random_seed), prov: 'default' as Provenance },
     ],
     buildings: [
-      { label: 'Building ID', value: b.building_id, prov: 'given' as Provenance },
-      { label: 'Type', value: b.building_type, prov: 'given' as Provenance },
-      { label: 'Location', value: (b.location?.lat ?? '\u2014') + ', ' + (b.location?.lon ?? '\u2014'), prov: 'given' as Provenance },
+      {
+        label: 'Buildings',
+        value: `${buildings.length} building${buildings.length === 1 ? '' : 's'}`,
+        prov: 'given' as Provenance,
+      },
+      ...buildings.map((b, i) => ({
+        label: `Building ${i + 1}`,
+        value: `${b.building_type}`,
+        prov: 'given' as Provenance,
+      })),
     ],
-    pv: [
-      { label: 'Capacity (kW)', value: pv.capacity_kw ?? '\u2014', prov: pv.capacity_kw ? ('given' as Provenance) : ('missing' as Provenance) },
-      { label: 'Azimuth (\u00B0)', value: pv.azimuth ?? '\u2014', prov: pv.azimuth ? ('given' as Provenance) : ('assumed' as Provenance) },
-      { label: 'Tilt (\u00B0)', value: pv.tilt ?? '\u2014', prov: pv.tilt ? ('given' as Provenance) : ('assumed' as Provenance) },
-    ],
-    battery: [
-      { label: 'Capacity (kWh)', value: bat.capacity_kwh ?? '\u2014', prov: bat.capacity_kwh ? ('given' as Provenance) : ('missing' as Provenance) },
-      { label: 'Power (kW)', value: bat.power_kw ?? '\u2014', prov: bat.power_kw ? ('given' as Provenance) : ('missing' as Provenance) },
-    ],
-    ev: [
-      { label: 'Count', value: ev.capacity_kwh ? '1' : '\u2014', prov: ev.capacity_kwh ? ('given' as Provenance) : ('missing' as Provenance) },
-      { label: 'Max charge (kW)', value: ev.max_charge_kw ?? '\u2014', prov: ev.max_charge_kw ? ('given' as Provenance) : ('missing' as Provenance) },
-      { label: 'Target SOC', value: ev.target_soc ?? '\u2014', prov: ev.target_soc ? ('given' as Provenance) : ('assumed' as Provenance) },
-    ],
+    pv: buildings.flatMap((b: any) =>
+      b.pv ? [
+        { label: `${b.building_id} Capacity (kW)`, value: b.pv.capacity_kw ?? '\u2014', prov: 'given' as Provenance },
+        { label: `${b.building_id} Azimuth (\u00B0)`, value: b.pv.azimuth ?? '\u2014', prov: b.pv.azimuth ? ('given' as Provenance) : ('assumed' as Provenance) },
+        { label: `${b.building_id} Tilt (\u00B0)`, value: b.pv.tilt ?? '\u2014', prov: b.pv.tilt ? ('given' as Provenance) : ('assumed' as Provenance) },
+      ] : []
+    ),
+    battery: buildings.flatMap((b: any) =>
+      b.battery ? [
+        { label: `${b.building_id} Capacity (kWh)`, value: b.battery.capacity_kwh ?? '\u2014', prov: 'given' as Provenance },
+        { label: `${b.building_id} Power (kW)`, value: b.battery.power_kw ?? '\u2014', prov: 'given' as Provenance },
+      ] : []
+    ),
+    ev: buildings.flatMap((b: any) =>
+      b.evs?.length ? b.evs.flatMap((ev: any, j: number) => [
+        { label: `${b.building_id} EV ${j + 1} Max charge (kW)`, value: ev.max_charge_kw ?? '\u2014', prov: 'given' as Provenance },
+        { label: `${b.building_id} EV ${j + 1} Target SOC`, value: ev.target_soc ?? '\u2014', prov: 'given' as Provenance },
+      ]) : []
+    ),
     grid: [
       { label: 'Network', value: grid.network_type ?? '\u2014', prov: 'assumed' as Provenance },
       { label: 'Import limit (kW)', value: config.community_import_limit_kw ?? '\u2014', prov: config.community_import_limit_kw ? ('given' as Provenance) : ('missing' as Provenance) },

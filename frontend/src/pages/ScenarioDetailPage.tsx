@@ -105,17 +105,13 @@ export function ScenarioDetailPage() {
   // completed (e.g. deduplicated run returned immediately). The polling
   // effect above never observes the transition, so evCompletionRate would
   // stay null and the 0 % service failure / diagnosis panel would be
-  // invisible.
+  // invisible. Depends on run.run_id (not the run object) so re-renders from
+  // setRun don't re-trigger the effect.
   useEffect(() => {
-    console.log('[DetailPage] backfill effect running:', { runId: run?.run_id, status: run?.status, diagnostics: !!diagnostics });
-    if (!run || run.status !== 'completed') {
-      console.log('[DetailPage] backfill effect early return:', { run: !!run, status: run?.status });
-      return;
-    }
+    if (!run || run.status !== 'completed' || diagnostics != null) return;
     let active = true;
     (async () => {
       try {
-        console.log('[DetailPage] fetching run data:', run.run_id);
         const r = await api.getSimulationRun(run.run_id);
         if (active) {
           setRun({
@@ -124,16 +120,12 @@ export function ScenarioDetailPage() {
             avgEvSocAtDeparture: r.service_metrics?.avg_ev_soc_at_departure ?? null,
           });
         }
-        // Fetch diagnostics whenever they are not yet cached so the diagnosis
-        // panel renders even for runs that mounted already completed.
-        if (active && diagnostics == null) {
+        if (active) {
           try {
-            console.log('[DetailPage] fetching diagnostics:', run.run_id);
             const diag = await api.getRunDiagnostics(run.run_id);
-            console.log('[DetailPage] diagnostics fetched:', diag);
             if (active) setDiagnostics(diag);
-          } catch (e: unknown) {
-            console.log('[DetailPage] diagnostics fetch failed:', String(e));
+          } catch {
+            /* diagnostics are best-effort */
           }
         }
       } catch {
@@ -143,7 +135,7 @@ export function ScenarioDetailPage() {
     return () => {
       active = false;
     };
-  }, [run, diagnostics]);
+  }, [run?.run_id, run?.status, diagnostics]);
 
   const handleRun = useCallback(async () => {
     if (!scenarioId || starting) return;
