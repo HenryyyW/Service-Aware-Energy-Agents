@@ -107,10 +107,15 @@ export function ScenarioDetailPage() {
   // stay null and the 0 % service failure / diagnosis panel would be
   // invisible.
   useEffect(() => {
-    if (!run || run.status !== 'completed') return;
+    console.log('[DetailPage] backfill effect running:', { runId: run?.run_id, status: run?.status, diagnostics: !!diagnostics });
+    if (!run || run.status !== 'completed') {
+      console.log('[DetailPage] backfill effect early return:', { run: !!run, status: run?.status });
+      return;
+    }
     let active = true;
     (async () => {
       try {
+        console.log('[DetailPage] fetching run data:', run.run_id);
         const r = await api.getSimulationRun(run.run_id);
         if (active) {
           setRun({
@@ -123,10 +128,12 @@ export function ScenarioDetailPage() {
         // panel renders even for runs that mounted already completed.
         if (active && diagnostics == null) {
           try {
+            console.log('[DetailPage] fetching diagnostics:', run.run_id);
             const diag = await api.getRunDiagnostics(run.run_id);
+            console.log('[DetailPage] diagnostics fetched:', diag);
             if (active) setDiagnostics(diag);
-          } catch {
-            /* diagnostics are best-effort */
+          } catch (e: unknown) {
+            console.log('[DetailPage] diagnostics fetch failed:', String(e));
           }
         }
       } catch {
@@ -156,6 +163,15 @@ export function ScenarioDetailPage() {
         progress: created.progress,
         controller_type: created.controller_type,
       });
+      // Fetch diagnostics if run is completed (deduped run returned immediately)
+      if (created.status === 'completed') {
+        try {
+          const diag = await api.getRunDiagnostics(created.run_id);
+          setDiagnostics(diag);
+        } catch {
+          /* diagnostics are best-effort */
+        }
+      }
     } catch (e: any) {
       setError(e.response?.data?.detail || e.message || 'Could not start the simulation');
     } finally {
