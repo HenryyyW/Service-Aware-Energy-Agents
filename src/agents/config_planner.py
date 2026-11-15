@@ -284,10 +284,14 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
             # Try digits first
             for kw in keywords:
                 # Pattern: "N keyword" or "keyword N" or "N-keyword"
+                # Also handle Chinese measure words: "N 個/台/輛 keyword" or "N 個/台/輛 的 keyword"
+                measure_words = r"(?:個|个|台|輛|套|组|支|根|条|张|座|栋|间|户|部|具|项|份|桩|根|条|张|枚|粒|颗|双|对|副|套|组|队|群|座|栋|条|辆|台)"
                 patterns = [
                     rf"(\d+)\s*{re.escape(kw)}",  # "4 buildings"
                     rf"{re.escape(kw)}\s*(\d+)",  # "buildings 4"
                     rf"(\d+)[-\s]{re.escape(kw)}",  # "4-building"
+                    # Chinese: N + measure word + (optional: 的/共用/其他) + keyword
+                    rf"(\d+)\s*(?:{measure_words})\s*(?:的|共用|專用)?\s*{re.escape(kw)}",  # "4 個 battery" / "4 個 共用 battery"
                 ]
                 for pat in patterns:
                     m = re.search(pat, text)
@@ -321,7 +325,7 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
                         if re.search(rf"\b{word}\b.{{0,8}}\b{kw}\b", text):
                             return (val, True)
 
-            # Chinese number words - match both orders but tighter window
+            # Chinese number words - allow measure words between number and keyword
             zh_nums = {
                 "一": 1,
                 "二": 2,
@@ -335,10 +339,15 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
                 "九": 9,
                 "十": 10,
             }
+            measure_words = r"(?:個|个|台|輛|套|组|支|根|条|张|座|栋|间|户|部|具|项|份|桩|根|条|张|枚|粒|颗|双|对|副|套|组|队|群|座|栋|条|辆|台)"
             for ch, val in zh_nums.items():
                 if ch in text:
                     for kw in keywords:
-                        if re.search(rf"{ch}.{{0,2}}{kw}|{kw}.{{0,2}}{ch}", text):
+                        # Match: number + measure_word + (optional 的/共用/專用) + keyword
+                        if re.search(
+                            rf"{ch}(?:{measure_words})?(?:的|共用|專用)?{kw}|{kw}(?:{measure_words})?(?:的|共用|專用)?{ch}",
+                            text,
+                        ):
                             return (val, True)
 
             # Mentioned but couldn't parse count
@@ -348,7 +357,19 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
 
         # Building count
         bld_count, bld_mentioned = extract_count(
-            nl_lower, ["building", "buildings", "house", "houses", "栋", "建筑", "楼"]
+            nl_lower,
+            [
+                "building",
+                "buildings",
+                "house",
+                "houses",
+                "栋",
+                "建筑",
+                "楼",
+                "棟",
+                "建築",
+                "樓",
+            ],
         )
         if bld_count is not None:
             plan.building_count = bld_count
@@ -360,7 +381,15 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
         plan.building_types = ["residential"] * plan.building_count
 
         # PV
-        pv_keywords = ["pv", "solar", "photovoltaic", "太阳能", "光伏"]
+        pv_keywords = [
+            "pv",
+            "solar",
+            "photovoltaic",
+            "太阳能",
+            "光伏",
+            "太陽能",
+            "光伏",
+        ]
         pv_count, pv_mentioned = extract_count(nl_lower, pv_keywords)
         if pv_mentioned:
             plan.target_assets.append("pv")
@@ -374,13 +403,29 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
             # Check if any PV keyword mentioned without count
             if any(
                 kw in nl_lower
-                for kw in ["pv", "solar", "photovoltaic", "太阳能", "光伏"]
+                for kw in [
+                    "pv",
+                    "solar",
+                    "photovoltaic",
+                    "太阳能",
+                    "光伏",
+                    "太陽能",
+                    "光伏",
+                ]
             ):
                 plan.target_assets.append("pv")
                 plan.pv_configs.append({"capacity_kw": 10.0})
 
         # Battery
-        bat_keywords = ["battery", "batteries", "storage", "电池", "储能"]
+        bat_keywords = [
+            "battery",
+            "batteries",
+            "storage",
+            "电池",
+            "储能",
+            "電池",
+            "儲能",
+        ]
         bat_count, bat_mentioned = extract_count(nl_lower, bat_keywords)
         if bat_mentioned:
             plan.target_assets.append("battery")
@@ -391,7 +436,10 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
                 plan.rejected_fields.append("battery.count")
                 plan.battery_configs.append({"capacity_kwh": 13.5, "power_kw": 5.0})
         else:
-            if any(kw in nl_lower for kw in ["battery", "storage", "电池", "储能"]):
+            if any(
+                kw in nl_lower
+                for kw in ["battery", "storage", "电池", "储能", "電池", "儲能"]
+            ):
                 plan.target_assets.append("battery")
                 plan.battery_configs.append({"capacity_kwh": 13.5, "power_kw": 5.0})
 
@@ -405,6 +453,8 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
             "cars",
             "电动车",
             "电车",
+            "電動車",
+            "電車",
         ]
         ev_count, ev_mentioned = extract_count(nl_lower, ev_keywords)
         if ev_mentioned:
@@ -438,7 +488,15 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
         else:
             if any(
                 kw in nl_lower
-                for kw in ["ev", "electric vehicle", "car", "电动车", "电车"]
+                for kw in [
+                    "ev",
+                    "electric vehicle",
+                    "car",
+                    "电动车",
+                    "电车",
+                    "電動車",
+                    "電車",
+                ]
             ):
                 plan.target_assets.append("ev")
                 plan.ev_configs.append(
