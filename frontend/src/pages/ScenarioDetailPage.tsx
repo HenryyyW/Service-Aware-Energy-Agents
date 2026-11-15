@@ -98,6 +98,8 @@ export function ScenarioDetailPage() {
   }, [load]);
 
   // Poll the run to a terminal state: the lifecycle is real, never estimated.
+  // Note: diagnostics are NOT fetched here. They are fetched in handleRun when
+  // the run completes, to avoid setRun triggering effect re-render loops.
   useEffect(() => {
     if (!run || ['completed', 'failed', 'cancelled'].includes(run.status)) return;
     let active = true;
@@ -117,14 +119,6 @@ export function ScenarioDetailPage() {
             evCompletionRate: r.service_metrics?.ev_completion_rate ?? null,
             avgEvSocAtDeparture: r.service_metrics?.avg_ev_soc_at_departure ?? null,
           });
-        }
-        if (r.status === 'completed') {
-          try {
-            const diag = await api.getRunDiagnostics(r.run_id);
-            if (active) setDiagnostics(diag);
-          } catch {
-            /* diagnostics are best-effort: the run itself already reported */
-          }
         }
       } catch {
         /* transient: the next tick retries */
@@ -154,15 +148,32 @@ export function ScenarioDetailPage() {
         progress: created.progress,
         controller_type: created.controller_type,
       });
-      // Fetch diagnostics if run is completed (deduped run returned immediately)
-      if (created.status === 'completed') {
+      // Fetch diagnostics for the run (whether already completed or polling below)
+      let active = true;
+      (async () => {
         try {
-          const diag = await api.getRunDiagnostics(created.run_id);
-          setDiagnostics(diag);
+          // If already completed, fetch diagnostics immediately
+          if (created.status === 'completed') {
+            const diag = await api.getRunDiagnostics(created.run_id);
+            if (active) setDiagnostics(diag);
+            return;
+          }
+          // Otherwise poll until completed
+          while (active) {
+            const r = await api.getSimulationRun(created.run_id);
+            if (!active) return;
+            if (r.status === 'completed') {
+              if (active && run) setRun({ ...run, status: 'completed' });
+              const diag = await api.getRunDiagnostics(created.run_id);
+              if (active) setDiagnostics(diag);
+              break;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+          }
         } catch {
-          /* diagnostics are best-effort */
+          /* transient: best-effort diagnostics */
         }
-      }
+      })();
     } catch (e: any) {
       setError(e.response?.data?.detail || e.message || 'Could not start the simulation');
     } finally {
