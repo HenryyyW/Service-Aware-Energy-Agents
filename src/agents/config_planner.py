@@ -275,16 +275,28 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
                     break
 
         # Helper: extract number from text (digits or English/Chinese number words)
+        # Splits text into clauses by punctuation to avoid cross-contamination
+        # between different assets mentioned in different clauses.
         def extract_count(text: str, keywords: list) -> tuple[int | None, bool]:
             """Returns (count, mentioned). count is None if mentioned but unparseable."""
-            mentioned = any(kw in text for kw in keywords)
-            if not mentioned:
-                return (None, False)
+            # Split text into clauses by punctuation to isolate asset mentions
+            # Chinese punctuation: 、, 。, ，, ；, ;, English: ., ,, ;, :
+            clauses = re.split(r"[、。，,.;;:：]", text)
+            # Filter clauses that contain any of the keywords
+            relevant_clauses = [
+                c.strip() for c in clauses if any(kw in c for kw in keywords)
+            ]
+            if not relevant_clauses:
+                # Keywords not found in any clause
+                mentioned = any(kw in text for kw in keywords)
+                return (None, mentioned) if mentioned else (None, False)
+
+            # Search only within relevant clauses
+            search_text = " ".join(relevant_clauses)
+            mentioned = True  # keywords found in relevant clauses
 
             # Try digits first
             for kw in keywords:
-                # Pattern: "N keyword" or "keyword N" or "N-keyword"
-                # Also handle Chinese measure words: "N 個/台/輛 keyword" or "N 個/台/輛 的 keyword"
                 measure_words = r"(?:個|个|台|輛|套|组|支|根|条|张|座|栋|间|户|部|具|项|份|桩|根|条|张|枚|粒|颗|双|对|副|套|组|队|群|座|栋|条|辆|台)"
                 patterns = [
                     rf"(\d+)\s*{re.escape(kw)}",  # "4 buildings"
@@ -294,7 +306,7 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
                     rf"(\d+)\s*(?:{measure_words})\s*(?:的|共用|專用)?\s*{re.escape(kw)}",  # "4 個 battery" / "4 個 共用 battery"
                 ]
                 for pat in patterns:
-                    m = re.search(pat, text)
+                    m = re.search(pat, search_text)
                     if m:
                         return (int(m.group(1)), True)
 
@@ -319,10 +331,10 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
                 "several": 3,
             }
             for word, val in num_words.items():
-                if re.search(rf"\b{word}\b", text):
+                if re.search(rf"\b{word}\b", search_text):
                     # Check if number word immediately precedes keyword (within ~8 chars)
                     for kw in keywords:
-                        if re.search(rf"\b{word}\b.{{0,8}}\b{kw}\b", text):
+                        if re.search(rf"\b{word}\b.{{0,8}}\b{kw}\b", search_text):
                             return (val, True)
 
             # Chinese number words - allow measure words between number and keyword
@@ -341,12 +353,12 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
             }
             measure_words = r"(?:個|个|台|輛|套|组|支|根|条|张|座|栋|间|户|部|具|项|份|桩|根|条|张|枚|粒|颗|双|对|副|套|组|队|群|座|栋|条|辆|台)"
             for ch, val in zh_nums.items():
-                if ch in text:
+                if ch in search_text:
                     for kw in keywords:
                         # Match: number + measure_word + (optional 的/共用/專用) + keyword
                         if re.search(
                             rf"{ch}(?:{measure_words})?(?:的|共用|專用)?{kw}|{kw}(?:{measure_words})?(?:的|共用|專用)?{ch}",
-                            text,
+                            search_text,
                         ):
                             return (val, True)
 
