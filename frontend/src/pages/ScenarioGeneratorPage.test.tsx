@@ -60,9 +60,11 @@ describe('ScenarioGeneratorPage confirm screen', () => {
     // Confirm step renders without crashing
     await waitFor(() => expect(screen.getByText(/confirm scenario/i)).toBeInTheDocument())
 
-    // All seven sections render with their icons (none undefined)
+    // All seven sections render with their icons (none undefined).
+    // A multi-building config renders one group per building, so 'Buildings'
+    // (and the per-building asset sections) can appear more than once.
     for (const title of ['Community', 'Buildings', 'PV', 'Battery', 'EV', 'Grid', 'Sharing']) {
-      expect(screen.getByText(title)).toBeInTheDocument()
+      expect(screen.getAllByText(title).length).toBeGreaterThanOrEqual(1)
     }
 
     // No React element-type crash surface
