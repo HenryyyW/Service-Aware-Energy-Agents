@@ -568,3 +568,31 @@ honest fallback labels, downloads).
   compose smoke skipped. -> QA.
 - **Paper deadline TODAY (11-15):** submission status unverified;
   Research 2 asked for immediate confirmation.
+
+## Partner browser verification of W16-W23 (2026-11-15) on 37ecd3612
+
+PASS (live): W16 (validate no phantom scenario error), W17 (View the
+community -> /canvas), W18 (detail header "60 min steps" = effective
+timestep; the phantom 95-step timeline is gone), canvas load + 24-step
+TimePlayer, completed-run economics on the detail page ($218 / 728 kWh /
+EV 0%).
+
+FAIL with root causes:
+- **W23** diagnostics panel never renders: the backfill effect's cleanup
+  sets `active=false` on every re-run while `setRun` re-triggers the
+  effect - the fetch is aborted between "fetching" and "fetched". Fix: a
+  fetched-id ref, or move the fetch out of the polling effect.
+- **W22** report footer shows Unknown though `/api/reports/{id}` returns
+  scenario_id + controller_type - the state source in the page is wrong.
+- **W24 (new, blocking): the confirm screen renders only `buildings[0]`**
+  (`ScenarioGeneratorPage.tsx:199`). A correct 4-building config still
+  *looks* like 1 building + one of each asset to the user - step 1 fails
+  on perception alone. Must render every building.
+
+Re-verify: W19 (table view click blocked by a covering div in the partner
+harness) and W20 (MapLibre worker error not seen this pass - likely fixed
+by the main.tsx worker-URL change).
+
+W15 note: the API now generates 4 buildings for all tested inputs, but
+per-asset counts still equal the building count (cross-contamination) -
+re-dispatched to Backend A with measurements.
