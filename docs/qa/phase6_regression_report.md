@@ -211,6 +211,25 @@ formula path; 24 steps, seed 42):
 
 Both items verified; no new defects.
 
+### Final clean retest #2 — main @ `f26b26ba8` (2026-11-17, LLM path live)
+
+Tip includes Backend A's EV-count parsing fix (f26b26ba8) — retested at the
+current tip rather than 467fb13ec (strictly newer; the EV-count fix is in).
+
+| step | verdict | notes |
+|---|---|---|
+| 1 generate | **PASS with defect** | LLM path live (`plan_source=llm`); **EV count fixed: "two electric vehicles" → 2 EVs** (1+1 across two buildings — resolves the Partner's observation); NL naming present; verdict `escalate`. **NEW REGRESSION (Backend A)**: both arms (LLM + fallback) now emit `pv.building` placement keys — `POST /api/scenarios` rejects the generator's own output with 422 `{"field": "pv -> building", "message": "Extra inputs are not permitted"}`. Mechanism: `config_planner.py` per-asset placement instruction vs the confirm-side PV payload schema (extra inputs forbidden). Named-422 behavior works as designed; the generate→confirm seam is broken at this tip. |
+| 2 confirm | **FAIL on generated configs (regression above) / PASS on schema-clean config** | hand-built config (post-fix shape) → 201 + validate True; W25 named-422 re-verified (pv `capacity_kw: -1` → 422 naming `capacity_kw`) |
+| 3 validate + run + cancel | **PASS** (cancel verified on 756f831ce Phase A; run completed 26.41 USD on this tip) | |
+| 4 canvas | **PASS** | geometry 200 (50 buses); trajectories 200 with real observations |
+| 5 strategy comparison | **PASS with note** | 4 completed strategies, honest labels (mpc + single_agent_rl `24/fallback_to_rule_based`; rule_based + multi_agent_rl unlabelled); NOTE for B/A: all four arms byte-identical economics (26.41) — multi_agent_rl unlabelled yet identical to rule_based (earlier rounds differed 15.27 vs 14.90) — worth confirming the multi-agent dispatch is genuinely distinct |
+| 6 diagnosis | **PASS** | explicit no-violations reading |
+| 7 report | **PASS** | 200 with config/timestep/buildings/seed/controller/run_id; markdown download 200 |
+| 8 axe + keyboard | **PASS** (unchanged from Phase A) | 69 contrast/labelling violations on 4 routes (studio 57, generate 7, experiments 4, network 1); zero keyboard/focus violations — awaiting FE2 |
+
+Gates: tsc ✓, eslint ✓ (mechanical `let`→`const` re-applied, commit 72ee49c1c
+on qa/retest-467), build ✓.
+
 ### Re-verification #3 — Lighthouse + axe + responsive preflight (main @ `328df3568`, 2026-11-13)
 
 Production build (`npm run build`, vite) + preview server (:4173). NIM not involved.
