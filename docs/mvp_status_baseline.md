@@ -728,3 +728,41 @@ Phase B released (message sent) - the user's retest #6 follows Phase B.
   a literal "None". The honest fix is a "no record" style label in the
   missing branch; the value itself is present on real runs (the detail header
   shows the 60-min effective timestep). W22 stays open with FE2.
+
+## Partner verification: FE2's branch merged (2026-11-17 ~01:15, origin/main `b8cf2dc85`)
+
+**FE2's `frontend2/fix/preretest-a11y` was cherry-picked onto current main and
+pushed** (4 commits: `27e35a9c1` report-download disable, `82aa40350` Phase A
+axe fixes, `2dc516c65` per-arm fallback labels, `b8cf2dc85` Dispatch Trace
+panel). The branch itself was NOT merged: its tip (`0071bec4a`) was 3 commits
+past the SHA FE2 named and based on a stale main that would have reverted 52
+lines of today's verification records. Content instead landed clean.
+
+**Gates re-run by the Partner in a worktree on the merged result** (not taken
+from FE2's report): `npm run lint` exit 0 (1 pre-existing react-hooks warning
+in `ScenarioDetailPage.tsx` - non-blocking, CI runs plain `npm run lint`),
+`tsc --noEmit` 0 errors, `vitest` **16/16** (FE2's 13/13 predated their added
+tests), `npm run build` exit 0.
+
+**Honesty check of the new UI (read, not assumed):** the fallback labels read
+real run fields (`controller_fallback_steps` / `controller_fallback_reason` /
+`controller_type`), render "no record" when absent, and add
+"Effective controller: rule_based (via fallback)" only when steps > 0; the
+Dispatch Trace panel has an explicit "No dispatch trace data for this run"
+empty state and tests cover both branches. No fabricated values found.
+
+**W22 closed for real runs:** the report footer now shows the fallback label +
+effective controller next to Controller, and reads
+`scenario_config.effective_timestep_minutes` (present on real run payloads).
+Residual nit logged: when the value is genuinely missing the footer renders an
+empty string rather than a "no record" label (cosmetic, honest-empty).
+
+**Still open:** the axe re-run on the production build is QA's step (Partner
+has no browser here) - the 69 findings (studio 57 / generate 7 / experiments 4
+/ network 1) are expected to be addressed by `82aa40350` but only QA's scan
+proves it. The unattributed one-line `frontend/vite.config.ts` maplibre
+manualChunks change (pushed by A at `27be6581b`, disowned by FE2) stays on
+main as benign build config pending a PM/FE2 revert decision.
+
+**Gate for the user's retest #6:** QA's Phase B on `b8cf2dc85` (8 steps,
+including the axe re-run) → then the user walks `docs/mvp_walkthrough.md`.
