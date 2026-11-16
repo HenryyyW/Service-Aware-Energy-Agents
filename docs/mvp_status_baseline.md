@@ -704,3 +704,27 @@ branch.
 **State:** main `f26b26ba8`; W25/W26/W27 + EV counts verified; W22 + FE2's
 axe 57/7/4/1 + report-footer + fallback-label surfacing in flight; QA's
 Phase B released (message sent) - the user's retest #6 follows Phase B.
+
+## Partner record: teammate-claim verification (2026-11-17 ~01:00, origin/main `9c1d2aae1`)
+
+- **Backend A's "done" reply verified: pytest claim TRUE.** A's exact six-file
+  set (`test_scenario_aware_schemas.py`, `test_contract.py`,
+  `test_rejection_naming.py`, `test_grid_redispatch.py`,
+  `test_controller_grid_response.py`, `test_coordination.py`) re-run by the
+  Partner on the main tip: **60 passed**. The 422 body A quoted matches the
+  live response.
+- **A's branch `backendA/fix/w25-schema-validation` (`01fc1b999`) is a
+  REGRESSION, not a delivery - do not merge.** It is based on the
+  pre-W16-W24 tip `bdf5eec06`; diffed against main it removes ~190 lines
+  (the W16-W24 fixes, QA's PR #73 Phase A section, today's baseline records),
+  reverts `ci-cd.yml` and `Dockerfile.backend`, and commits a
+  `.vite/deps/_metadata.json` cache artifact the repo's hygiene guard
+  rejects. A's W25/W26/W27 work is already on main via `w25-fix-final` and is
+  live-verified; A was told to name anything main lacks or treat the branch
+  as superseded.
+- **W22 truth check (for FE2's fix):** the report footer renders
+  `Dataset resolution N min` when `scenario_config.effective_timestep_minutes`
+  exists and an EMPTY string when it does not (ReportPage.tsx:438-441) - not
+  a literal "None". The honest fix is a "no record" style label in the
+  missing branch; the value itself is present on real runs (the detail header
+  shows the 60-min effective timestep). W22 stays open with FE2.
