@@ -433,6 +433,14 @@ function ReportPageContent() {
             </span>
             <span>
               Controller: {runDetail?.controller_type || report?.controller_type || run?.controller_type || 'Unknown'}
+              {runDetail?.controller_fallback_steps !== undefined && runDetail.controller_fallback_steps > 0 ? (
+                <>
+                  {' '}
+                  <span className="text-violation">{runDetail.controller_fallback_steps}/{runDetail?.total_steps ?? '?'}</span>
+                  <span className="text-caption text-text-muted">{runDetail.controller_fallback_reason}</span>
+                  <span className="text-caption text-violation">Effective controller: rule_based (via fallback)</span>
+                </>
+              ) : null}
             </span>
             <span>
               {runDetail?.scenario_config?.effective_timestep_minutes !== undefined
