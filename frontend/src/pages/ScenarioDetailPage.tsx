@@ -170,7 +170,7 @@ export function ScenarioDetailPage() {
         controller_type: created.controller_type,
       });
       // Fetch diagnostics for the run (whether already completed or polling below)
-      let active = true;
+      const active = true;
       (async () => {
         try {
           // If already completed, fetch diagnostics immediately
