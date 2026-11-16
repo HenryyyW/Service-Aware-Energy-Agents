@@ -153,7 +153,6 @@ def create_app(settings_override: Optional[Settings] = None) -> FastAPI:
             content={"detail": exc.errors()},
         )
 
-    app.add_exception_handler(ValidationError, validation_exception_handler)
     app.add_middleware(SlowAPIMiddleware)
 
     # CORS middleware
