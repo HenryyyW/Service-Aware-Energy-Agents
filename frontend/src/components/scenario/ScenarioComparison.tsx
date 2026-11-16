@@ -376,6 +376,14 @@ function SelectedScenarioCard({ run, label, color }: {
         <div className="p-3 bg-surface/50 rounded-lg">
           <p className="font-body font-medium text-body text-text">{run.run_id}</p>
           <p className="text-caption text-text-muted">{run.scenario_id} · {run.controller_type}</p>
+          {run.controller_fallback_steps !== undefined && run.controller_fallback_steps > 0 ? (
+            <>
+              <p className="text-caption text-violation mt-0.5">
+                {run.controller_fallback_steps}/{run.total_steps ?? '—'} steps · {run.controller_fallback_reason}
+              </p>
+              <p className="text-caption text-violation mt-0.5">Effective controller: rule_based (via fallback)</p>
+            </>
+          ) : null}
           {/* Pricing regime badge (Phase 2) */}
           {pricingRegime && (
             <div className="flex items-center gap-2 mt-2">
