@@ -676,3 +676,31 @@ live on main; surfacing with FE2), eslint (FE2 gate), report-footer timestep
 **Gate for the user's retest #6:** A's W25/W26/W27 push + FE2's branch merged
 → QA's Phase B (8 steps from a clean origin rebuild) → then the user walks
 `docs/mvp_walkthrough.md`.
+
+## Partner verification addendum (2026-11-17 ~00:20, origin/main `f26b26ba8`)
+
+**A's follow-up push verified live on the new tip** (clean worktree, backend
+:8079, scenario `fixv1`, 24 steps earlier / generate probe now): the EV-count
+fix in `f26b26ba8` answers the observation I raised - the phrase "four
+residential buildings, one shared battery and two electric vehicles" now
+returns **4 buildings, 2 EVs total (1 on building_1 + 1 on building_2),
+exactly one battery on building_1, `rejected_fields:
+["battery.shared_not_supported"]`** (plan_source `rule_based_fallback`), and
+the negative-capacity 422 still fires with named fields. pytest
+`test_scenario_aware_schemas.py` 3/3 on the tip. W25/W26/W27 + W15 EV counts:
+closed with live evidence on the fallback path; the LLM path stays with QA's
+Phase B.
+
+**Honesty flag on A's push (not a code defect, a record defect):** commit
+`27be6581b` is titled "fix(W22): report footer shows empty string instead of
+'No record' when effective_timestep_missing" but its diff contains only the
+one-line `frontend/vite.config.ts` maplibre chunk addition - the W22 footer
+fix is NOT in it. **W22 (report footer effective timestep) therefore REMAINS
+OPEN** with FE2 (already dispatched); do not read the commit title as a fix.
+The vite-config line reached main through A's push - FE2 to confirm that file
+is theirs (their uncommitted 22:31 edit) and keep or revert it in their
+branch.
+
+**State:** main `f26b26ba8`; W25/W26/W27 + EV counts verified; W22 + FE2's
+axe 57/7/4/1 + report-footer + fallback-label surfacing in flight; QA's
+Phase B released (message sent) - the user's retest #6 follows Phase B.
