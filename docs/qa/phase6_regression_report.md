@@ -211,6 +211,28 @@ formula path; 24 steps, seed 42):
 
 Both items verified; no new defects.
 
+### Final clean retest — full 8-step walkthrough (main @ `ee3df1a0f`, 2026-11-17)
+
+Clean origin rebuild (ee3df1a0f: W25/W26/W27). Gates: pytest 518 (repo),
+tsc ✓, eslint ✓ (after one mechanical `let`→`const` in
+ScenarioDetailPage.tsx from the W2 canvas work — f25fe8835), vite build ✓.
+
+| step | verdict | evidence |
+|---|---|---|
+| 1 generate | **PASS** | 200; deterministic fallback (LLM env absent — accepted); verdict `accept`; 4 buildings; rejected fields named (`pv.count`, `battery.shared_not_supported`) |
+| 2 confirm | **PASS** | 201 saved; EV arrival/departure filled (W3 holds); **invalid -1 kW → 422 naming `capacity_kwh`** (W25 schema fix live) |
+| 3 validate+run+cancel | **PASS** | validate `valid=True`; 24-step run `completed` (cost 14.90 USD); second run cancelled mid-run → terminal `cancelled` |
+| 4 canvas | **PASS (API/data path)** | geometry 200 (50 buses); trajectories 200 (24 steps); `/api/*` through the preview proxy verified. Browser-level: canvas at :4173 showed a connection-error state on first paint in automation while the same-origin proxy serves data (curl + earlier live rounds) — flagged FE2 for a dev-tools look; low priority |
+| 5 strategy comparison | **PASS** | 4 strategies completed, real records; honest labels — mpc + single_agent_rl `24 steps / fallback_to_rule_based`, rule_based + multi_agent_rl unlabelled; economics differ (multi_agent_rl 15.27 vs baseline 14.90 USD) |
+| 6 diagnosis | **PASS** | explicit "No constraint violations were recorded in this run." |
+| 7 report | **PASS** | `GET /api/reports/{id}` 200 with timestep/buildings/seed 42/controller/run_id; markdown download 200 |
+| 8 axe + keyboard | **PASS (re-run, same as Phase A)** | 69 violations on 4 routes (studio 57, generate 7, experiments 4, network 1 — all contrast/labelling); **zero keyboard/focus violations on any route**; manual Tab traversal = user retest |
+
+Labelling per the retest instructions: **W25-fix-related results verified**
+(named 422, fallback labels end-to-end); **awaiting FE2 push**: timestep
+unification display, Dispatch Trace panel, bundle split, and the axe
+contrast/button-name fixes (69 violations unchanged from Phase A).
+
 ### Re-verification #3 — Lighthouse + axe + responsive preflight (main @ `328df3568`, 2026-11-13)
 
 Production build (`npm run build`, vite) + preview server (:4173). NIM not involved.
