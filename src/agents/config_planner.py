@@ -279,9 +279,9 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
         # between different assets mentioned in different clauses.
         def extract_count(text: str, keywords: list) -> tuple[int | None, bool]:
             """Returns (count, mentioned). count is None if mentioned but unparseable."""
-            # Split text into clauses by punctuation to isolate asset mentions
-            # Chinese punctuation: 、, 。, ，, ；, ;, English: ., ,, ;, :
-            clauses = re.split(r"[、。，,.;;:：]", text)
+            # Split text into clauses by punctuation AND "and" to isolate asset mentions
+            # Chinese punctuation: 、, 。, ，, ；, ;, English: ., ,, ;, :, and "and"
+            clauses = re.split(r"[、。，,.;;:：]|(?:\s+and\s+)", text)
             # Filter clauses that contain any of the keywords
             relevant_clauses = [
                 c.strip() for c in clauses if any(kw in c for kw in keywords)

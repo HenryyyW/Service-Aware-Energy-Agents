@@ -138,7 +138,7 @@ export function ScenarioComparison({
         </div>
 
         <div className="glass-card p-8 text-center text-text-muted">
-          <GitCompare className="w-16 h-16 mx-auto mb-4 text-text-muted/30" />
+          <GitCompare className="w-16 h-16 mx-auto mb-4 text-text-muted" />
           <p className="text-body">Select two scenarios to compare their performance metrics</p>
           <p className="text-caption mt-2">Choose from completed simulation runs</p>
         </div>
@@ -286,7 +286,7 @@ export function ScenarioComparison({
           <h3 className="font-body font-medium text-body text-text mb-4">Radar Comparison</h3>
           <div className="aspect-square flex items-center justify-center bg-surface/50 rounded-lg border border-border/30">
             <div className="text-center text-text-muted">
-              <BarChart2 className="w-12 h-12 mx-auto mb-2 text-text-muted/30" />
+              <BarChart2 className="w-12 h-12 mx-auto mb-2 text-text-muted" />
               <p>Radar chart visualization</p>
               <p className="text-caption mt-1">(Integrate with recharts or similar)</p>
             </div>
@@ -376,6 +376,14 @@ function SelectedScenarioCard({ run, label, color }: {
         <div className="p-3 bg-surface/50 rounded-lg">
           <p className="font-body font-medium text-body text-text">{run.run_id}</p>
           <p className="text-caption text-text-muted">{run.scenario_id} · {run.controller_type}</p>
+          {run.controller_fallback_steps !== undefined && run.controller_fallback_steps > 0 ? (
+            <>
+              <p className="text-caption text-violation mt-0.5">
+                {run.controller_fallback_steps}/{run.total_steps ?? '—'} steps · {run.controller_fallback_reason}
+              </p>
+              <p className="text-caption text-violation mt-0.5">Effective controller: rule_based (via fallback)</p>
+            </>
+          ) : null}
           {/* Pricing regime badge (Phase 2) */}
           {pricingRegime && (
             <div className="flex items-center gap-2 mt-2">

@@ -169,12 +169,21 @@ class ConfigCoderAgent:
         if hinted:
             for c in configs:
                 if isinstance(c, dict) and c.get("building") == i + 1:
-                    return c
+                    return ConfigCoderAgent._strip_building_key(c)
             return None
         # No hints: assign to first N buildings where N = len(configs)
         if i < len(configs):
-            return configs[i]
+            return ConfigCoderAgent._strip_building_key(configs[i])
         return None
+
+    @staticmethod
+    def _strip_building_key(config: Dict[str, Any]) -> Dict[str, Any]:
+        """Remove the 'building' placement key from a config dict before it
+        reaches the schema (which forbids extra fields)."""
+        if not isinstance(config, dict):
+            return config
+        # Shallow copy without the placement key
+        return {k: v for k, v in config.items() if k != "building"}
 
     @staticmethod
     def _config_list_for_building(configs, i, num_buildings):
@@ -188,13 +197,16 @@ class ConfigCoderAgent:
         # Respect explicit building hints if present
         hinted = [c for c in configs if isinstance(c, dict) and c.get("building")]
         if hinted:
-            return [c for c in configs if c.get("building") == i + 1]
+            return [
+                ConfigCoderAgent._strip_building_key(c)
+                for c in configs if c.get("building") == i + 1
+            ]
         # No hints: distribute evenly across buildings
         n_configs = len(configs)
         n_buildings = num_buildings
         if n_configs <= n_buildings:
             # Fewer configs than buildings: assign one per building
-            return [configs[i]] if i < n_configs else []
+            return [ConfigCoderAgent._strip_building_key(configs[i])] if i < n_configs else []
         else:
             # More configs than buildings: distribute evenly
             # E.g., 4 configs across 3 buildings -> building 0 gets 2, buildings 1,2 get 1 each
@@ -202,7 +214,10 @@ class ConfigCoderAgent:
             extra = n_configs % n_buildings
             start = i * base + min(i, extra)
             end = start + base + (1 if i < extra else 0)
-            return configs[start:end]
+            return [
+                ConfigCoderAgent._strip_building_key(c)
+                for c in configs[start:end]
+            ]
 
     def _build_buildings(self, plan: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Build building configurations from plan."""

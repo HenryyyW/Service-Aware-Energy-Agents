@@ -676,3 +676,93 @@ live on main; surfacing with FE2), eslint (FE2 gate), report-footer timestep
 **Gate for the user's retest #6:** A's W25/W26/W27 push + FE2's branch merged
 → QA's Phase B (8 steps from a clean origin rebuild) → then the user walks
 `docs/mvp_walkthrough.md`.
+
+## Partner verification addendum (2026-11-17 ~00:20, origin/main `f26b26ba8`)
+
+**A's follow-up push verified live on the new tip** (clean worktree, backend
+:8079, scenario `fixv1`, 24 steps earlier / generate probe now): the EV-count
+fix in `f26b26ba8` answers the observation I raised - the phrase "four
+residential buildings, one shared battery and two electric vehicles" now
+returns **4 buildings, 2 EVs total (1 on building_1 + 1 on building_2),
+exactly one battery on building_1, `rejected_fields:
+["battery.shared_not_supported"]`** (plan_source `rule_based_fallback`), and
+the negative-capacity 422 still fires with named fields. pytest
+`test_scenario_aware_schemas.py` 3/3 on the tip. W25/W26/W27 + W15 EV counts:
+closed with live evidence on the fallback path; the LLM path stays with QA's
+Phase B.
+
+**Honesty flag on A's push (not a code defect, a record defect):** commit
+`27be6581b` is titled "fix(W22): report footer shows empty string instead of
+'No record' when effective_timestep_missing" but its diff contains only the
+one-line `frontend/vite.config.ts` maplibre chunk addition - the W22 footer
+fix is NOT in it. **W22 (report footer effective timestep) therefore REMAINS
+OPEN** with FE2 (already dispatched); do not read the commit title as a fix.
+The vite-config line reached main through A's push - FE2 to confirm that file
+is theirs (their uncommitted 22:31 edit) and keep or revert it in their
+branch.
+
+**State:** main `f26b26ba8`; W25/W26/W27 + EV counts verified; W22 + FE2's
+axe 57/7/4/1 + report-footer + fallback-label surfacing in flight; QA's
+Phase B released (message sent) - the user's retest #6 follows Phase B.
+
+## Partner record: teammate-claim verification (2026-11-17 ~01:00, origin/main `9c1d2aae1`)
+
+- **Backend A's "done" reply verified: pytest claim TRUE.** A's exact six-file
+  set (`test_scenario_aware_schemas.py`, `test_contract.py`,
+  `test_rejection_naming.py`, `test_grid_redispatch.py`,
+  `test_controller_grid_response.py`, `test_coordination.py`) re-run by the
+  Partner on the main tip: **60 passed**. The 422 body A quoted matches the
+  live response.
+- **A's branch `backendA/fix/w25-schema-validation` (`01fc1b999`) is a
+  REGRESSION, not a delivery - do not merge.** It is based on the
+  pre-W16-W24 tip `bdf5eec06`; diffed against main it removes ~190 lines
+  (the W16-W24 fixes, QA's PR #73 Phase A section, today's baseline records),
+  reverts `ci-cd.yml` and `Dockerfile.backend`, and commits a
+  `.vite/deps/_metadata.json` cache artifact the repo's hygiene guard
+  rejects. A's W25/W26/W27 work is already on main via `w25-fix-final` and is
+  live-verified; A was told to name anything main lacks or treat the branch
+  as superseded.
+- **W22 truth check (for FE2's fix):** the report footer renders
+  `Dataset resolution N min` when `scenario_config.effective_timestep_minutes`
+  exists and an EMPTY string when it does not (ReportPage.tsx:438-441) - not
+  a literal "None". The honest fix is a "no record" style label in the
+  missing branch; the value itself is present on real runs (the detail header
+  shows the 60-min effective timestep). W22 stays open with FE2.
+
+## Partner verification: FE2's branch merged (2026-11-17 ~01:15, origin/main `b8cf2dc85`)
+
+**FE2's `frontend2/fix/preretest-a11y` was cherry-picked onto current main and
+pushed** (4 commits: `27e35a9c1` report-download disable, `82aa40350` Phase A
+axe fixes, `2dc516c65` per-arm fallback labels, `b8cf2dc85` Dispatch Trace
+panel). The branch itself was NOT merged: its tip (`0071bec4a`) was 3 commits
+past the SHA FE2 named and based on a stale main that would have reverted 52
+lines of today's verification records. Content instead landed clean.
+
+**Gates re-run by the Partner in a worktree on the merged result** (not taken
+from FE2's report): `npm run lint` exit 0 (1 pre-existing react-hooks warning
+in `ScenarioDetailPage.tsx` - non-blocking, CI runs plain `npm run lint`),
+`tsc --noEmit` 0 errors, `vitest` **16/16** (FE2's 13/13 predated their added
+tests), `npm run build` exit 0.
+
+**Honesty check of the new UI (read, not assumed):** the fallback labels read
+real run fields (`controller_fallback_steps` / `controller_fallback_reason` /
+`controller_type`), render "no record" when absent, and add
+"Effective controller: rule_based (via fallback)" only when steps > 0; the
+Dispatch Trace panel has an explicit "No dispatch trace data for this run"
+empty state and tests cover both branches. No fabricated values found.
+
+**W22 closed for real runs:** the report footer now shows the fallback label +
+effective controller next to Controller, and reads
+`scenario_config.effective_timestep_minutes` (present on real run payloads).
+Residual nit logged: when the value is genuinely missing the footer renders an
+empty string rather than a "no record" label (cosmetic, honest-empty).
+
+**Still open:** the axe re-run on the production build is QA's step (Partner
+has no browser here) - the 69 findings (studio 57 / generate 7 / experiments 4
+/ network 1) are expected to be addressed by `82aa40350` but only QA's scan
+proves it. The unattributed one-line `frontend/vite.config.ts` maplibre
+manualChunks change (pushed by A at `27be6581b`, disowned by FE2) stays on
+main as benign build config pending a PM/FE2 revert decision.
+
+**Gate for the user's retest #6:** QA's Phase B on `b8cf2dc85` (8 steps,
+including the axe re-run) → then the user walks `docs/mvp_walkthrough.md`.

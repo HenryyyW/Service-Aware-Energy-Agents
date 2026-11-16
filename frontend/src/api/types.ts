@@ -227,6 +227,11 @@ export interface SimulationRun {
   // Pricing regime fields (Phase 2)
   pricing_regime?: 'tou_solo' | 'pool_tou' | 'lmp' | 'p2p';
   cost_basis?: 'tariff' | 'lmp';
+  // Controller fallback tracking (per-step semantic fallback to rule_based).
+  // Present when the controller fell back on any step; fallback_steps > 0
+  // means the effective controller for those steps is rule_based.
+  controller_fallback_steps?: number;
+  controller_fallback_reason?: string;
 }
 
 export interface EnergyMetrics {

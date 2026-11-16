@@ -281,7 +281,7 @@ export function ScenarioEditor({ onSave, onRun, readOnly = false }: ScenarioEdit
                           const newPowers = [...currentScenario.assets.evs.charging_power_kw];
                           newPowers.splice(i, 1);
                           updateScenarioField('assets.evs.charging_power_kw', newPowers);
-                        }}>
+                        }} aria-label="Remove charging power">
                           <X className="w-3 h-3" />
                         </Button>
                       </span>
