@@ -377,8 +377,8 @@ class CityLearnAdapter:
             pv.setdefault("attributes", {})["nominal_power"] = float(
                 building_config.pv.capacity_kw
             )
-        elif building_config.pv is not None and "pv" in building_schema:
-            # Explicit zero-capacity PV removes the device.
+        elif "pv" in building_schema:
+            # Explicit None or zero-capacity PV removes the device.
             del building_schema["pv"]
 
         # EV chargers: one charger + one synthesized schedule CSV per configured EV

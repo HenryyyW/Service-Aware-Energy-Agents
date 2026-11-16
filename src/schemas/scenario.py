@@ -1,7 +1,7 @@
 """Scenario configuration schemas for CityLearn and pandapower."""
 
 from typing import Optional, List, Dict, Any, Literal
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from enum import Enum
 
 
@@ -15,7 +15,9 @@ class BuildingType(str, Enum):
 class PVConfig(BaseModel):
     """PV system configuration."""
 
-    capacity_kw: float
+    model_config = ConfigDict(extra="forbid")
+
+    capacity_kw: float = Field(gt=0)
     azimuth: float = 180.0  # degrees, 180 = south
     tilt: float = 30.0  # degrees
     efficiency: float = 0.20
@@ -25,8 +27,10 @@ class PVConfig(BaseModel):
 class BatteryConfig(BaseModel):
     """Battery storage configuration."""
 
-    capacity_kwh: float
-    power_kw: float
+    model_config = ConfigDict(extra="forbid")
+
+    capacity_kwh: float = Field(gt=0)
+    power_kw: float = Field(gt=0)
     efficiency_charge: float = 0.95
     efficiency_discharge: float = 0.95
     soc_min: float = 0.1
@@ -51,8 +55,10 @@ class BatteryConfig(BaseModel):
 class EVConfig(BaseModel):
     """Electric vehicle configuration."""
 
-    capacity_kwh: float
-    max_charge_kw: float
+    model_config = ConfigDict(extra="forbid")
+
+    capacity_kwh: float = Field(gt=0)
+    max_charge_kw: float = Field(gt=0)
     efficiency: float = 0.90
     arrival_time: str  # HH:MM format
     departure_time: str  # HH:MM format
@@ -66,15 +72,19 @@ class EVConfig(BaseModel):
 class FlexibleLoadConfig(BaseModel):
     """Flexible load configuration."""
 
-    power_kw: float
-    energy_kwh: float
+    model_config = ConfigDict(extra="forbid")
+
+    power_kw: float = Field(gt=0)
+    energy_kwh: float = Field(gt=0)
     earliest_start: str  # HH:MM
     latest_end: str  # HH:MM
-    duration_hours: float
+    duration_hours: float = Field(gt=0)
 
 
 class TariffConfig(BaseModel):
     """Electricity tariff configuration."""
+
+    model_config = ConfigDict(extra="forbid")
 
     type: str = "time_of_use"  # time_of_use, real_time, flat
     import_prices: Dict[str, float] = Field(default_factory=dict)  # period -> price
@@ -84,6 +94,8 @@ class TariffConfig(BaseModel):
 
 class BuildingConfig(BaseModel):
     """Building configuration."""
+
+    model_config = ConfigDict(extra="forbid")
 
     building_id: str
     building_type: BuildingType = BuildingType.RESIDENTIAL
@@ -98,6 +110,8 @@ class BuildingConfig(BaseModel):
     weather_file: Optional[str] = None
     simulation_start: str = "2023-01-01"
     simulation_end: str = "2023-01-08"  # one week default
+    # Legacy field used by some tests and local backend
+    solar_generation_kw: Optional[float] = None
 
 
 class GridBusMapping(BaseModel):
@@ -185,6 +199,8 @@ class FailureConfig(BaseModel):
 
 class ScenarioConfig(BaseModel):
     """Complete scenario configuration."""
+
+    model_config = ConfigDict(extra="forbid")
 
     scenario_id: str
     name: str

@@ -127,6 +127,10 @@ class ConfigPlannerOutput(BaseModel):
     assumptions: List[str] = Field(default_factory=list)
     required_fields: List[str] = Field(default_factory=list)
     out_of_scope: List[str] = Field(default_factory=list)
+    # W27: assets the NL describes as community-level/shared ("one shared
+    # battery"). The schema is per-building; the coder attaches them to
+    # building_1 and records the provenance so it is never silent.
+    shared_assets: List[str] = Field(default_factory=list)
 
 
 class ConfigCoderOutput(BaseModel):

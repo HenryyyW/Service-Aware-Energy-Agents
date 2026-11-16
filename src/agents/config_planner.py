@@ -332,9 +332,10 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
             }
             for word, val in num_words.items():
                 if re.search(rf"\b{word}\b", search_text):
-                    # Check if number word immediately precedes keyword (within ~8 chars)
+                    # Check if number word precedes keyword (within ~30 chars to handle
+                    # phrases like "two residential buildings")
                     for kw in keywords:
-                        if re.search(rf"\b{word}\b.{{0,8}}\b{kw}\b", search_text):
+                        if re.search(rf"\b{word}\b.{{0,30}}\b{kw}\b", search_text):
                             return (val, True)
 
             # Chinese number words - allow measure words between number and keyword
@@ -439,6 +440,15 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
             "儲能",
         ]
         bat_count, bat_mentioned = extract_count(nl_lower, bat_keywords)
+        # Check for "shared" keyword in the same clauses as battery
+        shared_battery = False
+        if bat_mentioned:
+            clauses = re.split(r"[、。，,.;;:：]", nl_lower)
+            bat_clauses = [c.strip() for c in clauses if any(kw in c for kw in bat_keywords)]
+            for clause in bat_clauses:
+                if "shared" in clause or "共用" in clause:
+                    shared_battery = True
+                    break
         if bat_mentioned:
             plan.target_assets.append("battery")
             if bat_count is not None:
@@ -447,6 +457,10 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
             else:
                 plan.rejected_fields.append("battery.count")
                 plan.battery_configs.append({"capacity_kwh": 13.5, "power_kw": 5.0})
+            if shared_battery:
+                plan.shared_assets.append("battery")
+                # Schema doesn't support community-level batteries; name the rejection
+                plan.rejected_fields.append("battery.shared_not_supported")
         else:
             if any(
                 kw in nl_lower
@@ -454,6 +468,10 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
             ):
                 plan.target_assets.append("battery")
                 plan.battery_configs.append({"capacity_kwh": 13.5, "power_kw": 5.0})
+                if "shared" in nl_lower or "共用" in nl_lower:
+                    plan.shared_assets.append("battery")
+                    # Schema doesn't support community-level batteries; name the rejection
+                    plan.rejected_fields.append("battery.shared_not_supported")
 
         # EV
         ev_keywords = [

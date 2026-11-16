@@ -118,8 +118,8 @@ def _schema_to_scenario_config(schema: dict, scenario_id: str) -> ScenarioConfig
         )
 
     pandapower_config = None
-    if "pandapower" in schema:
-        pp_data = schema["pandapower"]
+    pp_data = schema.get("pandapower")
+    if pp_data is not None:
         pandapower_config = PandapowerConfig(
             network_type=pp_data.get("network_type", "ieee_34"),
             network_file=pp_data.get("network_file"),

@@ -142,7 +142,18 @@ def create_app(settings_override: Optional[Settings] = None) -> FastAPI:
 
     # Rate limiter
     app.state.limiter = limiter
+    from pydantic import ValidationError
+
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    @app.exception_handler(ValidationError)
+    async def validation_exception_handler(request: Request, exc: ValidationError):
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={"detail": exc.errors()},
+        )
+
+    app.add_exception_handler(ValidationError, validation_exception_handler)
     app.add_middleware(SlowAPIMiddleware)
 
     # CORS middleware

@@ -98,7 +98,7 @@ def mixed_scenario():
             ),
             _building(
                 "mix_building_1",
-                pv_kw=0.0,  # explicitly no PV
+                pv_kw=None,  # explicitly no PV
                 battery=BatteryConfig(capacity_kwh=20.0, power_kw=5.0),
                 evs=[],
             ),

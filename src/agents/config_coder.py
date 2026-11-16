@@ -48,8 +48,9 @@ class ConfigCoderAgent:
         # Get baseline config
         baseline = baseline_config or state.baseline_config
         if baseline is None:
-            # Create minimal baseline
-            baseline = self._create_minimal_baseline()
+            # Create minimal baseline (named from the NL description)
+            nl_description = getattr(state, "nl_description", "") or ""
+            baseline = self._create_minimal_baseline(nl_description)
 
         # Apply plan to create patched config
         patched = self._apply_plan(baseline, plan)
@@ -72,12 +73,12 @@ class ConfigCoderAgent:
 
         return output
 
-    def _create_minimal_baseline(self) -> Dict[str, Any]:
+    def _create_minimal_baseline(self, nl_description: str = "") -> Dict[str, Any]:
         """Create a minimal baseline scenario config."""
         return {
             "scenario_id": "scenario_base",
-            "name": "Base Scenario",
-            "description": "Minimal baseline scenario",
+            "name": self._scenario_name(nl_description),
+            "description": nl_description or "Minimal baseline scenario",
             "buildings": [],
             "pandapower": {
                 "network_type": "ieee_34",
@@ -93,6 +94,21 @@ class ConfigCoderAgent:
             "random_seed": 42,
             "timestep_minutes": 15,
         }
+
+    @staticmethod
+    def _scenario_name(nl_description: str) -> str:
+        """Derive a scenario name from the NL description.
+
+        Falls back to a generated name when the description is empty.
+        """
+        if not nl_description or not nl_description.strip():
+            return "Community Scenario"
+        # Use a trimmed, title-cased version of the first few words
+        words = nl_description.strip().split()
+        short = " ".join(words[:5])
+        if len(short) > 60:
+            short = short[:57] + "..."
+        return short or "Community Scenario"
 
     def _apply_plan(
         self, baseline: Dict[str, Any], plan: Dict[str, Any]

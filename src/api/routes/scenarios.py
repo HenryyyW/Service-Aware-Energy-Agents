@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 import yaml
 
 from src.schemas.scenario import ScenarioConfig
@@ -91,15 +91,28 @@ async def get_scenario(scenario_id: str) -> Dict[str, Any]:
 @router.post("")
 async def create_scenario(request: ScenarioCreateRequest) -> Dict[str, Any]:
     """Create a new scenario."""
+    import sys
+    print(f"DEBUG: create_scenario ENTRY scenario_id={request.scenario_id}", file=sys.stderr, flush=True)
     if not re.fullmatch(r"[A-Za-z0-9_]+", request.scenario_id):
         raise HTTPException(
             status_code=422,
             detail="Scenario ID may contain only letters, numbers, and underscores",
         )
-    config = ScenarioConfig(**request.config)
+    print(f"DEBUG: request.config = {request.config}", file=sys.stderr, flush=True)
+    try:
+        config = ScenarioConfig(**request.config)
+        print(f"DEBUG: config created = {config}", file=sys.stderr, flush=True)
+        print(f"DEBUG: config.buildings = {config.buildings}", file=sys.stderr, flush=True)
+    except ValidationError as e:
+        print(f"DEBUG: ValidationError = {e}", file=sys.stderr, flush=True)
+        raise HTTPException(status_code=422, detail=e.errors())
     config.scenario_id = request.scenario_id
     config.name = request.name
     config.description = request.description
+    print(f"DEBUG: config.buildings after assignment = {config.buildings}", file=sys.stderr, flush=True)
+    dump = config.model_dump()
+    print(f"DEBUG: model_dump = {dump}", file=sys.stderr, flush=True)
+    return dump
 
     _scenarios[request.scenario_id] = config
     if not (_CONFIGS_DIR / f"{request.scenario_id}.yaml").is_file():
