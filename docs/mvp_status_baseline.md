@@ -1,6 +1,6 @@
 # MVP status baseline (Phase 0 record)
 
-Owner: Project Partner · Updated: 2026-11-12 (evening, main @ `e943c1d9c`) ·
+Owner: Project Partner · Updated: 2026-11-16 (main @ `2e8a117fe`) ·
 Single source of truth for "what is built / usable in the UI /
 research-verified". The product plan of 2026-11-11 is the roadmap; this file
 records where each of its phases stands against the repo. Earlier in the day
@@ -619,3 +619,60 @@ re-dispatched to Backend A with measurements.
 - Note: a `.vite` cache file accidentally committed in Backend A's W15 v3 was
   dropped before merge (the artifact-hygiene guard); one vitest assertion
   updated for the W24 multi-building render.
+
+## Partner verification + dispatch cycle (2026-11-16, origin/main `2e8a117fe`)
+
+**QA PR #73 merged (docs-only, 41-line diff partner-verified).** Phase A is
+recorded in `docs/qa/phase6_regression_report.md`: step-3 cancel flow PASS
+(run `run_e8d3675bc639`, rule_based, cancelled at step 12/96, terminal status
+`cancelled` immediately, no fake completion; cosmetic note - `outcome_sentence`
+is None on cancelled runs); step-8 full-site axe on the production build, all
+10 routes: **69 violations on 4 routes, all labelling/contrast classes**
+(/studio 57 button-name + color-contrast, /scenarios/generate 7
+color-contrast, /experiments 4 + /network 1 select-name), **no
+keyboard/focus-order violations anywhere**. Phase B (the full 8-step clean
+retest) is explicitly blocked on Backend A's schema-validation push.
+
+**Fallback labels re-verified live by the Partner on the merged tip** (clean
+worktree at `2e8a117fe`, backend :8077, scenario `fixv1`, 24 steps, seed 42/43):
+`mpc` and `single_agent_rl` both return **24 steps / `fallback_to_rule_based`**
+in the create response AND in `GET /api/simulations/{run_id}` - the per-run
+strip QA saw is closed on main (B's `e189791bc` is in main; the label is
+written by the controller, so both the POST and the per-run GET carry it).
+Both arms genuinely fall back in this environment, so the labels are the whole
+honesty story: the comparison page and run detail must show each arm's label
+next to its numbers, or identical arm numbers mislead (the user's
+no-silent-substitution rule). R1/W7 backend leg: PASS with live evidence.
+
+**W25/W26/W27 (Backend A) - verified in the shared checkout, NOT landable.**
+The files are uncommitted and on-track (`src/schemas/scenario.py` gt=0 +
+`extra="forbid"` on the device/tariff/building schemas; `config_planner.py`
+shared_assets + the named `battery.shared_not_supported` rejection + count
+window 8→30 chars; `config_roles.py` shared_assets; `config_coder.py`
+NL-derived name/description), but the batch is broken and would fake success:
+`create_scenario` in `src/api/routes/scenarios.py` returns its dump BEFORE
+`_scenarios[...] = config` and the YAML persistence (dead code - POST would
+answer 200 and the scenario would never be stored), DEBUG prints remain in
+that file, and the `ValidationError` handler is registered twice in
+`src/api/main.py`. Re-dispatched to Backend A W25-first on branch
+`backendA/fix/w25-schema-validation` (no frontend edits; reply must carry
+exact pytest counts and a real 422 body for a negative-capacity payload).
+Partner pushes after verifying from a fresh worktree.
+
+**FE2 dispatched** (`frontend2/fix/preretest-a11y`): the axe fixes (studio 57,
+generate 7, experiments 4, network 1 - all labelling/contrast), report-footer
+effective-timestep None, a cancelled-run stage sentence, and per-arm
+fallback-label surfacing on comparison/detail; `npm run lint` must pass
+(retest #5's eslint failure must not return). FE2 to confirm whether tonight's
+uncommitted `CommunityCanvas.tsx` / `vite.config.ts` edits are theirs.
+
+**Retest #5 open items mapped to owners:** shared-battery fidelity (W27 -
+with A, in the checkout), negative-capacity 422 (W25 - with A, in the
+checkout), 15-vs-60-min timestep (60-min effective verified on the detail
+header; QA to re-confirm in Phase B), identical strategy arms (labels now
+live on main; surfacing with FE2), eslint (FE2 gate), report-footer timestep
+(FE2).
+
+**Gate for the user's retest #6:** A's W25/W26/W27 push + FE2's branch merged
+→ QA's Phase B (8 steps from a clean origin rebuild) → then the user walks
+`docs/mvp_walkthrough.md`.
