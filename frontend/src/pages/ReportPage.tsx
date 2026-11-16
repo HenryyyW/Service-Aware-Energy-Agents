@@ -437,7 +437,7 @@ function ReportPageContent() {
             <span>
               {runDetail?.scenario_config?.effective_timestep_minutes !== undefined
                 ? `Dataset resolution ${runDetail.scenario_config.effective_timestep_minutes} min`
-                : ''}
+                : 'Unknown effective timestep'}
             </span>
             <span>{runDetail?.start_time || run?.start_time ? new Date(runDetail?.start_time || run?.start_time).toLocaleString() : ''}</span>
           </div>
