@@ -31,6 +31,7 @@ export default defineConfig({
           vendor: ['react', 'react-dom', 'react-router-dom'],
           charts: ['recharts'],
           ui: ['lucide-react'],
+          maplibre: ['maplibre-gl'],
         },
       },
     },
