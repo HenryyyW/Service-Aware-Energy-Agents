@@ -268,3 +268,44 @@ Same pattern as the AgentTask `metrics_comparison` strip fixed in
 `4a090209c`. Two-line schema addition; until then the per-run payload
 cannot convey the label to the frontend (the comparison page can, via
 `/api/compare`).
+
+### Pre-retest Phase A — cancel flow + full-site axe + keyboard (main @ `756f831ce`, 2026-11-16)
+
+**Step 3 cancel flow — PASS.** Scenario `cancel_smoke` (4 buildings), run
+`run_e8d3675bc639` (rule_based, 96 steps): cancelled mid-run at step 12/96 —
+`POST /api/simulations/{id}/cancel` → 200 "cancellation requested" → terminal
+status `cancelled`, stage `cancelled`, immediate (1 poll). No fake completion.
+Minor note: `outcome_sentence` is None on cancelled runs (no "cancelled at
+step N" sentence) — cosmetic, FE may surface the stage instead.
+
+**Step 8 axe — full-site scan** (production build, all 10 routes):
+
+| route | violations | rules |
+|---|---|---|
+| / | 0 | — |
+| /scenarios | 0 | — |
+| /scenarios/generate | 7 | color-contrast |
+| /studio | **57** | button-name, color-contrast |
+| /workspace | 0 | — |
+| /experiments | 4 | select-name |
+| /network | 1 | select-name |
+| /canvas | 0 | — |
+| /scenarios/{id} | 0 | — |
+| /comparison/strategy/{id} | 0 | — |
+
+**Total: 69 violations on 4 routes** — all labelling/contrast classes
+(button-name × studio, select-name × experiments/network, color-contrast ×
+generate/studio). **No keyboard/focus-order violations anywhere** (axe's
+`keyboard` and `focus-order-semantics` rules enabled and clean). Studio's 57
+is the heavy item → FE2.
+
+**Keyboard reachability (step 8)**: axe's keyboard/focus rules pass on all
+scanned routes; the canvas accessibility snapshot shows every interactive
+control named (nav links, Retry button). Full manual Tab traversal remains
+for the user's own retest — automation reached its limit (script sandbox has
+no page-context focus control); no blockers found.
+
+**Phase B (full 8-step clean retest)** is pending Backend A's schema-validation
+push (-1 kW rejection, NL naming, shared-battery provenance, dispatch trace) —
+will run from a clean origin rebuild when that lands.
+
