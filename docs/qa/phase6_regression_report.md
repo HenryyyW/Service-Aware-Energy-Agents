@@ -211,6 +211,29 @@ formula path; 24 steps, seed 42):
 
 Both items verified; no new defects.
 
+### Increment — FE2 a11y merge + pv.building seam fix verified (main @ `6408599ac` lineage, 2026-11-17)
+
+**Axe re-scan after FE2's a11y merge** (same 9 routes, production build @
+61fe8e679 + this branch):
+
+| route | Phase A | now |
+|---|---|---|
+| /studio | 57 | **54** (button-name fixed) |
+| /experiments | 4 | **0** (select-name fixed) |
+| /network | 1 | **0** (select-name fixed) |
+| /scenarios/generate | 7 | 7 (color-contrast remains) |
+| all other routes | 0 | 0 |
+
+**Total: 69 → 61 violations**; residual is color-contrast only (studio +
+generate) → FE2. No keyboard/focus violations.
+
+**pv.building seam CLOSED**: Backend A's strip fix (`6408599ac`, in main via
+this branch's merge) removes the placement key at distribution. Live seam
+re-test on both arms: generate 200 (`plan_source=llm`) → confirm **201**
+with clean per-building PV payloads (no `building` key). The
+generate→confirm seam is reopened; the generate→confirm→run loop is fully
+functional on this tip.
+
 ### Final clean retest #2 — main @ `f26b26ba8` (2026-11-17, LLM path live)
 
 Tip includes Backend A's EV-count parsing fix (f26b26ba8) — retested at the
