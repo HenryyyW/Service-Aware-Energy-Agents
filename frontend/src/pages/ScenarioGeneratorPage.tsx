@@ -185,7 +185,7 @@ function SummaryCard({
       <div className="p-3 space-y-2">
         {rows.map((r, i) => (
           <div key={i} className="flex items-center gap-3">
-            <span className="w-40 flex-shrink-0 text-caption text-text-muted leading-none">{r.label}</span>
+            <span className="w-40 flex-shrink-0 text-caption text-text leading-none">{r.label}</span>
             <span className="flex-1 font-mono text-body-sm text-text truncate">{r.value}</span>
             <ConfidenceChip prov={r.prov} />
           </div>
@@ -394,15 +394,15 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
       <div className="h-full flex flex-col">
         <div className="p-4 border-b border-border/30 bg-surface/50">
           <h1 className="font-display font-semibold text-heading-1 text-text">Generate Scenario</h1>
-          <p className="text-caption text-text-muted">Describe an energy community in natural language, review the generated config, then run it.</p>
+          <p className="text-caption text-text">Describe an energy community in natural language, review the generated config, then run it.</p>
         </div>
         <div className="flex-1 flex flex-col sm:flex-row overflow-hidden">
           <div className="w-full sm:w-2/5 flex-shrink-0 border-r border-border/30 bg-surface/30 p-4 overflow-y-auto sm:border-b-0 sm:border-r">
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="block text-caption text-text-muted">Community description</label>
+                <label className="block text-caption text-text">Community description</label>
                 <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the community you want to simulate" rows={6} className="font-body" />
-                <p className="text-caption text-text-muted">The agent turns this into an executable ScenarioConfig you can review before running.</p>
+                <p className="text-caption text-text">The agent turns this into an executable ScenarioConfig you can review before running.</p>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -412,12 +412,12 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
                 </div>
               </div>
               <div className="space-y-2">
-                <p className="text-caption text-text-muted">Examples</p>
+                <p className="text-caption text-text">Examples</p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {EXAMPLES.map((ex) => (
                     <button key={ex.title} onClick={() => handleExample(ex)} className="glass-card p-3 text-left hover:border-sun/50 transition-colors border border-border/30">
                       <p className="font-body font-medium text-body-sm text-text mb-1">{ex.title}</p>
-                      <p className="text-caption text-text-muted line-clamp-2">{ex.description}</p>
+                      <p className="text-caption text-text line-clamp-2">{ex.description}</p>
                     </button>
                   ))}
                 </div>
@@ -450,7 +450,7 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display font-semibold text-heading-1 text-text">Confirm Scenario</h1>
-            <p className="text-caption text-text-muted">Review the generated config before running. No scenario runs until you approve it.</p>
+            <p className="text-caption text-text">Review the generated config before running. No scenario runs until you approve it.</p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" onClick={handleClear} aria-label="Clear">
@@ -494,13 +494,13 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-body font-medium text-body text-text">Configuration preview</h3>
-                  <p className="text-caption text-text-muted">Review field-by-field before running.</p>
+                  <p className="text-caption text-text">Review field-by-field before running.</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => setShowDiff(!showDiff)} className="text-caption text-text-muted hover:text-sun transition-colors">
+                  <button onClick={() => setShowDiff(!showDiff)} className="text-caption text-text hover:text-sun transition-colors">
                     {showDiff ? 'Show summary' : 'Show diff'}
                   </button>
-                  <button className="text-caption text-text-muted hover:text-sun transition-colors" onClick={() => navigator.clipboard.writeText(JSON.stringify(parsed, null, 2))} title="Copy config JSON">
+                  <button className="text-caption text-text hover:text-sun transition-colors" onClick={() => navigator.clipboard.writeText(JSON.stringify(parsed, null, 2))} title="Copy config JSON">
                     <Copy className="w-4 h-4 mr-1" />
                     Copy JSON
                   </button>
@@ -514,10 +514,10 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
                   <div className="p-3 space-y-2">
                     {diff.map((s) => (
                       <div key={s.section} className="mb-2">
-                        <h5 className="text-caption text-text-muted mb-1">{s.section}</h5>
+                        <h5 className="text-caption text-text mb-1">{s.section}</h5>
                         {s.rows.map((r) => (
                           <div key={r.path} className="flex items-start gap-2 text-body-sm">
-                            <span className="flex-shrink-0 w-48 text-caption text-text-muted leading-none">{r.path}</span>
+                            <span className="flex-shrink-0 w-48 text-caption text-text leading-none">{r.path}</span>
                             <span className={clsx('flex-1 font-mono', r.kind === 'added' ? 'text-energy' : r.kind === 'removed' ? 'text-violation' : 'text-sun')}>
                               {JSON.stringify(r.new)}
                             </span>
@@ -532,7 +532,7 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-caption text-text-muted">No diff available against an existing scenario.</p>
+                  <p className="text-caption text-text">No diff available against an existing scenario.</p>
                 </div>
               )}
               {validation && (
@@ -547,7 +547,7 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
                     </ul>
                   )}
                   {validation.warnings.length > 0 && (
-                    <ul className="text-caption text-text-muted mt-1 list-disc list-inside space-y-1">
+                    <ul className="text-caption text-text mt-1 list-disc list-inside space-y-1">
                       {validation.warnings.map((w) => <li key={w}>{w}</li>)}
                     </ul>
                   )}
