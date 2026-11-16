@@ -1,6 +1,5 @@
 import { useRef, useMemo, useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import MapGL, { Marker } from 'react-map-gl/maplibre';
 import { Building2, Zap, FileText, AlertCircle } from 'lucide-react';
 import Deck from '@deck.gl/react';
 import { Layer } from '@deck.gl/core';
@@ -27,6 +26,79 @@ import {
 import type { Building, PVAsset, BatteryAsset, EVAsset, Feeder, Transformer, GridDiagnostics, NetworkBus, PVAssetMetadata, BatteryAssetMetadata, EVAssetMetadata } from '../../api/types';
 
 interface CommunityCanvasProps {}
+
+// Lazy-loaded MapLibre components — maplibre-gl is split into its own
+// chunk (vite.config.ts manualChunks) and loaded on first map render so the
+// initial canvas paint is not blocked by the ~1 MB map library.
+let MapGLComponent: React.ComponentType<any> | null = null;
+let MarkerComponent: React.ComponentType<any> | null = null;
+let mapLibreReady = false;
+let mapLibreError: Error | null = null;
+
+if (typeof window !== 'undefined') {
+  import('react-map-gl/maplibre').then((mod) => {
+    MapGLComponent = mod.default as React.ComponentType<any>;
+    MarkerComponent = mod.Marker as React.ComponentType<any>;
+    mapLibreReady = true;
+  }).catch((err) => {
+    mapLibreError = err;
+    mapLibreReady = true;
+  });
+}
+
+function LazyMap({ buildings, selectAsset, layerVisibility, style, viewState, onMove, mapStyle, attributionControl }: {
+  buildings: any[];
+  selectAsset: (a: any) => void;
+  layerVisibility: { buildings: boolean };
+  style: React.CSSProperties;
+  viewState: any;
+  onMove: (event: any) => void;
+  mapStyle: string;
+  attributionControl: boolean;
+}) {
+  if (mapLibreError) {
+    return (
+      <div className="absolute inset-0 bg-surface/90 flex flex-col items-center justify-center z-50 p-6 text-center">
+        <AlertCircle className="w-8 h-8 text-violation mb-3" />
+        <h2 className="font-body font-medium text-body text-text">Unable to load map</h2>
+        <p className="text-caption text-text-muted mb-4">MapLibre failed to load. Check the console for details.</p>
+      </div>
+    );
+  }
+  if (!mapLibreReady || !MapGLComponent || !MarkerComponent) {
+    return (
+      <div className="absolute inset-0 bg-surface/90 flex flex-col items-center justify-center z-50">
+        <div className="animate-spin w-8 h-8 border-2 border-sun/30 border-t-sun rounded-full mb-3" />
+        <p className="text-caption text-text-muted">Loading map…</p>
+      </div>
+    );
+  }
+  const MapGL = MapGLComponent as React.ComponentType<any>;
+  const Marker = MarkerComponent as React.ComponentType<any>;
+  return (
+    <MapGL
+      style={style}
+      viewState={viewState}
+      onMove={onMove}
+      mapStyle={mapStyle}
+      attributionControl={attributionControl}
+    >
+      {layerVisibility.buildings && buildings.map((building) => building.location && (
+        <Marker key={building.building_id} longitude={building.location.lon} latitude={building.location.lat} style={{ zIndex: 5 }}>
+          <button
+            type="button"
+            aria-label={`Select ${building.building_id}`}
+            title={building.building_id}
+            className="flex h-6 w-6 items-center justify-center rounded border-2 border-white bg-emerald-600 text-white shadow"
+            onClick={() => selectAsset({ type: 'building', id: building.building_id, data: building })}
+          >
+            <Building2 size={14} />
+          </button>
+        </Marker>
+      ))}
+    </MapGL>
+  );
+}
 
 export function CommunityCanvas(_props: CommunityCanvasProps) {
   const navigate = useNavigate();
@@ -282,15 +354,19 @@ export function CommunityCanvas(_props: CommunityCanvasProps) {
   // trajectories have loaded. With no run at all we keep the empty state
   // instead of a loading spinner. Missing network geometry is not a blocker:
   // schematic locations are synthesized from the scenario config instead.
+  // A safety timeout prevents getting stuck in the loading state if a
+  // dependency never resolves (first-paint race guard).
   useEffect(() => {
     const hasRun = Boolean(currentRun?.scenario_id);
-    const ready = hasRun && Boolean(currentScenario) && trajectories.length > 0;
+    if (!hasRun) {
+      setIsLoading(false);
+      return;
+    }
+    const ready = Boolean(currentScenario) && trajectories.length > 0;
     if (ready) {
       setIsLoading(false);
-    } else if (!hasRun && isLoading) {
-      setIsLoading(false);
     }
-  }, [currentRun?.scenario_id, currentScenario, trajectories, isLoading]);
+  }, [currentRun?.scenario_id, currentScenario, trajectories]);
 
   const violations = useMemo(() => {
     if (!gridDiagnostics || !networkGeometry) return [];
@@ -645,7 +721,11 @@ export function CommunityCanvas(_props: CommunityCanvasProps) {
                 Schematic network layout — not actual geographic data
               </div>
             )}
-            <MapGL
+            <LazyMap
+              buildings={buildings}
+              selectAsset={selectAsset}
+              layerVisibility={layerVisibility}
+              style={{ width: '100%', height: '100%' }}
               viewState={{
                 ...viewport,
                 width: mapRef.current?.clientWidth || window.innerWidth,
@@ -655,21 +735,7 @@ export function CommunityCanvas(_props: CommunityCanvasProps) {
               onMove={(event) => handleViewportChange(event.viewState)}
               mapStyle={mapStyleUrl}
               attributionControl={false}
-            >
-              {layerVisibility.buildings && buildings.map((building) => building.location && (
-                <Marker key={building.building_id} longitude={building.location.lon} latitude={building.location.lat} style={{ zIndex: 5 }}>
-                  <button
-                    type="button"
-                    aria-label={`Select ${building.building_id}`}
-                    title={building.building_id}
-                    className="flex h-6 w-6 items-center justify-center rounded border-2 border-white bg-emerald-600 text-white shadow"
-                    onClick={() => selectAsset({ type: 'building', id: building.building_id, data: building })}
-                  >
-                    <Building2 size={14} />
-                  </button>
-                </Marker>
-              ))}
-            </MapGL>
+            />
 
             <Deck
               ref={deckRef as any}
