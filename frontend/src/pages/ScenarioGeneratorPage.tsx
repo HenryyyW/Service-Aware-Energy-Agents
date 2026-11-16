@@ -435,7 +435,7 @@ export function ScenarioGeneratorPageContent({ generateScenario: propGenerate }:
           </div>
           <div className="flex-1 min-w-0 p-4 overflow-y-auto">
             <div className="glass-card p-8 text-center text-text-muted">
-              <FileText className="w-16 h-16 mx-auto mb-3 text-text-muted/30" />
+              <FileText className="w-16 h-16 mx-auto mb-3 text-text-muted" />
               <p className="text-body">Generate a config to preview it here.</p>
             </div>
           </div>

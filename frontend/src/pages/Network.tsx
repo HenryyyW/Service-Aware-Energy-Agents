@@ -75,7 +75,7 @@ export default function Network() {
           <p>Real-time grid monitoring and diagnostics</p>
         </div>
         <div className="header-actions">
-          <select value={viewMode} onChange={(e) => setViewMode(e.target.value as 'overview' | 'detailed')} className="filter-select">
+          <select value={viewMode} onChange={(e) => setViewMode(e.target.value as 'overview' | 'detailed')} className="filter-select" aria-label="View mode">
             <option value="overview">Overview</option>
             <option value="detailed">Detailed View</option>
           </select>

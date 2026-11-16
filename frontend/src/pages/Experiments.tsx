@@ -105,22 +105,22 @@ export default function Experiments() {
               />
             </div>
             <div className="filters">
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="filter-select">
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="filter-select" aria-label="Status filter">
                 <option value="all">All Status</option>
                 <option value="completed">Completed</option>
                 <option value="running">Running</option>
                 <option value="pending">Pending</option>
                 <option value="failed">Failed</option>
               </select>
-              <select value={controllerFilter} onChange={(e) => setControllerFilter(e.target.value)} className="filter-select">
+              <select value={controllerFilter} onChange={(e) => setControllerFilter(e.target.value)} className="filter-select" aria-label="Controller filter">
                 <option value="all">All Controllers</option>
                 {controllers.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
-              <select value={scenarioFilter} onChange={(e) => setScenarioFilter(e.target.value)} className="filter-select">
+              <select value={scenarioFilter} onChange={(e) => setScenarioFilter(e.target.value)} className="filter-select" aria-label="Scenario filter">
                 <option value="all">All Scenarios</option>
                 {scenarios.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
-              <select value={regimeFilter} onChange={(e) => setRegimeFilter(e.target.value)} className="filter-select">
+              <select value={regimeFilter} onChange={(e) => setRegimeFilter(e.target.value)} className="filter-select" aria-label="Regime filter">
                 <option value="all">All Regimes</option>
                 {regimes.map(r => <option key={r} value={r}>{r}</option>)}
               </select>

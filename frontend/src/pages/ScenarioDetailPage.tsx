@@ -170,7 +170,7 @@ export function ScenarioDetailPage() {
         controller_type: created.controller_type,
       });
       // Fetch diagnostics for the run (whether already completed or polling below)
-      let active = true;
+      const active = true;
       (async () => {
         try {
           // If already completed, fetch diagnostics immediately
@@ -302,9 +302,13 @@ export function ScenarioDetailPage() {
               ? ` (${Math.round(run.progress * 100)}%)`
               : ''}
           </p>
-          {run.outcome_sentence && (
+          {run.outcome_sentence ? (
             <p className="text-caption text-text-muted mt-1">{run.outcome_sentence}</p>
-          )}
+          ) : run.stage || run.status !== 'completed' ? (
+            <p className="text-caption text-text-muted mt-1">
+              {run.stage ? `Stage: ${run.stage}` : `Status: ${run.status}`}
+            </p>
+          ) : null}
           {run.status === 'failed' && run.error && (
             <p className="text-caption text-violation mt-1">
               {run.error} — check the scenario configuration and try again; the run is
