@@ -159,7 +159,7 @@ export function ParameterControls({ onRun, running = false }: ParameterControlsP
                   const newPowers = [...currentScenario.assets.evs.charging_power_kw];
                   newPowers.splice(i, 1);
                   updateScenarioField('assets.evs.charging_power_kw', newPowers);
-                }}>
+                }} aria-label="Remove charging power">
                   <Minus className="w-3 h-3" />
                 </Button>
               </span>

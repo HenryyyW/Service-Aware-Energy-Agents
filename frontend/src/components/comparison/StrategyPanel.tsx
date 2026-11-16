@@ -118,21 +118,25 @@ export function StrategyPanel({ strategy, buildings, violations, currentTimestep
         />
       </div>
 
-      {/* OPF fallback marker — only shown when the backend provides it;
-           otherwise "no record" so it is never mistaken for a real strategy
-           difference. */}
+      {/* Controller fallback — labelled per strategy comparison semantics.
+           Shows controller_type, fallback_steps/total_steps, fallback_reason,
+           and the effective controller when any step fell back to rule_based. */}
       <div className="p-3 border-b border-border/30 bg-surface/50">
         <div className="flex items-center justify-between mb-1">
-          <h5 className="text-caption text-text-muted">OPF Fallback</h5>
+          <h5 className="text-caption text-text-muted">Controller Fallback</h5>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] text-text-muted">Controller: {strategy.controller}</span>
           {strategy.fallback_steps !== undefined ? (
             <>
               <span className="badge badge-violation text-[10px]">
-                {strategy.fallback_steps} step{strategy.fallback_steps !== 1 ? 's' : ''}
+                {strategy.fallback_steps}/{maxTimestep + 1} step{strategy.fallback_steps !== 1 ? 's' : ''}
               </span>
               {strategy.fallback_reason && (
                 <span className="text-caption text-text-muted">{strategy.fallback_reason}</span>
+              )}
+              {strategy.fallback_steps > 0 && (
+                <span className="text-caption text-violation">Effective controller: rule_based (via fallback)</span>
               )}
             </>
           ) : (

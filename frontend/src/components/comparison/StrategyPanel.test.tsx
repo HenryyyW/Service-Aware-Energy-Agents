@@ -22,19 +22,28 @@ const baseStrategy = {
   power_flow_converged: true,
 }
 
-describe('StrategyPanel OPF fallback labelling', () => {
-  it('shows fallback steps + reason when backend provides them', () => {
+describe('StrategyPanel controller fallback labelling', () => {
+  it('shows controller_type, fallback_steps/total_steps, reason and effective controller', () => {
     render(
       <StrategyPanel
-        strategy={{ ...baseStrategy, fallback_steps: 2, fallback_reason: 'voltage violation cleared' }}
+        strategy={{
+          ...baseStrategy,
+          controller: 'mpc',
+          fallback_steps: 24,
+          fallback_reason: 'semantic_fallback_to_rule_based',
+        }}
         buildings={buildings}
         currentTimestep={0}
-        maxTimestep={95}
+        maxTimestep={23}
       />
     )
-    expect(screen.getByText('OPF Fallback')).toBeInTheDocument()
-    expect(screen.getByText('2 steps')).toBeInTheDocument()
-    expect(screen.getByText('voltage violation cleared')).toBeInTheDocument()
+    expect(screen.getByText('Controller Fallback')).toBeInTheDocument()
+    expect(screen.getByText('Controller: mpc')).toBeInTheDocument()
+    expect(screen.getByText('24/24 steps')).toBeInTheDocument()
+    expect(screen.getByText('semantic_fallback_to_rule_based')).toBeInTheDocument()
+    expect(
+      screen.getByText('Effective controller: rule_based (via fallback)')
+    ).toBeInTheDocument()
   })
 
   it('shows "no record" when no fallback marker is provided', () => {
@@ -46,7 +55,7 @@ describe('StrategyPanel OPF fallback labelling', () => {
         maxTimestep={95}
       />
     )
-    expect(screen.getByText('OPF Fallback')).toBeInTheDocument()
+    expect(screen.getByText('Controller Fallback')).toBeInTheDocument()
     expect(screen.getByText('無紀錄 / no record')).toBeInTheDocument()
     expect(screen.queryByText('steps')).not.toBeInTheDocument()
   })
