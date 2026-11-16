@@ -234,6 +234,19 @@ with clean per-building PV payloads (no `building` key). The
 generate→confirm seam is reopened; the generate→confirm→run loop is fully
 functional on this tip.
 
+**Canvas preview-build flake (FE2, low priority, does not block the user's
+dev-mode retest):** on the production preview (:4173) the canvas
+intermittently renders "Could not connect to the backend API" (toast:
+"Failed to load simulations") in a real browser session, while the same
+`GET /api/simulations` through the preview proxy returns 200 via curl
+consistently, and one load after rebuild reached "Loading simulation
+runs…" cleanly. The first-paint race fix (383f35a5d) improved the initial
+state. Not reproduced on the dev server (:3000/:3010). Suspects for FE2:
+the `/ws` WebSocket has no proxy entry in `vite.config.ts` (`ws: true`
+missing — only `/api` is proxied), and the connection gate may treat the
+WS failure as an API failure. Repro: production preview + fresh
+navigation to `/canvas` (intermittent).
+
 ### Final clean retest #2 — main @ `f26b26ba8` (2026-11-17, LLM path live)
 
 Tip includes Backend A's EV-count parsing fix (f26b26ba8) — retested at the
