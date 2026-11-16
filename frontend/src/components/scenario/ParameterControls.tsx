@@ -149,7 +149,7 @@ export function ParameterControls({ onRun, running = false }: ParameterControlsP
           />
         </div>
         <div className="mt-3 pt-3 border-t border-border/30">
-          <label className="block text-caption text-text-muted mb-2">Charging Power Levels</label>
+          <label className="block text-caption text-text mb-2">Charging Power Levels</label>
           <div className="flex flex-wrap gap-2">
             {currentScenario.assets.evs.charging_power_kw.map((power, i) => (
               <span key={i} className="badge badge-ev">

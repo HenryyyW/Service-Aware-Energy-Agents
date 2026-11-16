@@ -271,7 +271,7 @@ export function ScenarioEditor({ onSave, onRun, readOnly = false }: ScenarioEdit
                   max={1}
                 />
                 <div className="md:col-span-3">
-                  <label className="block text-caption text-text-muted mb-1.5">Charging Power Options (kW)</label>
+                  <label className="block text-caption text-text mb-1.5">Charging Power Options (kW)</label>
                   <div className="flex flex-wrap gap-2">
                     {currentScenario.assets.evs.charging_power_kw.map((power, i) => (
                       <span key={i} className="badge badge-ev">
@@ -345,7 +345,7 @@ export function ScenarioEditor({ onSave, onRun, readOnly = false }: ScenarioEdit
               max={5000}
             />
             <div className="md:col-span-2">
-              <label className="block text-caption text-text-muted mb-1.5">Voltage Limits (p.u.)</label>
+              <label className="block text-caption text-text mb-1.5">Voltage Limits (p.u.)</label>
               <div className="flex gap-4">
                 <Input
                   label="Min"
@@ -407,7 +407,7 @@ export function ScenarioEditor({ onSave, onRun, readOnly = false }: ScenarioEdit
               ]}
             />
             <div>
-              <label className="block text-caption text-text-muted mb-1.5">Objectives</label>
+              <label className="block text-caption text-text mb-1.5">Objectives</label>
               <div className="flex flex-wrap gap-2">
                 {objectiveOptions.map(obj => (
                   <label key={obj} className="flex items-center gap-2 cursor-pointer">
@@ -515,7 +515,7 @@ export function ScenarioEditor({ onSave, onRun, readOnly = false }: ScenarioEdit
                   ]}
                 />
               </div>
-              <div className="mt-3 p-3 bg-surface/50 rounded-lg text-caption text-text-muted">
+              <div className="mt-3 p-3 bg-surface/50 rounded-lg text-caption text-text">
                 <p><strong>Regime Definitions:</strong></p>
                 <ul className="list-disc list-inside mt-1 space-y-1">
                   <li><strong>tou_solo:</strong> No community pool, static TOU tariff per building</li>
@@ -620,7 +620,7 @@ export function ScenarioEditor({ onSave, onRun, readOnly = false }: ScenarioEdit
                   <span className="text-xl">📋</span>
                   <div>
                     <p className="font-body font-medium text-body text-text">{scenario.community.name}</p>
-                    <p className="text-caption text-text-muted">
+                    <p className="text-caption text-text">
                       {scenario.community.buildings} buildings · {scenario.assets.evs.number} EVs · {scenario.grid.model}
                     </p>
                   </div>

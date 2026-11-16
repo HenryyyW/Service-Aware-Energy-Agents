@@ -245,12 +245,12 @@ export function ScenarioComparison({
                   <div key={metric.key} className="p-4 flex items-center justify-between hover:bg-white/5">
                     <div className="flex-1 min-w-0">
                       <p className="font-body text-body-sm text-text">{metric.label}</p>
-                      <p className="text-caption text-text-muted">{metric.unit}</p>
+                      <p className="text-caption text-text">{metric.unit}</p>
                     </div>
                     <div className="flex items-center gap-4 ml-4">
                       <div className="text-right w-32">
                         <p className="font-mono text-data text-text">{valA !== null ? metric.format(valA) : '—'}</p>
-                        <p className="text-caption text-text-muted">Scenario A</p>
+                        <p className="text-caption text-text">Scenario A</p>
                       </div>
                       <div className="flex items-center gap-2">
                         {comparison.diff !== null && (
@@ -264,12 +264,12 @@ export function ScenarioComparison({
                           </span>
                         )}
                         {comparison.diff === null && (
-                          <span className="text-caption text-text-muted">—</span>
+                          <span className="text-caption text-text">—</span>
                         )}
                       </div>
                       <div className="text-right w-32">
                         <p className="font-mono text-data text-text">{valB !== null ? metric.format(valB) : '—'}</p>
-                        <p className="text-caption text-text-muted">Scenario B</p>
+                        <p className="text-caption text-text">Scenario B</p>
                       </div>
                     </div>
                   </div>
@@ -315,7 +315,7 @@ function ScenarioSelector({ label, runs, selected, onSelect, icon }: {
           <div className="flex items-center justify-between p-3 bg-surface/50 rounded-lg">
             <div>
               <p className="font-body font-medium text-body text-text">{selected.run_id}</p>
-              <p className="text-caption text-text-muted">{selected.scenario_id} · {selected.controller_type}</p>
+              <p className="text-caption text-text">{selected.scenario_id} · {selected.controller_type}</p>
             </div>
             <Button variant="ghost" size="icon" onClick={() => onSelect({ ...selected, run_id: '' } as any)} aria-label="Clear">
               <XCircle className="w-4 h-4 text-text-muted" />
@@ -326,19 +326,19 @@ function ScenarioSelector({ label, runs, selected, onSelect, icon }: {
               <p className="font-mono text-data text-sun">
                 {selected.energy_metrics?.total_cost ? `$${selected.energy_metrics.total_cost.toLocaleString()}` : '—'}
               </p>
-              <p className="text-caption text-text-muted">Cost</p>
+              <p className="text-caption text-text">Cost</p>
             </div>
             <div className="p-2 bg-surface/50 rounded">
               <p className="font-mono text-data text-energy">
                 {selected.energy_metrics?.pv_self_consumption ? `${(selected.energy_metrics.pv_self_consumption * 100).toFixed(0)}%` : '—'}
               </p>
-              <p className="text-caption text-text-muted">Self-Con.</p>
+              <p className="text-caption text-text">Self-Con.</p>
             </div>
             <div className="p-2 bg-surface/50 rounded">
               <p className="font-mono text-data text-battery">
                 {selected.service_metrics?.ev_completion_rate ? `${(selected.service_metrics.ev_completion_rate * 100).toFixed(0)}%` : '—'}
               </p>
-              <p className="text-caption text-text-muted">EV Ready</p>
+              <p className="text-caption text-text">EV Ready</p>
             </div>
           </div>
         </div>
@@ -375,7 +375,7 @@ function SelectedScenarioCard({ run, label, color }: {
       <div className="space-y-2">
         <div className="p-3 bg-surface/50 rounded-lg">
           <p className="font-body font-medium text-body text-text">{run.run_id}</p>
-          <p className="text-caption text-text-muted">{run.scenario_id} · {run.controller_type}</p>
+          <p className="text-caption text-text">{run.scenario_id} · {run.controller_type}</p>
           {run.controller_fallback_steps !== undefined && run.controller_fallback_steps > 0 ? (
             <>
               <p className="text-caption text-violation mt-0.5">
@@ -398,19 +398,19 @@ function SelectedScenarioCard({ run, label, color }: {
             <p className="font-mono text-data text-sun">
               {run.energy_metrics?.total_cost ? `$${run.energy_metrics.total_cost.toLocaleString()}` : '—'}
             </p>
-            <p className="text-caption text-text-muted">Cost</p>
+            <p className="text-caption text-text">Cost</p>
           </div>
           <div className="p-2 bg-surface/50 rounded">
             <p className="font-mono text-data text-energy">
               {run.energy_metrics?.pv_self_consumption ? `${(run.energy_metrics.pv_self_consumption * 100).toFixed(0)}%` : '—'}
             </p>
-            <p className="text-caption text-text-muted">Self-Con.</p>
+            <p className="text-caption text-text">Self-Con.</p>
           </div>
           <div className="p-2 bg-surface/50 rounded">
             <p className="font-mono text-data text-battery">
               {run.service_metrics?.ev_completion_rate ? `${(run.service_metrics.ev_completion_rate * 100).toFixed(0)}%` : '—'}
             </p>
-            <p className="text-caption text-text-muted">EV Ready</p>
+            <p className="text-caption text-text">EV Ready</p>
           </div>
         </div>
         {/* LMP metrics row (Phase 2) */}
@@ -420,19 +420,19 @@ function SelectedScenarioCard({ run, label, color }: {
               <p className="font-mono text-data text-ev">
                 {run.energy_metrics?.lmp_cost_usd !== undefined ? `$${run.energy_metrics.lmp_cost_usd.toLocaleString()}` : '—'}
               </p>
-              <p className="text-caption text-text-muted">LMP Cost</p>
+              <p className="text-caption text-text">LMP Cost</p>
             </div>
             <div className="p-2 bg-surface/50 rounded">
               <p className="font-mono text-data text-ev">
                 {run.energy_metrics?.lmp_price_mean !== undefined ? `$${run.energy_metrics.lmp_price_mean.toFixed(3)}/kWh` : '—'}
               </p>
-              <p className="text-caption text-text-muted">LMP Mean</p>
+              <p className="text-caption text-text">LMP Mean</p>
             </div>
             <div className="p-2 bg-surface/50 rounded">
               <p className="font-mono text-data text-violation">
                 {run.energy_metrics?.lmp_opf_fallback_steps !== undefined ? `${run.energy_metrics.lmp_opf_fallback_steps}` : '—'}
               </p>
-              <p className="text-caption text-text-muted">OPF Fallback</p>
+              <p className="text-caption text-text">OPF Fallback</p>
             </div>
           </div>
         )}
@@ -467,9 +467,9 @@ function SummaryCard({ title, value, unit, icon }: {
         <span className={clsx('font-display font-bold text-heading-1', isPositive ? 'text-energy' : isNegative ? 'text-violation' : 'text-text')}>
           {isPositive ? '+' : ''}{value.toFixed(1)}
         </span>
-        <span className="text-caption text-text-muted">{unit}</span>
+        <span className="text-caption text-text">{unit}</span>
       </div>
-      <p className="text-caption text-text-muted mt-1">B vs A</p>
+      <p className="text-caption text-text mt-1">B vs A</p>
     </div>
   );
 }
