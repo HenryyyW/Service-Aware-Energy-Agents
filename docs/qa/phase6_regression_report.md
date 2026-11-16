@@ -211,6 +211,44 @@ formula path; 24 steps, seed 42):
 
 Both items verified; no new defects.
 
+### Phase B — pre-retest gates + axe full-clear + W22 footer (main @ `6abdb58ec`, 2026-11-17)
+
+**Gates**: tsc ✓, eslint ✓, build ✓, vitest **16/16**, pytest **518/518** (baseline holds).
+
+**axe full-site re-run — the original 69 are FULLY CLEARED** (production
+build @ 6abdb58ec, all four previously-failing routes):
+
+| route | Phase A | now |
+|---|---|---|
+| /studio | 57 | **0** |
+| /scenarios/generate | 7 | **0** |
+| /experiments | 4 | **0** |
+| /network | 1 | **0** |
+
+FE2's contrast pass + select-name/button-name fixes are complete on main.
+
+**Walkthrough data run** (scenario `phaseb_smoke`, 24 steps, seed 42):
+confirm 201, run `completed` (14.90 USD), strategy comparison 4/4 completed
+with honest labels (mpc + single_agent_rl `24 steps /
+fallback_to_rule_based`; rule_based + multi_agent_rl unlabelled).
+
+**Step 7 W22 footer — CONFIRMED STILL OPEN (FE2)**: the report renders
+`Timestep: 15 min (effective: None min)` — the missing effective timestep
+leaks Python `None` instead of the required explicit "Unknown effective
+timestep" text (and there is no "Dataset resolution" mention). Same class
+as the W22 empty-string footer; still to fix.
+
+**Verification-environment notes (honest)**: browser rendering checks
+(canvas first-paint settled state, Dispatch Trace panel visual) were not
+completable this session — the embedded browser hit a 25-tab registration
+cap and headless Chrome decayed after the axe sweep (same environment decay
+as prior rounds). Carried evidence: canvas first-paint sanity verified on
+the same canvas code at the 4173 session ("Loading simulation runs…" on
+first open, no connection error — fix 383f35a5d); Dispatch Trace panel
+empty-state text implemented at StrategyPanel.tsx:181 and its data source
+verified (per-strategy trajectories 200 with battery/EV/flexible action
+records). Panel visual = FE2/user retest.
+
 ### Final clean retest — full 8-step walkthrough (main @ `ee3df1a0f`, 2026-11-17)
 
 Clean origin rebuild (ee3df1a0f: W25/W26/W27). Gates: pytest 518 (repo),
