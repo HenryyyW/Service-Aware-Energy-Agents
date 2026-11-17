@@ -891,3 +891,33 @@ with A/B to confirm, not blocking the label fix. **CI is still red at
 `d29e073d3`: `black --check` fails on `src/agents/config_planner.py` and
 `src/agents/config_coder.py`** - trivial formatting, Backend A to run black and
 push (this is the pulse's standing item; A's d29e073d3 did not include it).
+
+## Partner verification: black fix + economics explanation FALSIFIED (2026-11-17 ~11:30, origin/main `49763fad3`)
+
+**A's black fix verified - CI red layer resolved.** `49763fad3` is
+formatting-only in effect (the `-w` residue is black's line-wrapping of one
+list comprehension; no logic change), `black --check` clean (93 files),
+full suite **518 passed**, GitHub checks on that sha show
+`Lint & Type Check → success` and `Artifact Hygiene → success` (other jobs
+were in progress at read time). Live generate probe intact: 4 buildings,
+1 shared battery on building_1, 2 EVs, `rejected_fields
+["battery.shared_not_supported"]`. `/api/compare` also carries the new label
+(`controller_fallback_b: {fallback_steps: 5, reason:
+fallback_to_rule_based}` for multi_agent_rl vs rule_based).
+
+**A's economics-identity explanation is FALSIFIED on the natural config.**
+A attributed QA's byte-identical four-arm economics (26.41 USD) to the
+differing battery actions "netting out identically" through community pool
+clearing. Live measurement on fixv1, 24 steps, seed 42 (per-run
+`energy_metrics`): rule_based = grid_import **158.12 kWh** /
+battery_throughput **53.40 kWh** / self-consumption 0.470; multi_agent_rl =
+**163.07 kWh** / **237.36 kWh** / 0.307. A 4.4x throughput and 5 kWh import
+difference cannot net out to identical totals, so the mechanism A described
+does not hold on this config. Note also QA's own two rounds disagree (retest
+#1: multi_agent_rl 15.27 vs baseline 14.90 USD - distinct; retest #2: all
+four 26.41 - identical), which points at the comparison/settlement path
+rather than the physics. Dispatched to Backend B (economics/settlement
+owner): reproduce the four-arm comparison on the same shape and reconcile
+its per-arm economics against the per-run metrics above; if the comparison
+reports identical economics while the runs differ, that is a reconciliation
+defect - arms must never show identical numbers without a named reason.
