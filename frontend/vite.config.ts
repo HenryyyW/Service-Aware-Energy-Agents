@@ -20,6 +20,14 @@ export default defineConfig({
         target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8001',
         changeOrigin: true,
       },
+      '/ws': {
+        // WebSocket proxy for real-time simulation updates. Must be proxied
+        // on the production preview (:4173) so the canvas's WebSocket
+        // reaches the backend instead of hanging against the dev server.
+        target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8001',
+        ws: true,
+        changeOrigin: true,
+      },
     },
   },
   build: {
