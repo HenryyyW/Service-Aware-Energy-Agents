@@ -211,27 +211,60 @@ formula path; 24 steps, seed 42):
 
 Both items verified; no new defects.
 
-### Final clean retest — full 8-step walkthrough (main @ `ee3df1a0f`, 2026-11-17)
+### Increment — FE2 a11y merge + pv.building seam fix verified (main @ `6408599ac` lineage, 2026-11-17)
 
-Clean origin rebuild (ee3df1a0f: W25/W26/W27). Gates: pytest 518 (repo),
-tsc ✓, eslint ✓ (after one mechanical `let`→`const` in
-ScenarioDetailPage.tsx from the W2 canvas work — f25fe8835), vite build ✓.
+**Axe re-scan after FE2's a11y merge** (same 9 routes, production build @
+61fe8e679 + this branch):
 
-| step | verdict | evidence |
+| route | Phase A | now |
 |---|---|---|
-| 1 generate | **PASS** | 200; deterministic fallback (LLM env absent — accepted); verdict `accept`; 4 buildings; rejected fields named (`pv.count`, `battery.shared_not_supported`) |
-| 2 confirm | **PASS** | 201 saved; EV arrival/departure filled (W3 holds); **invalid -1 kW → 422 naming `capacity_kwh`** (W25 schema fix live) |
-| 3 validate+run+cancel | **PASS** | validate `valid=True`; 24-step run `completed` (cost 14.90 USD); second run cancelled mid-run → terminal `cancelled` |
-| 4 canvas | **PASS (API/data path)** | geometry 200 (50 buses); trajectories 200 (24 steps); `/api/*` through the preview proxy verified. Browser-level: canvas at :4173 showed a connection-error state on first paint in automation while the same-origin proxy serves data (curl + earlier live rounds) — flagged FE2 for a dev-tools look; low priority |
-| 5 strategy comparison | **PASS** | 4 strategies completed, real records; honest labels — mpc + single_agent_rl `24 steps / fallback_to_rule_based`, rule_based + multi_agent_rl unlabelled; economics differ (multi_agent_rl 15.27 vs baseline 14.90 USD) |
-| 6 diagnosis | **PASS** | explicit "No constraint violations were recorded in this run." |
-| 7 report | **PASS** | `GET /api/reports/{id}` 200 with timestep/buildings/seed 42/controller/run_id; markdown download 200 |
-| 8 axe + keyboard | **PASS (re-run, same as Phase A)** | 69 violations on 4 routes (studio 57, generate 7, experiments 4, network 1 — all contrast/labelling); **zero keyboard/focus violations on any route**; manual Tab traversal = user retest |
+| /studio | 57 | **54** (button-name fixed) |
+| /experiments | 4 | **0** (select-name fixed) |
+| /network | 1 | **0** (select-name fixed) |
+| /scenarios/generate | 7 | 7 (color-contrast remains) |
+| all other routes | 0 | 0 |
 
-Labelling per the retest instructions: **W25-fix-related results verified**
-(named 422, fallback labels end-to-end); **awaiting FE2 push**: timestep
-unification display, Dispatch Trace panel, bundle split, and the axe
-contrast/button-name fixes (69 violations unchanged from Phase A).
+**Total: 69 → 61 violations**; residual is color-contrast only (studio +
+generate) → FE2. No keyboard/focus violations.
+
+**pv.building seam CLOSED**: Backend A's strip fix (`6408599ac`, in main via
+this branch's merge) removes the placement key at distribution. Live seam
+re-test on both arms: generate 200 (`plan_source=llm`) → confirm **201**
+with clean per-building PV payloads (no `building` key). The
+generate→confirm seam is reopened; the generate→confirm→run loop is fully
+functional on this tip.
+
+**Canvas preview-build flake (FE2, low priority, does not block the user's
+dev-mode retest):** on the production preview (:4173) the canvas
+intermittently renders "Could not connect to the backend API" (toast:
+"Failed to load simulations") in a real browser session, while the same
+`GET /api/simulations` through the preview proxy returns 200 via curl
+consistently, and one load after rebuild reached "Loading simulation
+runs…" cleanly. The first-paint race fix (383f35a5d) improved the initial
+state. Not reproduced on the dev server (:3000/:3010). Suspects for FE2:
+the `/ws` WebSocket has no proxy entry in `vite.config.ts` (`ws: true`
+missing — only `/api` is proxied), and the connection gate may treat the
+WS failure as an API failure. Repro: production preview + fresh
+navigation to `/canvas` (intermittent).
+
+### Final clean retest #2 — main @ `f26b26ba8` (2026-11-17, LLM path live)
+
+Tip includes Backend A's EV-count parsing fix (f26b26ba8) — retested at the
+current tip rather than 467fb13ec (strictly newer; the EV-count fix is in).
+
+| step | verdict | notes |
+|---|---|---|
+| 1 generate | **PASS with defect** | LLM path live (`plan_source=llm`); **EV count fixed: "two electric vehicles" → 2 EVs** (1+1 across two buildings — resolves the Partner's observation); NL naming present; verdict `escalate`. **NEW REGRESSION (Backend A)**: both arms (LLM + fallback) now emit `pv.building` placement keys — `POST /api/scenarios` rejects the generator's own output with 422 `{"field": "pv -> building", "message": "Extra inputs are not permitted"}`. Mechanism: `config_planner.py` per-asset placement instruction vs the confirm-side PV payload schema (extra inputs forbidden). Named-422 behavior works as designed; the generate→confirm seam is broken at this tip. |
+| 2 confirm | **FAIL on generated configs (regression above) / PASS on schema-clean config** | hand-built config (post-fix shape) → 201 + validate True; W25 named-422 re-verified (pv `capacity_kw: -1` → 422 naming `capacity_kw`) |
+| 3 validate + run + cancel | **PASS** (cancel verified on 756f831ce Phase A; run completed 26.41 USD on this tip) | |
+| 4 canvas | **PASS** | geometry 200 (50 buses); trajectories 200 with real observations |
+| 5 strategy comparison | **PASS with note** | 4 completed strategies, honest labels (mpc + single_agent_rl `24/fallback_to_rule_based`; rule_based + multi_agent_rl unlabelled); NOTE for B/A: all four arms byte-identical economics (26.41) — multi_agent_rl unlabelled yet identical to rule_based (earlier rounds differed 15.27 vs 14.90) — worth confirming the multi-agent dispatch is genuinely distinct |
+| 6 diagnosis | **PASS** | explicit no-violations reading |
+| 7 report | **PASS** | 200 with config/timestep/buildings/seed/controller/run_id; markdown download 200 |
+| 8 axe + keyboard | **PASS** (unchanged from Phase A) | 69 contrast/labelling violations on 4 routes (studio 57, generate 7, experiments 4, network 1); zero keyboard/focus violations — awaiting FE2 |
+
+Gates: tsc ✓, eslint ✓ (mechanical `let`→`const` re-applied, commit 72ee49c1c
+on qa/retest-467), build ✓.
 
 ### Re-verification #3 — Lighthouse + axe + responsive preflight (main @ `328df3568`, 2026-11-13)
 
