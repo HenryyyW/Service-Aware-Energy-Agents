@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.coordination.coordinator import CoordinationResult
 
-from src.controllers import BaseController
+from src.controllers import BaseController, RuleBasedController
 from src.schemas.action import RequestedActions, Action, ActionType
 from src.schemas.scenario import ScenarioConfig
 from src.coordination import create_coordinator
@@ -33,6 +33,9 @@ class MultiAgentController(BaseController):
             max_iterations=max_iterations,
         )
         self.last_coordination_result: Optional["CoordinationResult"] = None
+        # For semantic fallback detection (run_experiment.py): if this controller
+        # produces actions identical to rule_based, it will be marked as fallback.
+        self._rule_based = RuleBasedController(scenario_config)
 
     def get_actions(
         self, observations: Dict[str, Any], timestep: int
@@ -160,4 +163,5 @@ class MultiAgentController(BaseController):
     def reset(self):
         super().reset()
         self.coordinator.reset()
+        self._rule_based.reset()
         self.last_coordination_result = None
