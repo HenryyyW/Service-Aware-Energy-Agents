@@ -808,3 +808,28 @@ title loose; recorded as-is, not reworded.
 **Gate for the user's retest #6:** contrast residuals + canvas flake closed,
 the identical-economics question answered, QA's final axe rescan clean →
 then the user walks `docs/mvp_walkthrough.md`.
+
+## Partner verification: WS-proxy fix landed (2026-11-17 ~02:10, origin/main `a007ea58c`)
+
+**FE2's `frontend2/fix/ws-proxy` cherry-picked onto main** (`a007ea58c`,
+single commit, vite.config.ts only - the branch as a whole was NOT merged:
+its tip still sat on a stale base and would have reverted the baseline and
+QA-report records). Gates re-run by the Partner on the merged tree: lint
+exit 0 (1 pre-existing warning), tsc 0, vitest 16/16, build 0. The change
+adds the `/ws` proxy entry (`ws: true`, same `VITE_API_PROXY_TARGET`) - the
+exact gap QA named for the production-preview canvas flake; the connection
+gate already separates REST failure from WS setup per FE2's read.
+
+**Record correction (FE2 premise, not code):** FE2 reported "QA scanned
+before my contrast fix was merged" - not the case. The contrast work IS on
+the tree QA scanned (their axe commit landed as `82aa40350`, inside
+`61fe8e679`); the SHA they cite (`04ef6be91`) is the pre-cherry-pick id and
+is not on main. So the residual 61 (studio 54 + generate 7, color-contrast)
+are measured WITH the contrast fix in - the fix did not clear them, and the
+surgical selector-based pass is still the open item.
+
+**Still open:** the color-contrast residuals (studio 54 / generate 7 -
+awaiting QA's exact axe targets), the canvas flake's browser-level
+re-check by QA (the /ws proxy + gate separation need QA's preview pass to
+call it closed), A's identical-economics answer (four arms 26.41,
+multi_agent_rl unlabelled), and the LLM-path generation evidence in Phase B.
