@@ -443,7 +443,7 @@ function ReportPageContent() {
               ) : null}
             </span>
             <span>
-              {runDetail?.scenario_config?.effective_timestep_minutes !== undefined
+              {runDetail?.scenario_config?.effective_timestep_minutes != null
                 ? `Dataset resolution ${runDetail.scenario_config.effective_timestep_minutes} min`
                 : 'Unknown effective timestep'}
             </span>
