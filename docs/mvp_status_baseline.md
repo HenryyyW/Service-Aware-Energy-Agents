@@ -833,3 +833,31 @@ awaiting QA's exact axe targets), the canvas flake's browser-level
 re-check by QA (the /ws proxy + gate separation need QA's preview pass to
 call it closed), A's identical-economics answer (four arms 26.41,
 multi_agent_rl unlabelled), and the LLM-path generation evidence in Phase B.
+
+## Partner verification: multi-agent fallback + FE2 contrast pass (2026-11-17 ~09:00, origin/main `b8f8d6953`)
+
+**A's `b8f8d6953` verified - premise TRUE, coverage partial.** Full repo
+suite on the tip: **518 passed** (A's 43/43 was a subset). Live probe on the
+walkthrough config (fixv1, 24 steps, seed 77) mirroring the benchmark's own
+battery-action equality: **multi_agent_rl is 24/24 steps battery-action-
+identical to rule_based** - it genuinely degenerates on this config (not a
+coordinator bug: earlier rounds showed it distinct, e.g. 41.80 vs 27.48 USD).
+The commit enables the BENCHMARK label (`semantic_fallback_to_rule_based`).
+**The API/UI path still cannot see it** - live run of multi_agent_rl through
+`POST /api/simulations`: `controller_fallback_steps` 0 / reason None,
+because `MultiAgentController` has `_rule_based` but no `fallback_steps` and
+the route gates on that attribute. QA's user-visible flag (four arms
+identical, multi_agent unlabelled) is therefore still open. Bounded
+follow-up dispatched to A: count the semantic-equal steps on the controller
+itself (battery-only equality, same as the benchmark), keep the API reason
+string "fallback_to_rule_based", unit test + branch + partner live check.
+
+**FE2's second contrast pass (`19e7dad28`) verified - gates green:** lint
+exit 0 (1 pre-existing warning), tsc 0, vitest 16/16, build 0 (37 lines
+across ScenarioComparison / ScenarioEditor / ScenarioGeneratorPage /
+ParameterControls). Whether it clears the 54+7 axe color-contrast items is
+QA's rescan - not provable from gates alone.
+
+**Open:** multi-agent API label (with A), the axe color-contrast residuals
+(studio 54 / generate 7 - QA's selector list pending), canvas flake browser
+re-check (QA).
