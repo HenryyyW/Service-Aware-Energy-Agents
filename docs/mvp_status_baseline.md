@@ -921,3 +921,38 @@ owner): reproduce the four-arm comparison on the same shape and reconcile
 its per-arm economics against the per-run metrics above; if the comparison
 reports identical economics while the runs differ, that is a reconciliation
 defect - arms must never show identical numbers without a named reason.
+
+## Partner reproduction: identical-arm economics reconciled (2026-11-17 ~12:40, origin/main `ed40ec607`)
+
+**B's reconciliation answer verified as far as it goes; their evidence does
+not exist.** B reported "all four arms DISTINCT" with a table from
+`experiments/results/scenario_a/comparison_table.json` - **that file is not
+on disk and not in the repo** (last commit touching `experiments/results` is
+CI config; the artifact-hygiene rule keeps results out of git), so the table
+is unverifiable and I reproduced the comparison myself instead.
+
+**Partner reproduction, live API path** (`POST
+/api/simulations/strategy-comparison`, fixv1, seed 42, 24 steps, then per-run
+GETs):
+
+| arm | grid_import_kwh | throughput_kwh | carbon_kg | fallback label |
+|---|---|---|---|---|
+| rule_based | 158.12 | 53.40 | 85.03 | 0 / None |
+| mpc | 158.12 | 53.40 | 85.03 | **24 / fallback_to_rule_based** |
+| single_agent_rl | 158.12 | 53.40 | 85.03 | **24 / fallback_to_rule_based** |
+| multi_agent_rl | 163.07 | 237.36 | 87.70 | **5 / fallback_to_rule_based** |
+
+Conclusions: (1) **no comparison-path defect** - each arm's numbers match its
+own run payload (no cross-contamination, consistent with B's read of
+`/api/compare`); (2) the three identical arms are identical **because they
+fully fall back to rule_based, and each says so** - the no-silent-substitution
+rule holds; (3) multi_agent_rl is genuinely distinct on this config. **QA's
+"all four byte-identical 26.41" therefore did not reproduce here** - the most
+likely explanation is config-specific total degeneracy on their walkthrough
+config (all four arms fully falling back, multi-agent unlabelled at the time
+of their retest #2, before A's label fix). Dispatch to QA: re-run the
+four-arm comparison on the retest-#2 config/seed and check the multi-agent
+label now reads 24 steps there - if it does, the identity is honestly
+explained; if it reads <24 while economics stay identical, it becomes a real
+reconciliation item for B. B's "all four distinct" table is NOT the verified
+state either - on fixv1 three arms are identical-by-labelled-fallback.
