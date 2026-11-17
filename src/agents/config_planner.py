@@ -444,7 +444,9 @@ OUTPUT ONLY THE JSON. NO EXPLANATIONS.
         shared_battery = False
         if bat_mentioned:
             clauses = re.split(r"[、。，,.;;:：]", nl_lower)
-            bat_clauses = [c.strip() for c in clauses if any(kw in c for kw in bat_keywords)]
+            bat_clauses = [
+                c.strip() for c in clauses if any(kw in c for kw in bat_keywords)
+            ]
             for clause in bat_clauses:
                 if "shared" in clause or "共用" in clause:
                     shared_battery = True
