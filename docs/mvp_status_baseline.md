@@ -766,3 +766,45 @@ main as benign build config pending a PM/FE2 revert decision.
 
 **Gate for the user's retest #6:** QA's Phase B on `b8cf2dc85` (8 steps,
 including the axe re-run) → then the user walks `docs/mvp_walkthrough.md`.
+
+## Partner verification: post-merge increments (2026-11-17 ~01:45, origin/main `a52ad0d74`)
+
+**Two code commits landed on main without partner sign-off this cycle - both
+now verified by the Partner on the true tip (`6abdb58ec` + docs):**
+- **A's `6408599ac`** (strip the planner's `building` placement key before
+  schema validation - the W25 `extra="forbid"` seam QA caught as a 422
+  regression): **live-verified** - generate (fallback) returns 4 buildings /
+  1 battery on building_1 / 2 EVs, no `building` key in the payloads,
+  `rejected_fields ["battery.shared_not_supported"]` intact, negative
+  capacity still 422, 60/60 tests.
+- **FE2's `383f35a5d`** (lazy MapLibre + canvas first-paint race): **gates
+  re-run** - lint exit 0 (1 pre-existing warning), tsc 0, vitest 16/16,
+  build 0. QA's intermittent canvas preview flake persists on the production
+  preview (not on dev) - re-dispatched with the code-level suspects
+  (`/ws` missing from the vite proxy; connection gate conflating WS and REST
+  failure).
+
+**QA's `qa/retest-467` report landed on main** (`a52ad0d74`): axe after the
+a11y merge is **69 -> 61** (select-name fully cleared; studio button-name
+cleared; residuals are color-contrast only - studio 54 + generate 7), zero
+keyboard/focus violations, pv.building seam closed on both arms, cancel +
+report + diagnostics verified, and their clean retest #2 table.
+
+**New open items dispatched this cycle:**
+- **Four arms byte-identical economics (26.41 USD) with multi_agent_rl
+  unlabelled** - QA's retest #2 note; earlier rounds were distinct
+  (15.27 vs 14.90). Bounded question to Backend A: is the multi-agent
+  coordinator dispatching genuinely distinct actions, or degenerating
+  without a fallback label? (Honesty-critical: identical numbers must be
+  explained, not silent.)
+- **Color-contrast residuals** (studio 54 / generate 7) back to FE2; QA
+  asked for the exact axe target selectors + computed colors so the fix is
+  surgical instead of another blind pass.
+
+**Record note:** QA's commit `6abdb58ec` is titled "all steps PASS" while
+its own body labels the axe residuals awaiting FE2 - content accurate,
+title loose; recorded as-is, not reworded.
+
+**Gate for the user's retest #6:** contrast residuals + canvas flake closed,
+the identical-economics question answered, QA's final axe rescan clean →
+then the user walks `docs/mvp_walkthrough.md`.
