@@ -861,3 +861,33 @@ QA's rescan - not provable from gates alone.
 **Open:** multi-agent API label (with A), the axe color-contrast residuals
 (studio 54 / generate 7 - QA's selector list pending), canvas flake browser
 re-check (QA).
+
+## Partner verification + CORRECTION: multi-agent API label (2026-11-17 ~10:30, origin/main `d29e073d3`)
+
+**A's `d29e073d3` verified live - the user-visible label now fires and is
+honest, and one claim is corrected.** Live runs through
+`POST /api/simulations` (fixv1, 24 steps, seeds 42/77/88): `multi_agent_rl`
+returns **`controller_fallback_steps` 5, reason `fallback_to_rule_based`**,
+identical in the POST response and the per-run GET; `rule_based` 0/None; `mpc`
+24/`fallback_to_rule_based` (unchanged). Full suite on the tip: **518 passed**.
+QA's "four arms identical, multi_agent unlabelled" flag is therefore CLOSED at
+the UI level - the arm now names its partial fallback.
+
+**Correction to my own earlier record (probe bug, disclosed):** my first
+identity probe reported "24/24 steps battery-identical - degenerates" - that
+was a case-sensitive filter bug in the probe (`"battery" in str(action_type)`
+never matches `ActionType.BATTERY_...`; both dicts came out empty → equal).
+Re-measured with the repo's exact equality (battery keys by asset_id, 1e-6
+tolerance): **5/24 steps identical, stable across seeds 88/77/42**, matching
+the controller-side count. So `multi_agent_rl` is partially divergent on this
+config (19/24 steps differ from rule_based), not fully degenerate - A's
+in-message claim of "fallback_steps=24" is likewise an over-claim; the
+verified value is 5.
+
+**Still open from this cluster:** QA's byte-identical economics across all
+four arms (26.41 USD) is NOT explained by full degeneration (multi_agent
+differs on 19/24 steps) - the horizon totals must coincide for another reason;
+with A/B to confirm, not blocking the label fix. **CI is still red at
+`d29e073d3`: `black --check` fails on `src/agents/config_planner.py` and
+`src/agents/config_coder.py`** - trivial formatting, Backend A to run black and
+push (this is the pulse's standing item; A's d29e073d3 did not include it).
