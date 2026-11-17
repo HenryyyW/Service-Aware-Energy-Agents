@@ -33,9 +33,13 @@ class MultiAgentController(BaseController):
             max_iterations=max_iterations,
         )
         self.last_coordination_result: Optional["CoordinationResult"] = None
-        # For semantic fallback detection (run_experiment.py): if this controller
-        # produces actions identical to rule_based, it will be marked as fallback.
+        # For semantic fallback detection (run_experiment.py + API/UI): if this
+        # controller produces battery actions identical to rule_based, it will be
+        # marked as fallback. Both run_experiment and the API route check
+        # hasattr(controller, "fallback_steps") and fallback_steps > 0.
         self._rule_based = RuleBasedController(scenario_config)
+        self.fallback_steps: int = 0
+        self.fallback_reason: Optional[str] = None
 
     def get_actions(
         self, observations: Dict[str, Any], timestep: int
@@ -59,7 +63,52 @@ class MultiAgentController(BaseController):
         # Apply grid violation re-dispatch based on previous step pandapower diagnostics
         actions = self._apply_grid_violation_redispatch(actions)
 
-        return self._create_requested_actions(actions)
+        requested_actions = self._create_requested_actions(actions)
+
+        # Semantic fallback detection (mirrors run_experiment.py): if battery
+        # actions match rule_based exactly, count as fallback step. Both the
+        # benchmark and the API route check hasattr(controller, "fallback_steps")
+        # and fallback_steps > 0.
+        rule_based_actions = self._rule_based.get_actions(observations, timestep)
+        if self._battery_actions_equal(requested_actions, rule_based_actions):
+            self.fallback_steps += 1
+            if self.fallback_reason is None:
+                self.fallback_reason = "fallback_to_rule_based"
+
+        return requested_actions
+
+    @staticmethod
+    def _battery_actions_equal(
+        actions_a: RequestedActions, actions_b: RequestedActions
+    ) -> bool:
+        """Check if two RequestedActions have the same battery actions.
+
+        Mirrors run_experiment.py's _actions_equal: compare only battery actions
+        by (asset_id, action_type) -> value_kw mapping.
+        """
+        actions_a_dict = {
+            (a.asset_id, a.action_type): a.value_kw for a in actions_a.actions
+        }
+        actions_b_dict = {
+            (a.asset_id, a.action_type): a.value_kw for a in actions_b.actions
+        }
+
+        # Compare battery actions only
+        battery_keys_a = {
+            k: v for k, v in actions_a_dict.items() if "battery" in k[0].lower()
+        }
+        battery_keys_b = {
+            k: v for k, v in actions_b_dict.items() if "battery" in k[0].lower()
+        }
+
+        if battery_keys_a.keys() != battery_keys_b.keys():
+            return False
+
+        for key in battery_keys_a:
+            if abs(battery_keys_a[key] - battery_keys_b[key]) > 1e-6:
+                return False
+
+        return True
 
     def _apply_grid_violation_redispatch(self, actions: List[Action]) -> List[Action]:
         """Re-dispatch actions based on actual grid violations from previous step.
@@ -164,4 +213,6 @@ class MultiAgentController(BaseController):
         super().reset()
         self.coordinator.reset()
         self._rule_based.reset()
+        self.fallback_steps = 0
+        self.fallback_reason = None
         self.last_coordination_result = None
